@@ -1,0 +1,25 @@
+' S-157: native'de STRING degeri 32 metin isleminden sonra eziliyordu (degisken halkayi gosteriyordu).
+' Sahiplik yuva adresine baglidir: b = a kopyadir; parametreye atama cagiranin metnini serbest birakmaz.
+SUB Degistir(p AS STRING)
+    p = "yeni-" + p
+    PRINT p
+END SUB
+FUNCTION Tekrar(s AS STRING, n AS I32) AS STRING
+    IF n = 0 THEN RETURN s
+    RETURN Tekrar(s + "+", n - 1)
+END FUNCTION
+DIM a AS STRING = STR(1) + "a"
+DIM b AS STRING
+b = a
+a = "degisti"
+Degistir(b)
+PRINT a
+PRINT b
+PRINT Tekrar("k", 5)
+DIM i AS I32
+DIM u AS STRING
+FOR i = 1 TO 20000
+    u = STR(i) + "-" + STR(i * 2)
+NEXT
+PRINT u
+

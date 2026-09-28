@@ -80,6 +80,7 @@ Private Function MIRX64FindUserFunctionIndex(ByRef cg As MIRX64Context, ByRef fu
 End Function
 
 #include once "mir_x64_task_shell.fbs"
+#include once "mir_x64_task_v2.fbs"
 
 Private Function MIRX64EmitUserCallInstruction(ByRef ins As MIRIRInstruction, ByVal fnIdx As Integer, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
     If fnIdx < 0 Or cg.modulePtr = 0 Or fnIdx >= cg.modulePtr->functionCount Then
@@ -251,6 +252,16 @@ End Function
 Private Function MIRX64CollectLocals(ByRef fn As MIRFunction, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
     Dim i As Integer
     Dim off As Integer
+
+    ' S-030 Faz 2A: SPAWN lane'i baska is parcaciginda calisir. Gorev baglam adlari
+    ' (TASKIN/TASKOUT) TRIGGER kabugunda global; SPAWN lane'inde yerel golge yuvalari
+    ' onceden acilir ki iki gorev (ya da gorev ile TRIGGER) ayni global'e yazmasin.
+    If MIRX64IsSpawnLane(fn.name) <> 0 Then
+        If MIRX64EnsureLocalSlot(cg, UXB_TASK_INPUT_NAME, off) = 0 Or MIRX64EnsureLocalSlot(cg, UXB_TASK_RESULT_NAME, off) = 0 Then
+            errText = "MIR x64 emitter: SPAWN lane baglam yuvasi acilamadi"
+            Return 0
+        End If
+    End If
 
     For i = 0 To fn.paramVarCount - 1
         If MIRX64EnsureLocalSlot(cg, fn.paramVars(i), off) = 0 Then
@@ -501,6 +512,12 @@ Private Function MIRX64EmitCallInstruction(ByRef ins As MIRIRInstruction, ByRef 
     If callTarget = "DLL" Or callTarget = "API" Then
         Return MIRX64EmitFfiStubCallInstruction(ins, cg, errText)
     End If
+
+    ' S-030 Faz 2A: kanonik gorev cagrilari gercek eszamanli calisma zamanina iner
+    ' (mir_x64_task_v2.fbs; K7 geregi gecici senkron surum yok).
+    Dim taskV2Handled As Integer
+    If MIRX64TryEmitTaskV2Call(ins, cg, taskV2Handled, errText) = 0 Then Return 0
+    If taskV2Handled <> 0 Then Return 1
 
     Dim taskShellHandled As Integer
     If MIRX64TryEmitTaskShellCall(ins, cg, taskShellHandled, errText) = 0 Then Return 0
@@ -942,6 +959,11 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             errText = "MIR x64 emitter: LOAD_VAR requires source and result"
             Return 0
         End If
+        If UCase(Trim(ins.operands(0))) = "__MIR_EXC_ACTIVE" Then
+            ' S-160: istisna bayragi is parcacigina ozel calisma zamani durumudur (rutin sinirini gecer).
+            MIRX64EmitRuntimeCall0 cg, "__uxb_rt_exc_active"
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End If
         If MIRX64LoadOperandToReg(cg, ins.operands(0), "rax", errText) = 0 Then Return 0
         Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
 
@@ -949,6 +971,18 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
         If ins.operandCount < 1 Or Trim(ins.result) = "" Then
             errText = "MIR x64 emitter: STORE_VAR requires source and target"
             Return 0
+        End If
+        Dim excTarget As String = UCase(Trim(ins.result))
+        If excTarget = "__MIR_EXC_ACTIVE" Then
+            If MIRX64LoadOperandToReg(cg, ins.operands(0), "r10", errText) = 0 Then Return 0
+            MIRX64EmitRuntimeCall1Reg cg, "__uxb_rt_exc_set_active", "r10"
+            Return 1
+        End If
+        If excTarget = "__MIR_EXC_VALUE" Then
+            If MIRX64LoadOperandToReg(cg, ins.operands(0), "r10", errText) = 0 Then Return 0
+            MIRX64Emit cg, "    mov r11, " & IIf(MIRX64OperandIsString(cg, ins.operands(0)) <> 0, "1", "0")
+            MIRX64EmitRuntimeCall2Reg cg, "__uxb_rt_exc_set_value", "r10", "r11"
+            Return 1
         End If
 
         Dim storeSourceType As String
@@ -1104,6 +1138,7 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             errText = "MIR x64 emitter: JMP target must be block id"
             Return 0
         End If
+        MIRX64EmitTaskCancelPointIfBackEdge cg, targetJmp
         MIRX64Emit cg, "    jmp " & MIRX64BlockLabel(targetJmp)
         Return 1
 
@@ -1113,13 +1148,15 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             Return 0
         End If
 
-        If MIRX64LoadOperandToReg(cg, ins.operands(0), "rax", errText) = 0 Then Return 0
-
         Dim targetCond As Integer
         If MIRX64TryParseBlockId(ins.operands(1), targetCond) = 0 Then
             errText = "MIR x64 emitter: " & op & " target must be block id"
             Return 0
         End If
+        ' Iptal denetimi kosul yuklenmeden ONCE (cagri rax'i ve bayraklari bozar).
+        MIRX64EmitTaskCancelPointIfBackEdge cg, targetCond
+
+        If MIRX64LoadOperandToReg(cg, ins.operands(0), "rax", errText) = 0 Then Return 0
 
         MIRX64Emit cg, "    cmp rax, 0"
         If op = "JZ" Then
@@ -1390,24 +1427,17 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             Dim retOperand As String
             retOperand = UCase(Trim(ins.operands(0)))
             If retOperand = "__RESULT__" Then
-                Dim excActiveOffset As Integer
-                If MIRX64FindLocalOffset(cg, "__mir_exc_active", excActiveOffset) <> 0 Then
+                ' S-160: istisna bayragi is parcacigina ozel calisma zamani durumudur. Ara rutinler
+                ' acik istisnayla yalnizca doner (cagiranin denetimi CATCH'e sicrar ya da o da doner);
+                ' MAIN'de yakalanmamis istisna degeri yazilir, gorev lane'inde gorev hatasi olur.
+                Dim isLaneRet As Integer = MIRX64IsSpawnLane(cg.currentFunctionName)
+                If isLaneRet <> 0 Or UCase(Trim(cg.currentFunctionName)) = "MAIN" Then
                     Dim noExceptionLabel As String
                     noExceptionLabel = MIRX64NextLabel(cg, "ret_no_exception")
-                    MIRX64Emit cg, "    mov rax, qword " & MIRX64RbpRef(excActiveOffset)
-                    MIRX64Emit cg, "    cmp rax, 0"
-                    MIRX64Emit cg, "    je " & noExceptionLabel
-
-                    Dim excValueOffset As Integer
-                    If MIRX64FindLocalOffset(cg, "__mir_exc_value", excValueOffset) <> 0 Then
-                        MIRX64Emit cg, "    mov rax, qword " & MIRX64RbpRef(excValueOffset)
-                        If MIRX64OperandIsString(cg, "__mir_exc_value") <> 0 Then
-                            MIRX64EmitRuntimePrintCStr cg, "rax"
-                        Else
-                            MIRX64EmitRuntimePrintI64 cg, "rax"
-                        End If
-                        MIRX64EmitRuntimePrintNewline cg
-                    End If
+                    MIRX64Emit cg, "    mov r10, " & IIf(isLaneRet <> 0, "1", "0")
+                    MIRX64EmitRuntimeCall1Reg cg, "__uxb_rt_exc_uncaught", "r10"
+                    MIRX64Emit cg, "    test rax, rax"
+                    MIRX64Emit cg, "    jz " & noExceptionLabel
                     MIRX64Emit cg, "    mov rax, 1"
                     MIRX64Emit cg, "    jmp " & MIRX64CurrentEpilogueLabel(cg)
                     MIRX64Emit cg, noExceptionLabel & ":"
@@ -1553,6 +1583,14 @@ Private Function MIRX64EmitFunction(ByRef fn As MIRFunction, ByVal fnIdx As Inte
             MIRX64Emit cg, "    call __uxb_ffi_resolve_all"
             MIRX64Emit cg, "    add rsp, 32"
         End If
+        If MIRX64ModuleUsesSpawn() <> 0 And gMirX64TaskWorkers > 0 Then
+            ' S-030 K4: --task-workers N gomulu isci sayisi (UXB_TASK_WORKERS calisma aninda ustundedir).
+            MIRX64EmitRuntimeExtern cg, "__uxb_rt_task_set_workers"
+            MIRX64Emit cg, "    mov rcx, " & MIRX64ToStr(gMirX64TaskWorkers)
+            MIRX64Emit cg, "    sub rsp, 32"
+            MIRX64Emit cg, "    call __uxb_rt_task_set_workers"
+            MIRX64Emit cg, "    add rsp, 32"
+        End If
         If MIRX64ModuleUsesNativeTaskShell(*cg.modulePtr) <> 0 Then
             MIRX64EmitNativeRuntimeExterns cg
             MIRX64EmitRuntimeCall0 cg, "uxb_rt_init"
@@ -1584,6 +1622,7 @@ Private Function MIRX64EmitFunction(ByRef fn As MIRFunction, ByVal fnIdx As Inte
     Dim b As Integer
     For b = 0 To fn.blockCount - 1
         MIRX64Emit cg, MIRX64BlockLabel(fn.blocks(b).id) & ":"
+        gMirX64CurrentBlockId = fn.blocks(b).id
 
         Dim ii As Integer
         For ii = 0 To fn.blocks(b).instructionCount - 1
@@ -1594,7 +1633,55 @@ Private Function MIRX64EmitFunction(ByRef fn As MIRFunction, ByVal fnIdx As Inte
     Next b
 
     MIRX64Emit cg, MIRX64CurrentEpilogueLabel(cg) & ":"
+    ' S-157: rutinin yerel STRING yuvalarinin sahipli kopyalari serbest birakilir. Donus degeri bir
+    ' yerel metni gosterebilecegi icin once gecici halkaya kopyalanir; donus register'i rbx'te korunur
+    ' (rbx prologda saklandi, epilogda geri yuklenir).
+    If UCase(Trim(fn.name)) <> "MAIN" Then
+        Dim releaseCount As Integer = 0
+        Dim li As Integer
+        For li = 0 To cg.localCount - 1
+            If cg.locals(li).isByRef = 0 AndAlso MIRX64IsOwnedStringSlotName(cg, cg.locals(li).nameText) <> 0 Then releaseCount += 1
+        Next li
+        If releaseCount > 0 Then
+            Dim retIsFloat As Integer = MIRX64TypeIsFloat(fn.returnType)
+            Dim retIsString As Integer = IIf(UCase(Trim(fn.returnType)) = "STRING", 1, 0)
+            If retIsString <> 0 Then
+                MIRX64EmitRuntimeCall1Reg cg, "__uxb_rt_str_temp", "rax"
+            End If
+            If retIsFloat <> 0 Then
+                MIRX64Emit cg, "    movq rbx, xmm0"
+            Else
+                MIRX64Emit cg, "    mov rbx, rax"
+            End If
+            For li = 0 To cg.localCount - 1
+                If cg.locals(li).isByRef = 0 AndAlso MIRX64IsOwnedStringSlotName(cg, cg.locals(li).nameText) <> 0 Then
+                    MIRX64EmitRuntimeExtern cg, "__uxb_rt_str_release"
+                    MIRX64Emit cg, "    lea rcx, " & MIRX64RbpRef(cg.locals(li).offset)
+                    MIRX64Emit cg, "    sub rsp, 32"
+                    MIRX64Emit cg, "    call __uxb_rt_str_release"
+                    MIRX64Emit cg, "    add rsp, 32"
+                End If
+            Next li
+            If retIsFloat <> 0 Then
+                MIRX64Emit cg, "    movq xmm0, rbx"
+            Else
+                MIRX64Emit cg, "    mov rax, rbx"
+            End If
+        End If
+    End If
     If UCase(Trim(fn.name)) = "MAIN" And cg.modulePtr <> 0 Then
+        If MIRX64ModuleUsesSpawn() <> 0 Then
+            ' S-030 K5: normal kapanis gorevleri bekler; okunmamis gorev hatasi hata cikisina
+            ' yazilir ve cikis kodu basarisiz olur (program kendi hata koduyla bittiyse o korunur).
+            MIRX64Emit cg, "    mov rbx, rax"
+            MIRX64EmitRuntimeExtern cg, "__uxb_rt_task_shutdown"
+            MIRX64Emit cg, "    mov rcx, 1"
+            MIRX64Emit cg, "    sub rsp, 32"
+            MIRX64Emit cg, "    call __uxb_rt_task_shutdown"
+            MIRX64Emit cg, "    add rsp, 32"
+            MIRX64Emit cg, "    test rbx, rbx"
+            MIRX64Emit cg, "    cmovnz rax, rbx"
+        End If
         If MIRX64ModuleUsesNativeTaskShell(*cg.modulePtr) <> 0 Then
             MIRX64EmitRuntimeCall0 cg, "uxb_rt_shutdown"
             MIRX64EmitNativeCheckEax cg
@@ -1637,6 +1724,7 @@ Function MIRX64EmitModule(ByRef m As MIRModule, ByRef outPath As String, ByRef e
     Dim cg As MIRX64Context
     MIRX64Init(cg)
     cg.modulePtr = @m
+    MIRX64CollectSpawnLanes m
     MIRX64PrepareModuleGlobals cg
     If MIRX64EmitOopVTables(cg, m, errText) = 0 Then Return 0
     If MIRX64ModuleUsesNativeTaskShell(m) <> 0 Then
@@ -1659,6 +1747,7 @@ Function MIRX64EmitModule(ByRef m As MIRModule, ByRef outPath As String, ByRef e
     If MIRX64ModuleUsesNativeTaskShell(m) <> 0 Then
         If MIRX64EmitTaskCallbacks(m, cg, errText) = 0 Then Return 0
     End If
+    If MIRX64EmitSpawnThunks(m, cg, errText) = 0 Then Return 0
 
     Dim content As String
     ' memoryModeHelperText (NATIVE/VIRTUAL PEEK/POKE/MEMCOPY/MEMFILL support

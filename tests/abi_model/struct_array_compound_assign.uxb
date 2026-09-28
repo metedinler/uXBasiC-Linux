@@ -1,0 +1,28 @@
+' S-080: compound assignment on a field of an ARRAY of TYPE reads, updates and stores the field.
+TYPE P
+X AS I32
+Y AS I64
+END TYPE
+DIM pts(2) AS P
+pts(1).X = 5
+pts(1).X += 3
+PRINT pts(1).X
+pts(1).X -= 1
+pts(1).X *= 4
+PRINT pts(1).X
+pts(1).X \= 3
+PRINT pts(1).X
+pts(1).X <<= 2
+PRINT pts(1).X
+pts(2).Y = 10
+pts(2).Y += 5000000000
+PRINT pts(2).Y
+DIM i AS I32
+i = 0
+pts(i).X = 100
+pts(i).X += 1
+PRINT pts(0).X
+i = 1
+pts(i + 1).X = 7
+pts(i + 1).X += pts(1).X
+PRINT pts(2).X

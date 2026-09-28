@@ -34,6 +34,18 @@ Declare Function ExecTaskGroupValid(ByVal id As Integer) As Integer
 Declare Function ExecTaskReceiverInfo(ByRef ps As ParseState, ByRef es As ExecState, ByVal receiverNodeIdx As Integer, ByRef kindOut As String, ByRef handleIdOut As Integer, ByRef errText As String) As Integer
 Declare Function ExecReadTaskField(ByRef kindText As String, ByVal handleId As Integer, ByRef fieldName As String, ByRef valueOut As ExecValue, ByRef errText As String) As Integer
 Declare Function ExecInvokeTaskMember(ByRef ps As ParseState, ByRef es As ExecState, ByRef kindText As String, ByVal handleId As Integer, ByRef methodName As String, ByVal callNodeIdx As Integer, ByRef valueOut As ExecValue, ByRef errText As String) As Integer
+' S-146 Model D (exec_task_handle.fbs)
+Declare Sub ExecSyncReset()
+Declare Function ExecIsLockFatal(ByRef textValue As String) As Integer
+Declare Function ExecMutexNew() As LongInt
+Declare Function ExecTaskRunIfDeferred(ByRef ps As ParseState, ByRef es As ExecState, ByVal handleId As Integer, ByRef errText As String) As Integer
+Declare Function ExecTaskFinishProgram(ByRef ps As ParseState, ByRef es As ExecState, ByRef errText As String) As Integer
+Declare Function ExecRunLockStmt(ByRef ps As ParseState, ByRef es As ExecState, ByVal stmtIdx As Integer, ByRef errText As String) As Integer
+Declare Function ExecRunUnsafeStmt(ByRef ps As ParseState, ByRef es As ExecState, ByVal stmtIdx As Integer, ByRef errText As String) As Integer
+#include once "../common/uxb_rng.fbs"
+Declare Function ExecCurrentTaskKey() As Integer
+Declare Function ExecInvokeAtomicMember(ByRef ps As ParseState, ByRef es As ExecState, ByVal recvIdx As Integer, ByRef methodName As String, ByVal callNodeIdx As Integer, ByRef valueOut As ExecValue, ByRef errText As String) As Integer
+Declare Function ExecLockCheckStmtAccess(ByRef ps As ParseState, ByRef es As ExecState, ByVal stmtIdx As Integer, ByRef errText As String) As Integer
 Declare Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef es As ExecState, ByVal routineIdx As Integer, preparedArgs() As Integer, ByVal preparedArgCount As Integer, ByVal expectValue As Integer, ByVal prependReceiver As Integer, ByVal receiverAddr As Integer, ByRef valueOut As Integer, ByRef errText As String) As Integer
 Declare Sub ExecSnapshotVars(ByRef es As ExecState, snapshotVars() As ExecVar, ByRef snapshotCount As Integer, ByRef snapshotNextAddr As UInteger)
 Declare Sub ExecRestoreVars(ByRef es As ExecState, snapshotVars() As ExecVar, ByVal snapshotCount As Integer, ByVal snapshotNextAddr As UInteger)
@@ -654,6 +666,9 @@ Function ExecEvalDIM(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef es 
                 Dim taskGroupHandle As Integer
                 taskGroupHandle = ExecTaskGroupAlloc()
                 ExecValueSetInteger varValue, taskGroupHandle
+            ElseIf declType = "MUTEX" Then
+                ' S-146 Model D: her MUTEX bildirimi kendi kilidini (kimlik) alir -- MIR/native ile ayni.
+                ExecValueSetInteger varValue, ExecMutexNew()
             ElseIf ExecFindClassDeclNode(ps, declType) <> -1 Or ExecFindInterfaceDeclNode(ps, declType) <> -1 Or declType = "OBJECT" Then
                 If initNode <> -1 Then
                     If ps.ast.nodes(initNode).left = -1 Then
@@ -1853,7 +1868,7 @@ Function ExecEvalExpression(ByRef ps As ParseState, ByVal nodeIdx As Integer, By
         varName = UCase(n.value)
         If varName = "" Then varName = UCase(n.symbolName)
         If varName = "RND" Then
-            ExecValueSetFloat result, Rnd
+            ExecValueSetFloat result, UXBRngRnd(ExecCurrentTaskKey(), 0, 0)   ' S-163: ortak uretec, gorev basina
             Return 1
         End If
         If varName = "TIMER" Then
@@ -2233,6 +2248,15 @@ Function ExecEvalExpression(ByRef ps As ParseState, ByVal nodeIdx As Integer, By
             Else
                 ExecValueSetFloat result, valNumber
             End If
+            Return 1
+        Case "RND"
+            ' S-163: RND / RND(x) -> [0,1) F64, tum motorlarda ayni uretec (src/common/uxb_rng.fbs).
+            Dim rndHasArg As Integer = IIf(ExecChildCount(ps, nodeIdx) > 0, 1, 0)
+            Dim rndArgValue As ExecValue
+            If rndHasArg <> 0 Then
+                If ExecEvalExpression(ps, ExecChildAt(ps, nodeIdx, 0), es, rndArgValue, errText) = 0 Then Return 0
+            End If
+            ExecValueSetFloat result, UXBRngRnd(ExecCurrentTaskKey(), rndHasArg, IIf(rndHasArg <> 0, ExecValueToFloat(rndArgValue), 0))
             Return 1
         Case "INT", "CINT", "SGN", "SQR", "SIN", "COS", "TAN", "ATN", "EXP", "LOG"
             ' S-137: see ExecApplyNumericBuiltin (these used to fall into the integer-only path below).
@@ -3272,6 +3296,42 @@ End Function
 ' read back unsigned (-3 -> 253). Returns "I" (signed integer), "U" (unsigned
 ' integer), "F" (IEEE float) or "" when the field is not a native scalar (nested
 ' TYPE, string handle, ... keep their existing size-based path), and its byte width.
+' S-158: TYPE/CLASS STRING alanlari. AST alanlari sanal bellekte (VMem) hucre olarak tutar; metin eskiden
+' ExecValueToInteger ile SAYIYA cevrilip yaziliyordu (k.ad = "abc" -> 0, STR(55)+"-x" -> 55). Hucreye
+' artik metin havuzundaki tutamac yazilir (0 = bos metin). Metin degismez (her yazim yeni tutamac),
+' boylece TYPE kopyasi (k2 = k) bayt kopyasiyla ayni metni guvenle paylasir.
+Dim Shared gExecFieldStrings(Any) As String
+Dim Shared gExecFieldStringCount As Integer
+
+Private Sub ExecFieldStringsReset()
+    ReDim gExecFieldStrings(0)
+    gExecFieldStringCount = 0
+End Sub
+
+Private Function ExecFieldStringIntern(ByRef textValue As String) As LongInt
+    If textValue = "" Then Return 0
+    If gExecFieldStringCount = 0 Then
+        ReDim gExecFieldStrings(1)
+        gExecFieldStringCount = 1
+    ElseIf gExecFieldStringCount > UBound(gExecFieldStrings) Then
+        ReDim Preserve gExecFieldStrings(gExecFieldStringCount * 2)
+    End If
+    gExecFieldStrings(gExecFieldStringCount) = textValue
+    gExecFieldStringCount += 1
+    Return gExecFieldStringCount - 1
+End Function
+
+Private Function ExecFieldStringLookup(ByVal handleValue As LongInt) As String
+    If handleValue <= 0 Or handleValue >= gExecFieldStringCount Then Return ""
+    Return gExecFieldStrings(CInt(handleValue))
+End Function
+
+Private Function ExecFieldIsString(ByRef fieldTypeRaw As String) As Integer
+    Dim t As String = UCase(Trim(fieldTypeRaw))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    Return IIf(t = "STRING", 1, 0)
+End Function
+
 Private Function ExecFieldScalarKind(ByRef fieldTypeRaw As String, ByRef widthOut As Integer) As String
     Dim t As String
     t = UCase(Trim(fieldTypeRaw))
@@ -3371,6 +3431,10 @@ Private Function ExecReadFieldValue(ByRef ps As ParseState, ByRef es As ExecStat
     taskRecvRv = ExecTaskReceiverInfo(ps, es, taskReceiverNodeIdx, taskKind, taskHandleId, errText)
     If taskRecvRv = 0 Then Return 0
     If taskRecvRv > 0 Then
+        ' S-146: ertelenmis gorevin sonucu okunurken gorev simdi calisir.
+        If taskKind = "TASK" AndAlso taskHandleId <> 0 AndAlso UCase(Trim(ps.ast.nodes(nodeIdx).value)) = "RESULT" Then
+            If ExecTaskRunIfDeferred(ps, es, taskHandleId, errText) = 0 Then Return 0
+        End If
         Return ExecReadTaskField(taskKind, taskHandleId, ps.ast.nodes(nodeIdx).value, valueOut, errText)
     End If
 
@@ -3413,6 +3477,17 @@ Private Function ExecReadFieldValue(ByRef ps As ParseState, ByRef es As ExecStat
             End If
             Return 1
         End If
+    End If
+
+    If ExecFieldIsString(fieldType) <> 0 Then
+        ExecValueInit valueOut
+        valueOut.valueType = "STRING"
+        If fieldSize >= 8 Then
+            valueOut.stringValue = ExecFieldStringLookup(VMemPeekQ(fieldAddr))
+        Else
+            valueOut.stringValue = ExecFieldStringLookup(CLngInt(VMemPeekD(fieldAddr)))
+        End If
+        Return 1
     End If
 
     Dim readScalarWidth As Integer
@@ -3484,6 +3559,18 @@ Private Function ExecWriteFieldValue(ByRef ps As ParseState, ByRef es As ExecSta
             ExecStaticFieldWrite staticFieldKey, valueIn
             Return 1
         End If
+    End If
+
+    If ExecFieldIsString(fieldType) <> 0 Then
+        Dim fieldTextHandle As LongInt = ExecFieldStringIntern(ExecValueToString(valueIn))
+        Dim fieldTextOk As Integer
+        If fieldSize >= 8 Then
+            fieldTextOk = VMemPokeQ(fieldAddr, fieldTextHandle)
+        Else
+            fieldTextOk = VMemPokeD(fieldAddr, CInt(fieldTextHandle))
+        End If
+        If fieldTextOk = 0 Then errText = "exec: field write out of range": Return 0
+        Return 1
     End If
 
     Dim writeScalarWidth As Integer
@@ -3819,6 +3906,8 @@ Private Function ExecEvalBuiltinCall(ByRef ps As ParseState, ByRef es As ExecSta
     End Select
 End Function
 
+' S-156: ifade icindeki FUNCTION'da calisan END'in isaret metni (hata degil; bkz. ExecRunMemoryProgram).
+Const UXB_EXEC_END_SIGNAL_TEXT As String = "exec: END (program sonu)"
 #include once "exec/exec_call_dispatch_helpers.fbs"
 #include once "exec/exec_task_handle.fbs"
 
@@ -4729,6 +4818,7 @@ End Function
 
 Private Function ExecRunStmt(ByRef ps As ParseState, ByRef es As ExecState, ByVal stmtIdx As Integer, ByRef errText As String) As Integer
     If UXBStepBudgetTick(errText) = 0 Then Return 0
+    If ExecLockCheckStmtAccess(ps, es, stmtIdx, errText) = 0 Then Return 0
     Dim st As ASTNode
     st = ps.ast.nodes(stmtIdx)
 
@@ -4736,6 +4826,16 @@ Private Function ExecRunStmt(ByRef ps As ParseState, ByRef es As ExecState, ByVa
     Case "NAMESPACE_STMT", "MODULE_STMT"
         ' Namespace/module bodies declare scoped symbols. They are registered by
         ' the declaration passes and must not execute as part of the main program.
+        ' S-162: ad alani duzeyindeki DIM/REDIM ise depo olusturur ("NS.NV", ayristirma sonrasi
+        ' normallestirilmis ad) -- MIR/native ile ayni sekilde calistirilir.
+        Dim nsChild As Integer = ps.ast.nodes(stmtIdx).firstChild
+        Do While nsChild <> -1
+            Dim nsChildKind As String = UCase(Trim(ps.ast.nodes(nsChild).kind))
+            If nsChildKind = "DIM_STMT" Or nsChildKind = "REDIM_STMT" Then
+                If ExecRunStmt(ps, es, nsChild, errText) = 0 Then Return 0
+            End If
+            nsChild = ps.ast.nodes(nsChild).nextSibling
+        Loop
         Return 1
     Case "MAIN_STMT"
         Return ExecRunBlockChildren(ps, es, stmtIdx, errText)
@@ -4869,6 +4969,9 @@ Function ExecRunMemoryProgram(ByRef ps As ParseState, ByRef errText As String) A
     es.runtime.ffiResolverPath = gFfiDefaultResolverPath
     es.runtime.ffiResolverEnforce = gFfiDefaultResolverEnforce
     ExecCollectionsReset
+    ExecFieldStringsReset
+    ExecSyncReset
+    UXBRngResetAll
     ExecSlotsReset es
     ExecDebugConsoleReset
     ExecContractInit es
@@ -4936,6 +5039,13 @@ Function ExecRunMemoryProgram(ByRef ps As ParseState, ByRef errText As String) A
         End If
 
         If ExecRunStmt(ps, es, st, errText) = 0 Then
+            ' S-156: ifade icindeki bir cagri (PRINT F() gibi) END calistirdi; cagri, ifadenin
+            ' geri kalanini degerlendirmemek icin basarisiz yoldan dondu. Bu bir hata degil, program biter.
+            If UCase(es.runtime.exitRequest) = "END" Then
+                es.runtime.exitRequest = ""
+                errText = ""
+                Exit Do
+            End If
             ExecNormalizeError errText
             UxbFileCloseAll es.fileIo
             Return 0
@@ -5018,6 +5128,15 @@ Function ExecRunMemoryProgram(ByRef ps As ParseState, ByRef errText As String) A
 
         st = ps.ast.nodes(st).nextSibling
     Loop
+
+    ' S-146 Model D / K5: ana programin kalan acik kilitleri birakilir (LOCK icinde END), acik
+    ' LOCK suresince ertelenmis gorevler program bitmeden calisir.
+    If ExecTaskFinishProgram(ps, es, errText) = 0 Then
+        ExecNormalizeError errText
+        UxbFileCloseAll es.fileIo
+        ExecBigRuntimeReleaseAll
+        Return 0
+    End If
 
     If ExecRunProgramScopeDtors(ps, es, errText) = 0 Then
         ExecNormalizeError errText

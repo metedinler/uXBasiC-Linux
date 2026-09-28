@@ -1,0 +1,14 @@
+' S-157: native'de STRING degeri 32 metin isleminden sonra eziliyordu (degisken halkayi gosteriyordu).
+CLASS Kisi
+    ad AS STRING
+END CLASS
+DIM p AS Kisi = NEW Kisi()
+p.ad = STR(66) + "-sinif"
+DIM t AS STRING
+DIM i AS I32
+FOR i = 1 TO 100
+    t = STR(i) + "x"
+NEXT
+PRINT p.ad
+
+

@@ -1,0 +1,9 @@
+' S-056: a pointer taken before REDIM is stale afterwards (the backing store may have moved).
+DIM a(3) AS I32
+a(0) = 11
+DIM p AS PTR
+p = VARPTR(a)
+REDIM a(99) AS I32
+PRINT PEEKD(p)
+PRINT "unreachable"
+

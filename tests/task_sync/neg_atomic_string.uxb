@@ -1,0 +1,2 @@
+' ATOMIC tamsayi, BOOLEAN, F32 ya da F64 tutar.
+DIM ATOMIC s AS STRING

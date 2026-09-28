@@ -1,0 +1,11 @@
+' S-160: istisna ic ice rutinlerden gecer; TRY disinda program durur (sonraki satirlar calismaz).
+SUB P()
+    THROW 5
+END SUB
+SUB Q()
+    P()
+    PRINT "q devam (olmamali)"
+END SUB
+PRINT "a"
+Q()
+PRINT "b (olmamali)"

@@ -261,10 +261,9 @@ Private Function UXBMIRInterpInvokeLabel( _
                 Return sig.errorValue
             End If
             If sig.returnNow <> 0 Then
-                Dim pendingErr As String
-                If UXBMIRInterpPendingException(st, pendingErr) <> 0 Then
-                    Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, pendingErr)
-                End If
+                ' S-160: bayrak acikken donus normal donustur -- istisna cagirana gecer; cagiranin
+                ' MIR'i (mir_exc_pass.fbs) bayragi denetleyip CATCH'e sicrar ya da o da doner.
+                ' En ustte hala acik ise UXBMIRInterpRunInstructionsCore "yakalanmamis" raporlar.
                 Return sig.returnValue
             End If
             pc = sig.nextIndex
@@ -290,6 +289,10 @@ Private Function UXBMIRInterpInvokeLabel( _
 
     Return UXBInterpValueVoid()
 End Function
+
+' S-030 Faz 1B: gorev saglayicisi rutin cagirma (UXBMIRInterpInvokeLabel) kullanir;
+' tanimindan sonra dahil edilir.
+#include once "mir_interp_task.fbs"
 
 ' MIR_OBJECT_NEW carries constructor arguments in operands 2..N.  Keep
 ' construction in the interpreter's instruction context so the constructor
@@ -480,7 +483,21 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
         End If
     End If
 
+    If canonicalCallOp = "MIR_CALL" And callName = "PROGRAM_END" Then
+        ' S-156: rutin icindeki END -- sinyal ic ice cagrilari cozer, en ust dongu basarili bitirir.
+        handledOut = 1
+        Return UXBInterpValueError(UXB_INTERP_SIGNAL_PROGRAM_END, "END")
+    End If
+
     If canonicalCallOp = "MIR_CALL" Then
+        Dim taskHandled As Integer
+        Dim taskValue As UXBInterpValue
+        taskValue = UXBMIRInterpExecTaskCall(instructions(), instructionCount, ctx, st, ins, taskHandled)
+        If taskHandled <> 0 Then
+            handledOut = 1
+            Return taskValue
+        End If
+
         Dim collectionHandled As Integer
         Dim collectionValue As UXBInterpValue
         collectionValue = UXBMIRInterpExecCollectionCall(ins, ctx, st, collectionHandled)
@@ -512,18 +529,20 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
             Dim userParamCount As Integer
             userParamCount = userLabel.operandCount - 1
             If userParamCount < 0 Then userParamCount = 0
-            ' Non-empty only for a BYREF parameter (see UXB_MIR_CANONICAL_BYREF_PARAM_PREFIX)
-            ' whose call-site argument is a plain writable variable -- used below to write
-            ' the parameter's final value back into that caller variable.
-            Dim byRefParamNames(Any) As String
-            Dim byRefCallerArgNames(Any) As String
+            ' S-167: once TUM argumanlar cagiranin gozunden okunur (deger ya da BYREF hedef hucresi),
+            ' sonra parametreler baglanir. Eskiden sirayla baglaniyordu: F(b, a) cagrisinda ikinci
+            ' arguman, az once baglanan yeni `a` parametresinden okunabiliyordu.
+            Dim userParamNames(Any) As String
+            Dim userArgValues(Any) As UXBInterpValue
+            Dim userAliasTargets(Any) As Integer
             If userParamCount > 0 Then
-                ReDim byRefParamNames(userParamCount - 1)
-                ReDim byRefCallerArgNames(userParamCount - 1)
+                ReDim userParamNames(userParamCount - 1)
+                ReDim userArgValues(userParamCount - 1)
+                ReDim userAliasTargets(userParamCount - 1)
             End If
-
             Dim userParamIdx As Integer
             For userParamIdx = 0 To userParamCount - 1
+                userAliasTargets(userParamIdx) = -1
                 If userParamIdx + 1 > 15 Then Exit For
                 Dim userParamNameRaw As String
                 userParamNameRaw = Trim(userLabel.operands(userParamIdx + 1))
@@ -535,6 +554,7 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
                     userParamIsByRef = 1
                     userParamName = Mid(userParamNameRaw, Len(UXB_MIR_CANONICAL_BYREF_PARAM_PREFIX) + 1)
                 End If
+                userParamNames(userParamIdx) = userParamName
                 If userParamName <> "" Then
                     Dim userArgValue As UXBInterpValue
                     userArgValue = UXBInterpValueVoid()
@@ -548,23 +568,45 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
                     Else
                         sourceOperandIndex = userParamIdx + 1
                     End If
-                    If ins.operandCount > sourceOperandIndex Then userArgValue = UXBMIRInterpGetOperand(st, ins.operands(sourceOperandIndex))
-                    If userParamIsByRef = 0 Then
-                        userArgValue = UXBInterpLibraryValueCopy(userArgValue)
-                        If UXBInterpIsError(userArgValue) <> 0 Then
-                            UXBMIRInterpLeaveScope st
-                            Return userArgValue
-                        End If
-                    End If
-                    UXBMIRInterpSetVar st, userParamName, userArgValue
                     If userParamIsByRef <> 0 And ins.operandCount > sourceOperandIndex Then
+                        ' BYREF: parametre cagiranin deposunun takma adi olur (native ile ayni anlam).
                         Dim callerArgRaw As String
                         callerArgRaw = Trim(ins.operands(sourceOperandIndex))
                         If UXBMIRInterpIsReferenceName(callerArgRaw) <> 0 Then
-                            byRefParamNames(userParamIdx) = userParamName
-                            byRefCallerArgNames(userParamIdx) = callerArgRaw
+                            userAliasTargets(userParamIdx) = UXBMIRInterpFindVar(st, callerArgRaw)
                         End If
                     End If
+                    If userAliasTargets(userParamIdx) < 0 Then
+                        If ins.operandCount > sourceOperandIndex Then userArgValue = UXBMIRInterpGetOperand(st, ins.operands(sourceOperandIndex))
+                        If userParamIsByRef = 0 Then
+                            userArgValue = UXBInterpLibraryValueCopy(userArgValue)
+                            If UXBInterpIsError(userArgValue) <> 0 Then
+                                UXBMIRInterpLeaveScope st
+                                Return userArgValue
+                            End If
+                        End If
+                        userArgValues(userParamIdx) = userArgValue
+                    End If
+                End If
+            Next userParamIdx
+            ' Takma ad hedefleri hucre isaretcisiyle tutulur: baglama sirasinda tablo buyur, indeks kayabilir.
+            Dim userAliasCells(Any) As UXBMIRInterpVar Ptr
+            If userParamCount > 0 Then ReDim userAliasCells(userParamCount - 1)
+            For userParamIdx = 0 To userParamCount - 1
+                If userAliasTargets(userParamIdx) >= 0 Then userAliasCells(userParamIdx) = st.vars(userAliasTargets(userParamIdx))
+            Next userParamIdx
+            For userParamIdx = 0 To userParamCount - 1
+                If userParamIdx + 1 > 15 Then Exit For
+                If userParamNames(userParamIdx) = "" Then Continue For
+                If userAliasCells(userParamIdx) <> 0 Then
+                    Dim aliasTargetIdx As Integer = -1
+                    Dim scanIdx As Integer
+                    For scanIdx = 0 To st.varCount - 1
+                        If st.vars(scanIdx) = userAliasCells(userParamIdx) Then aliasTargetIdx = scanIdx : Exit For
+                    Next scanIdx
+                    UXBMIRInterpBindAlias st, userParamNames(userParamIdx), aliasTargetIdx
+                Else
+                    UXBMIRInterpSetVar st, userParamNames(userParamIdx), userArgValues(userParamIdx)
                 End If
             Next userParamIdx
             If canonicalCallOp = "MIR_METHOD_CALL" Or canonicalCallOp = "MIR_VIRTUAL_CALL" Then
@@ -580,30 +622,9 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
             Dim userInvokeValue As UXBInterpValue
             userInvokeValue = UXBMIRInterpInvokeLabel(instructions(), instructionCount, ctx, st, callName, userInvokeErr)
 
-            ' Capture each BYREF parameter's final value BEFORE leaving the callee's
-            ' scope discards it, then write it into the caller's variable AFTER
-            ' leaving -- so a caller variable that happens to share its name with
-            ' the callee's own parameter ends up with the callee's result, not a
-            ' stale shadowed copy.
-            Dim byRefFinalValues(Any) As UXBInterpValue
-            If userParamCount > 0 Then ReDim byRefFinalValues(userParamCount - 1)
-            Dim byRefIdx As Integer
-            If UXBInterpIsError(userInvokeValue) = 0 Then
-                For byRefIdx = 0 To userParamCount - 1
-                    If Trim(byRefCallerArgNames(byRefIdx)) <> "" Then
-                        byRefFinalValues(byRefIdx) = UXBMIRInterpGetOperand(st, byRefParamNames(byRefIdx))
-                    End If
-                Next byRefIdx
-            End If
-
+            ' BYREF parametreleri takma ad oldugundan yazimlar zaten cagiranin deposunda (S-167).
             UXBMIRInterpLeaveScope st
             If UXBInterpIsError(userInvokeValue) <> 0 Then Return userInvokeValue
-
-            For byRefIdx = 0 To userParamCount - 1
-                If Trim(byRefCallerArgNames(byRefIdx)) <> "" Then
-                    UXBMIRInterpAssignVar st, byRefCallerArgNames(byRefIdx), byRefFinalValues(byRefIdx)
-                End If
-            Next byRefIdx
 
             If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, userInvokeValue
             Return userInvokeValue
@@ -1003,10 +1024,15 @@ End Function
 Private Function UXBMIRInterpRunInstructionsCore(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef errText As String) As UXBInterpResult
     UXBLibraryPayloadResetCounters
     UXBInterpExtNumReleaseAll
+    UXBMIRSyncReset
     UXBInterpResultInit ctx.result
     Dim st As UXBMIRInterpState
     UXBMIRInterpStateInit st
     st.libraryHeap = @ctx.heap
+    ' S-160: istisna durumu program geneli (en dis kapsam) degiskendir; rutin icindeki THROW'un
+    ' yazdigi bayrak boylece cagiranin denetimine ulasir (yoksa rutin kapsaminda kaybolurdu).
+    UXBMIRInterpSetVar st, "__mir_exc_active", UXBInterpValueInt(0)
+    UXBMIRInterpSetVar st, "__mir_exc_value", UXBInterpValueVoid()
     ' S-073: same default VIRTUAL sandbox (and --virtual flag) the AST
     ' interpreter sets up before running; without it PEEK/POKE with no
     ' explicit VIRTUAL statement failed here ("memory store failed").
@@ -1077,6 +1103,9 @@ Private Function UXBMIRInterpRunInstructionsCore(instructions() As UXBMIRInstruc
             Dim specialValue As UXBInterpValue
             specialValue = UXBMIRInterpExecTaskRuntimeCall(instructions(), instructionCount, ctx, st, i, handledSpecial, specialErr)
             If handledSpecial <> 0 Then
+                If UXBInterpIsError(specialValue) <> 0 AndAlso specialValue.errorCode = UXB_INTERP_SIGNAL_PROGRAM_END Then
+                    Exit Do   ' S-156: END bir rutin icinde calisti -- program basariyla biter
+                End If
                 If UXBInterpIsError(specialValue) <> 0 Then
                     UXBInterpResultFail ctx.result, specialValue.errorCode, specialValue.errorText
                     errText = specialValue.errorText
@@ -1091,6 +1120,7 @@ Private Function UXBMIRInterpRunInstructionsCore(instructions() As UXBMIRInstruc
                 Else
                     r = UXBMIRInterpDispatch(instructions(i), ctx, st)
                 End If
+                If UXBInterpIsError(r) <> 0 AndAlso r.errorCode = UXB_INTERP_SIGNAL_PROGRAM_END Then Exit Do
                 If UXBInterpIsError(r) <> 0 Then
                     UXBInterpResultFail ctx.result, r.errorCode, r.errorText
                     errText = r.errorText
@@ -1101,6 +1131,15 @@ Private Function UXBMIRInterpRunInstructionsCore(instructions() As UXBMIRInstruc
             End If
         End If
     Loop
+    ' S-146 Model D / K5: ana programin kalan acik kilitleri birakilir, LOCK suresince
+    ' ertelenmis gorevler program bitmeden calisir (normal kapanis gorevleri bekler).
+    Dim finishValue As UXBInterpValue = UXBMIRTaskFinishProgram(instructions(), instructionCount, ctx, st)
+    If UXBInterpIsError(finishValue) <> 0 AndAlso finishValue.errorCode <> UXB_INTERP_SIGNAL_PROGRAM_END Then
+        UXBInterpResultFail ctx.result, finishValue.errorCode, finishValue.errorText
+        errText = finishValue.errorText
+        UXBInterpExtNumReleaseAll
+        Return ctx.result
+    End If
     Dim pendingErr As String
     If UXBMIRInterpPendingException(st, pendingErr) <> 0 Then
         UXBInterpResultFail ctx.result, UXB_INTERP_ERR_RUNTIME_SERVICE, pendingErr
@@ -1119,6 +1158,15 @@ End Function
 Function UXBMIRInterpRunInstructions(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef errText As String) As UXBInterpResult
     Dim res As UXBInterpResult
     res = UXBMIRInterpRunInstructionsCore(instructions(), instructionCount, ctx, errText)
+    ' S-030 K5: okunmamis gorev hatasi sessiz kaybolmaz -- basarili bitis bile basarisiz sayilir.
+    If res.statusText = "PASS" Then
+        Dim unreadTaskErr As String
+        If UXBMIRTaskUnreadErrors(ctx, unreadTaskErr) <> 0 Then
+            res.statusText = "FAIL"
+            res.errorText = unreadTaskErr
+            errText = unreadTaskErr
+        End If
+    End If
     ' The program has ended, including all failure exits. Release array payloads
     ' before publishing lifecycle counters; frame values were released by st.
     For slotIdx As Integer = 0 To ctx.heap.slotCount - 1

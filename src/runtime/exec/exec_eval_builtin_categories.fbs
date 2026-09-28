@@ -977,16 +977,18 @@ Private Function ExecEvalBuiltinTimeRandomCategory(ByRef ps As ParseState, ByRef
         Dim rndArgc As Integer
         rndArgc = ExecChildCount(ps, callNodeIdx)
 
-        Dim rndValue As Single
+        ' S-163: tamsayi baglaminda RND [0,1) degerinin tamsayi kismidir (0); uretec yine ilerler
+        ' (tipli yol ile ayni dizi). Onceki `* 2147483647` olceklemesi kilavuza aykiriydi.
+        Dim rndValue As Double
         If rndArgc = 0 Then
-            rndValue = Rnd
+            rndValue = UXBRngRnd(ExecCurrentTaskKey(), 0, 0)
         Else
             Dim rndSeedArg As Integer
             If ExecBuiltinArgAsInt(ps, es, callNodeIdx, callName, rndSeedArg, errText, 1) = 0 Then Return 0
-            rndValue = Rnd(rndSeedArg)
+            rndValue = UXBRngRnd(ExecCurrentTaskKey(), 1, CDbl(rndSeedArg))
         End If
 
-        Return ExecClampI32(CDbl(rndValue) * 2147483647#)
+        Return ExecClampI32(Int(rndValue))
 
     Case "TIMER"
         Dim timerArgc As Integer

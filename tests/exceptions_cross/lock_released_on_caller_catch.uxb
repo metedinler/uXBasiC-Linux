@@ -1,0 +1,27 @@
+' S-160 + S-146: LOCK tutan alt rutinden atilan istisna cagirandaki CATCH'e ulasir; kilit CATCH girisinde birakilir
+' (birakilmasaydi sonraki LOCK x SELF_DEADLOCK verirdi); ust duzeyde GOTO ile LOCK disina atlamak da kilidi birakir.
+DIM x AS I64 = 0
+SUB Patla()
+    LOCK x
+        x += 1
+        THROW 9
+    END LOCK
+END SUB
+TRY
+    Patla()
+CATCH
+    PRINT "yakalandi"
+END TRY
+LOCK x
+    x += 10
+END LOCK
+LOCK x
+    x += 100
+    GOTO disari
+END LOCK
+PRINT "atlanmamali"
+disari:
+LOCK x
+    x += 1000
+END LOCK
+PRINT x

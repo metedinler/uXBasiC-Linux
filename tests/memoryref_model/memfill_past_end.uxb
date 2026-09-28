@@ -1,0 +1,7 @@
+' S-056: a fill that would overrun the array is refused before any byte is written.
+DIM a(3) AS I32
+DIM p AS PTR
+p = VARPTR(a)
+MEMFILLD p, 7, 5
+PRINT "unreachable"
+

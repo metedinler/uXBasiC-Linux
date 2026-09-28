@@ -1,0 +1,21 @@
+' S-077: assignment normalizes to the declared narrow integer type in every engine.
+DIM a AS I32
+a = 2147483647
+a = a + 1
+PRINT a
+DIM w AS U32
+w = 0
+w = w - 1
+PRINT w
+DIM b AS U8
+b = U8(250)
+b = U8(b + 10)
+PRINT b
+DIM h AS I16
+h = I16(32767)
+h = I16(h + 1)
+PRINT h
+DIM c AS I8
+c = I8(127)
+c++
+PRINT c

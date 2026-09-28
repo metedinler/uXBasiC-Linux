@@ -1,0 +1,6 @@
+' S-149: sonuc tipi uyusmazligi.
+THREAD Namer(x AS I32) AS STRING
+    RETURN STR(x)
+END THREAD
+DIM t AS TASK OF I32 = SPAWN Namer(1)
+

@@ -6,6 +6,8 @@ THREAD Boom(x AS I32)
 END THREAD
 
 DIM b AS TASK = SPAWN Boom(1)
+' Faz 2A: gercek eszamanlilikta STATUS ancak WAIT/JOIN sonrasi kesindir (senkron referansta gorev SPAWN aninda biter).
+b.WAIT()
 PRINT b.STATUS
 IF b.ERRORTEXT <> "" THEN PRINT "hata var"
 PRINT "devam"

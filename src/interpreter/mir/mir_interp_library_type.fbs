@@ -47,6 +47,33 @@ Private Function UXBMIRLibTypeRationalCompare(ByVal an As LongInt, ByVal ad As L
 End Function
 
 Private Function UXBMIRInterpExecRationalProvider(ByRef ins As UXBMIRInstructionRecord, ByRef st As UXBMIRInterpState, ByVal memberName As String) As UXBInterpValue
+    Dim lifecycleName As String = UCase(Trim(memberName))
+    If lifecycleName = "COPY" Or lifecycleName = "CLONE" Or lifecycleName = "RETAIN" Or lifecycleName = "TOSTRING" Then
+        If ins.operandCount <> 2 Then Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "RATIONAL." & lifecycleName & " expects one operand")
+        Dim sourceValue As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(1))
+        If UCase(Trim(sourceValue.typeName)) <> "RATIONAL" Then
+            Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "library type operand mismatch: RATIONAL." & lifecycleName)
+        End If
+        Dim lifecycleResult As UXBInterpValue
+        If lifecycleName = "TOSTRING" Then
+            lifecycleResult = UXBInterpValueString(UXBInterpValueToString(sourceValue))
+        Else
+            ' RATIONAL is VALUE/BITCOPY/NONE: lifecycle transfer is a scalar
+            ' value copy and must not allocate or retain an external payload.
+            lifecycleResult = sourceValue
+        End If
+        If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, lifecycleResult
+        Return lifecycleResult
+    End If
+    If lifecycleName = "DROP" Then
+        If ins.operandCount <> 2 Then Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "RATIONAL.DROP expects one operand")
+        Dim dropValue As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(1))
+        If UCase(Trim(dropValue.typeName)) <> "RATIONAL" Then
+            Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "library type operand mismatch: RATIONAL.DROP")
+        End If
+        ' drop_model=NONE: explicit DROP is a valid no-op for a value type.
+        Return UXBInterpValueVoid()
+    End If
     If ins.operandCount < 3 Then Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "RATIONAL." & memberName & " expects two operands")
 
     Dim leftValue As UXBInterpValue

@@ -1,0 +1,148 @@
+#ifndef UXB_PARSER_NAMESPACE_VARS_FBS
+#define UXB_PARSER_NAMESPACE_VARS_FBS
+
+' ===========================================================================
+' S-162 (2026-09-26): NAMESPACE / MODULE degiskenleri tek bir nitelikli depo adi alir ("NS.NV").
+' Ayristirma bitince (semantik ve tum motorlardan once) calisir; bildirim ve tum erisimler ayni ada
+' cevrilir, boylece AST, MIR, native ve analizci (Model D) onu siradan bir global olarak gorur:
+'   - ad alani duzeyindeki `DIM nv` bildirimi         -> DIM_DECL "NS.NV"
+'   - disaridan `ns.nv` (FIELD_EXPR)                   -> IDENT "NS.NV"
+'   - disaridan `ns.dizi(i)` (CALL_EXPR "ns.dizi")     -> CALL_EXPR "NS.DIZI" (alicisiz)
+'   - ad alani icindeki rutinde nitelenmemis `nv`      -> "NS.NV" (yerel/parametre golgelemiyorsa)
+' ad alanindaki CONST'lar S-140 yolundan cozulur (bu gecis dokunmaz).
+' ===========================================================================
+
+Dim Shared gNsVarNamespaces As String   ' "|NS|"
+Dim Shared gNsVarKeys As String         ' "|NS.NV|" nitelikli adlar
+
+Private Function NsVarIsRoutineKind(ByRef kindRaw As String) As Integer
+    Select Case UCase(Trim(kindRaw))
+    Case "FUNCTION_STMT", "SUB_STMT", "THREAD_STMT", "PARALEL_STMT", "EVENT_STMT", "PIPE_STMT", _
+         "CLASS_METHOD_DECL", "CLASS_CONSTRUCTOR_DECL", "CLASS_DESTRUCTOR_DECL", "CLASS_OPERATOR_DECL", "CLASS_PROPERTY_DECL"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Private Function NsVarHas(ByRef ns As String, ByRef nm As String) As Integer
+    If ns = "" Or nm = "" Then Return 0
+    Return IIf(InStr(gNsVarKeys, "|" & ns & "." & nm & "|") > 0, 1, 0)
+End Function
+
+' Rutin alt agacindaki PARAM_DECL / DIM_DECL adlari ("|AD|").
+Private Sub NsVarCollectLocals(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef setOut As String, ByVal depth As Integer)
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Or depth > 400 Then Exit Sub
+    Dim k As String = UCase(Trim(ps.ast.nodes(nodeIdx).kind))
+    If k = "PARAM_DECL" Or k = "DIM_DECL" Then setOut &= UCase(Trim(ps.ast.nodes(nodeIdx).value)) & "|"
+    If k = "FOR_STMT" Or k = "FOR_EACH_STMT" Then setOut &= UCase(Trim(ps.ast.nodes(nodeIdx).value)) & "|"
+    Dim c As Integer = ps.ast.nodes(nodeIdx).firstChild
+    Do While c <> -1
+        NsVarCollectLocals ps, c, setOut, depth + 1
+        c = ps.ast.nodes(c).nextSibling
+    Loop
+    If ps.ast.nodes(nodeIdx).left <> -1 Then NsVarCollectLocals ps, ps.ast.nodes(nodeIdx).left, setOut, depth + 1
+    If ps.ast.nodes(nodeIdx).right <> -1 Then NsVarCollectLocals ps, ps.ast.nodes(nodeIdx).right, setOut, depth + 1
+End Sub
+
+Private Sub NsVarRewrite(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByVal curNs As String, ByVal locals As String, ByVal depth As Integer)
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Or depth > 400 Then Exit Sub
+    Dim k As String = UCase(Trim(ps.ast.nodes(nodeIdx).kind))
+    Dim v As String = UCase(Trim(ps.ast.nodes(nodeIdx).value))
+
+    If k = "NAMESPACE_STMT" Or k = "MODULE_STMT" Then
+        curNs = v
+        locals = "|"
+    ElseIf NsVarIsRoutineKind(k) <> 0 Then
+        locals = "|"
+        NsVarCollectLocals ps, nodeIdx, locals, 0
+    End If
+
+    Select Case k
+    Case "IDENT", "IDENTIFIER"
+        If curNs <> "" AndAlso InStr(locals, "|" & v & "|") = 0 AndAlso NsVarHas(curNs, v) <> 0 Then
+            ps.ast.nodes(nodeIdx).value = curNs & "." & v
+        End If
+    Case "FOR_STMT", "FOR_EACH_STMT"
+        If curNs <> "" AndAlso InStr(locals, "|" & v & "|") = 0 AndAlso NsVarHas(curNs, v) <> 0 Then
+            ps.ast.nodes(nodeIdx).value = curNs & "." & v
+        End If
+    Case "FIELD_EXPR", "MEMBER_EXPR"
+        Dim owner As Integer = ps.ast.nodes(nodeIdx).left
+        If owner <> -1 Then
+            Dim ok As String = UCase(Trim(ps.ast.nodes(owner).kind))
+            Dim ov As String = UCase(Trim(ps.ast.nodes(owner).value))
+            Dim member As String = v
+            If member = "" AndAlso ps.ast.nodes(nodeIdx).right <> -1 Then member = UCase(Trim(ps.ast.nodes(ps.ast.nodes(nodeIdx).right).value))
+            If (ok = "IDENT" Or ok = "IDENTIFIER") AndAlso InStr(locals, "|" & ov & "|") = 0 AndAlso NsVarHas(ov, member) <> 0 Then
+                ps.ast.nodes(nodeIdx).kind = "IDENT"
+                ps.ast.nodes(nodeIdx).value = ov & "." & member
+                ps.ast.nodes(nodeIdx).op = ""
+                ps.ast.nodes(nodeIdx).left = -1
+                ps.ast.nodes(nodeIdx).right = -1
+                ps.ast.nodes(nodeIdx).firstChild = -1
+                Exit Sub
+            End If
+        End If
+    Case "CALL_EXPR", "CALL_STMT"
+        ' Dizi erisimi: disaridan "ns.dizi" (alicili), iceriden nitelenmemis "dizi".
+        Dim dotPos As Integer = InStr(v, ".")
+        If dotPos > 0 Then
+            Dim nsPart As String = Left(v, dotPos - 1)
+            Dim memPart As String = Mid(v, dotPos + 1)
+            If InStr(locals, "|" & nsPart & "|") = 0 AndAlso NsVarHas(nsPart, memPart) <> 0 Then
+                ps.ast.nodes(nodeIdx).value = nsPart & "." & memPart
+                ps.ast.nodes(nodeIdx).left = -1
+                ps.ast.nodes(nodeIdx).op = ""
+            End If
+        ElseIf curNs <> "" AndAlso InStr(locals, "|" & v & "|") = 0 AndAlso NsVarHas(curNs, v) <> 0 Then
+            ps.ast.nodes(nodeIdx).value = curNs & "." & v
+        End If
+    End Select
+
+    Dim c As Integer = ps.ast.nodes(nodeIdx).firstChild
+    Do While c <> -1
+        Dim nxt As Integer = ps.ast.nodes(c).nextSibling
+        NsVarRewrite ps, c, curNs, locals, depth + 1
+        c = nxt
+    Loop
+    If ps.ast.nodes(nodeIdx).left <> -1 Then NsVarRewrite ps, ps.ast.nodes(nodeIdx).left, curNs, locals, depth + 1
+    If ps.ast.nodes(nodeIdx).right <> -1 Then NsVarRewrite ps, ps.ast.nodes(nodeIdx).right, curNs, locals, depth + 1
+End Sub
+
+Function NormalizeNamespaceVariables(ByRef ps As ParseState) As Integer
+    gNsVarNamespaces = "|"
+    gNsVarKeys = "|"
+    If ps.rootNode = -1 Then Return 1
+    ' 1) Ad alani duzeyindeki DIM bildirimleri (rutin disi, dogrudan ad alani govdesinde).
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If k <> "NAMESPACE_STMT" And k <> "MODULE_STMT" Then Continue For
+        Dim ns As String = UCase(Trim(ps.ast.nodes(i).value))
+        If ns = "" Then Continue For
+        Dim st As Integer = ps.ast.nodes(i).firstChild
+        Do While st <> -1
+            If UCase(Trim(ps.ast.nodes(st).kind)) = "DIM_STMT" Then
+                Dim d As Integer = ps.ast.nodes(st).firstChild
+                Do While d <> -1
+                    If UCase(Trim(ps.ast.nodes(d).kind)) = "DIM_DECL" Then
+                        Dim nm As String = UCase(Trim(ps.ast.nodes(d).value))
+                        If nm <> "" AndAlso InStr(nm, ".") = 0 Then
+                            If InStr(gNsVarNamespaces, "|" & ns & "|") = 0 Then gNsVarNamespaces &= ns & "|"
+                            If InStr(gNsVarKeys, "|" & ns & "." & nm & "|") = 0 Then gNsVarKeys &= ns & "." & nm & "|"
+                            ps.ast.nodes(d).value = ns & "." & nm
+                        End If
+                    End If
+                    d = ps.ast.nodes(d).nextSibling
+                Loop
+            End If
+            st = ps.ast.nodes(st).nextSibling
+        Loop
+    Next i
+    If Len(gNsVarKeys) <= 1 Then Return 1
+    ' 2) Tum erisimler.
+    NsVarRewrite ps, ps.rootNode, "", "|", 0
+    Return 1
+End Function
+
+#endif

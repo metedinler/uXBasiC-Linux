@@ -1,0 +1,15 @@
+' S-142b: F32 en cok 7 anlamli hane basar (tek duyarlik); F32 op F32 de F32'dir.
+DIM c AS F32
+DIM s AS STRING
+c = 1.0 / 3.0
+PRINT c
+s = STR(c)
+PRINT s
+PRINT "c=" + STR(c)
+c = 0.1
+PRINT c
+PRINT c + c
+c = 16777216.0
+PRINT c
+c = 2.5
+PRINT c

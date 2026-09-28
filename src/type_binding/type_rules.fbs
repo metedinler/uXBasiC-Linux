@@ -50,6 +50,7 @@ Function UXBStep3TypeCanonical(ByVal rawType As String) As String
     Case "WASM_EXTERNREF", "EXTERNREF", "TYPE_WASM_EXTERNREF": Return TYPE_WASM_EXTERNREF
     Case "TASK", "TYPE_TASK": Return TYPE_TASK
     Case "TASKGROUP", "TYPE_TASKGROUP": Return TYPE_TASKGROUP
+    Case "MUTEX", "TYPE_MUTEX": Return TYPE_MUTEX
     Case TYPE_UNKNOWN: Return TYPE_UNKNOWN
     Case TYPE_ERROR: Return TYPE_ERROR
     End Select
@@ -90,7 +91,13 @@ Function UXBStep3TypeLegacyName(ByVal rawType As String) As String
     Case TYPE_FUNCTION_PTR: Return "POINTER"
     Case TYPE_DLL_HANDLE, TYPE_FILE_HANDLE: Return "POINTER"
     Case TYPE_JS_OBJECT, TYPE_WASM_EXTERNREF: Return "REF"
-    Case TYPE_TASK, TYPE_TASKGROUP: Return "POINTER"
+    ' S-030/S-149: tip baglama tablosu TASK/TASKGROUP turlerini kendisi tanir
+    ' (type_binding.fbs, isTask). "POINTER"a indirmek, ada gore calisan kayit
+    ' defterinden geri okununca TYPE_PTR'a donusup TASK parametrelerini PTR
+    ' gosteriyordu (MIR'de `SUB Show(t AS TASK)` icinde t.JOIN() cozulmuyordu).
+    Case TYPE_TASK: Return "TASK"
+    Case TYPE_TASKGROUP: Return "TASKGROUP"
+    Case TYPE_MUTEX: Return "MUTEX"
     End Select
     Return t
 End Function

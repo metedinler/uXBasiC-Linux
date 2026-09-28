@@ -1,0 +1,8 @@
+' S-014: a PRINT list must preserve a literal before a namespaced DLL wrapper call.
+INCLUDE "include/modules/uxcollections.uxmh"
+
+DIM h AS U64
+h = uxcollections.ListNew()
+CALL uxcollections.ListPushI64(h, 42)
+PRINT "etiket="; uxcollections.ListGetI64(h, 0)
+CALL uxcollections.ListFree(h)

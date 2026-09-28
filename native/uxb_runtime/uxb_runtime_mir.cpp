@@ -1,5 +1,6 @@
 #include "uxb_runtime.h"
 #include "uxb_runtime_state.h"
+#include "uxb_runtime_print.h"
 
 #include <algorithm>
 #include <array>
@@ -40,6 +41,18 @@ const char* hold_text(std::string value) {
     std::string& slot = text_ring[text_ring_index++ % text_ring.size()];
     slot = std::move(value);
     return slot.c_str();
+}
+
+// S-157: STRING DEGISKENLERININ SAHIPLI DEPOSU. Metin ureten fonksiyonlar sonucu yukaridaki is
+// parcacigina ozel 32 yuvalik halkaya yazar (gecici deger). Bir degiskene / dizi elemanina / alana
+// yazilan metin eskiden halkayi gosteriyordu ve 32 metin isleminden sonra sessizce eziliyordu.
+// Artik yazim aninda kopyalanir; kopyanin sahibi YUVA ADRESIDIR. Ayni yuvaya yeni yazimda (ya da
+// rutin bitisinde __uxb_rt_str_release) yalniz o yuvanin kendi kopyasi serbest birakilir -- baska
+// bir degiskenin metnine (b = a; parametre) hic dokunulmaz. Kayit defteri kilitli: gorevler guvenli.
+std::mutex owned_text_mutex;
+std::unordered_map<const char*, void*>& owned_texts() {
+    static auto* table = new std::unordered_map<const char*, void*>();   // bilerek yok edilmez (S-030)
+    return *table;
 }
 
 std::string text_or_empty(const char* value) {
@@ -176,35 +189,105 @@ std::string format_f32_text(double value) {
 
 }  // namespace
 
-UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_i64(int64_t value) {
-    std::printf("%lld", static_cast<long long>(value));
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_str_store(const char** slot, const char* src) {
+    if (!slot) return 0;
+    const char* old = *slot;
+    if (src && src == old) return 0;
+    const std::size_t n = src ? std::strlen(src) : 0;
+    char* copy = static_cast<char*>(std::malloc(n + 1));
+    if (!copy) return 0;
+    if (n) std::memcpy(copy, src, n);
+    copy[n] = '\0';
+    {
+        std::lock_guard<std::mutex> lock(owned_text_mutex);
+        auto& table = owned_texts();
+        if (old) {
+            auto it = table.find(old);
+            if (it != table.end() && it->second == static_cast<void*>(slot)) {
+                std::free(const_cast<char*>(old));
+                table.erase(it);
+            }
+        }
+        table[copy] = static_cast<void*>(slot);
+    }
+    *slot = copy;
+    return 1;
+}
+
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_str_release(const char** slot) {
+    if (!slot || !*slot) return 0;
+    std::lock_guard<std::mutex> lock(owned_text_mutex);
+    auto& table = owned_texts();
+    auto it = table.find(*slot);
+    if (it == table.end() || it->second != static_cast<void*>(slot)) return 0;
+    std::free(const_cast<char*>(*slot));
+    table.erase(it);
+    *slot = nullptr;
+    return 1;
+}
+
+// Rutin donusu: yerel yuvanin kopyasi serbest birakilmadan once metin gecici halkaya alinir.
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_temp(const char* value) { return hold_text(text_or_empty(value)); }
+
+// S-030 Faz 2A / K9: konsol ciktisinin tek yolu (bkz. uxb_runtime_print.h).
+namespace {
+std::mutex console_mutex;
+thread_local std::string console_line;
+}  // namespace
+
+namespace uxb {
+
+void console_write(const std::string& text) {
+    if (!task_pool_active() && console_line.empty()) {
+        std::fputs(text.c_str(), stdout);
+        std::fflush(stdout);
+        return;
+    }
+    console_line += text;
+    const std::size_t lastNewline = console_line.rfind('\n');
+    if (lastNewline == std::string::npos) return;
+    {
+        std::lock_guard<std::mutex> lock(console_mutex);
+        std::fwrite(console_line.data(), 1, lastNewline + 1, stdout);
+        std::fflush(stdout);
+    }
+    console_line.erase(0, lastNewline + 1);
+}
+
+void console_flush_current_thread() {
+    if (console_line.empty()) return;
+    std::lock_guard<std::mutex> lock(console_mutex);
+    std::fwrite(console_line.data(), 1, console_line.size(), stdout);
     std::fflush(stdout);
+    console_line.clear();
+}
+
+}  // namespace uxb
+
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_i64(int64_t value) {
+    uxb::console_write(std::to_string(static_cast<long long>(value)));
     return value;
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_cstr(const char* value) {
     const char* text = value ? value : "";
-    std::fputs(text, stdout);
-    std::fflush(stdout);
+    uxb::console_write(text);
     return static_cast<int64_t>(std::strlen(text));
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_newline(void) {
-    std::fputc('\n', stdout);
-    std::fflush(stdout);
+    uxb::console_write("\n");
     return 1;
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_f64(double value) {
     // S-142b: same digits rule as the interpreters (see format_float_text).
-    std::fputs(format_f64_text(value).c_str(), stdout);
-    std::fflush(stdout);
+    uxb::console_write(format_f64_text(value));
     return 0;
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_f32(double value) {
-    std::fputs(format_f32_text(value).c_str(), stdout);
-    std::fflush(stdout);
+    uxb::console_write(format_f32_text(value));
     return 0;
 }
 
@@ -213,6 +296,7 @@ UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_f32(double value) {
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_input_i64(void) {
+    uxb::console_flush_current_thread();   // yarim satir istem (PRINT "Sayi: ";) girdiden once gorunmeli
     int64_t value = 0;
     if (!(std::cin >> value)) {
         uxb::RuntimeState::instance().set_error("INPUT expected an integer value");
@@ -223,6 +307,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_input_i64(void) {
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_cls(void) {
+    uxb::console_flush_current_thread();
 #if defined(_WIN32)
     HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO info{};
@@ -240,6 +325,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_cls(void) {
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_locate(int64_t row, int64_t column) {
+    uxb::console_flush_current_thread();
 #if defined(_WIN32)
     COORD position{static_cast<SHORT>(std::max<int64_t>(1, column) - 1), static_cast<SHORT>(std::max<int64_t>(1, row) - 1)};
     return SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), position) ? 1 : 0;
@@ -250,6 +336,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_locate(int64_t row, int64_t column) {
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_color(int64_t foreground, int64_t background) {
+    uxb::console_flush_current_thread();
 #if defined(_WIN32)
     const WORD attributes = static_cast<WORD>((foreground & 15) | ((background & 15) << 4));
     return SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), attributes) ? 1 : 0;
@@ -260,6 +347,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_color(int64_t foreground, int64_t backg
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_getkey_i64(void) {
+    uxb::console_flush_current_thread();
 #if defined(_WIN32)
     return static_cast<unsigned char>(_getch());
 #else
@@ -268,6 +356,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_getkey_i64(void) {
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_inkey_i64(void) {
+    uxb::console_flush_current_thread();
 #if defined(_WIN32)
     return _kbhit() ? static_cast<unsigned char>(_getch()) : 0;
 #else
@@ -305,6 +394,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_val_i64(const char* value) {
     return end == value ? 0 : static_cast<int64_t>(result);
 }
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_i64(int64_t value) { return hold_text(std::to_string(value)); }
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_u64(int64_t value) { return hold_text(std::to_string(static_cast<uint64_t>(value))); }
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_asc(const char* value) { return value && *value ? static_cast<unsigned char>(*value) : 0; }
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_chr(int64_t value) { return hold_text(std::string(1, static_cast<char>(value & 255))); }
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_left(const char* value, int64_t count) {
@@ -395,7 +485,21 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_open(const char* path, const char*
     if (!path || !mode || channel < 0) return 0;
     std::lock_guard<std::mutex> lock(file_mutex);
     if (std::FILE* old = channel_file(channel)) std::fclose(old);
-    std::FILE* file = std::fopen(path, mode);
+    // S-146 adim 2: BASIC kip sozcukleri C fopen kiplerine cevrilir (onceden "OUTPUT" dogrudan fopen'a
+    // gidiyor, dosya hic acilmiyordu). C kipi ("w", "rb" ...) verilmisse oldugu gibi kullanilir.
+    const std::string m = text_or_empty(mode);
+    std::string mu;
+    for (char c : m) mu.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+    std::FILE* file = nullptr;
+    if (mu == "OUTPUT" || mu == "O") file = std::fopen(path, "w");
+    else if (mu == "INPUT" || mu == "I" || mu == "IN") file = std::fopen(path, "r");
+    else if (mu == "APPEND" || mu == "A") file = std::fopen(path, "a");
+    else if (mu == "BINARY" || mu == "B" || mu == "RANDOM" || mu == "R") {
+        file = std::fopen(path, "r+b");
+        if (!file) file = std::fopen(path, "w+b");
+    } else {
+        file = std::fopen(path, mode);
+    }
     if (!file) { files.erase(channel); return 0; }
     files[channel] = file;
     return 1;
@@ -453,6 +557,58 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_put(int64_t channel, int64_t posit
     return std::fwrite(&value, 1, count, file) == count ? static_cast<int64_t>(count) : 0;
 }
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_delete(const char* path) { return path && std::remove(path) == 0 ? 1 : 0; }
+// S-146 adim 2: metin dosyasi PRINT # / INPUT # (yorumlayicilarla ayni bicim). Satir, is parcacigina
+// ozel tamponda birlesir ve dosyaya TEK kilit altinda yazilir: gorevlerin satirlari karismaz.
+// Ayrac: ";" hicbir sey, "," sekme, " " bosluk; son ayrac ";" ya da "," degilse satir sonu yazilir.
+namespace {
+thread_local std::string tl_filePrintBuffer;
+thread_local int64_t tl_filePrintChannel = -1;
+thread_local std::string tl_filePrintLastSep;
+}  // namespace
+
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_print_begin(int64_t channel) {
+    tl_filePrintBuffer.clear();
+    tl_filePrintChannel = channel;
+    tl_filePrintLastSep.clear();
+    return 0;
+}
+
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_print_text(const char* text, const char* sep) {
+    tl_filePrintBuffer += text_or_empty(text);
+    tl_filePrintLastSep = text_or_empty(sep);
+    if (tl_filePrintLastSep == ",") tl_filePrintBuffer += '\t';
+    else if (tl_filePrintLastSep == " ") tl_filePrintBuffer += ' ';
+    return 0;
+}
+
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_print_end(void) {
+    const bool raw = (tl_filePrintLastSep == ";" || tl_filePrintLastSep == ",");
+    std::lock_guard<std::mutex> lock(file_mutex);
+    std::FILE* file = channel_file(tl_filePrintChannel);
+    tl_filePrintChannel = -1;
+    if (!file) return 0;
+    if (!tl_filePrintBuffer.empty()) std::fwrite(tl_filePrintBuffer.data(), 1, tl_filePrintBuffer.size(), file);
+    if (!raw) std::fputc('\n', file);
+    tl_filePrintBuffer.clear();
+    return 1;
+}
+
+// INPUT #: bir satir (satir sonu olmadan); dosya sonunda bos metin.
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_file_input_line(int64_t channel) {
+    std::string line;
+    {
+        std::lock_guard<std::mutex> lock(file_mutex);
+        std::FILE* file = channel_file(channel);
+        if (file) {
+            int ch;
+            while ((ch = std::fgetc(file)) != EOF) {
+                if (ch == '\n') break;
+                if (ch != '\r') line.push_back(static_cast<char>(ch));
+            }
+        }
+    }
+    return hold_text(line);
+}
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_sqrt_i64(int64_t value) { return value < 0 ? 0 : static_cast<int64_t>(std::sqrt(static_cast<double>(value))); }
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_sin_i64(int64_t value) { return static_cast<int64_t>(std::sin(static_cast<double>(value))); }
@@ -668,6 +824,7 @@ UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_f64(double value) {
 // this is an ordinary, expected language-level runtime error, not a fatal
 // internal-invariant violation.
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_runtime_error_exit(const char* message) {
+    uxb::console_flush_current_thread();
     std::fputs(message ? message : "uXBasic runtime error", stderr);
     std::fputc('\n', stderr);
     std::fflush(stderr);

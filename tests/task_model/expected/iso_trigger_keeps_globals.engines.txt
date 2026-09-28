@@ -1,0 +1,3 @@
+# SPAWN yok: K3 geregi TRIGGER programi tum motorlarda calisir.
+x64=run
+AST-x64=run

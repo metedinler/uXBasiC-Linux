@@ -1,0 +1,1 @@
+ALL=global 'GP' (NOKTA) gorevlerle paylasiliyor -- henuz uygulanmadi: S-146 adim 5

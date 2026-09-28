@@ -1,0 +1,3 @@
+PARALEL CompileGroup(files AS STRING[])
+    PRINT "array-task"
+END PARALEL

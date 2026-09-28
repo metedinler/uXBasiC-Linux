@@ -1,0 +1,31 @@
+' S-140: golgeleme + sabit takma adi + F64 sabitle bolme + nitelikli namespace sabiti + STRING sabit birlestirme.
+NAMESPACE geo
+    CONST PI2 AS F64 = 6.25
+    CONST SIDES = 4
+    CONST LABEL = "sq"
+END NAMESPACE
+CONST BASE = 10
+CONST BASE2 = BASE
+CONST HALF AS F64 = 1
+CONST GREETING = "hi"
+FUNCTION Shadow(BASE AS I32) AS I32
+    RETURN BASE + 1
+END FUNCTION
+FUNCTION UsesAlias() AS I32
+    RETURN BASE2 * 2
+END FUNCTION
+MAIN
+    PRINT Shadow(5)
+    PRINT UsesAlias()
+    PRINT HALF / 4
+    PRINT geo.PI2
+    PRINT geo.SIDES * 3
+    PRINT geo.LABEL + "-" + GREETING
+    DIM i AS I32
+    DIM total AS I32
+    total = 0
+    FOR i = 1 TO geo.SIDES
+        total = total + BASE
+    NEXT
+    PRINT total
+END MAIN

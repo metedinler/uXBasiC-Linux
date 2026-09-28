@@ -1,0 +1,16 @@
+' S-146: saf govde (yerel degisken, saf yerlesikler, yerel LIST, CONST, saf kullanici FUNCTION) SPAWN edilebilir.
+FUNCTION Kare(v AS I32) AS I32
+ RETURN v * v
+END FUNCTION
+CONST K = 3
+THREAD W(x AS I32) AS I32
+ DIM s AS STRING = STR(x) + LEFT("ab", 1) + MID("xyz", 2, 1) + UCASE("q")
+ DIM l AS LIST
+ LISTADD(l, x)
+ PRINT s; LISTLEN(l); TIMER > 0
+ RETURN Kare(x) + K + ABS(-2) + LEN(s) + INT(SQR(16)) + I32(1)
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

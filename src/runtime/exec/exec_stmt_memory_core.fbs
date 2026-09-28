@@ -80,12 +80,75 @@ Private Function ExecMemoryModeOffset(ByRef ps As ParseState, ByVal stmtIdx As I
     Return 1
 End Function
 
+' S-159: bir ifade dugumu TYPE/STRUCT/UNION degerinin bellek konumu mu (TYPE degiskeni ya da TYPE tipli alan).
+' 1 = evet (addrOut/typeOut dolu), 0 = hayir, -1 = hata (errText dolu).
+Private Function ExecTypeValueLocation(ByRef ps As ParseState, ByRef es As ExecState, ByVal nodeIdx As Integer, ByRef addrOut As UInteger, ByRef typeOut As String, ByRef errText As String) As Integer
+    addrOut = 0
+    typeOut = ""
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return 0
+    Dim k As String = UCase(Trim(ps.ast.nodes(nodeIdx).kind))
+    Dim candType As String = ""
+    Dim candAddr As UInteger = 0
+    If k = "IDENT" Or k = "IDENTIFIER" Then
+        Dim vIdx As Integer = ExecFindVar(es, ps.ast.nodes(nodeIdx).value)
+        If vIdx = -1 Then Return 0
+        If es.vars(vIdx).isArray <> 0 Then Return 0
+        candType = UCase(Trim(es.vars(vIdx).declType))
+        If Left(candType, 5) = "TYPE_" Then candType = Mid(candType, 6)
+        candAddr = es.vars(vIdx).addr
+    ElseIf k = "FIELD_EXPR" Then
+        Dim fSize As Integer, rootT As String, rootA As UInteger, pathT As String, resErr As String
+        If ExecResolveFieldAccess(ps, es, nodeIdx, candAddr, candType, fSize, rootT, rootA, pathT, resErr) = 0 Then Return 0
+        candType = UCase(Trim(candType))
+    Else
+        Return 0
+    End If
+    If candType = "" Or candAddr = 0 Then Return 0
+    Dim recSize As Integer, recAlign As Integer, recKind As String, recAbi As String, recPack As Integer, recExplicit As Integer
+    If TypeLayoutDescribeGlobal(candType, recSize, recAlign, recKind, recAbi, recPack, recExplicit) = 0 Then Return 0
+    If recKind <> "TYPE" And recKind <> "STRUCT" And recKind <> "UNION" Then Return 0
+    If ExecFindClassDeclNode(ps, candType) <> -1 Then Return 0
+    addrOut = candAddr
+    typeOut = candType
+    Return 1
+End Function
+
 Private Function ExecRunAssignStmt(ByRef ps As ParseState, ByRef es As ExecState, ByRef st As ASTNode, ByRef errText As String) As Integer
     Dim lhs As Integer
     lhs = st.left
     If lhs = -1 Then
         errText = "exec: assign lhs missing"
         Return 0
+    End If
+
+    ' S-159: TYPE degerinin butun atamasi (k2 = k, a.ic = b.ic) -- deger semantigi, bayt kopyasi.
+    ' STRING alanlar metin havuzu tutamaci tasir (S-158); her yeni yazim yeni tutamac aldigi icin kopya guvenli.
+    Dim assignOp As String = Trim(st.op)
+    If (assignOp = "" Or assignOp = "=") AndAlso st.right <> -1 Then
+        Dim dstAddr As UInteger, dstType As String
+        Dim srcAddr As UInteger, srcType As String
+        If ExecTypeValueLocation(ps, es, lhs, dstAddr, dstType, errText) = 1 Then
+            If ExecTypeValueLocation(ps, es, st.right, srcAddr, srcType, errText) = 1 Then
+                If dstType <> srcType Then
+                    errText = "exec: TYPE atamasi farkli tipler arasinda: " & srcType & " -> " & dstType
+                    Return 0
+                End If
+                Dim copySize As Integer
+                Dim sizeErr As String
+                If TypeLayoutSizeOf(ps, dstType, copySize, sizeErr) = 0 Or copySize <= 0 Then
+                    errText = "exec: TYPE boyutu bulunamadi " & dstType & " " & sizeErr
+                    Return 0
+                End If
+                If srcAddr <> dstAddr Then
+                    If VMemCopyB(srcAddr, dstAddr, CUInt(copySize)) = 0 Then
+                        errText = "exec: TYPE kopyasi bellek disi"
+                        Return 0
+                    End If
+                End If
+                Return 1
+            End If
+        End If
+        errText = ""
     End If
 
     Dim rhsValue As ExecValue
@@ -472,8 +535,9 @@ Private Function ExecRunRandomizeStmt(ByRef ps As ParseState, ByRef es As ExecSt
     Dim randomizeCount As Integer
     randomizeCount = ExecChildCount(ps, stmtIdx)
 
+    ' S-163: tum motorlarda ayni uretec (src/common/uxb_rng.fbs), gorev basina durum.
     If randomizeCount = 0 Then
-        Randomize Timer
+        UXBRngRandomizeTime ExecCurrentTaskKey()
         Return 1
     End If
 
@@ -488,7 +552,7 @@ Private Function ExecRunRandomizeStmt(ByRef ps As ParseState, ByRef es As ExecSt
     seedValue = ExecEvalNode(ps, es, seedExpr, errText)
     If errText <> "" Then Return 0
 
-    Randomize seedValue
+    UXBRngRandomize ExecCurrentTaskKey(), seedValue
     Return 1
 End Function
 

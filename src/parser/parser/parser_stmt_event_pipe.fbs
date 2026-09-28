@@ -161,11 +161,18 @@ Private Function ParseNamedSlotHeader(ByRef ps As ParseState, ByRef firstTok As 
         If ParserTaskTryParsePipeInput(ps, blockNode) = 0 Then Return -1
     End If
 
-    ' Only PIPE is value-producing.  Its declared result type is represented
-    ' by the same RETURN_TYPE AST node used by FUNCTION.
+    ' PIPE is value-producing; its declared result type is represented by the
+    ' same RETURN_TYPE AST node used by FUNCTION. S-149 (Mete, 2026-09-25):
+    ' THREAD/PARALEL may also declare one -- it is the result type of the TASK
+    ' handle SPAWN returns, so `DIM t AS TASK OF I32 = SPAWN Worker(1)` can be
+    ' checked against it. It stays optional (untyped THREAD/PARALEL keep working)
+    ' and, unlike PIPE, does not overwrite the block's typeName kind marker.
+    ' EVENT stays synchronous and result-less.
     If IsKw(ps, "AS") Then
-        If UCase(Trim(firstTok.lexeme)) <> "PIPE" Then
-            ps.lastError = firstTok.lexeme & ": return type is only valid for PIPE"
+        Dim returnOwnerKind As String
+        returnOwnerKind = UCase(Trim(firstTok.lexeme))
+        If returnOwnerKind <> "PIPE" And returnOwnerKind <> "THREAD" And returnOwnerKind <> "PARALEL" Then
+            ps.lastError = firstTok.lexeme & ": return type is only valid for PIPE, THREAD and PARALEL"
             Return -1
         End If
         AdvanceTok ps
@@ -181,7 +188,7 @@ Private Function ParseNamedSlotHeader(ByRef ps As ParseState, ByRef firstTok As 
         returnTypeNode = MakeNodeFromToken(ps, "RETURN_TYPE", canonicalReturnType, "", returnTypeTok)
         ps.ast.nodes(returnTypeNode).role = "RETURN_TYPE"
         ASTAddChild ps.ast, blockNode, returnTypeNode
-        ps.ast.nodes(blockNode).typeName = canonicalReturnType
+        If returnOwnerKind = "PIPE" Then ps.ast.nodes(blockNode).typeName = canonicalReturnType
         AdvanceTok ps
     End If
 

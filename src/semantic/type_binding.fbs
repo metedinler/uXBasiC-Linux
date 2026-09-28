@@ -202,7 +202,7 @@ Function TypeBindingCreate(ByRef typeKind As String, ByRef typeName As String) A
         tb.collectionKind = k
         tb.sizeBytes = ptrSize
         tb.alignBytes = ptrSize
-    Case "TASK", "TASKGROUP"
+    Case "TASK", "TASKGROUP", "MUTEX"
         ' S-030: opak gorev tutamaci -- CLASS referansiyla ayni ABI (tek pointer),
         ' ama isClass DEGIL: metot/alan cozumlemesi kullanici sinifi tablosundan
         ' degil, TASK'a ozel sabit uye kumesinden (STATUS/WAIT/JOIN/CANCEL/RESULT/
@@ -266,7 +266,7 @@ Function TypeBindingResolve(ByRef typeName As String, ByRef errText As String) A
     End If
 
     Select Case canonical
-    Case "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "F32", "F64", "F80", "F128", "BIGF", "BIGD", "BALL", "BIGINT", "BOOLEAN", "STRING", "ARRAY", "TYPE", "CLASS", "INTERFACE", "LIST", "DICT", "SET", "REF", "POINTER", "TASK", "TASKGROUP"
+    Case "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "F32", "F64", "F80", "F128", "BIGF", "BIGD", "BALL", "BIGINT", "BOOLEAN", "STRING", "ARRAY", "TYPE", "CLASS", "INTERFACE", "LIST", "DICT", "SET", "REF", "POINTER", "TASK", "TASKGROUP", "MUTEX"
         Dim existing As Integer
         existing = TypeBindingFindByKey(canonical, "")
         If existing <> -1 Then Return existing

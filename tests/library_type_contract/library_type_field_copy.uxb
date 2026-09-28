@@ -1,0 +1,22 @@
+LIBTYPE "owned_text.library_type.json"
+
+TYPE BOX
+    item AS TEXT_VALUE
+END TYPE
+
+MAIN
+    DIM a AS TEXT_VALUE
+    DIM b AS TEXT_VALUE
+    DIM leftBox AS BOX
+    DIM rightBox AS BOX
+    DIM boxes(0 TO 0) AS BOX
+    a = TEXT_VALUE.CONSTRUCT("hello")
+    leftBox.item = a
+    boxes(0).item = a
+    a = TEXT_VALUE.NORMALIZE(a)
+    PRINT TEXT_VALUE.TOSTRING(leftBox.item)
+    rightBox.item = leftBox.item
+    leftBox.item = TEXT_VALUE.NORMALIZE(leftBox.item)
+    PRINT TEXT_VALUE.TOSTRING(rightBox.item)
+    PRINT TEXT_VALUE.TOSTRING(boxes(0).item)
+END MAIN

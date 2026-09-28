@@ -1,0 +1,12 @@
+' S-146 izolasyon negatif testi: neg_iso_global_object
+CLASS Nokta
+ f AS I32
+END CLASS
+DIM gp AS Nokta = NEW Nokta()
+THREAD W(x AS I32) AS I32
+ RETURN gp.f
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

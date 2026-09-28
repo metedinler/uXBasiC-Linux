@@ -1,0 +1,16 @@
+' S-149: STRING ve F64 sonuclu gorevler; sonuc bildirilen tipe cevrilir (FUNCTION donusu gibi).
+THREAD Namer(x AS I32) AS STRING
+    RETURN "n" + STR(x)
+END THREAD
+THREAD Halver(x AS I32) AS F64
+    RETURN x
+END THREAD
+DIM a AS TASK OF STRING = SPAWN Namer(7)
+DIM s AS STRING
+s = a.JOIN()
+PRINT s
+DIM b AS TASK OF F64 = SPAWN Halver(3)
+DIM f AS F64
+f = b.RESULT / 2
+PRINT f
+

@@ -1,0 +1,8 @@
+' S-149: tipsiz TASK degiskeni TASK OF'a atanamaz.
+THREAD Plain(x AS I32)
+    RETURN x
+END THREAD
+DIM u AS TASK = SPAWN Plain(1)
+DIM t AS TASK OF I32
+t = u
+

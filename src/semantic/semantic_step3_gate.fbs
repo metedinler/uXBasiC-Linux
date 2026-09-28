@@ -1239,6 +1239,52 @@ Private Function Step3ValidateCompoundAssignmentTypes(ByVal opTextRaw As String,
     Return 1
 End Function
 
+' S-148: DIM initializers are assignments too.  Keep their compatibility
+' check in the same semantic gate as ordinary assignments so MIR lowering
+' cannot silently store an expression of a different type.
+Private Function Step3ValidateDimInitializers(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If Step3NodeKind(ps, i) <> "DIM_DECL" Then Continue For
+
+        Dim declaredType As String
+        If Step3NodeDeclaredType(ps, i, declaredType) = 0 Then Continue For
+        declaredType = UXBStep3TypeCanonical(declaredType)
+
+        Dim initNode As Integer
+        initNode = Step3FindChildByKind(ps, i, "INIT_EXPR")
+        If initNode = -1 Then Continue For
+
+        Dim initExpr As Integer
+        initExpr = ps.ast.nodes(initNode).left
+        If initExpr = -1 Then initExpr = Step3ChildAt(ps, initNode, 0)
+        If initExpr = -1 Then
+            errText = "type: DIM initializer expression missing for " & ps.ast.nodes(i).value
+            Return 0
+        End If
+
+        Dim actualType As String
+        If UXBStep3InferExprType(ps, initExpr, actualType, errText) = 0 Then Return 0
+        actualType = UXBStep3TypeCanonical(actualType)
+
+        ' Class assignment is nominal and directional; the generic coercion
+        ' table deliberately does not encode inheritance/interface relations.
+        If SemHasClassName(ps, actualType) <> 0 Then
+            If SemHasClassName(ps, declaredType) <> 0 Or SemFindInterfaceNode(ps, declaredType) <> -1 Or declaredType = "OBJECT" Then
+                If SemCanAssignClassType(ps, declaredType, actualType) = 0 Then
+                    errText = "type: DIM initializer cannot convert " & actualType & " to " & declaredType
+                    Return 0
+                End If
+            Else
+                If UXBStep3CheckAssignment(declaredType, actualType, errText) = 0 Then Return 0
+            End If
+        Else
+            If UXBStep3CheckAssignment(declaredType, actualType, errText) = 0 Then Return 0
+        End If
+    Next i
+    Return 1
+End Function
+
 Private Function Step3ValidateAssignments(ByRef ps As ParseState, ByRef errText As String) As Integer
     Dim i As Integer
     For i = 0 To ps.ast.count - 1
@@ -1263,8 +1309,20 @@ Private Function Step3ValidateAssignments(ByRef ps As ParseState, ByRef errText 
                     Dim scopeId As Integer
                     scopeId = Step3ScopeForNode(ps, lhs)
                     If UXBSymbolResolveAnyKindLexical(scopeId, callName, rr) = 0 Then
-                        errText = "assign: left side is not writable: CALL_EXPR"
-                        Return 0
+                        ' S-162: NAMESPACE dizisi (normallestirilmis nitelikli ad "NS.DIZI") ad alani kapsaminda
+                        ' kayitli; sozcuksel arama disaridan bulamaz -- bildirimin kendisi yazilabilirligi kanitlar.
+                        Dim nsDeclFound As Integer = 0
+                        If InStr(callName, ".") > 0 Then
+                            Dim nsd As Integer
+                            For nsd = 0 To ps.ast.count - 1
+                                If Step3NodeKind(ps, nsd) = "DIM_DECL" AndAlso UCase(Trim(ps.ast.nodes(nsd).value)) = callName Then nsDeclFound = 1: Exit For
+                            Next nsd
+                        End If
+                        If nsDeclFound = 0 Then
+                            errText = "assign: left side is not writable: CALL_EXPR"
+                            Return 0
+                        End If
+                        Continue For
                     End If
 
                     Select Case UCase(Trim(rr.kind))
@@ -1545,6 +1603,7 @@ Function SemStep3SemanticTypeLayoutGate(ByRef ps As ParseState, ByRef errText As
     If Step3BindDeclarations(ps, errText) = 0 Then Return 0
     If Step3ValidateExpressions(ps, errText) = 0 Then Return 0
     If Step3ValidateStatements(ps, errText) = 0 Then Return 0
+    If Step3ValidateDimInitializers(ps, errText) = 0 Then Return 0
     If Step3ValidateAssignments(ps, errText) = 0 Then Return 0
     If Step3ValidateCallsAndReturns(ps, errText) = 0 Then Return 0
     If Step3ValidateFFI(ps, errText) = 0 Then Return 0

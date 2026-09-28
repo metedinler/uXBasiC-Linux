@@ -1,0 +1,10 @@
+' S-056: re-taking VARPTR after REDIM gives a valid pointer into the new store.
+DIM a(3) AS I32
+DIM p AS PTR
+p = VARPTR(a)
+REDIM a(99) AS I32
+p = VARPTR(a)
+a(50) = 5
+PRINT PEEKD(p + 200)
+PRINT PEEKD(p + 396)
+

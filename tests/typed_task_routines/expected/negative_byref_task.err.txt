@@ -1,0 +1,1 @@
+THREAD BYREF parametre desteklenmiyor

@@ -1,0 +1,5 @@
+# S-156: END semantigi. Legacy AST-x64 END_STMT'i (IF icinde ana programda da) desteklemiyor: acik red, bilinen sinir.
+AST=run
+MIR=run
+x64=run
+AST-x64=reject:unsupported AST node kind=END_STMT

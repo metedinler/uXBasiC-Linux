@@ -1,0 +1,6 @@
+' S-146 adim 2: ayni konsol kilidini sozcuksel olarak ic ice LOCK etmek derleme zamaninda SELF_DEADLOCK.
+LOCK CONSOLE
+    LOCK CONSOLE
+        PRINT "a"
+    END LOCK
+END LOCK

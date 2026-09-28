@@ -1,0 +1,20 @@
+' S-142b: STR(), birlestirme ve sabit katlama de ayni metin kuralini kullanir; katlanan sabit calisma zamani sonucuyla ayni sayidir.
+DIM a AS F64
+DIM b AS F64
+DIM s AS STRING
+a = 1.0 / 3.0
+s = STR(a)
+PRINT s
+PRINT "a=" + STR(a)
+s = "x" + STR(a * 3.0)
+PRINT s
+PRINT STR(2.5)
+PRINT STR(0.1 + 0.2)
+a = 0.1
+b = a + 0.2
+IF b = 0.3 THEN PRINT "eq" ELSE PRINT "ne"
+IF 0.1 + 0.2 = 0.3 THEN PRINT "eq" ELSE PRINT "ne"
+PRINT b
+PRINT -0.0
+PRINT a * 100000000.0
+PRINT STR(1.0E-7)

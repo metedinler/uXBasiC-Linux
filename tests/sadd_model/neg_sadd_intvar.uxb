@@ -1,0 +1,6 @@
+' S-076 olumsuz: string olmayan değişkenin SADD'i alınamaz.
+DIM n AS I32
+n = 5
+DIM p AS PTR
+p = SADD(n)
+PRINT 1

@@ -65,11 +65,24 @@ Private Function UXBMIRInterpIsReferenceName(ByVal textValue As String) As Integ
     Return 1
 End Function
 
+' S-167: takma ad hucresinin (BYREF parametre) hedef hucresinin indeksi; takma ad degilse idx.
+Private Function UXBMIRInterpResolveAliasIdx(ByRef st As UXBMIRInterpState, ByVal idx As Integer) As Integer
+    If idx < 0 Or idx >= st.varCount Then Return idx
+    Dim target As UXBMIRInterpVar Ptr = st.vars(idx)->aliasOf
+    If target = 0 Then Return idx
+    Dim j As Integer
+    For j = idx - 1 To 0 Step -1
+        If st.vars(j) = target Then Return j
+    Next j
+    Return idx
+End Function
+
 Function UXBMIRInterpFindVar(ByRef st As UXBMIRInterpState, ByVal nameText As String) As Integer
     Dim key As String = UXBMIRInterpNormName(nameText)
     Dim i As Integer
     For i = st.varCount - 1 To 0 Step -1
         If st.vars(i)->nameKey = key Then
+            i = UXBMIRInterpResolveAliasIdx(st, i)
             ' S-071: a pinned scalar's truth is its raw cell (a POKE through
             ' VARPTR may have changed it) -- refresh before anyone reads it.
             If st.vars(i)->pinned <> 0 Then UXBMIRInterpPinLoad *st.vars(i)
@@ -78,6 +91,30 @@ Function UXBMIRInterpFindVar(ByRef st As UXBMIRInterpState, ByVal nameText As St
     Next i
     Return -1
 End Function
+
+Declare Function UXBMIRInterpFindCurrentVar(ByRef st As UXBMIRInterpState, ByVal nameText As String) As Integer
+
+' S-167: `nameText` adli, mevcut kapsamda `targetIdx` hucresinin takma adi olan bir hucre kurar.
+Sub UXBMIRInterpBindAlias(ByRef st As UXBMIRInterpState, ByVal nameText As String, ByVal targetIdx As Integer)
+    If Trim(nameText) = "" Or targetIdx < 0 Or targetIdx >= st.varCount Then Exit Sub
+    Dim target As UXBMIRInterpVar Ptr = st.vars(targetIdx)
+    Dim idx As Integer = UXBMIRInterpFindCurrentVar(st, nameText)
+    If idx < 0 Then
+        If st.varCount = 0 Then
+            ReDim st.vars(0)
+        Else
+            ReDim Preserve st.vars(st.varCount)
+        End If
+        idx = st.varCount
+        st.varCount += 1
+        st.vars(idx) = New UXBMIRInterpVar
+        st.vars(idx)->nameText = Trim(nameText)
+        st.vars(idx)->nameKey = UXBMIRInterpNormName(nameText)
+        st.vars(idx)->scopeDepth = st.currentScopeDepth
+    End If
+    If st.vars(idx) = target Then Exit Sub
+    st.vars(idx)->aliasOf = target
+End Sub
 
 Private Function UXBMIRInterpFindCurrentVar(ByRef st As UXBMIRInterpState, ByVal nameText As String) As Integer
     Dim key As String = UXBMIRInterpNormName(nameText)
@@ -131,6 +168,7 @@ Sub UXBMIRInterpSetVar(ByRef st As UXBMIRInterpState, ByVal nameText As String, 
         st.vars(idx)->nameKey = UXBMIRInterpNormName(nameText)
         st.vars(idx)->scopeDepth = st.currentScopeDepth
     End If
+    idx = UXBMIRInterpResolveAliasIdx(st, idx)
     st.vars(idx)->value = v
     If st.vars(idx)->pinned <> 0 Then UXBMIRInterpPinStore *st.vars(idx)
 End Sub
@@ -140,6 +178,8 @@ Sub UXBMIRInterpAssignVar(ByRef st As UXBMIRInterpState, ByVal nameText As Strin
     Dim idx As Integer = UXBMIRInterpFindVar(st, nameText)
     If idx >= 0 Then
         Dim declaredType As String = st.vars(idx)->value.typeName
+        ' S-160: istisna degeri her THROW'da kendi tipini tasir (sayi ya da metin).
+        If UCase(Trim(nameText)) = "__MIR_EXC_VALUE" Then declaredType = ""
         If declaredType <> "" And declaredType <> "VOID" Then
             st.vars(idx)->value = UXBInterpApplyDeclaredType(v, declaredType)
         Else

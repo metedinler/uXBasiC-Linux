@@ -1,0 +1,6 @@
+' S-149: TASK OF I32'ye tipsiz THREAD'in gorevi baglanamaz.
+THREAD Plain(x AS I32)
+    RETURN x
+END THREAD
+DIM t AS TASK OF I32 = SPAWN Plain(1)
+

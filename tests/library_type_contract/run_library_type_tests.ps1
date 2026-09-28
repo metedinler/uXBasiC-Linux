@@ -23,7 +23,7 @@ try {
     $cases = @(
         @{name='library_owned_value'; expected="hello`nhello`nhello`nHELLO`nhello`nhello`nhello`nhello"; lifecycle=$true; clones=$true},
         @{name='library_shared_value'; expected="HELLO`nhello`nHELLO"; lifecycle=$true; clones=$true},
-        @{name='library_owned_error'; error='divide by zero'; lifecycle=$true; clones=$true},
+        @{name='library_owned_error'; error='division by zero'; lifecycle=$true; clones=$true},
         @{name='library_owned_limit'; error='step limit'; lifecycle=$true; clones=$true; steps=100},
         @{name='neg_owned_arity'; error='expects one operand'; semantic=$true},
         @{name='neg_owned_operand'; error='operand mismatch'; semantic=$true},
@@ -35,6 +35,8 @@ try {
         @{name='rational_mir_add_value'; expected='3/1'},
         @{name='rational_mir_ops_value'; expected="2/1`n24/1`n3/2"},
         @{name='rational_mir_compare_value'; expected="EQ`nGT"},
+        @{name='rational_lifecycle'; expected="3/1`n3/1`n3/1"},
+        @{name='library_type_field_copy'; expected="hello`nhello`nhello"; lifecycle=$true; clones=$true},
         @{name='rational_include_manifest_semantic'; expected='3/1'},
         @{name='rational_libtype_source_relative'; expected='12/1'},
         @{name='rational_libtype_package_search'; expected='13/1'},
@@ -76,13 +78,14 @@ try {
         @{name='NATIVE'; args=@('bld', $managedSource, '--build-x64')},
         @{name='JS'; args=@('jsw', $managedSource)},
         @{name='WAT'; args=@('wat', $managedSource)},
-        @{name='WASM'; args=@('wasm', $managedSource)}
+        @{name='WASM'; args=@('wat', $managedSource, '--emit-wasm'); diagnosticTarget='WAT'}
     )
     foreach ($target in $targets) {
         $cliArgs = $target.args
         $raw = (@(& $compilerPath @cliArgs 2>&1 | ForEach-Object { "$_" }) -join "`n")
         $code = $LASTEXITCODE
-        $passed = $code -ne 0 -and $raw.Contains("library type lifecycle provider unavailable for $($target.name)")
+        $diagnosticTarget = if ($target.diagnosticTarget) { $target.diagnosticTarget } else { $target.name }
+        $passed = $code -ne 0 -and $raw.Contains("library type lifecycle provider unavailable for $diagnosticTarget")
         $results += [pscustomobject]@{name="managed_target_$($target.name)"; passed=$passed; exit_code=$code; output=$raw}
     }
     $reportFile = [IO.Path]::GetFullPath((Join-Path $root $ReportPath))

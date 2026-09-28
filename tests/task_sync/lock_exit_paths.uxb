@@ -1,0 +1,35 @@
+' S-146 Model D: LOCK'tan her cikis yolu kilidi birakir -- RETURN, EXIT FOR, THROW->CATCH.
+' Birakilmasaydi sonraki LOCK x SELF_DEADLOCK verirdi.
+DIM x AS I64 = 0
+FUNCTION Erken(n AS I64) AS I64
+    LOCK x
+        IF n > 0 THEN RETURN n * 10
+        x += 1
+    END LOCK
+    RETURN -1
+END FUNCTION
+PRINT Erken(3)
+LOCK x
+    x += 100
+END LOCK
+DIM i AS I64
+FOR i = 1 TO 5
+    LOCK x
+        IF i = 3 THEN EXIT FOR
+        x += 1
+    END LOCK
+NEXT i
+LOCK x
+    x += 1000
+END LOCK
+TRY
+    LOCK x
+        THROW 7
+    END LOCK
+CATCH
+    PRINT "yakalandi"
+END TRY
+LOCK x
+    x += 5
+END LOCK
+PRINT x

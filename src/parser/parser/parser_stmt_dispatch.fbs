@@ -1,3 +1,4 @@
+#include once "parser_namespace_vars.fbs"
 Private Function IsProgramStructureDeclKind(ByRef kindText As String) As Integer
     Select Case UCase(kindText)
     Case "MAIN_STMT", "NAMESPACE_STMT", "MODULE_STMT", "USING_STMT", "ALIAS_STMT"
@@ -1091,6 +1092,7 @@ Sub ParserInit(ByRef ps As ParseState, ByRef lx As LexerState)
     ps.taskScopeDepth = 0
     Erase ps.taskScopeNames
     ResetTypeValidationState
+    PreRegisterLibraryTypeManifestNames ps.lx
 End Sub
 
 Function ParseProgram(ByRef ps As ParseState) As Integer
@@ -1195,6 +1197,10 @@ Function ParseProgram(ByRef ps As ParseState) As Integer
 
     vres = ValidateTypeReferences(ps)
     ParserDiag ps, "[PDBG] ValidateTypeReferences result=" & Str(vres)
+    If vres = 0 Then Return 0
+
+    ' S-162: NAMESPACE degiskenleri tek nitelikli depo adi (NS.NV) alir -- tum katmanlardan once.
+    vres = NormalizeNamespaceVariables(ps)
     If vres = 0 Then Return 0
 
     vres = BuildTypeLayoutTable(ps)

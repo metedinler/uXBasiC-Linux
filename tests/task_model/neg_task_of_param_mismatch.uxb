@@ -1,0 +1,9 @@
+' S-149: TASK OF I32 parametresine TASK OF STRING gecirilemez.
+THREAD Namer(x AS I32) AS STRING
+    RETURN STR(x)
+END THREAD
+SUB Show(t AS TASK OF I32)
+    PRINT t.JOIN()
+END SUB
+Show(SPAWN Namer(2))
+

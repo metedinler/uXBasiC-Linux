@@ -1,0 +1,6 @@
+PIPE DoubleValue(value AS I32) AS I32
+    DoubleValue = value * 2
+END PIPE
+
+TRIGGER PIPE DoubleValue, 21
+PRINT TASKOUT

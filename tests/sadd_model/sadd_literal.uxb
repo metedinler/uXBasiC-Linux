@@ -1,0 +1,6 @@
+' S-076: sabit metnin adresi de gerçektir.
+DIM p AS PTR
+p = SADD("Hi")
+PRINT PEEKB(p)
+PRINT PEEKB(p + 1)
+PRINT PEEKB(p + 2)

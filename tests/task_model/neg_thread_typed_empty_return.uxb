@@ -1,0 +1,5 @@
+' S-149: AS <tip> bildiren THREAD degersiz RETURN ile bitemez.
+THREAD Bad(x AS I32) AS I32
+    RETURN
+END THREAD
+

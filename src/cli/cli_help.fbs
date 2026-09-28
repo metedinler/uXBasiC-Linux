@@ -68,6 +68,7 @@ Sub ShowUXBCliHelp()
     Print "  --execmem               : Kod üretimi için dinamik bellek yürütmesini açar."
     Print "  --interpreter-backend   : Yorumlayıcı motorunun arkasındaki katmanı seçer."
     Print "  --max-steps <N>         : Yalnız yorumlayıcılar: en çok N adım (0 = sınırsız, varsayılan)."
+    Print "  --task-workers <N>      : Native SPAWN işçi sayısı (1..1024, varsayılan: CPU sayısı)."
     Print "  --validate-all          : Tüm doğrulama adımlarını çalıştırır."
     Print "  --validate-all-fail-fast: İlk hatada doğrulamayı keser."
     Print "  --source-map            : Kaynak haritası (source-map) üretimini tetikler."

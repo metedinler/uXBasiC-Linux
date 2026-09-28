@@ -22,6 +22,8 @@ foreach ($f in Get-ChildItem $TestRoot -Filter *.uxb | Sort-Object Name) {
     $m = [regex]::Match($o, "build tamamlandi: (.+)")
     $results[$mode[0]] = if ($m.Success) { Norm ((& $m.Groups[1].Value.Trim() 2>&1) -join "`n") } else { "BUILDFAIL: " + (Norm $o) }
   }
+  # "ALL=<metin>" (task_model kosucusuyla ayni bicim): motor anahtari yoksa tum motorlar icin gecerli.
+  if ($contains.ContainsKey("ALL")) { foreach ($k in @($results.Keys)) { if (-not $contains.ContainsKey($k)) { $contains[$k] = $contains["ALL"] } } }
   foreach ($k in $results.Keys) {
     if ($contains.ContainsKey($k)) { $okCase = $results[$k].Contains($contains[$k]) } else { $okCase = ($results[$k] -eq $expected) }
     if ($okCase) { $pass++; Write-Host "  PASS $k/$($f.BaseName)" -ForegroundColor Green }

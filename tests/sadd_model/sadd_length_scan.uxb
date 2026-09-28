@@ -1,0 +1,12 @@
+' S-076: NUL'a kadar taramak LEN(s) verir (NUL sonlu gerçek veri).
+DIM s AS STRING
+s = "uXBasic native pointer"
+DIM p AS PTR
+p = SADD(s)
+DIM n AS I32
+n = 0
+DO WHILE PEEKB(p + n) <> 0
+    n = n + 1
+LOOP
+PRINT n
+PRINT LEN(s)

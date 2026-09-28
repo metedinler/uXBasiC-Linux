@@ -568,7 +568,18 @@ Private Function MIRLowerProgramBodyRecursive( _
         Dim ck As String
         ck = UCase(Trim(ps.ast.nodes(child).kind))
 
-        If MIRIsRoutineDeclKindForProgramBody(ck) <> 0 Then
+        If ck = "NAMESPACE_STMT" Or ck = "MODULE_STMT" Then
+            ' S-162: ad alani duzeyindeki DIM/REDIM calisir (NS.NV global depolari); rutinler ayri indirgenir.
+            Dim nsChild As Integer = ps.ast.nodes(child).firstChild
+            Do While nsChild <> -1
+                Dim nsKind As String = UCase(Trim(ps.ast.nodes(nsChild).kind))
+                If nsKind = "DIM_STMT" Or nsKind = "REDIM_STMT" Then
+                    If MIRLowerTopLevelStmt(ps, nsChild, module, 0, blkIdx, tempSeed, errText) = 0 Then Return 0
+                    loweredOut += 1
+                End If
+                nsChild = ps.ast.nodes(nsChild).nextSibling
+            Loop
+        ElseIf MIRIsRoutineDeclKindForProgramBody(ck) <> 0 Then
             ' Routines/classes are lowered by MIRLowerAllRoutineNodes or compile-time layers.
         ElseIf MIRIsCompileTimeOnlyProgramBodyKind(ck) <> 0 Then
             ' Compile-time declarations do not produce executable MAIN instructions.
@@ -843,6 +854,8 @@ Function MIRBuildModuleFromAST(ByRef ps As ParseState, ByRef moduleOut As MIRMod
     errText = ""
     gMirLowerLoopDepth = 0
     gMirLowerTryDepth = 0
+    gMIRStmtSeqCounter = 0
+    gMIRCurrentStmtSeq = 0
     moduleOut.functionCount = 0
     moduleOut.globalVarCount = 0
     moduleOut.sourceFileCount = 0
@@ -867,6 +880,15 @@ Function MIRBuildModuleFromAST(ByRef ps As ParseState, ByRef moduleOut As MIRMod
 
     MIREnsureMain moduleOut
     moduleOut.functions(0).returnType = "I64"
+
+    ' S-146 Model D: LOCK hedef cozumu ve senkron gecisi gorev/depo analizine dayanir; semantik
+    ' kapisi calistirmayan yollar (`uxb mir`) icin analiz burada (onbellekli) yapilir. Burada
+    ' yalniz BILGI olarak kullanilir: senkron kumesi/kilit sirasi/ATOMIC bilgisi analizin
+    ' tanilarindan once eksiksiz hesaplanir; reddetme karari semantik kapinindir (run/bld).
+    Dim syncAnalysisErr As String
+    UXBTaskEnsureSyncAnalysis ps, syncAnalysisErr
+    errText = ""
+    MIRLockResetForModule ps
 
     If MIRRegisterStaticClassMembers(ps, moduleOut, errText) = 0 Then Return 0
 
@@ -893,6 +915,12 @@ Function MIRBuildModuleFromAST(ByRef ps As ParseState, ByRef moduleOut As MIRMod
     MIRAppendInstruction moduleOut, 0, curBlock, MIR_OP_RET, "", 1, "__result__"
 
     MIRAnnotateModuleResultTypes moduleOut
+
+    ' S-146 Model D: gorevlerle paylasilan globallere otomatik deyim kilidi.
+    If MIRSyncPassModule(ps, moduleOut, tempSeed, errText) = 0 Then Return 0
+
+    ' S-160: istisna rutin sinirini gecer (her kullanici cagrisindan sonra bayrak denetimi).
+    If MIRExcPassModule(ps, moduleOut, tempSeed, errText) = 0 Then Return 0
 
     If MIRFinalizeCfg(moduleOut, errText) = 0 Then Return 0
 

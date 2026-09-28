@@ -1,0 +1,11 @@
+' Paylasilan global BYREF parametreye verilemez (kilitsiz yazim) -> adim 4.
+DIM g AS I64
+SUB Artir(BYREF v AS I64)
+    v += 1
+END SUB
+THREAD W() AS I64
+    Artir(g)
+    RETURN 0
+END THREAD
+DIM u AS TASK OF I64 = SPAWN W()
+PRINT u.JOIN()

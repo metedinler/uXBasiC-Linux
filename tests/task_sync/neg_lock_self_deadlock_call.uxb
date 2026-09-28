@@ -1,0 +1,17 @@
+' S-146 Model D: ayni gorevin ayni kilidi ikinci kez acikca LOCK etmesi SELF_DEADLOCK
+' (cagri uzerinden -- sozcuksel ic ice olani semantik katman yakalar). Olumcul: TRY yakalamaz.
+DIM x AS I64 = 0
+SUB Ic()
+    LOCK x
+        x += 1
+    END LOCK
+END SUB
+PRINT "basla"
+TRY
+    LOCK x
+        Ic()
+    END LOCK
+CATCH
+    PRINT "yakalandi (olmamali)"
+END TRY
+PRINT "bitti (olmamali)"

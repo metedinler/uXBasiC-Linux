@@ -1,0 +1,12 @@
+' S-146 adim 3: TASK tutamaci paylasilan global olarak gorevler arasinda kullanilir.
+DIM kaynak AS TASK OF I64
+THREAD Uret(n AS I64) AS I64
+    RETURN n + 100
+END THREAD
+THREAD Tuket(k AS I64) AS I64
+    RETURN kaynak.JOIN() * k
+END THREAD
+kaynak = SPAWN Uret(5)
+DIM a AS TASK OF I64 = SPAWN Tuket(2)
+DIM b AS TASK OF I64 = SPAWN Tuket(3)
+PRINT a.JOIN(); " "; b.JOIN()

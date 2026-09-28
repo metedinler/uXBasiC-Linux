@@ -1,0 +1,16 @@
+' S-146 izolasyon negatif testi: neg_iso_class_static
+CLASS Sayac
+ STATIC sf AS I32
+ SUB M()
+  sf = sf + 1
+ END SUB
+END CLASS
+THREAD W(x AS I32) AS I32
+ DIM c AS Sayac = NEW Sayac()
+ c.M()
+ RETURN x
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

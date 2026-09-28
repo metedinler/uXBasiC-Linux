@@ -24,6 +24,42 @@ Private Function ParserRoutineNameIsReserved(ByRef ps As ParseState, ByRef nameT
     Return ParserTokenIsReservedName(nameTok)
 End Function
 
+' S-149 (Mete, 2026-09-25): tipli gorev tutamaci `TASK OF <tip>`. Tip adi yine
+' `TASK` kalir (her motorun TASK yolu degismez); sonuc tipi, TASK tip dugumunun
+' role="TASK_RESULT_TYPE" alt TYPE_REF dugumunde tasinir. `OF` yeni bir anahtar
+' sozcuk DEGILDIR -- yalniz TASK'tan hemen sonra baglamsal olarak taninir, boylece
+' `of` adli mevcut degiskenler (S-128) etkilenmez. DIM/REDIM, parametre ve
+' FUNCTION/DECLARE FUNCTION donus tipi ayni yardimciyi kullanir.
+'   1 = TASK OF yok ya da basariyla ayristirildi, 0 = hata (ps.lastError dolu)
+Private Function ParserTryParseTaskOf(ByRef ps As ParseState, ByVal typeNode As Integer, ByRef baseCanonicalType As String, ByRef ownerLabel As String) As Integer
+    If UCase(Trim(baseCanonicalType)) <> "TASK" Then Return 1
+    Dim ofTok As Token
+    ofTok = CurToken(ps)
+    If ofTok.kind <> "IDENT" And ofTok.kind <> "KEYWORD" Then Return 1
+    If UCase(Trim(ofTok.lexeme)) <> "OF" Then Return 1
+    AdvanceTok ps
+
+    Dim resultTok As Token
+    resultTok = CurToken(ps)
+    If ValidateTypeToken(ps, resultTok) = 0 Then
+        If ps.lastError = "" Then ps.lastError = ownerLabel & ": TASK OF sonrasinda sonuc tipi bekleniyor"
+        Return 0
+    End If
+    Dim resultType As String
+    resultType = CanonicalTypeNameForParser(resultTok.lexeme)
+    If resultType = "TASK" Or resultType = "TASKGROUP" Then
+        ps.lastError = ownerLabel & ": TASK OF " & resultType & " desteklenmiyor (gorev sonucu bir gorev tutamaci olamaz)"
+        Return 0
+    End If
+    AdvanceTok ps
+
+    Dim resultNode As Integer
+    resultNode = MakeNodeFromToken(ps, "TYPE_REF", resultType, "", resultTok)
+    ps.ast.nodes(resultNode).role = "TASK_RESULT_TYPE"
+    ASTAddChild ps.ast, typeNode, resultNode
+    Return 1
+End Function
+
 Private Function ParseParamDeclarator(ByRef ps As ParseState) As Integer
     Dim modeText As String
     modeText = ""
@@ -90,6 +126,7 @@ Private Function ParseParamDeclarator(ByRef ps As ParseState) As Integer
             canonicalParamType &= "[]"
         End If
         typeNode = MakeNodeFromToken(ps, "TYPE_REF", canonicalParamType, "", typeTok)
+        If ParserTryParseTaskOf(ps, typeNode, canonicalParamType, "parameter") = 0 Then Return -1
         ASTAddChild ps.ast, paramNode, typeNode
         ps.ast.nodes(paramNode).typeName = canonicalParamType
     End If
@@ -248,6 +285,7 @@ Function ParseDeclareStmt(ByRef ps As ParseState, ByRef firstTok As Token) As In
         Dim canonicalRetTypeDecl As String
         canonicalRetTypeDecl = CanonicalTypeNameForParser(retTok.lexeme)
         retNode = MakeNodeFromToken(ps, "RETURN_TYPE", canonicalRetTypeDecl, "", retTok)
+        If ParserTryParseTaskOf(ps, retNode, canonicalRetTypeDecl, "DECLARE FUNCTION") = 0 Then Return -1
         ASTAddChild ps.ast, declNode, retNode
     End If
 
@@ -328,6 +366,7 @@ Function ParseFunctionStmt(ByRef ps As ParseState, ByRef firstTok As Token) As I
     Dim canonicalRetType As String
     canonicalRetType = CanonicalTypeNameForParser(retTok.lexeme)
     retNode = MakeNodeFromToken(ps, "RETURN_TYPE", canonicalRetType, "", retTok)
+    If ParserTryParseTaskOf(ps, retNode, canonicalRetType, "FUNCTION") = 0 Then Return -1
     ASTAddChild ps.ast, fnNode, retNode
 
     SkipSeparators ps

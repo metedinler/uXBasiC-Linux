@@ -1,0 +1,9 @@
+' Paylasilan globalin ham adresi kilidi atlar -> adim 7 (UNSAFE disinda).
+DIM g AS I64
+THREAD W() AS I64
+    g += 1
+    RETURN 0
+END THREAD
+DIM u AS TASK OF I64 = SPAWN W()
+PRINT VARPTR(g) <> 0
+PRINT u.JOIN()

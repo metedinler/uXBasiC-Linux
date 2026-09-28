@@ -1,0 +1,3 @@
+' S-011: explicit I32 casts retain the low 32 bits in every execution path.
+PRINT I32(5000000000)
+PRINT I32(-5000000000)

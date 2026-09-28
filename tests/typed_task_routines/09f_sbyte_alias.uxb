@@ -1,0 +1,9 @@
+DIM localValue AS SBYTE
+localValue = I8(255)
+PRINT localValue
+
+EVENT SignedByte(value AS SBYTE)
+    PRINT value
+END EVENT
+
+TRIGGER EVENT SignedByte, 255

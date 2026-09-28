@@ -1,0 +1,1 @@
+ALL=assignment cannot convert TYPE_STRING to TYPE_I32

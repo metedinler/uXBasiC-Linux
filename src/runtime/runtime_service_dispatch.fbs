@@ -1,3 +1,4 @@
+#include once "../common/uxb_rng.fbs"
 #ifndef UXB_RUNTIME_SERVICE_DISPATCH_FBS
 #define UXB_RUNTIME_SERVICE_DISPATCH_FBS
 
@@ -34,10 +35,10 @@ Private Function UXBRuntimeMathDispatch(ByRef rt As UXBRuntimeContext, ByVal ser
         Return UXBInterpValueFloat(Log(a))
     Case RT_MATH_EXP: Return UXBInterpValueFloat(Exp(a))
     Case RT_RANDOMIZE
-        Randomize
+        UXBRngRandomizeTime 0   ' S-163: ortak uretec (src/common/uxb_rng.fbs)
         Return UXBInterpValueVoid()
     Case RT_RND
-        Return UXBInterpValueFloat(Rnd)
+        Return UXBInterpValueFloat(UXBRngRnd(0, 0, 0))
     Case RT_TIMER
         Return UXBInterpValueFloat(Timer)
     End Select

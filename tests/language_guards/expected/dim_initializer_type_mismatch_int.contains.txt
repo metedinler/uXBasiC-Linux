@@ -1,0 +1,1 @@
+ALL=type: assignment cannot convert

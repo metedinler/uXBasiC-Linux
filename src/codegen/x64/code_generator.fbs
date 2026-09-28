@@ -1670,6 +1670,8 @@ Private Function X64ToStr(ByVal n As Integer) As String
     Return LTrim(Str(n))
 End Function
 
+Declare Sub X64RegisterRoutineSymbol(ByVal nameText As String)
+
 Private Function X64NormalizeTextLine(ByRef lineText As String) As String
     Dim raw As String
     raw = RTrim(lineText)
@@ -4079,6 +4081,7 @@ Private Function GenerateRoutineCore(ByRef ps As ParseState, ByVal nodeIdx As In
     frameBytes = X64Align16(cg.localFrameBytes)
     cg.currentEpilogLabel = X64NextLabel(cg, "ret")
 
+    X64RegisterRoutineSymbol routineName
     X64EmitText cg, "global " & routineName
     X64EmitLabel cg, routineName
     EmitFunctionProlog cg, frameBytes
@@ -7843,7 +7846,102 @@ Private Function X64EmitIncDecStmt(ByRef ps As ParseState, ByVal nodeIdx As Inte
 End Function
 
 
+' Legacy motor kullanici rutinlerini ham adla etiketler (`global near` / `near:` / `call near`). Ad bir NASM
+' ayrilmis sozcugu ya da yazmac adiysa (NEAR, BYTE, REL, AL, RAX ...) NASM "expression syntax error" verir.
+' NASM'de `$ad` bicimi adi her zaman sembol olarak okutur; bu kume o rutin adlarini tutar ("|ad|", kucuk harf).
+Dim Shared gX64AsmEscapeNames As String
+
+Private Function X64IsNasmReservedName(ByVal nameText As String) As Integer
+    Dim n As String = "|" & LCase(Trim(nameText)) & "|"
+    Const kw As String = "|near|far|short|byte|word|dword|qword|tword|oword|yword|zword|rel|abs|strict|seg|wrt|times|nosplit|ptr|" & _
+        "db|dw|dd|dq|dt|do|dy|dz|resb|resw|resd|resq|rest|reso|resy|resz|equ|incbin|section|segment|global|extern|common|bits|default|align|alignb|org|" & _
+        "rax|rbx|rcx|rdx|rsi|rdi|rbp|rsp|eax|ebx|ecx|edx|esi|edi|ebp|esp|ax|bx|cx|dx|si|di|bp|sp|al|bl|cl|dl|ah|bh|ch|dh|sil|dil|bpl|spl|" & _
+        "r8|r9|r10|r11|r12|r13|r14|r15|r8d|r9d|r10d|r11d|r12d|r13d|r14d|r15d|r8w|r9w|r10w|r11w|r12w|r13w|r14w|r15w|r8b|r9b|r10b|r11b|r12b|r13b|r14b|r15b|" & _
+        "cs|ds|es|fs|gs|ss|rip|st0|st1|st2|st3|st4|st5|st6|st7|"
+    If InStr(kw, n) > 0 Then Return 1
+    If Left(n, 4) = "|xmm" Or Left(n, 4) = "|ymm" Or Left(n, 4) = "|zmm" Or Left(n, 3) = "|cr" Or Left(n, 3) = "|dr" Or Left(n, 3) = "|mm" Then
+        Dim rest As String = Mid(n, IIf(Left(n, 3) = "|cr" Or Left(n, 3) = "|dr" Or Left(n, 3) = "|mm", 4, 5))
+        rest = Left(rest, Len(rest) - 1)
+        If rest <> "" AndAlso rest = LTrim(Str(Val(rest))) Then Return 1
+    End If
+    Return 0
+End Function
+
+Sub X64RegisterRoutineSymbol(ByVal nameText As String)
+    If X64IsNasmReservedName(nameText) = 0 Then Exit Sub
+    Dim key As String = "|" & LCase(Trim(nameText)) & "|"
+    If gX64AsmEscapeNames = "" Then gX64AsmEscapeNames = "|"
+    If InStr(gX64AsmEscapeNames, key) = 0 Then gX64AsmEscapeNames &= LCase(Trim(nameText)) & "|"
+End Sub
+
+' Yalniz sembol beklenen konumlarda (call/jmp hedefi, global, etiket tanimi, [rel X], dq X) kumedeki adin onune `$`.
+Private Function X64EscapeRoutineSymbolsInLine(ByRef lineText As String) As String
+    Dim t As String = Trim(lineText)
+    If t = "" Then Return lineText
+    Dim lead As String = Left(lineText, Len(lineText) - Len(LTrim(lineText)))
+    Dim low As String = LCase(t)
+    Dim prefixes(0 To 4) As String = {"call ", "jmp ", "global ", "dq ", "extern "}
+    Dim i As Integer
+    ' Etiket tanimi "ad:"
+    If Right(t, 1) = ":" AndAlso InStr(t, " ") = 0 Then
+        If InStr(gX64AsmEscapeNames, "|" & LCase(Left(t, Len(t) - 1)) & "|") > 0 Then Return lead & "$" & t
+        Return lineText
+    End If
+    For i = 0 To 4
+        If Left(low, Len(prefixes(i))) = prefixes(i) Then
+            Dim operand As String = Trim(Mid(t, Len(prefixes(i)) + 1))
+            If InStr(gX64AsmEscapeNames, "|" & LCase(operand) & "|") > 0 Then Return lead & Left(t, Len(prefixes(i))) & "$" & operand
+        End If
+    Next i
+    ' [rel ad] -- ornegin CODEPTR / geri cagirma adresi
+    Dim relPos As Integer = InStr(low, "[rel ")
+    If relPos > 0 Then
+        Dim closePos As Integer = InStr(relPos, t, "]")
+        If closePos > relPos + 5 Then
+            Dim sym As String = Trim(Mid(t, relPos + 5, closePos - relPos - 5))
+            If InStr(gX64AsmEscapeNames, "|" & LCase(sym) & "|") > 0 Then Return lead & Left(t, relPos + 4) & "$" & sym & Mid(t, closePos)
+        End If
+    End If
+    Return lineText
+End Function
+
 Private Function X64CodegenAssembleOutput(ByRef cg As X64CodegenContext, ByRef asmText As String) As Integer
+    If Len(gX64AsmEscapeNames) > 1 Then
+        Dim escText As String = cg.textSection
+        Dim outText As String = ""
+        Dim startPos As Integer = 1
+        Do While startPos <= Len(escText)
+            Dim nlPos As Integer = InStr(startPos, escText, Chr(10))
+            Dim oneLine As String
+            If nlPos = 0 Then
+                oneLine = Mid(escText, startPos)
+                startPos = Len(escText) + 1
+            Else
+                oneLine = Mid(escText, startPos, nlPos - startPos)
+                startPos = nlPos + 1
+            End If
+            outText &= X64EscapeRoutineSymbolsInLine(oneLine)
+            If nlPos <> 0 Then outText &= Chr(10)
+        Loop
+        cg.textSection = outText
+        Dim dataOut As String = ""
+        startPos = 1
+        escText = cg.dataSection
+        Do While startPos <= Len(escText)
+            Dim dnl As Integer = InStr(startPos, escText, Chr(10))
+            Dim dLine As String
+            If dnl = 0 Then
+                dLine = Mid(escText, startPos)
+                startPos = Len(escText) + 1
+            Else
+                dLine = Mid(escText, startPos, dnl - startPos)
+                startPos = dnl + 1
+            End If
+            dataOut &= X64EscapeRoutineSymbolsInLine(dLine)
+            If dnl <> 0 Then dataOut &= Chr(10)
+        Loop
+        cg.dataSection = dataOut
+    End If
     asmText = cg.textSection
 
     If Len(cg.dataSection) > 0 Then
@@ -7887,6 +7985,7 @@ Private Function GenerateX64Code(ByRef ps As ParseState, ByRef outputText As Str
     cg.currentEpilogLabel = ""
     cg.currentRoutineIsFunction = 0
     cg.routineCount = 0
+    gX64AsmEscapeNames = ""
 
     Dim i As Integer
     For i = 0 To 4095
@@ -8012,6 +8111,97 @@ Private Function GenerateX64Code(ByRef ps As ParseState, ByRef outputText As Str
     X64EmitData cg, "__uxb_exc_type_integer: db ""INTEGER"", 0"
     X64EmitData cg, "__uxb_exc_type_string: db ""STRING"", 0"
     X64EmitData cg, "__uxb_exc_text_zero: db ""0"", 0"
+
+    ' S-030 K7 (Mete, 2026-09-24): legacy AST-x64 SPAWN/TASK/TASKGROUP'u KALICI olarak
+    ' desteklemez (S-019 koleksiyon/ABI sinirinin ailesi). Tesadufi "unsupported
+    ' expression kind" / "virtual method slot" iletileri yerine tek, acik tani.
+    Dim taskScanIdx As Integer
+    For taskScanIdx = 0 To ps.ast.count - 1
+        Dim taskScanKind As String
+        taskScanKind = UCase(Trim(ps.ast.nodes(taskScanIdx).kind))
+        Dim taskScanValue As String
+        taskScanValue = UCase(Trim(ps.ast.nodes(taskScanIdx).value))
+        If taskScanKind = "SPAWN_EXPR" Or ((taskScanKind = "TYPE_REF" Or taskScanKind = "RETURN_TYPE") And (taskScanValue = "TASK" Or taskScanValue = "TASKGROUP")) Then
+            errText = "legacy AST-x64: SPAWN/TASK/TASKGROUP desteklenmiyor (S-030 K7: bu motorda kalici sinir; MIR tabanli native x64 icin Faz 2) -- satir " & LTrim(Str(ps.ast.nodes(taskScanIdx).lineNo))
+            Return 0
+        End If
+        ' S-146 Model D: LOCK/UNSAFE/MUTEX/ATOMIC ayni ailedir (gorev calisma zamani + kilit tablosu
+        ' MIR tabanli native x64'te). Legacy motor bunlari acik taniyla reddeder.
+        Dim modelDWhat As String = ""
+        If taskScanKind = "LOCK_STMT" Then modelDWhat = "LOCK ... END LOCK"
+        If taskScanKind = "UNSAFE_STMT" Then modelDWhat = "UNSAFE ... END UNSAFE"
+        If (taskScanKind = "TYPE_REF" Or taskScanKind = "RETURN_TYPE") And taskScanValue = "MUTEX" Then modelDWhat = "MUTEX"
+        If taskScanKind = "DIM_DECL" AndAlso UCase(Trim(ps.ast.nodes(taskScanIdx).op)) = "ATOMIC" Then modelDWhat = "DIM ATOMIC"
+        If modelDWhat <> "" Then
+            errText = "legacy AST-x64: " & modelDWhat & " desteklenmiyor (S-146 Model D: kilit tablosu ve atomikler MIR tabanli native x64'te; `uxb bld` varsayilan motoru kullanin) -- satir " & LTrim(Str(ps.ast.nodes(taskScanIdx).lineNo))
+            Return 0
+        End If
+    Next taskScanIdx
+
+    ' S-159-L: legacy motor TYPE degerinin butun atamasini (k2 = k) kopyalamiyor; sessiz yanlis sonuc
+    ' yerine acik tani (MIR tabanli native x64 alan alan kopyalar).
+    Dim s159Idx As Integer
+    For s159Idx = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(s159Idx).kind)) <> "ASSIGN_STMT" Then Continue For
+        Dim s159Op As String = Trim(ps.ast.nodes(s159Idx).op)
+        If s159Op <> "" And s159Op <> "=" Then Continue For
+        Dim s159L As Integer = ps.ast.nodes(s159Idx).left
+        Dim s159R As Integer = ps.ast.nodes(s159Idx).right
+        If s159L < 0 Or s159R < 0 Then Continue For
+        Dim s159Kind As String = UCase(Trim(ps.ast.nodes(s159R).kind))
+        If s159Kind <> "IDENT" And s159Kind <> "IDENTIFIER" And s159Kind <> "FIELD_EXPR" Then Continue For
+        Dim s159Type As String, s159Err As String
+        If UXBStep3InferExprType(ps, s159R, s159Type, s159Err) = 0 Then Continue For
+        s159Type = UCase(Trim(s159Type))
+        If Left(s159Type, 5) = "TYPE_" Then Continue For
+        Dim s159Size As Integer, s159Align As Integer, s159RecKind As String, s159Abi As String, s159Pack As Integer, s159Explicit As Integer
+        If TypeLayoutDescribeGlobal(s159Type, s159Size, s159Align, s159RecKind, s159Abi, s159Pack, s159Explicit) = 0 Then Continue For
+        If s159RecKind = "TYPE" Or s159RecKind = "STRUCT" Or s159RecKind = "UNION" Then
+            errText = "legacy AST-x64: TYPE degerinin butun atamasi desteklenmiyor (S-159-L; MIR tabanli native x64 destekler: `uxb bld` varsayilan motoru) -- satir " & LTrim(Str(ps.ast.nodes(s159Idx).lineNo))
+            Return 0
+        End If
+    Next s159Idx
+
+    ' S-160-L: legacy motorun istisna durumu rutin sinirini gecmez (cagirandaki TRY yakalayamaz). TRY
+    ' iceren programda rutin icindeki THROW/ASSERT sessizce farkli davranmasin diye acik tani.
+    Dim legacyHasTry As Integer = 0
+    Dim excScanIdx As Integer
+    For excScanIdx = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(excScanIdx).kind)) = "TRY_STMT" Then legacyHasTry = 1: Exit For
+    Next excScanIdx
+    If legacyHasTry <> 0 Then
+        For excScanIdx = 0 To ps.ast.count - 1
+            Dim excKind As String = UCase(Trim(ps.ast.nodes(excScanIdx).kind))
+            If (excKind = "THROW_STMT" Or excKind = "ASSERT_STMT") AndAlso UXBTaskEnclosingRoutine(ps, excScanIdx) <> -1 Then
+                errText = "legacy AST-x64: rutin icinden atilan istisnanin cagirandaki TRY ile yakalanmasi desteklenmiyor (S-160-L; MIR tabanli native x64 destekler: `uxb bld` varsayilan motoru) -- satir " & LTrim(Str(ps.ast.nodes(excScanIdx).lineNo))
+                Return 0
+            End If
+        Next excScanIdx
+    End If
+
+    ' S-167-L: legacy motor kullanici rutininin BYREF skaler parametresini deger olarak geciriyor
+    ' (cagiranin degiskeni hic degismiyor) -- sessiz yanlis sonuc yerine acik tani. Dizi parametresi
+    ' (T[]) zaten cagiranin dizisine baslanir; FFI DECLARE parametreleri bu denetimin disindadir.
+    Dim byRefScanIdx As Integer
+    For byRefScanIdx = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(byRefScanIdx).kind)) <> "PARAM_DECL" Then Continue For
+        If UCase(Trim(ps.ast.nodes(byRefScanIdx).op)) <> "BYREF" Then Continue For
+        Dim byRefOwner As Integer = ps.ast.nodes(byRefScanIdx).parent
+        If byRefOwner < 0 Then Continue For
+        Dim byRefOwnerKind As String = UCase(Trim(ps.ast.nodes(byRefOwner).kind))
+        If byRefOwnerKind <> "SUB_STMT" And byRefOwnerKind <> "FUNCTION_STMT" And Left(byRefOwnerKind, 6) <> "CLASS_" Then Continue For
+        Dim byRefParamType As String = UCase(Trim(ps.ast.nodes(byRefScanIdx).typeName))
+        If byRefParamType = "" Then
+            Dim byRefTypeChild As Integer = ps.ast.nodes(byRefScanIdx).firstChild
+            Do While byRefTypeChild <> -1
+                If UCase(Trim(ps.ast.nodes(byRefTypeChild).kind)) = "TYPE_REF" Then byRefParamType = UCase(Trim(ps.ast.nodes(byRefTypeChild).value)) : Exit Do
+                byRefTypeChild = ps.ast.nodes(byRefTypeChild).nextSibling
+            Loop
+        End If
+        If Right(byRefParamType, 2) = "[]" Then Continue For
+        errText = "legacy AST-x64: BYREF parametre desteklenmiyor (S-167-L: bu motor degeri kopyalar, cagiranin degiskeni degismez; MIR tabanli native x64 destekler: `uxb bld` varsayilan motoru) -- " & Trim(ps.ast.nodes(byRefOwner).value) & "." & Trim(ps.ast.nodes(byRefScanIdx).value) & " satir " & LTrim(Str(ps.ast.nodes(byRefScanIdx).lineNo))
+        Return 0
+    Next byRefScanIdx
 
     If X64EmitNode(ps, ps.rootNode, cg, errText) = 0 Then Return 0
 

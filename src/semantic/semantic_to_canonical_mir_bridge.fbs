@@ -601,6 +601,33 @@ Function UXBSemanticMIRToCanonicalMIR(ByRef src As MIRModule, ByRef r As UXBSema
             UXBSemanticToCanonicalMIRAddInstruction r, paramDecl
         Next fnParamDeclIdx
 
+        ' S-168: rutinin kendi yerelleri (DIM/CONST) girişte rutinin kapsaminda olusturulur; boylece
+        ' ayni adli global golgelenir. MIR adla calistigindan eskiden rutindeki `DIM g` ile yapilan
+        ' yazim, yorumlayicinin ad aramasinda globali buluyor ve globale yaziyordu. MAIN duzeyindeki
+        ' bildirimler globaldir, onlara dokunulmaz.
+        If UCase(Trim(src.functions(fi).name)) <> "MAIN" Then
+            Dim fnLocalIdx As Integer
+            For fnLocalIdx = 0 To src.functions(fi).localVarCount - 1
+                Dim localDeclName As String = Trim(src.functions(fi).localVars(fnLocalIdx))
+                If localDeclName = "" Then Continue For
+                Dim localIsParam As Integer = 0
+                Dim lpIdx As Integer
+                For lpIdx = 0 To src.functions(fi).paramVarCount - 1
+                    If UCase(Trim(src.functions(fi).paramVars(lpIdx))) = UCase(localDeclName) Then localIsParam = 1 : Exit For
+                Next lpIdx
+                If localIsParam <> 0 Then Continue For
+                Dim localDeclType As String = ""
+                If fnLocalIdx < UBound(src.functions(fi).localVarTypes) + 1 Then localDeclType = Trim(src.functions(fi).localVarTypes(fnLocalIdx))
+                Dim localDecl As UXBMIRInstructionRecord
+                localDecl = UXBMIRInstructionMake("MIR_LOCAL_DECL", localDeclName, localDeclType, 0)
+                localDecl.sourceAstKind = "MIR_LOCAL_DECL"
+                localDecl.sourceAstNode = -1
+                localDecl.blockId = fnLabel.blockId
+                localDecl.mirInstructionId = -1
+                UXBSemanticToCanonicalMIRAddInstruction r, localDecl
+            Next fnLocalIdx
+        End If
+
         Dim bi As Integer
         For bi = 0 To src.functions(fi).blockCount - 1
             UXBSemanticToCanonicalMIRAddBlock r, src.functions(fi).blocks(bi)

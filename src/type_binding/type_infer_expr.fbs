@@ -7,7 +7,7 @@
 #include once "../semantic/ast_owner_index.fbs"
 #include once "../semantic/ast_name_index.fbs"
 
-Declare Function UXBStep3InferExprType(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef typeOut As String, ByRef errText As String) As Integer
+#include once "type_infer_expr_decl.fbs"
 
 Private Function UXBStep3InferChild(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByVal childPos As Integer, ByRef typeOut As String, ByRef errText As String) As Integer
     ' Hybrid AST support:
@@ -136,7 +136,17 @@ Private Function UXBStep3InferScopeForNode(ByRef ps As ParseState, ByVal nodeIdx
         Case "FUNCTION_STMT", "SUB_STMT", "CLASS_STMT", "TYPE_STMT", "ENUM_STMT", "INTERFACE_STMT", "MODULE_STMT", "NAMESPACE_STMT"
             Return p + 1
         End Select
-        p = ps.ast.nodes(p).parent
+        ' S-030 Faz 1B: zincirin ORTASINDA .parent kopuk olabilir (ham .left/.right
+        ' atamalari). Eskiden burada dongu bitip kapsam 0 (program geneli) donuyordu:
+        ' SUB govdesindeki `PRINT t.JOIN()` gibi bir ifadede t parametresi bulunamiyor,
+        ' ada gore kayit defterine dusuluyor, ayni adli global varsa YANLIS sembol
+        ' secilebiliyordu. Ilk dongudeki gibi sahip dizinine (UXBAstFindOwner) dus.
+        Dim nextP As Integer = ps.ast.nodes(p).parent
+        If nextP = -1 Then nextP = UXBStep3FindOwnerNode(ps, p)
+        If nextP = p Then Exit Do
+        p = nextP
+        guard += 1
+        If guard > ps.ast.count Then Exit Do
     Loop
     Return 0
 End Function
@@ -507,6 +517,266 @@ Private Function UXBStep3NamespaceRoutineReturnType(ByRef ps As ParseState, ByRe
     Return 0
 End Function
 
+' ---------------------------------------------------------------------------
+' S-149 (Mete, 2026-09-25): tipli gorev tutamaci `TASK OF <tip>`.
+' Parser, sonuc tipini TASK tip dugumunun (DIM/PARAM TYPE_REF ya da FUNCTION
+' RETURN_TYPE) role="TASK_RESULT_TYPE" alt TYPE_REF dugumunde tasir. Asagidaki
+' yardimcilar semantik denetim (semantic_pass_tail.fbs) ve .RESULT/.JOIN() tip
+' cikarimi tarafindan ORTAK kullanilir -- kural tek yerde.
+' ---------------------------------------------------------------------------
+
+' TASK tip dugumunun (TYPE_REF/RETURN_TYPE, degeri "TASK") sonuc tipi; yoksa "".
+Function UXBTaskOfResultTypeFromTypeNode(ByRef ps As ParseState, ByVal typeNode As Integer) As String
+    If typeNode < 0 Or typeNode >= ps.ast.count Then Return ""
+    Dim ch As Integer
+    ch = ps.ast.nodes(typeNode).firstChild
+    Do While ch <> -1
+        If UCase(Trim(ps.ast.nodes(ch).kind)) = "TYPE_REF" And UCase(Trim(ps.ast.nodes(ch).role)) = "TASK_RESULT_TYPE" Then
+            Return UCase(Trim(ps.ast.nodes(ch).value))
+        End If
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return ""
+End Function
+
+' Bildirim dugumunun (DIM_DECL/PARAM_DECL) TASK tip dugumu; TASK degilse -1.
+Function UXBTaskDeclTypeNode(ByRef ps As ParseState, ByVal declNode As Integer) As Integer
+    If declNode < 0 Or declNode >= ps.ast.count Then Return -1
+    Dim ch As Integer
+    ch = ps.ast.nodes(declNode).firstChild
+    Do While ch <> -1
+        If UCase(Trim(ps.ast.nodes(ch).kind)) = "TYPE_REF" Then
+            If UCase(Trim(ps.ast.nodes(ch).value)) = "TASK" Then Return ch
+            Return -1
+        End If
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return -1
+End Function
+
+' Kendi govdesi (ve yerel kapsami) olan rutin dugumleri. S-149 TASK OF bildirimi arama ve
+' S-146 gorev izolasyonu (semantic_task_isolation.fbs) ayni listeyi kullanir.
+Function UXBTaskIsRoutineKind(ByRef kindRaw As String) As Integer
+    Select Case UCase(Trim(kindRaw))
+    Case "FUNCTION_STMT", "SUB_STMT", "THREAD_STMT", "PARALEL_STMT", "EVENT_STMT", "PIPE_STMT", _
+         "CLASS_METHOD_DECL", "CLASS_CONSTRUCTOR_DECL", "CLASS_DESTRUCTOR_DECL", "CLASS_OPERATOR_DECL", "CLASS_PROPERTY_DECL"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' Dugumu iceren rutin (UXBTaskIsRoutineKind); yoksa -1 (program govdesi / MAIN / NAMESPACE duzeyi).
+Function UXBTaskEnclosingRoutine(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    Dim p As Integer = nodeIdx
+    Dim guard As Integer = 0
+    Do While p >= 0 And p < ps.ast.count
+        If UXBTaskIsRoutineKind(ps.ast.nodes(p).kind) <> 0 Then
+            If p <> nodeIdx Then Return p
+        End If
+        Dim nextP As Integer
+        nextP = ps.ast.nodes(p).parent
+        If nextP = -1 Then nextP = UXBAstFindOwner(ps, p)
+        If nextP = p Then Exit Do
+        p = nextP
+        guard += 1
+        If guard > ps.ast.count Then Exit Do
+    Loop
+    Return -1
+End Function
+
+' `name` icin TASK bildirimi (DIM_DECL/PARAM_DECL, tipi TASK). Ayni rutindeki
+' bildirim, program geneli bildirimden onceliklidir. Bulunamazsa -1.
+Function UXBTaskFindDeclForName(ByRef ps As ParseState, ByRef nameRaw As String, ByVal useNodeIdx As Integer) As Integer
+    Dim wanted As String
+    wanted = UCase(Trim(nameRaw))
+    If wanted = "" Then Return -1
+    Dim useRoutine As Integer
+    useRoutine = UXBTaskEnclosingRoutine(ps, useNodeIdx)
+    Dim fallback As Integer = -1
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String
+        k = UCase(Trim(ps.ast.nodes(i).kind))
+        If k <> "DIM_DECL" And k <> "PARAM_DECL" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> wanted Then Continue For
+        If UXBTaskDeclTypeNode(ps, i) = -1 Then Continue For
+        Dim declRoutine As Integer
+        declRoutine = UXBTaskEnclosingRoutine(ps, i)
+        If declRoutine = useRoutine Then Return i
+        If declRoutine = -1 And fallback = -1 Then fallback = i
+    Next i
+    Return fallback
+End Function
+
+' Bir ifadenin gorev sonuc tipi. isTaskOut=1 ise ifade bir TASK uretir:
+'   donus "<TIP>" = TASK OF <TIP>, "" = tipsiz TASK.
+' isTaskOut=0: ifade statik olarak TASK kaynagi olarak taninmadi (denetim atlanir).
+Function UXBTaskExprResultType(ByRef ps As ParseState, ByVal exprIdx As Integer, ByRef isTaskOut As Integer) As String
+    isTaskOut = 0
+    If exprIdx < 0 Or exprIdx >= ps.ast.count Then Return ""
+    Dim k As String
+    k = UCase(Trim(ps.ast.nodes(exprIdx).kind))
+
+    Select Case k
+    Case "SPAWN_EXPR"
+        isTaskOut = 1
+        Dim spawnCall As Integer
+        spawnCall = ps.ast.nodes(exprIdx).left
+        If spawnCall = -1 Then Return ""
+        Dim targetName As String
+        targetName = UCase(Trim(ps.ast.nodes(spawnCall).value))
+        Dim ti As Integer
+        For ti = 0 To ps.ast.count - 1
+            Dim tk As String
+            tk = UCase(Trim(ps.ast.nodes(ti).kind))
+            If tk <> "THREAD_STMT" And tk <> "PARALEL_STMT" Then Continue For
+            If UCase(Trim(ps.ast.nodes(ti).value)) <> targetName And UCase(Trim(ps.ast.nodes(ti).symbolName)) <> targetName Then Continue For
+            Dim rc As Integer
+            rc = ps.ast.nodes(ti).firstChild
+            Do While rc <> -1
+                If UCase(Trim(ps.ast.nodes(rc).kind)) = "RETURN_TYPE" Then Return UCase(Trim(ps.ast.nodes(rc).value))
+                rc = ps.ast.nodes(rc).nextSibling
+            Loop
+            Return ""
+        Next ti
+        Return ""
+
+    Case "IDENT", "IDENTIFIER", "KEYWORD_REF"
+        Dim identDecl As Integer
+        identDecl = UXBTaskFindDeclForName(ps, ps.ast.nodes(exprIdx).value, exprIdx)
+        If identDecl = -1 Then Return ""
+        isTaskOut = 1
+        Return UXBTaskOfResultTypeFromTypeNode(ps, UXBTaskDeclTypeNode(ps, identDecl))
+
+    Case "CALL_EXPR"
+        If ps.ast.nodes(exprIdx).left <> -1 Then Return ""   ' metot cagrisi: statik sonuc tipi yok
+        Dim callName As String
+        callName = Trim(ps.ast.nodes(exprIdx).value)
+        ' dizi elemani g(i)
+        Dim arrDecl As Integer
+        arrDecl = UXBTaskFindDeclForName(ps, callName, exprIdx)
+        If arrDecl <> -1 Then
+            isTaskOut = 1
+            Return UXBTaskOfResultTypeFromTypeNode(ps, UXBTaskDeclTypeNode(ps, arrDecl))
+        End If
+        ' TASK donduren FUNCTION
+        Dim fi As Integer
+        For fi = 0 To ps.ast.count - 1
+            If UCase(Trim(ps.ast.nodes(fi).kind)) <> "FUNCTION_STMT" Then Continue For
+            If UCase(Trim(ps.ast.nodes(fi).value)) <> UCase(callName) Then Continue For
+            Dim fc As Integer
+            fc = ps.ast.nodes(fi).firstChild
+            Do While fc <> -1
+                If UCase(Trim(ps.ast.nodes(fc).kind)) = "RETURN_TYPE" Then
+                    If UCase(Trim(ps.ast.nodes(fc).value)) <> "TASK" Then Return ""
+                    isTaskOut = 1
+                    Return UXBTaskOfResultTypeFromTypeNode(ps, fc)
+                End If
+                fc = ps.ast.nodes(fc).nextSibling
+            Loop
+            Return ""
+        Next fi
+        Return ""
+
+    Case "PAREN_EXPR", "GROUP_EXPR", "EXPR_GROUP"
+        Dim inner As Integer
+        inner = ps.ast.nodes(exprIdx).left
+        If inner = -1 Then inner = ps.ast.nodes(exprIdx).firstChild
+        Return UXBTaskExprResultType(ps, inner, isTaskOut)
+    End Select
+    Return ""
+End Function
+
+' TASK/TASKGROUP alicili uye (metot ya da alan) tipi. 1 = cozuldu (typeOut dolu), 0 = TASK alicisi degil.
+Private Function UXBStep3TaskMemberType(ByRef ps As ParseState, ByVal receiverNode As Integer, ByRef receiverTypeCanon As String, ByRef memberRaw As String, ByRef typeOut As String) As Integer
+    Dim member As String
+    member = UCase(Trim(memberRaw))
+    If receiverTypeCanon = TYPE_TASK Then
+        Select Case member
+        Case "STATUS", "ERRORTEXT"
+            typeOut = TYPE_STRING
+            Return 1
+        Case "WAIT", "CANCEL"
+            typeOut = TYPE_VOID
+            Return 1
+        Case "RESULT", "JOIN"
+            Dim isTask As Integer
+            Dim resultType As String
+            resultType = UXBTaskExprResultType(ps, receiverNode, isTask)
+            If isTask <> 0 And resultType <> "" Then
+                typeOut = UXBStep3TypeCanonical(resultType)
+            Else
+                typeOut = TYPE_OBJECT   ' tipsiz TASK: sonuc OBJECT, tipli hedefe acik cast gerekir (S-149)
+            End If
+            Return 1
+        End Select
+        Return 0
+    End If
+    If receiverTypeCanon = TYPE_TASKGROUP Then
+        Select Case member
+        Case "ADD", "JOIN"
+            typeOut = TYPE_VOID
+            Return 1
+        End Select
+        Return 0
+    End If
+    Return 0
+End Function
+
+' S-146 Model D: `DIM ATOMIC x AS T` bildirimi (DIM_DECL.op = "ATOMIC"). Ayni rutindeki bildirim
+' program geneli bildirimden onceliklidir; `name` ATOMIC degilse (ya da yerel golgeleyen
+' ATOMIC olmayan bildirim varsa) -1.
+Function UXBAtomicDeclFor(ByRef ps As ParseState, ByVal nameRaw As String, ByVal useNodeIdx As Integer) As Integer
+    Dim wanted As String = UCase(Trim(nameRaw))
+    If wanted = "" Then Return -1
+    Dim useRoutine As Integer = UXBTaskEnclosingRoutine(ps, useNodeIdx)
+    Dim fallback As Integer = -1
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If k <> "DIM_DECL" And k <> "PARAM_DECL" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> wanted Then Continue For
+        Dim declRoutine As Integer = UXBTaskEnclosingRoutine(ps, i)
+        If declRoutine = useRoutine Then
+            If k = "DIM_DECL" AndAlso UCase(Trim(ps.ast.nodes(i).op)) = "ATOMIC" Then Return i
+            Return -1
+        End If
+        If declRoutine = -1 And fallback = -1 Then fallback = i
+    Next i
+    If fallback <> -1 AndAlso UCase(Trim(ps.ast.nodes(fallback).kind)) = "DIM_DECL" AndAlso UCase(Trim(ps.ast.nodes(fallback).op)) = "ATOMIC" Then Return fallback
+    Return -1
+End Function
+
+' ATOMIC bildiriminin deger tipi (kanonik degil, yazildigi gibi: "I64", "BOOLEAN" ...).
+Function UXBAtomicDeclType(ByRef ps As ParseState, ByVal declNode As Integer) As String
+    If declNode < 0 Or declNode >= ps.ast.count Then Return ""
+    Dim ch As Integer = ps.ast.nodes(declNode).firstChild
+    Do While ch <> -1
+        If UCase(Trim(ps.ast.nodes(ch).kind)) = "TYPE_REF" Then Return UCase(Trim(ps.ast.nodes(ch).value))
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return UCase(Trim(ps.ast.nodes(declNode).typeName))
+End Function
+
+' ATOMIC alicili metot: LOAD()/STORE(v)/ADD(n)/SUB(n)/EXCHANGE(v) -> deger tipi; CAS(e, n) -> I32
+' (karsilastirma sonucu gibi TRUE = -1). 1 = cozuldu, 0 = alici ATOMIC degil ya da bilinmeyen metot.
+Function UXBAtomicMemberType(ByRef ps As ParseState, ByVal receiverNode As Integer, ByRef memberRaw As String, ByRef typeOut As String) As Integer
+    If receiverNode < 0 Or receiverNode >= ps.ast.count Then Return 0
+    Dim rk As String = UCase(Trim(ps.ast.nodes(receiverNode).kind))
+    If rk <> "IDENT" And rk <> "IDENTIFIER" Then Return 0
+    Dim decl As Integer = UXBAtomicDeclFor(ps, ps.ast.nodes(receiverNode).value, receiverNode)
+    If decl = -1 Then Return 0
+    Select Case UCase(Trim(memberRaw))
+    Case "LOAD", "STORE", "ADD", "SUB", "EXCHANGE"
+        typeOut = UXBStep3TypeCanonical(UXBAtomicDeclType(ps, decl))
+        Return 1
+    Case "CAS"
+        typeOut = TYPE_I32
+        Return 1
+    End Select
+    Return 0
+End Function
+
 Private Function UXBStep3InferMethodCallReturnType(ByRef ps As ParseState, ByVal callNodeIdx As Integer, ByRef callNameRaw As String, ByRef typeOut As String, ByRef errText As String) As Integer
     typeOut = ""
     If callNodeIdx < 0 Or callNodeIdx >= ps.ast.count Then Return 0
@@ -521,12 +791,26 @@ Private Function UXBStep3InferMethodCallReturnType(ByRef ps As ParseState, ByVal
     Dim receiverNode As Integer
     receiverNode = ps.ast.nodes(callNodeIdx).left
     If receiverNode <> -1 Then
+        ' S-146 Model D: ATOMIC uyeleri (LOAD/STORE/ADD/SUB/EXCHANGE/CAS) sinif metodu degildir.
+        If UXBAtomicMemberType(ps, receiverNode, methodName, typeOut) <> 0 Then
+            errText = ""
+            Return 1
+        End If
         Dim recvErr As String
         recvErr = ""
         If UXBStep3InferExprType(ps, receiverNode, receiverType, recvErr) = 0 Then
             receiverType = ""
         End If
         receiverType = UCase(Trim(UXBStep3TypeCanonical(receiverType)))
+
+        ' S-149: TASK/TASKGROUP uyeleri CLASS metodu degildir.
+        If receiverType = TYPE_TASK Or receiverType = TYPE_TASKGROUP Then
+            If UXBStep3TaskMemberType(ps, receiverNode, receiverType, methodName, typeOut) <> 0 Then
+                errText = ""
+                Return 1
+            End If
+            Return 0
+        End If
 
         If receiverType = "" Or receiverType = TYPE_OBJECT Then
             Dim rk As String
@@ -1140,6 +1424,17 @@ Private Function UXBStep3ResolveFieldExprType(ByRef ps As ParseState, ByVal node
         baseIdx = ps.ast.nodes(nodeIdx).firstChild
     End If
     If baseIdx = -1 Then Return 1
+
+    ' S-149: TASK .STATUS/.ERRORTEXT (STRING) ve .RESULT (TASK OF <tip> ise o tip).
+    Dim taskBaseType As String
+    Dim taskBaseErr As String
+    If UXBStep3InferExprType(ps, baseIdx, taskBaseType, taskBaseErr) <> 0 Then
+        taskBaseType = UCase(Trim(UXBStep3TypeCanonical(taskBaseType)))
+        If taskBaseType = TYPE_TASK Or taskBaseType = TYPE_TASKGROUP Then
+            If UXBStep3TaskMemberType(ps, baseIdx, taskBaseType, memberName, typeOut) = 0 Then typeOut = TYPE_OBJECT
+            Return 1
+        End If
+    End If
 
     Dim baseType As String
     Dim baseKind As String

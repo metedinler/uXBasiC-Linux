@@ -1,0 +1,6 @@
+EVENT CompilerEvent(message AS STRING, phase AS I32)
+    PRINT message
+    PRINT phase
+END EVENT
+
+TRIGGER EVENT CompilerEvent, "lexer", 2

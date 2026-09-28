@@ -1,0 +1,6 @@
+' S-076: gerçek bellek: little-endian 4 bayt = 'A','B','C','D'.
+DIM s AS STRING
+s = "ABCD"
+DIM p AS PTR
+p = SADD(s)
+PRINT PEEKD(p)

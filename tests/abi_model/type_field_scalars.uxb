@@ -1,0 +1,28 @@
+' S-095: every scalar TYPE field keeps ITS width, sign and representation.
+TYPE Q
+A AS I32
+B AS F64
+C AS F32
+D AS U64
+E AS I8
+END TYPE
+DIM q AS Q
+q.A = 7
+q.B = 1.5
+q.C = F32(2.5)
+q.D = 18446744073709551615
+q.E = I8(-3)
+PRINT q.A
+PRINT q.B
+PRINT q.C
+PRINT q.D
+PRINT q.E
+PRINT SIZEOF(Q)
+q.E = I8(127)
+q.E += 1
+PRINT q.E
+q.A = 2147483647
+q.A += 1
+PRINT q.A
+q.B += 1.25
+PRINT q.B

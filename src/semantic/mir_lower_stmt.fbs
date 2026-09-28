@@ -1,4 +1,7 @@
 ' Extracted MIRLowerTopLevelStmt
+#include once "mir_sync_pass.fbs"
+#include once "mir_lower_lock.fbs"
+#include once "mir_exc_pass.fbs"
 
 Private Function MIRStmtMemoryMode(ByRef ps As ParseState, ByVal stmtIdx As Integer, ByRef modeOut As String, ByRef offsetOut As Integer) As Integer
     modeOut = "AUTO"
@@ -244,6 +247,18 @@ Private Function MIRLowerTopLevelStmtIoConsole(ByRef ps As ParseState, ByVal stm
             Dim inputFileTemp As String
             inputFileTemp = MIRNextTemp(tempSeed)
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, inputFileTemp, 2, "INPUTF", inputHandleName
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, "STRING"
+            ' S-146 adim 2: INPUT # bir satir METIN okur; sayisal hedefe VAL ile cevrilir (native metin adresini
+            ' sayi sanmasin; AST ile ayni kural).
+            Dim inputFileTargetType As String
+            Dim inputFileTypeErr As String
+            If UXBStep3InferExprType(ps, inputFileTarget, inputFileTargetType, inputFileTypeErr) = 0 Then inputFileTargetType = ""
+            inputFileTargetType = UXBStep3TypeCanonical(inputFileTargetType)
+            If inputFileTargetType <> "" AndAlso inputFileTargetType <> TYPE_STRING Then
+                Dim inputFileNum As String = MIRNextTemp(tempSeed)
+                MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, inputFileNum, 2, "VAL", inputFileTemp
+                inputFileTemp = inputFileNum
+            End If
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, ps.ast.nodes(inputFileTarget).value, 1, inputFileTemp
         Next inputFilePos
         Return 1
@@ -498,6 +513,21 @@ Private Function MIRLowerTopLevelStmtMemory(ByRef ps As ParseState, ByVal stmtId
     End Select
 End Function
 
+' S-156: END programi bitirir. Ana program govdesinde (MAIN) donus yeterli ve K5 kapanisi
+' main sonunda calisir. Bir rutin icinde ise sadece o rutinden donmek YANLISTI (MIR ve native
+' "a | c" basiyordu, AST "a"): kanonik PROGRAM_END cagrisi ic ice cagrilari cozerek programi
+' bitirir (MIR yorumlayicisi: UXB_INTERP_SIGNAL_PROGRAM_END; native: __uxb_rt_program_end).
+Private Sub MIRLowerEndStmt(ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByRef tempSeed As Integer)
+    If fnIdx >= 0 And fnIdx < module.functionCount Then
+        If UCase(Trim(module.functions(fnIdx).name)) <> "MAIN" Then
+            Dim endTmp As String
+            endTmp = MIRNextTemp(tempSeed)
+            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, endTmp, 1, "PROGRAM_END"
+        End If
+    End If
+    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_RET, "", 1, "__result__"
+End Sub
+
 Private Function MIRLowerTopLevelStmtFlowCore(ByRef ps As ParseState, ByVal stmtIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef handledOut As Integer, ByRef errText As String) As Integer
     MIRSetCurrentSourceFromAstNode ps, stmtIdx
     handledOut = 1
@@ -518,12 +548,14 @@ Private Function MIRLowerTopLevelStmtFlowCore(ByRef ps As ParseState, ByVal stmt
         Else
             If MIRLowerExprNode(ps, retExprNode, module, fnIdx, blkIdx, tempSeed, retValueName, errText) = 0 Then Return 0
         End If
+        MIRLockEmitLeavesForReturn module, fnIdx, blkIdx
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_RET, "", 1, retValueName
         Return 1
 
     Case "END_STMT"
-        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_RET, "", 1, "__result__"
+        MIRLowerEndStmt module, fnIdx, blkIdx, tempSeed
         Return 1
+
 
     Case "EXIT_STMT"
         Dim exitBreakBlock As Integer
@@ -533,11 +565,13 @@ Private Function MIRLowerTopLevelStmtFlowCore(ByRef ps As ParseState, ByVal stmt
         If exitWantType = "IF" Then
             Dim exitIfEndBlock As Integer
             If MIRCurrentIfExitTarget(exitIfEndBlock) = 0 Then errText = "mir: EXIT IF used outside IF block": Return 0
+            MIRLockEmitLeavesForIfExit module, fnIdx, blkIdx, gMirLowerIfDepth
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(exitIfEndBlock))
             Return 1
         End If
         If exitWantType <> "FOR" And exitWantType <> "DO" Then exitWantType = ""
         If MIRFindLoopContext(exitWantType, exitBreakBlock, exitContBlock) = 0 Then errText = "mir: EXIT icin uygun loop context yok": Return 0
+        MIRLockEmitLeavesForLoopExit module, fnIdx, blkIdx, MIRLockLoopIndexFor(exitWantType)
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(exitBreakBlock))
         Return 1
 
@@ -590,6 +624,11 @@ Private Function MIRLowerTopLevelStmtCallDispatch(ByRef ps As ParseState, ByVal 
     If isNamespaceStmtCall <> 0 Then stmtCallName = namespaceStmtTarget
 
     If isNamespaceStmtCall = 0 And st.left <> -1 And InStr(stmtCallName, ".") > 0 Then
+        ' S-146 Model D: `sayac.ADD(1)` deyim olarak (sonuc atilir).
+        Dim atomicStmtHandled As Integer
+        Dim atomicStmtTemp As String
+        If MIRLowerAtomicMember(ps, stmtIdx, module, fnIdx, blkIdx, tempSeed, atomicStmtTemp, atomicStmtHandled, errText) = 0 Then Return 0
+        If atomicStmtHandled <> 0 Then Return 1
         Dim stmtMethodTemp As String
         If MIRAppendMethodCallInstruction(ps, stmtIdx, module, fnIdx, blkIdx, tempSeed, stmtMethodTemp, errText) = 0 Then Return 0
         MIREmitTryEscalationCheck module, fnIdx, blkIdx, tempSeed
@@ -823,6 +862,82 @@ Private Function MIRTryEmitClassFieldStore(ByRef ps As ParseState, ByVal lhsNode
     Return 1
 End Function
 
+Declare Function MIRTypeIsPlainScalarField(ByRef typeNameRaw As String) As Integer
+
+' S-159: dugum TYPE/STRUCT degerinin konumu mu (TYPE degiskeni ya da TYPE tipli alan). pathOut = MIR alan
+' yolu koku (DEGISKEN ya da DEGISKEN.ALAN), typeOut = tip adi.
+Private Function MIRTypeValuePath(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef pathOut As String, ByRef typeOut As String) As Integer
+    pathOut = ""
+    typeOut = ""
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return 0
+    Dim k As String = UCase(Trim(ps.ast.nodes(nodeIdx).kind))
+    If k <> "IDENT" And k <> "IDENTIFIER" And k <> "FIELD_EXPR" Then Return 0
+    Dim inferred As String
+    Dim inferErr As String
+    If UXBStep3InferExprType(ps, nodeIdx, inferred, inferErr) = 0 Then Return 0
+    inferred = UCase(Trim(inferred))
+    If Left(inferred, 5) = "TYPE_" Then Return 0   ' yerlesik tip
+    Dim recSize As Integer, recAlign As Integer, recKind As String, recAbi As String, recPack As Integer, recExplicit As Integer
+    If TypeLayoutDescribeGlobal(inferred, recSize, recAlign, recKind, recAbi, recPack, recExplicit) = 0 Then Return 0
+    If recKind <> "TYPE" And recKind <> "STRUCT" And recKind <> "UNION" Then Return 0
+    If k = "FIELD_EXPR" Then
+        Dim pathErr As String
+        If MIRBuildFieldPath(ps, nodeIdx, pathOut, pathErr) = 0 Then Return 0
+        pathOut = UCase(Trim(pathOut))
+    Else
+        pathOut = UCase(Trim(ps.ast.nodes(nodeIdx).value))
+    End If
+    typeOut = inferred
+    Return 1
+End Function
+
+Private Function MIRLowerTypeFieldCopy(ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByRef tempSeed As Integer, ByVal dstPath As String, ByVal srcPath As String, ByVal typeNameRaw As String, ByVal depth As Integer, ByRef errText As String) As Integer
+    If depth > 8 Then errText = "mir: TYPE kopyasi cok derin ic ice (S-159)": Return 0
+    Dim recSize As Integer, recAlign As Integer, recKind As String, recAbi As String, recPack As Integer, recExplicit As Integer
+    If TypeLayoutDescribeGlobal(typeNameRaw, recSize, recAlign, recKind, recAbi, recPack, recExplicit) = 0 Then errText = "mir: TYPE yerlesimi yok: " & typeNameRaw: Return 0
+    If recKind = "UNION" Then
+        ' MIR UNION uyelerini ust uste bindirilmis tek depo olarak modellemiyor (varsayilan degerleri de
+        ' yazilmiyor): butun kopya sessizce yanlis olmasin diye acik tani.
+        errText = "mir: UNION degerinin butun atamasi desteklenmiyor: " & UCase(typeNameRaw) & " (S-159)"
+        Return 0
+    End If
+    Dim typeIdx As Integer = FindTypeLayoutIndex(typeNameRaw)
+    If typeIdx < 0 Then errText = "mir: TYPE yerlesimi yok: " & typeNameRaw: Return 0
+    Dim fi As Integer
+    For fi = gTypeLayouts(typeIdx).firstField To gTypeLayouts(typeIdx).firstField + gTypeLayouts(typeIdx).fieldCount - 1
+        Dim fName As String = UCase(Trim(gTypeLayoutFields(fi).fieldName))
+        If gTypeLayoutFields(fi).isArray <> 0 Then
+            errText = "mir: dizi alanli TYPE'in butun atamasi desteklenmiyor: " & UCase(typeNameRaw) & "." & fName & " (S-159)"
+            Return 0
+        End If
+        If MIRTypeIsPlainScalarField(gTypeLayoutFields(fi).fieldTypeName) <> 0 Then
+            Dim fType As String = MIRCanonicalTypeName(gTypeLayoutFields(fi).fieldTypeName)
+            Dim t As String = MIRNextTemp(tempSeed)
+            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_VAR, t, 1, srcPath & "." & fName
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, fType
+            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, dstPath & "." & fName, 1, t
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, fType
+        Else
+            If MIRLowerTypeFieldCopy(module, fnIdx, blkIdx, tempSeed, dstPath & "." & fName, srcPath & "." & fName, gTypeLayoutFields(fi).fieldTypeName, depth + 1, errText) = 0 Then Return 0
+        End If
+    Next fi
+    Return 1
+End Function
+
+Private Function MIRLowerTypeWholeAssign(ByRef ps As ParseState, ByVal lhsIdx As Integer, ByVal rhsIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef handledOut As Integer, ByRef errText As String) As Integer
+    handledOut = 0
+    Dim dstPath As String, dstType As String, srcPath As String, srcType As String
+    If MIRTypeValuePath(ps, lhsIdx, dstPath, dstType) = 0 Then Return 1
+    If MIRTypeValuePath(ps, rhsIdx, srcPath, srcType) = 0 Then Return 1
+    handledOut = 1
+    If dstType <> srcType Then
+        errText = "mir: TYPE atamasi farkli tipler arasinda: " & srcType & " -> " & dstType
+        Return 0
+    End If
+    If dstPath = srcPath Then Return 1
+    Return MIRLowerTypeFieldCopy(module, fnIdx, blkIdx, tempSeed, dstPath, srcPath, dstType, 0, errText)
+End Function
+
 Private Function MIRLowerTopLevelStmtAssignIncDec(ByRef ps As ParseState, ByVal stmtIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef handledOut As Integer, ByRef errText As String) As Integer
     MIRSetCurrentSourceFromAstNode ps, stmtIdx
     handledOut = 1
@@ -839,6 +954,12 @@ Private Function MIRLowerTopLevelStmtAssignIncDec(ByRef ps As ParseState, ByVal 
         Dim opText As String
         opText = Trim(st.op)
         If opText = "" Then opText = "="
+        ' S-159: TYPE degerinin butun atamasi -- alan alan kopya (deger semantigi).
+        If opText = "=" Then
+            Dim wholeHandled As Integer
+            If MIRLowerTypeWholeAssign(ps, st.left, st.right, module, fnIdx, blkIdx, tempSeed, wholeHandled, errText) = 0 Then Return 0
+            If wholeHandled <> 0 Then Return 1
+        End If
         Dim rhsName As String
         If MIRLowerExprNode(ps, st.right, module, fnIdx, blkIdx, tempSeed, rhsName, errText) = 0 Then Return 0
         Dim lhsKind As String, assignTarget As String, assignIndexName As String, indexedAssign As Integer
@@ -855,7 +976,7 @@ Private Function MIRLowerTopLevelStmtAssignIncDec(ByRef ps As ParseState, ByVal 
             If UCase(Trim(ps.ast.nodes(arrFieldBaseNode).kind)) = "CALL_EXPR" Then
                 Dim arrFieldArrName As String
                 arrFieldArrName = ps.ast.nodes(arrFieldBaseNode).value
-                If InStr(arrFieldArrName, ".") = 0 And MIRIsKnownArray(module, arrFieldArrName) <> 0 And MIRChildCount(ps, arrFieldBaseNode) = 1 Then
+                If (InStr(arrFieldArrName, ".") = 0 Or MIRIsNamespaceVarName(arrFieldArrName) <> 0) And MIRIsKnownArray(module, arrFieldArrName) <> 0 And MIRChildCount(ps, arrFieldBaseNode) = 1 Then
                     Dim arrFieldIdxExpr As Integer
                     arrFieldIdxExpr = MIRChildAt(ps, arrFieldBaseNode, 0)
                     Dim arrFieldIdxName As String
@@ -874,6 +995,21 @@ Private Function MIRLowerTopLevelStmtAssignIncDec(ByRef ps As ParseState, ByVal 
                     End If
                     Dim afStoreValue As String
                     afStoreValue = rhsName
+                    ' S-134 B6: an existing managed value assigned to an
+                    ' array-of-TYPE field needs the same COPY contract as a
+                    ' scalar field. Provider-produced temporaries retain their
+                    ' transfer ownership and are deliberately not cloned here.
+                    If opText = "=" Then
+                        Dim afRhsKindCopy As String
+                        afRhsKindCopy = UCase(Trim(ps.ast.nodes(st.right).kind))
+                        If (afRhsKindCopy = "IDENT" Or afRhsKindCopy = "IDENTIFIER" Or afRhsKindCopy = "FIELD_EXPR") And UXBLibraryTypeNeedsManagedCopy(arrFieldStoreType) <> 0 Then
+                            Dim afCopyTmp As String
+                            afCopyTmp = MIRNextTemp(tempSeed)
+                            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, afCopyTmp, 2, UCase(Trim(arrFieldStoreType)) & ".COPY", rhsName
+                            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, arrFieldStoreType
+                            afStoreValue = afCopyTmp
+                        End If
+                    End If
                     If opText <> "=" Then
                         ' S-080: a compound assignment on an array-of-TYPE field is
                         ' read-modify-write through the same array+object path as the plain
@@ -912,7 +1048,7 @@ Private Function MIRLowerTopLevelStmtAssignIncDec(ByRef ps As ParseState, ByVal 
         ElseIf lhsKind = "FIELD_EXPR" Then
             If MIRBuildFieldPath(ps, st.left, assignTarget, errText) = 0 Then Return 0
             If MIRNormalizeFieldPathForAccess(ps, st.left, assignTarget, 1, errText) = 0 Then Return 0
-        ElseIf lhsKind = "CALL_EXPR" And InStr(ps.ast.nodes(st.left).value, ".") = 0 And MIRIsKnownArray(module, ps.ast.nodes(st.left).value) <> 0 And MIRChildCount(ps, st.left) >= 1 Then
+        ElseIf lhsKind = "CALL_EXPR" And (InStr(ps.ast.nodes(st.left).value, ".") = 0 Or MIRIsNamespaceVarName(ps.ast.nodes(st.left).value) <> 0) And MIRIsKnownArray(module, ps.ast.nodes(st.left).value) <> 0 And MIRChildCount(ps, st.left) >= 1 Then
             assignTarget = ps.ast.nodes(st.left).value
             If MIRLowerFlatArrayIndex(ps, st.left, assignTarget, module, fnIdx, blkIdx, tempSeed, assignIndexName, errText) = 0 Then Return 0
             indexedAssign = 1
@@ -934,9 +1070,34 @@ Private Function MIRLowerTopLevelStmtAssignIncDec(ByRef ps As ParseState, ByVal 
                 Dim classStoreEq As Integer
                 classStoreEq = MIRTryEmitClassFieldStore(ps, st.left, assignTarget, rhsName, module, fnIdx, blkIdx, errText)
                 If classStoreEq = 0 Then Return 0
-                If classStoreEq < 0 Then MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, assignTarget, 1, rhsName
+                If classStoreEq < 0 Then
+                    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, assignTarget, 1, rhsName
+                    ' S-134 B6: a managed value copied into a record field must
+                    ' follow the field's COPY contract just like a plain variable.
+                    Dim fieldRhsKind As String
+                    fieldRhsKind = UCase(Trim(ps.ast.nodes(st.right).kind))
+                    If fieldRhsKind = "IDENT" Or fieldRhsKind = "IDENTIFIER" Or fieldRhsKind = "FIELD_EXPR" Then
+                        Dim managedFieldType As String
+                        If MIRTryInferExprTypeName(ps, st.left, managedFieldType) <> 0 Then
+                            If UCase(Trim(managedFieldType)) <> "" And UCase(Trim(managedFieldType)) <> "OBJECT" And UCase(Trim(managedFieldType)) <> "TYPE_OBJECT" Then
+                                MIRSetLastInstructionMetadata module, fnIdx, blkIdx, managedFieldType
+                            End If
+                        End If
+                    End If
+                End If
             Else
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, assignTarget, 1, rhsName
+                ' S-134 B2: an assignment from an existing managed library value
+                ' follows the declared COPY contract. Provider-produced
+                ' temporaries keep their transfer path and are not cloned here.
+                If UCase(Trim(ps.ast.nodes(st.right).kind)) = "IDENT" Or UCase(Trim(ps.ast.nodes(st.right).kind)) = "IDENTIFIER" Then
+                    Dim managedAssignType As String
+                    If MIRTryInferExprTypeName(ps, st.left, managedAssignType) = 0 Or UCase(Trim(managedAssignType)) = "" Or UCase(Trim(managedAssignType)) = "OBJECT" Or UCase(Trim(managedAssignType)) = "TYPE_OBJECT" Then
+                        managedAssignType = ""
+                        MIRFindNearestDeclaredType ps, st.left, assignTarget, managedAssignType
+                    End If
+                    If UCase(Trim(managedAssignType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, managedAssignType
+                End If
             End If
         Case "=-"
             Dim negTmp As String
@@ -1135,7 +1296,20 @@ End Function
 
 #include once "mir_lower_stmt_core_split.fbs"
 
+Declare Function MIRLowerTopLevelStmtBody(ByRef ps As ParseState, ByVal stmtIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer
+
+' S-146 Model D: deyim siniri. Senkron gecisi (mir_sync_pass.fbs) ayni stmtSeq'li ardisik
+' buyruklari "tek guvenli islem" olarak kilitler.
 Private Function MIRLowerTopLevelStmt(ByRef ps As ParseState, ByVal stmtIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer
+    Dim outerSeq As Integer = gMIRCurrentStmtSeq
+    gMIRStmtSeqCounter += 1
+    gMIRCurrentStmtSeq = gMIRStmtSeqCounter
+    Dim ok As Integer = MIRLowerTopLevelStmtBody(ps, stmtIdx, module, fnIdx, blkIdx, tempSeed, errText)
+    gMIRCurrentStmtSeq = outerSeq
+    Return ok
+End Function
+
+Private Function MIRLowerTopLevelStmtBody(ByRef ps As ParseState, ByVal stmtIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer
     MIRSetCurrentSourceFromAstNode ps, stmtIdx
     If stmtIdx < 0 Or stmtIdx >= ps.ast.count Then Return 1
 
@@ -1145,6 +1319,10 @@ Private Function MIRLowerTopLevelStmt(ByRef ps As ParseState, ByVal stmtIdx As I
     k = UCase(st.kind)
 
     Select Case k
+    Case "LOCK_STMT"
+        Return MIRLowerLockStmt(ps, stmtIdx, module, fnIdx, blkIdx, tempSeed, errText)
+    Case "UNSAFE_STMT"
+        Return MIRLowerUnsafeStmt(ps, stmtIdx, module, fnIdx, blkIdx, tempSeed, errText)
     Case "LABEL_STMT"
         Dim labelName As String
         labelName = Trim(st.value)
@@ -1161,6 +1339,7 @@ Private Function MIRLowerTopLevelStmt(ByRef ps As ParseState, ByVal stmtIdx As I
             errText = "mir: GOTO target missing"
             Return 0
         End If
+        MIRLockEmitLeavesForGoto ps, module, fnIdx, blkIdx, gotoTarget
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_GOTO, "", 1, gotoTarget
         Return 1
     Case "GOSUB_STMT"

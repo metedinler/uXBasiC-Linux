@@ -71,6 +71,43 @@ UXB_RT_API int UXB_RT_CDECL uxb_text_file_write(const char* path, const char* te
 
 UXB_RT_API const char* UXB_RT_CDECL uxb_last_error(void);
 
+// S-030 Faz 2A: gorev ABI v2 (uxb_runtime_task_v2.cpp). Thunk sozlesmesi o dosyanin basinda.
+// Deger turleri: 0=VOID, 1=I64, 2=F64, 3=STRING. stringArgMask: bit i => i. arguman STRING (kopyalanir).
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_spawn(void* thunk, const void* argblock, int64_t bytes, const char* name, int64_t resultKind, int64_t stringArgMask);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_fail_cstr(const char* message);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_fail_i64(int64_t value);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_cancel_point(void);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_wait(int64_t handle);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_join(int64_t handle);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_result(int64_t handle);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_cancel(int64_t handle);
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_task_status(int64_t handle);
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_task_error(int64_t handle);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_group_create(void);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_group_add(int64_t group, int64_t task);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_group_join(int64_t group);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_shutdown(int64_t normalExit);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_worker_count(void);
+/* S-146 Model D: depo basina kilit tablosu (uxb_runtime_sync.cpp). ids: kilit kimlikleri
+   (lockOrderId / MUTEX degeri), names: statik kimliklere paralel "AD1,AD2". mode 0 = otomatik
+   deyim kilidi (ayni gorev icin yeniden girilebilir), 1 = acik LOCK (ikinci kez = SELF_DEADLOCK). */
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_sync_enter(const int64_t* ids, int64_t count, const char* names, int64_t mode);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_sync_leave(const int64_t* ids, int64_t count, int64_t mode);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_lock_mark(void);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_lock_release_to(int64_t mark);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_mutex_new(void);
+/* S-160: is parcacigina ozel THROW/ASSERT istisna durumu (uxb_runtime_task_v2.cpp). */
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_exc_active(void);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_exc_set_active(int64_t value);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_exc_set_value(int64_t bits, int64_t isString);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_exc_uncaught(int64_t inTask);
+/* S-163: RND/RANDOMIZE, AST/MIR ile ayni uretec, gorev basina durum. */
+UXB_RT_API double UXB_RT_CDECL __uxb_rt_rnd_f64(int64_t hasArg, double arg);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_randomize_seed(int64_t hasSeed, int64_t seed);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_set_workers(int64_t count);
+// S-156: rutin icindeki END (K5 kapanisi + cikis; donmez).
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_program_end(void);
+
 // Native MIR x64 runtime ABI. Integer values and pointers use 64-bit slots to
 // match the Microsoft x64 calling convention used by the NASM backend.
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_i64(int64_t value);
@@ -91,6 +128,10 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_timer_i64(void);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_rnd_i64(void);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_randomize(int64_t seed);
 
+// S-157: STRING degiskeni/dizi elemani/alan icin sahipli metin deposu (yuva adresi sahiptir).
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_str_store(const char** slot, const char* src);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_str_release(const char** slot);
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_temp(const char* value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_strlen(const char* value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_val_i64(const char* value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_i64(int64_t value);
@@ -127,6 +168,12 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_lof(int64_t channel);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_get(int64_t channel, int64_t position, int64_t bytes);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_put(int64_t channel, int64_t position, int64_t bytes, int64_t value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_delete(const char* path);
+/* S-146 adim 2: metin dosyasi PRINT # / INPUT # */
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_print_begin(int64_t channel);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_print_text(const char* text, const char* sep);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_file_print_end(void);
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_file_input_line(int64_t channel);
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_u64(int64_t value);
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_sqrt_i64(int64_t value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_sin_i64(int64_t value);

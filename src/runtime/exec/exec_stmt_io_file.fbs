@@ -1,3 +1,4 @@
+#include once "../../common/uxb_stdin.fbs"
 Private Function ExecRunPrintStmt(ByRef ps As ParseState, ByRef es As ExecState, ByVal stmtIdx As Integer, ByRef errText As String) As Integer
     Dim printCount As Integer
     printCount = ExecChildCount(ps, stmtIdx)
@@ -208,10 +209,27 @@ Private Function ExecRunInputStmt(ByRef ps As ParseState, ByRef es As ExecState,
 
         Dim inputText As String
         If ExecDebugInputQueuePop(inputText) = 0 Then
-            Line Input inputText
+            UxbStdinReadLine inputText   ' S-164: yonlendirilmis girdide de calisir
         End If
 
-        ExecSetVar es, ps.ast.nodes(inputTarget).value, ValInt(inputText)
+        ' S-164: STRING hedef metni oldugu gibi alir (onceden ValInt ile 0'a donusuyordu); sayisal
+        ' hedef INPUT# ile ayni kurala uyar.
+        Dim inputTargetName As String = ps.ast.nodes(inputTarget).value
+        Dim inputTargetIdx As Integer = ExecFindVar(es, inputTargetName)
+        Dim inputTargetType As String = ""
+        If inputTargetIdx <> -1 Then inputTargetType = UCase(Trim(es.vars(inputTargetIdx).declType))
+        If Left(inputTargetType, 5) = "TYPE_" Then inputTargetType = Mid(inputTargetType, 6)
+        If inputTargetType = "STRING" Or inputTargetType = "WSTRING" Then
+            Dim inputStringValue As ExecValue
+            ExecValueSetString inputStringValue, inputText
+            ExecSetVarValue es, inputTargetName, inputStringValue
+        ElseIf inputTargetType = "F32" Or inputTargetType = "F64" Or inputTargetType = "SINGLE" Or inputTargetType = "DOUBLE" Then
+            Dim inputFloatValue As ExecValue
+            ExecValueSetFloat inputFloatValue, Val(inputText)
+            ExecSetVarValue es, inputTargetName, inputFloatValue
+        Else
+            ExecSetVar es, inputTargetName, ValInt(inputText)
+        End If
     Next inputPos
 
     Return 1

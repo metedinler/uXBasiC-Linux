@@ -1,0 +1,4 @@
+AST=THROW 5
+MIR=uncaught THROW/ASSERT 5
+x64=5
+AST-x64=5

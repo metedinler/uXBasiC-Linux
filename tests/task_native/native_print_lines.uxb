@@ -1,0 +1,16 @@
+' S-030 Faz 2A / K9: tek PRINT satiri baska gorevin ciktisiyla bolunmez (satir sirasi serbest).
+THREAD Writer(id AS I32) AS I32
+    DIM j AS I32
+    FOR j = 1 TO 60
+        PRINT "W"; id; ":"; j; ":"; id; ":"; j; ":END"
+    NEXT
+    RETURN id
+END THREAD
+DIM g AS TASKGROUP
+DIM w AS I32
+FOR w = 1 TO 8
+    g.ADD(SPAWN Writer(w))
+NEXT
+g.JOIN()
+PRINT "BITTI"
+

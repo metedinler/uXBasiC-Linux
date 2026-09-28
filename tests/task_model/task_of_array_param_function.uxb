@@ -1,0 +1,29 @@
+' S-149: TASK OF dizisi, TASK OF parametre, TASK OF donduren FUNCTION; tipli -> tipsiz TASK serbest.
+THREAD Worker(x AS I32) AS I32
+    RETURN x * 2
+END THREAD
+FUNCTION Start(v AS I32) AS TASK OF I32
+    DIM t AS TASK OF I32 = SPAWN Worker(v)
+    RETURN t
+END FUNCTION
+SUB Show(q AS TASK OF I32)
+    PRINT q.JOIN() + 1
+END SUB
+DIM g(3) AS TASK OF I32
+DIM i AS I32
+FOR i = 1 TO 3
+    g(i) = SPAWN Worker(i)
+NEXT
+DIM total AS I32
+FOR i = 1 TO 3
+    total = total + g(i).JOIN()
+NEXT
+PRINT total
+DIM k AS TASK OF I32
+k = Start(9)
+PRINT k.RESULT
+Show(Start(1))
+DIM u AS TASK
+u = k
+PRINT u.JOIN()
+

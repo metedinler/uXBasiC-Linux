@@ -26,8 +26,8 @@ FUNCTION ResW() AS F64
 END FUNCTION
 
 ' Vector slots (0..7) feed the functions whose arguments would exceed the 10-value CALL(DLL) limit.
-SUB VectorSlotSet(slot AS I32, x AS F64, y AS F64, z AS F64, w AS F64)
-    CALL(DLL, "uxraylib.dll", "uxraylib_vector_slot_set", VOID, CDECL, "I32,F64,F64,F64,F64", slot, x, y, z, w)
+SUB VectorSlotSet(slotIndex AS I32, x AS F64, y AS F64, z AS F64, w AS F64)
+    CALL(DLL, "uxraylib.dll", "uxraylib_vector_slot_set", VOID, CDECL, "I32,F64,F64,F64,F64", slotIndex, x, y, z, w)
 END SUB
 
 FUNCTION MathLastError() AS I32

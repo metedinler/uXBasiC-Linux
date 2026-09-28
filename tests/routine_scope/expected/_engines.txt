@@ -1,0 +1,5 @@
+# S-167/S-168: BYREF gercek takma ad; rutin yereli/parametresi ayni adli globali golgeler.
+AST=run
+MIR=run
+x64=run
+AST-x64=run

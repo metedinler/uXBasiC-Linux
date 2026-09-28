@@ -1,0 +1,3 @@
+EVENT Duplicate(a AS I32, a AS I32)
+    PRINT a
+END EVENT

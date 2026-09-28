@@ -1,0 +1,2 @@
+bozuk=0
+a=250 b=750 toplam=1000

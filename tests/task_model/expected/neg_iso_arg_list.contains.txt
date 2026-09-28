@@ -1,0 +1,1 @@
+ALL=1. arguman tipi LIST gorev sinirindan gecemiyor -- henuz uygulanmadi: S-146 adim 5

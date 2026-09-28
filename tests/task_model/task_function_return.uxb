@@ -9,7 +9,10 @@ FUNCTION Start(v AS I32) AS TASK
 END FUNCTION
 
 PRINT Start(5).JOIN()
-PRINT Start(6).STATUS
+' Faz 2A: gercek eszamanlilikta STATUS ancak WAIT/JOIN sonrasi kesindir (senkron referansta gorev SPAWN aninda biter).
+DIM s6 AS TASK = Start(6)
+s6.WAIT()
+PRINT s6.STATUS
 DIM k AS TASK
 k = Start(7)
 PRINT k.RESULT

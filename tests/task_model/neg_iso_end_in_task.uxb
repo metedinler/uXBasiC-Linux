@@ -1,0 +1,8 @@
+' S-146 Model D madde 12 / S-156: gorev zincirinde END tek dil yasagidir (tum programi, diger gorevleri de yarida keser).
+THREAD W(x AS I32) AS I32
+    IF x = 1 THEN END
+    RETURN x
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+

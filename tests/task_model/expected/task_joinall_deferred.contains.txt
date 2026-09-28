@@ -1,1 +1,4 @@
 AST=TASKGROUP.JOINALL() henuz desteklenmiyor
+MIR=TASKGROUP.JOINALL() henuz desteklenmiyor
+x64=TASKGROUP.JOINALL() henuz desteklenmiyor (S-147
+AST-x64=TASKGROUP.JOINALL() henuz desteklenmiyor (S-147

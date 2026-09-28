@@ -41,7 +41,7 @@ Function UXBTypeAbi(ByRef rawTypeName As String, ByRef payloadOut As Integer, By
         payloadOut = 8: alignOut = 8
         strideOut = 16
         Return 1
-    Case "STRING", "ARRAY", "LIST", "DICT", "SET", "REF", "POINTER", "PTR", "STRPTR", "WSTRPTR", "HANDLE", "OBJECT", "ANY", "VARIANT", "FILE_HANDLE", "DLL_HANDLE", "TASK", "TASKGROUP"
+    Case "STRING", "ARRAY", "LIST", "DICT", "SET", "REF", "POINTER", "PTR", "STRPTR", "WSTRPTR", "HANDLE", "OBJECT", "ANY", "VARIANT", "FILE_HANDLE", "DLL_HANDLE", "TASK", "TASKGROUP", "MUTEX"
         payloadOut = 8: alignOut = 8
     Case Else
         Return 0

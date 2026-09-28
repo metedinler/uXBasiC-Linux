@@ -1,0 +1,43 @@
+' S-142b: her motor ondalik sayiyi tipin izin verdigi hane sayisi kadar basar (F64: 16 anlamli hane), ilave sifir eklenmez.
+DIM a AS F64
+DIM b AS F64
+a = 0.1
+PRINT a
+b = a + 0.2
+PRINT b
+a = 1.0 / 3.0
+PRINT a
+a = 2.75
+PRINT a
+a = 100.0
+PRINT a
+a = 1234567.0
+PRINT a
+a = 1.0E20
+PRINT a
+a = 1.0E-7
+PRINT a
+a = 123456789.123456789
+PRINT a
+a = 0.000123
+PRINT a
+a = -0.5
+PRINT a
+a = 3.14159265358979
+PRINT a
+a = 1.0E15
+PRINT a
+a = 1.0E16
+PRINT a
+a = 2.0 / 3.0
+PRINT a
+a = 0.0
+PRINT a
+a = 1.5E300
+PRINT a
+a = 12345.6789
+PRINT a
+a = 0.0001
+PRINT a
+a = 0.00001
+PRINT a

@@ -1,0 +1,5 @@
+' S-149: EVENT senkron ve sonucsuz kalir; donus tipi yalniz PIPE/THREAD/PARALEL.
+EVENT E1(x AS I32) AS I32
+    PRINT x
+END EVENT
+

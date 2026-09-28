@@ -1,0 +1,59 @@
+' S-077: unsigned 64-bit semantics. Expected values are computed by hand from
+' the language rule (a U64 operand makes the whole operation unsigned 64-bit).
+DIM u AS U64
+DIM big AS U64
+DIM small AS U64
+u = 0
+u = u - 1
+PRINT u
+big = 18446744073709551615
+PRINT big
+PRINT big \ 3
+PRINT big MOD 1000
+IF big > 9223372036854775807 THEN
+PRINT "gt-i64max"
+ELSE
+PRINT "le-i64max"
+END IF
+small = 5
+IF small < big THEN
+PRINT "small<big"
+ELSE
+PRINT "small>=big"
+END IF
+IF big >= big THEN
+PRINT "ge"
+ELSE
+PRINT "lt"
+END IF
+u = big
+u = u + 2
+PRINT u
+u += 10
+PRINT u
+u = big
+u \= 10
+PRINT u
+u = big
+u %= 10
+PRINT u
+PRINT big SHR 60
+u = 1
+u <<= 63
+PRINT u
+u >>= 63
+PRINT u
+u = 0
+u--
+PRINT u
+u++
+PRINT u
+PRINT -big
+PRINT 0 - small
+DIM iv AS I64
+iv = -1
+IF iv = big THEN
+PRINT "i64-eq-u64"
+ELSE
+PRINT "i64-ne-u64"
+END IF

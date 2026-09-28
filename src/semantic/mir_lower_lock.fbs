@@ -1,0 +1,213 @@
+#ifndef UXB_MIR_LOWER_LOCK_FBS
+#define UXB_MIR_LOWER_LOCK_FBS
+
+' ===========================================================================
+' S-146 Model D: acik `LOCK a, b ... END LOCK` ve `UNSAFE ... END UNSAFE` indirgemesi.
+' Belge §10: LOCK yalniz cok deyimli bolunmezlik icindir (transaction degil); otomatik
+' deyim kilidi acik LOCK'un sahipligini tanir; ayni kilidi ikinci kez acikca LOCK etmek
+' SELF_DEADLOCK. Coklu hedef: tekillestirilir, lockOrderId sirasiyla alinir, ters sirada
+' birakilir (calisma zamani dinamik MUTEX degerlerini de ayni kurala gore siralar).
+'
+' Kanonik MIR:
+'   CALL LOCK_ENTER "id1,id2" "AD1,AD2" [mutexDeger...]
+'   CALL LOCK_LEAVE "id1,id2" "AD1,AD2" [mutexDeger...]
+'   t = CALL LOCK_MARK              (TRY girisi: bu gorevin acik kilit yigin derinligi)
+'   CALL LOCK_RELEASE_TO t          (CATCH/FINALLY girisi: TRY icinde alinip istisnayla
+'                                    birakilamamis kilitler)
+'   t = CALL MUTEX_NEW              (DIM m AS MUTEX)
+' Cikis yollari: RETURN, EXIT FOR/DO/IF ve bolum disina GOTO, atladiklari LOCK'lari
+' icten disa birakir. Istisna: TRY'nin CATCH/FINALLY girisi LOCK_RELEASE_TO ile; hic
+' yakalanmayan istisnada gorev bitince calisma zamani gorevin tum kilitlerini birakir.
+' ===========================================================================
+
+Declare Function UXBTaskLockTargetKind(ByRef ps As ParseState, ByVal targetNode As Integer) As Integer
+
+Dim Shared gMirLockDepth As Integer
+Dim Shared gMirLockFn(Any) As Integer
+Dim Shared gMirLockNode(Any) As Integer
+Dim Shared gMirLockLoopDepth(Any) As Integer
+Dim Shared gMirLockIfDepth(Any) As Integer
+Dim Shared gMirLockIds(Any) As String
+Dim Shared gMirLockNames(Any) As String
+Dim Shared gMirLockDyn(Any) As String   ' "|AD|AD|" MUTEX degiskenleri (calisma zamani degeri)
+Dim Shared gMirProgramUsesLock As Integer
+
+Sub MIRLockResetForModule(ByRef ps As ParseState)
+    gMirLockDepth = 0
+    gMirProgramUsesLock = 0
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) = "LOCK_STMT" Then gMirProgramUsesLock = 1: Exit For
+    Next i
+End Sub
+
+Private Sub MIRLockAppendCall(ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByVal callName As String, ByVal k As Integer)
+    Dim dyn As String = gMirLockDyn(k)
+    Dim ops(0 To 15) As String
+    Dim n As Integer = 0
+    ops(n) = callName: n += 1
+    ops(n) = Chr(34) & gMirLockIds(k) & Chr(34): n += 1
+    ops(n) = Chr(34) & gMirLockNames(k) & Chr(34): n += 1
+    Dim p As Integer = 2
+    Do While p < Len(dyn) And n <= 15
+        Dim q As Integer = InStr(p, dyn, "|")
+        If q = 0 Then Exit Do
+        ops(n) = Mid(dyn, p, q - p): n += 1
+        p = q + 1
+    Loop
+    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, "", n, ops(0), ops(1), ops(2), ops(3), ops(4), ops(5), ops(6), ops(7), ops(8), ops(9), ops(10), ops(11), ops(12), ops(13), ops(14), ops(15)
+End Sub
+
+' Yigindaki [fromK .. tepe] LOCK'lari (bu fonksiyondakiler) icten disa birakir.
+Sub MIRLockEmitLeavesFrom(ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByVal fromK As Integer)
+    Dim k As Integer
+    For k = gMirLockDepth - 1 To fromK Step -1
+        If k < 0 Then Exit For
+        If gMirLockFn(k) <> fnIdx Then Continue For
+        MIRLockAppendCall module, fnIdx, blkIdx, "LOCK_LEAVE", k
+    Next k
+End Sub
+
+' RETURN: fonksiyondaki tum acik LOCK'lar.
+Sub MIRLockEmitLeavesForReturn(ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer)
+    MIRLockEmitLeavesFrom module, fnIdx, blkIdx, 0
+End Sub
+
+' EXIT FOR/DO: hedef dongunun ICINDE acilmis LOCK'lar (targetLoopIdx = dongu yigini indeksi).
+Sub MIRLockEmitLeavesForLoopExit(ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByVal targetLoopIdx As Integer)
+    Dim k As Integer
+    For k = gMirLockDepth - 1 To 0 Step -1
+        If gMirLockFn(k) <> fnIdx Then Continue For
+        If gMirLockLoopDepth(k) <= targetLoopIdx Then Exit For
+        MIRLockAppendCall module, fnIdx, blkIdx, "LOCK_LEAVE", k
+    Next k
+End Sub
+
+' MIRFindLoopContext ile ayni secim; dongu yigini indeksini dondurur (-1: yok).
+Function MIRLockLoopIndexFor(ByVal wantType As String) As Integer
+    Dim w As String = UCase(Trim(wantType))
+    Dim i As Integer
+    For i = gMirLowerLoopDepth - 1 To 0 Step -1
+        If w = "" Or gMirLowerLoopType(i) = w Then Return i
+    Next i
+    Return -1
+End Function
+
+' EXIT IF: en icteki IF'in govdesinde acilmis LOCK'lar.
+Sub MIRLockEmitLeavesForIfExit(ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByVal currentIfDepth As Integer)
+    Dim k As Integer
+    For k = gMirLockDepth - 1 To 0 Step -1
+        If gMirLockFn(k) <> fnIdx Then Continue For
+        If gMirLockIfDepth(k) < currentIfDepth Then Exit For
+        MIRLockAppendCall module, fnIdx, blkIdx, "LOCK_LEAVE", k
+    Next k
+End Sub
+
+Private Function MIRLockSubtreeHasLabel(ByRef ps As ParseState, ByVal rootIdx As Integer, ByVal labelName As String) As Integer
+    If rootIdx < 0 Or rootIdx >= ps.ast.count Then Return 0
+    Dim want As String = UCase(Trim(labelName))
+    Dim stack(Any) As Integer
+    Dim sp As Integer = 0
+    ReDim stack(15)
+    stack(0) = rootIdx: sp = 1
+    Dim guard As Integer = 0
+    Do While sp > 0 And guard <= ps.ast.count * 4
+        guard += 1
+        sp -= 1
+        Dim cur As Integer = stack(sp)
+        If cur < 0 Or cur >= ps.ast.count Then Continue Do
+        If UCase(Trim(ps.ast.nodes(cur).kind)) = "LABEL_STMT" AndAlso UCase(Trim(ps.ast.nodes(cur).value)) = want Then Return 1
+        Dim nexts(0 To 2) As Integer
+        nexts(0) = ps.ast.nodes(cur).firstChild
+        nexts(1) = ps.ast.nodes(cur).left
+        nexts(2) = ps.ast.nodes(cur).right
+        Dim c As Integer = nexts(0)
+        Do While c <> -1
+            If sp > UBound(stack) Then ReDim Preserve stack(sp * 2 + 8)
+            stack(sp) = c: sp += 1
+            c = ps.ast.nodes(c).nextSibling
+        Loop
+        Dim j As Integer
+        For j = 1 To 2
+            If nexts(j) <> -1 Then
+                If sp > UBound(stack) Then ReDim Preserve stack(sp * 2 + 8)
+                stack(sp) = nexts(j): sp += 1
+            End If
+        Next j
+    Loop
+    Return 0
+End Function
+
+' GOTO: etiketi icermeyen (bolum disina atlanan) LOCK'lar.
+Sub MIRLockEmitLeavesForGoto(ByRef ps As ParseState, ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByVal labelName As String)
+    Dim k As Integer
+    For k = gMirLockDepth - 1 To 0 Step -1
+        If gMirLockFn(k) <> fnIdx Then Continue For
+        If MIRLockSubtreeHasLabel(ps, gMirLockNode(k), labelName) <> 0 Then Exit For
+        MIRLockAppendCall module, fnIdx, blkIdx, "LOCK_LEAVE", k
+    Next k
+End Sub
+
+Function MIRLowerLockStmt(ByRef ps As ParseState, ByVal stmtIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer
+    Dim staticSet As String = ""
+    Dim dyn As String = "|"
+    Dim bodyStart As Integer = 0
+    Dim cnt As Integer = MIRChildCount(ps, stmtIdx)
+    Dim p As Integer
+    For p = 0 To cnt - 1
+        Dim ch As Integer = MIRChildAt(ps, stmtIdx, p)
+        If ch = -1 Then Exit For
+        If UCase(Trim(ps.ast.nodes(ch).kind)) <> "LOCK_TARGET" Then Exit For
+        bodyStart = p + 1
+        Dim nm As String = UCase(Trim(ps.ast.nodes(ch).value))
+        Select Case UXBTaskLockTargetKind(ps, ch)
+        Case 1, 3   ' 3 = CONSOLE (S-146 adim 2): ayrilmis kimlik, UXBTaskSyncLockOrder cozer
+            If staticSet = "" Then staticSet = "|"
+            If InStr(staticSet, "|" & nm & "|") = 0 Then staticSet &= nm & "|"
+        Case 2
+            If InStr(dyn, "|" & nm & "|") = 0 Then dyn &= nm & "|"
+        Case Else
+            ' Semantik katman (StiValidateLockTargets) bu durumlari zaten reddeder.
+            errText = "mir: LOCK hedefi indirgenemedi: " & nm
+            Return 0
+        End Select
+    Next p
+    If staticSet = "" Then staticSet = "|"
+
+    Dim idsCsv As String, namesCsv As String
+    MIRSyncOrderedLists staticSet, idsCsv, namesCsv
+
+    Dim k As Integer = gMirLockDepth
+    ReDim Preserve gMirLockFn(k)
+    ReDim Preserve gMirLockNode(k)
+    ReDim Preserve gMirLockLoopDepth(k)
+    ReDim Preserve gMirLockIfDepth(k)
+    ReDim Preserve gMirLockIds(k)
+    ReDim Preserve gMirLockNames(k)
+    ReDim Preserve gMirLockDyn(k)
+    gMirLockFn(k) = fnIdx
+    gMirLockNode(k) = stmtIdx
+    gMirLockLoopDepth(k) = gMirLowerLoopDepth
+    gMirLockIfDepth(k) = gMirLowerIfDepth
+    gMirLockIds(k) = idsCsv
+    gMirLockNames(k) = namesCsv
+    gMirLockDyn(k) = dyn
+    gMirLockDepth = k + 1
+
+    MIRLockAppendCall module, fnIdx, blkIdx, "LOCK_ENTER", k
+    Dim ok As Integer = 1
+    If bodyStart <= cnt - 1 Then ok = MIRLowerStmtRange(ps, stmtIdx, bodyStart, cnt - 1, module, fnIdx, blkIdx, tempSeed, errText)
+    If ok <> 0 Then MIRLockAppendCall module, fnIdx, blkIdx, "LOCK_LEAVE", k
+    gMirLockDepth = k
+    Return ok
+End Function
+
+Function MIRLowerUnsafeStmt(ByRef ps As ParseState, ByVal stmtIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer
+    ' UNSAFE yalniz semantik guvenceleri kaldirir (analizci ham bellek/FFI etkisini atlar);
+    ' kod uretimi normal govdedir -- otomatik senkron da aynen gecerlidir.
+    Dim cnt As Integer = MIRChildCount(ps, stmtIdx)
+    If cnt <= 0 Then Return 1
+    Return MIRLowerStmtRange(ps, stmtIdx, 0, cnt - 1, module, fnIdx, blkIdx, tempSeed, errText)
+End Function
+
+#endif

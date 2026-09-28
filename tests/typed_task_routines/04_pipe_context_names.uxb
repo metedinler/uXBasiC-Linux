@@ -1,0 +1,6 @@
+PIPE LegacyDouble(value AS I32) AS I32
+    TASKOUT = TASKIN * 2
+END PIPE
+
+TRIGGER PIPE LegacyDouble, 21
+PRINT TASKOUT

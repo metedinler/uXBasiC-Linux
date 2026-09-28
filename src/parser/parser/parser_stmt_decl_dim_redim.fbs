@@ -64,10 +64,22 @@ Private Function ParseDeclaratorTypeRef(ByRef ps As ParseState, ByRef ownerLabel
 
     Dim typeNode As Integer
     typeNode = MakeNodeFromToken(ps, "TYPE_REF", canonicalTypeName, "", dtTok)
+    If ParserTryParseTaskOf(ps, typeNode, canonicalTypeName, ownerLabel) = 0 Then Return -1
     Return typeNode
 End Function
 
 Function ParseDimDeclarator(ByRef ps As ParseState) As Integer
+    ' S-146 Model D: `DIM ATOMIC sayac AS I64` -- ATOMIC baglamsal (ardindan ad gelirse);
+    ' `DIM atomic AS I32` gibi ayni adli degiskenler etkilenmez.
+    Dim storageClass As String
+    storageClass = ""
+    If CurToken(ps).kind = "IDENT" Or CurToken(ps).kind = "KEYWORD" Then
+        If UCase(Trim(CurToken(ps).lexeme)) = "ATOMIC" AndAlso LookToken(ps, 1).kind = "IDENT" Then
+            storageClass = "ATOMIC"
+            AdvanceTok ps
+        End If
+    End If
+
     Dim identTok As Token
     identTok = CurToken(ps)
     ParserDiag ps, "[PDBG] ParseDimDeclarator curKind=" & identTok.kind & " lexeme=" & identTok.lexeme & " line=" & Str(identTok.lineNo) & " col=" & Str(identTok.colNo)
@@ -83,6 +95,7 @@ Function ParseDimDeclarator(ByRef ps As ParseState) As Integer
 
     Dim declNode As Integer
     declNode = MakeNodeFromToken(ps, "DIM_DECL", identTok.lexeme, "", identTok)
+    If storageClass <> "" Then ps.ast.nodes(declNode).op = storageClass   ' DIM_DECL.op = depolama sinifi (ATOMIC)
 
     If MatchOp(ps, "(") Then
         Dim boundsNode As Integer

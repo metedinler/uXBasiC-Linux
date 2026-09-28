@@ -1,0 +1,6 @@
+' LONG is the signed 32-bit parameter type; LONGINT is the explicit I64 type.
+EVENT LongWidth(value AS LONG)
+    PRINT value
+END EVENT
+
+TRIGGER EVENT LongWidth, 2147483648

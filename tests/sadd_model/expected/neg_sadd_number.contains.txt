@@ -1,0 +1,4 @@
+AST=SADD expects a string literal or identifier argument
+MIR=SADD expects a string literal or identifier argument
+x64=SADD expects a string literal or identifier argument
+AST-x64=SADD expects a string literal or identifier argument

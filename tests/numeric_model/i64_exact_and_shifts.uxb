@@ -1,0 +1,39 @@
+' S-077/S-078: exact 64-bit signed integers, 64-bit shifts, constant folding.
+DIM w AS I64
+w = 9007199254740993
+PRINT w
+IF w > 9007199254740992 THEN
+PRINT "exact"
+ELSE
+PRINT "rounded"
+END IF
+DIM k AS I64
+k = 5000000000
+k += 1
+PRINT k
+k++
+PRINT k
+IF k > 3000000000 THEN
+PRINT "k-big"
+ELSE
+PRINT "k-small"
+END IF
+PRINT 1 SHL 40
+DIM s AS I64
+s = 1
+s <<= 40
+PRINT s
+PRINT s >> 38
+DIM m AS I64
+m = 9223372036854775807
+m = m + 1
+PRINT m
+PRINT -5
+PRINT 3000000000 \ 7
+DIM cnt AS I32
+cnt = 0
+FOR k = 5000000000 TO 5000000002
+cnt = cnt + 1
+NEXT
+PRINT cnt
+PRINT k

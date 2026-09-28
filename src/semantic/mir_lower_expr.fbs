@@ -8,6 +8,9 @@
 ' Dotted method-call MIR lowering. The RECEIVER_LIST contract keeps
 ' CALL_EXPR.left as receiver and firstChild as the argument list.
 Declare Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef valueNameOut As String, ByRef errText As String) As Integer
+' S-030 Faz 1B: TASK alici tipi ve TASK OF sonuc tipi, AST yorumlayicisi ve semantik
+' kapiyla AYNI kuraldan gelir (type_binding/type_infer_expr.fbs, daha sonra derlenir).
+#include once "../type_binding/type_infer_expr_decl.fbs"
 Private Function MIRMemoryModeFromArgs(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef modeOut As String, ByRef argOffsetOut As Integer) As Integer
     modeOut = "AUTO"
     argOffsetOut = 0
@@ -609,6 +612,212 @@ Private Function MIRAppendMethodCallInstruction(ByRef ps As ParseState, ByVal no
     Return 1
 End Function
 
+' ---------------------------------------------------------------------------
+' S-030 Faz 1B (Mete K7, 2026-09-24): canonical MIR gorev sozlesmesi.
+' Tutamac tabanli tiplerin (LIST_NEW/LISTADD) yerlesik kalibiyla, Mete'nin
+' verdigi adlarla adlandirilmis kanonik MIR_CALL'lar:
+'   TASK_SPAWN(laneRutin, tur, gorevAdi, sonucTipi, arg1..)   -> TASK tutamaci
+'   TASK_WAIT(t) TASK_CANCEL(t)                              -> deger yok
+'   TASK_JOIN(t) TASK_RESULT(t)                              -> sonuc (hata/iptal cagirana)
+'   TASK_STATUS(t) TASK_ERROR(t)                             -> STRING
+'   TASK_GROUP_CREATE()                                      -> TASKGROUP tutamaci
+'   TASK_GROUP_ADD(g, t) TASK_GROUP_JOIN(g)                   -> deger yok
+' Anlam AST referans uygulamasiyla (exec_task_handle.fbs) birebir; motor bu
+' adlari kendi saglayicisina baglar (MIR yorumlayicisi: mir_interp_task.fbs;
+' native x64 Faz 2'ye kadar ACIK red). Alici tipi, AST yorumlayicisinin da
+' kullandigi UXBStep3InferExprType ile belirlenir -- kural tek.
+' ---------------------------------------------------------------------------
+Private Function MIRTaskReceiverKind(ByRef ps As ParseState, ByVal nodeIdx As Integer) As String
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return ""
+    Dim inferred As String
+    Dim inferErr As String
+    If UXBStep3InferExprType(ps, nodeIdx, inferred, inferErr) <> 0 Then
+        inferred = UCase(Trim(UXBStep3TypeCanonical(inferred)))
+        If inferred = TYPE_TASK Then Return "TASK"
+        If inferred = TYPE_TASKGROUP Then Return "TASKGROUP"
+    End If
+    ' Tip kapisi calismamis yollarda (ornek `uxb mir`) step3 tablolari bos olabilir; o zaman
+    ' bildirime dayali MIR cozumlemesi kullanilir -- ayni kaynak (DIM/PARAM TYPE_REF).
+    Dim declared As String
+    If MIRTryInferExprTypeName(ps, nodeIdx, declared) <> 0 Then
+        declared = UCase(Trim(declared))
+        If declared = "TASK" Then Return "TASK"
+        If declared = "TASKGROUP" Then Return "TASKGROUP"
+    End If
+    Return ""
+End Function
+
+Private Function MIRLowerSpawnExpr(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef valueNameOut As String, ByRef errText As String) As Integer
+    Dim callIdx As Integer
+    callIdx = ps.ast.nodes(nodeIdx).left
+    If callIdx = -1 Then
+        errText = "mir: SPAWN gorev cagrisi eksik"
+        Return 0
+    End If
+    Dim taskName As String
+    taskName = UCase(Trim(ps.ast.nodes(callIdx).value))
+
+    ' Hedef bildirimi: tur (THREAD/PARALEL) ve istege bagli sonuc tipi (S-149).
+    Dim laneKind As String
+    Dim resultType As String
+    Dim declIdx As Integer = -1
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim dk As String
+        dk = UCase(Trim(ps.ast.nodes(i).kind))
+        If dk <> "THREAD_STMT" And dk <> "PARALEL_STMT" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> taskName And UCase(Trim(ps.ast.nodes(i).symbolName)) <> taskName Then Continue For
+        declIdx = i
+        laneKind = IIf(dk = "THREAD_STMT", "THREAD", "PARALEL")
+        Exit For
+    Next i
+    If declIdx = -1 Then
+        errText = "mir: SPAWN hedefi THREAD/PARALEL olarak bulunamadi: " & taskName
+        Return 0
+    End If
+    Dim retNode As Integer
+    retNode = MIRFindChildByKind(ps, declIdx, "RETURN_TYPE")
+    If retNode <> -1 Then resultType = MIRCanonicalTypeName(ps.ast.nodes(retNode).value)
+
+    Dim a(1 To 16) As String
+    a(1) = "TASK_SPAWN"
+    a(2) = Chr(34) & "__SLOTLANE_" & laneKind & "_" & MIRSlotSafeName(ps.ast.nodes(declIdx).value) & Chr(34)
+    a(3) = Chr(34) & laneKind & Chr(34)
+    a(4) = Chr(34) & taskName & Chr(34)
+    a(5) = Chr(34) & resultType & Chr(34)
+    Dim argPos As Integer = 5
+    Dim ch As Integer
+    ch = ps.ast.nodes(callIdx).firstChild
+    Do While ch <> -1
+        argPos += 1
+        If argPos > 16 Then
+            errText = "mir: SPAWN arguman sayisi limiti asildi (en fazla 11)"
+            Return 0
+        End If
+        If MIRLowerExprNode(ps, ch, module, fnIdx, blkIdx, tempSeed, a(argPos), errText) = 0 Then Return 0
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+
+    Dim t As String
+    t = MIRNextTemp(tempSeed)
+    MIRSetCurrentSourceFromAstNode ps, nodeIdx
+    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, t, argPos, a(1), a(2), a(3), a(4), a(5), a(6), a(7), a(8), a(9), a(10), a(11), a(12), a(13), a(14), a(15), a(16)
+    MIRSetLastInstructionMetadata module, fnIdx, blkIdx, "TASK"
+    valueNameOut = t
+    Return 1
+End Function
+
+' TASK/TASKGROUP alicili uye: metot (CALL_EXPR `t.JOIN()`) ya da alan (FIELD_EXPR `t.STATUS`).
+' argsParentIdx: metot argumanlarini tasiyan CALL_EXPR (alan icin -1).
+Private Function MIRLowerTaskMember(ByRef ps As ParseState, ByVal receiverIdx As Integer, ByRef receiverKind As String, ByRef memberRaw As String, ByVal argsParentIdx As Integer, ByVal isMethod As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef valueNameOut As String, ByRef errText As String) As Integer
+    Dim member As String
+    member = UCase(Trim(memberRaw))
+    Dim callName As String
+    Dim wantArgs As Integer = 0
+    Dim resultMeta As String
+
+    If receiverKind = "TASK" Then
+        If isMethod <> 0 Then
+            Select Case member
+            Case "WAIT": callName = "TASK_WAIT"
+            Case "JOIN": callName = "TASK_JOIN"
+            Case "CANCEL": callName = "TASK_CANCEL"
+            End Select
+        Else
+            Select Case member
+            Case "STATUS": callName = "TASK_STATUS": resultMeta = "STRING"
+            Case "RESULT": callName = "TASK_RESULT"
+            Case "ERRORTEXT": callName = "TASK_ERROR": resultMeta = "STRING"
+            End Select
+        End If
+    Else
+        If isMethod <> 0 Then
+            Select Case member
+            Case "ADD": callName = "TASK_GROUP_ADD": wantArgs = 1
+            Case "JOIN": callName = "TASK_GROUP_JOIN"
+            Case "JOINALL"
+                errText = "mir: TASKGROUP.JOINALL() henuz desteklenmiyor (S-147: LIST sonuc sozlesmesi) -- TASKGROUP.JOIN() ile bekleyip her uyenin .RESULT alanini okuyun"
+                Return 0
+            End Select
+        End If
+    End If
+    If callName = "" Then
+        errText = "mir: " & receiverKind & " uzerinde bilinmeyen " & IIf(isMethod <> 0, "metot", "alan") & ": " & member
+        Return 0
+    End If
+
+    Dim argCount As Integer = 0
+    If argsParentIdx <> -1 Then argCount = MIRChildCount(ps, argsParentIdx)
+    If argCount <> wantArgs Then
+        errText = "mir: " & receiverKind & "." & member & "() " & LTrim(Str(wantArgs)) & " arguman ister, gelen " & LTrim(Str(argCount))
+        Return 0
+    End If
+
+    Dim receiverName As String
+    If MIRLowerExprNode(ps, receiverIdx, module, fnIdx, blkIdx, tempSeed, receiverName, errText) = 0 Then Return 0
+    Dim argName As String
+    If wantArgs = 1 Then
+        If MIRLowerExprNode(ps, MIRChildAt(ps, argsParentIdx, 0), module, fnIdx, blkIdx, tempSeed, argName, errText) = 0 Then Return 0
+    End If
+
+    ' JOIN/RESULT: TASK OF <tip> ise sonuc o tipte (S-149); tipsiz TASK'ta metadata yok.
+    If callName = "TASK_JOIN" Or callName = "TASK_RESULT" Then
+        Dim isTask As Integer
+        Dim declared As String
+        declared = UXBTaskExprResultType(ps, receiverIdx, isTask)
+        If isTask <> 0 And declared <> "" Then resultMeta = MIRCanonicalTypeName(declared)
+    End If
+
+    Dim t As String
+    t = MIRNextTemp(tempSeed)
+    If wantArgs = 1 Then
+        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, t, 3, callName, receiverName, argName
+    Else
+        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, t, 2, callName, receiverName
+    End If
+    If resultMeta <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, resultMeta
+    valueNameOut = t
+    Return 1
+End Function
+
+Declare Function UXBAtomicDeclFor(ByRef ps As ParseState, ByVal nameRaw As String, ByVal useNodeIdx As Integer) As Integer
+Declare Function UXBAtomicDeclType(ByRef ps As ParseState, ByVal declNode As Integer) As String
+
+' S-146 Model D: ATOMIC alicili metot -> kanonik `CALL ATOMIC_<M> <degisken> [arg...]`.
+' Islenen 0 DEGISKENIN ADIDIR (deger degil): motor dogrudan depo uzerinde atomik islem yapar
+' (native: lock xadd / xchg / lock cmpxchg). Senkron gecisi bu buyrugu ortak depo erisimi sayar.
+' handledOut = 0: alici ATOMIC degil (baska yol denesin).
+Private Function MIRLowerAtomicMember(ByRef ps As ParseState, ByVal callIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef valueNameOut As String, ByRef handledOut As Integer, ByRef errText As String) As Integer
+    handledOut = 0
+    Dim recv As Integer = ps.ast.nodes(callIdx).left
+    If recv < 0 Then Return 1
+    Dim rk As String = UCase(Trim(ps.ast.nodes(recv).kind))
+    If rk <> "IDENT" And rk <> "IDENTIFIER" Then Return 1
+    Dim decl As Integer = UXBAtomicDeclFor(ps, ps.ast.nodes(recv).value, recv)
+    If decl = -1 Then Return 1
+    handledOut = 1
+    Dim member As String = UCase(MIRMethodLeafName(Trim(ps.ast.nodes(callIdx).value)))
+    Dim resultMeta As String = MIRCanonicalTypeName(UXBAtomicDeclType(ps, decl))
+    If member = "CAS" Then resultMeta = "I32"
+    Dim ops(0 To 3) As String
+    ops(0) = "ATOMIC_" & member
+    ops(1) = Trim(ps.ast.nodes(recv).value)
+    Dim argc As Integer = MIRChildCount(ps, callIdx)
+    If argc > 2 Then
+        errText = "mir: ATOMIC ." & member & " en fazla 2 arguman alir"
+        Return 0
+    End If
+    Dim i As Integer
+    For i = 0 To argc - 1
+        If MIRLowerExprNode(ps, MIRChildAt(ps, callIdx, i), module, fnIdx, blkIdx, tempSeed, ops(2 + i), errText) = 0 Then Return 0
+    Next i
+    Dim t As String = MIRNextTemp(tempSeed)
+    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, t, 2 + argc, ops(0), ops(1), ops(2), ops(3)
+    MIRSetLastInstructionMetadata module, fnIdx, blkIdx, resultMeta
+    valueNameOut = t
+    Return 1
+End Function
+
 Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef valueNameOut As String, ByRef errText As String) As Integer
     If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then
         errText = "mir: invalid expr node"
@@ -1102,6 +1311,18 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         Dim receiverVar As String
         callName = UCase(Trim(n.value))
 
+        ' S-030 Faz 1B: TASK/TASKGROUP alicili metot -> kanonik TASK_* cagrisi.
+        If n.left <> -1 And InStr(callName, ".") > 0 Then
+            Dim atomicHandled As Integer
+            If MIRLowerAtomicMember(ps, nodeIdx, module, fnIdx, blkIdx, tempSeed, valueNameOut, atomicHandled, errText) = 0 Then Return 0
+            If atomicHandled <> 0 Then Return 1
+            Dim taskRecvKind As String
+            taskRecvKind = MIRTaskReceiverKind(ps, n.left)
+            If taskRecvKind <> "" Then
+                Return MIRLowerTaskMember(ps, n.left, taskRecvKind, MIRMethodLeafName(callName), nodeIdx, 1, module, fnIdx, blkIdx, tempSeed, valueNameOut, errText)
+            End If
+        End If
+
         Dim sizeofHandled As Integer
         If MIRLowerArraySizeOfCall(ps, nodeIdx, module, fnIdx, blkIdx, tempSeed, valueNameOut, sizeofHandled, errText) = 0 Then Return 0
         If sizeofHandled <> 0 Then Return 1
@@ -1323,7 +1544,7 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
             Return 1
         End If
 
-        If InStr(callName, ".") = 0 And MIRIsKnownArray(module, callName) <> 0 And MIRChildCount(ps, nodeIdx) >= 1 Then
+        If (InStr(callName, ".") = 0 Or MIRIsNamespaceVarName(callName) <> 0) And MIRIsKnownArray(module, callName) <> 0 And MIRChildCount(ps, nodeIdx) >= 1 Then
             Dim indexName As String
             Dim loadTemp As String
             If MIRLowerFlatArrayIndex(ps, nodeIdx, callName, module, fnIdx, blkIdx, tempSeed, indexName, errText) = 0 Then Return 0
@@ -1484,6 +1705,21 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
     End If
 
     If k = "FIELD_EXPR" Then
+        ' S-030 Faz 1B: TASK .STATUS/.RESULT/.ERRORTEXT -> TASK_STATUS/TASK_RESULT/TASK_ERROR.
+        Dim taskFieldRecv As Integer
+        taskFieldRecv = n.left
+        If taskFieldRecv = -1 Then taskFieldRecv = n.firstChild
+        If taskFieldRecv <> -1 Then
+            Dim taskFieldKind As String
+            taskFieldKind = MIRTaskReceiverKind(ps, taskFieldRecv)
+            If taskFieldKind <> "" Then
+                Dim taskFieldName As String
+                taskFieldName = Trim(n.value)
+                If taskFieldName = "" And n.right <> -1 Then taskFieldName = Trim(ps.ast.nodes(n.right).value)
+                Return MIRLowerTaskMember(ps, taskFieldRecv, taskFieldKind, taskFieldName, -1, 0, module, fnIdx, blkIdx, tempSeed, valueNameOut, errText)
+            End If
+        End If
+
         Dim namespaceConstDecl As Integer
         Dim namespaceConstInit As Integer
         If UXBAstResolveNamespaceConstField(ps.ast, nodeIdx, namespaceConstDecl, namespaceConstInit) <> 0 Then
@@ -1631,7 +1867,7 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         If n.left <> -1 And UCase(Trim(ps.ast.nodes(n.left).kind)) = "CALL_EXPR" Then
             Dim arrFieldArrName As String
             arrFieldArrName = ps.ast.nodes(n.left).value
-            If InStr(arrFieldArrName, ".") = 0 And MIRIsKnownArray(module, arrFieldArrName) <> 0 And MIRChildCount(ps, n.left) = 1 Then
+            If (InStr(arrFieldArrName, ".") = 0 Or MIRIsNamespaceVarName(arrFieldArrName) <> 0) And MIRIsKnownArray(module, arrFieldArrName) <> 0 And MIRChildCount(ps, n.left) = 1 Then
                 Dim arrFieldIdxExpr As Integer
                 arrFieldIdxExpr = MIRChildAt(ps, n.left, 0)
                 Dim arrFieldIdxName As String
@@ -1663,6 +1899,12 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_VAR, t, 1, fieldPath
         valueNameOut = t
         Return 1
+    End If
+
+    ' S-030 Faz 1B: SPAWN artik genel "sol dugumu indir" yoluna (sessizce siradan
+    ' CALL <hedef>) DUSMEZ; kanonik TASK_SPAWN olur.
+    If k = "SPAWN_EXPR" Then
+        Return MIRLowerSpawnExpr(ps, nodeIdx, module, fnIdx, blkIdx, tempSeed, valueNameOut, errText)
     End If
 
     If k = "NEW_EXPR" Then

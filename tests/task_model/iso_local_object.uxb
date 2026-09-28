@@ -1,0 +1,16 @@
+' S-146: govdede yerel olusturulan nesne ve metodu serbest.
+CLASS Nokta
+ f AS I32
+ SUB Inc()
+  f = f + 1
+ END SUB
+END CLASS
+THREAD W(x AS I32) AS I32
+ DIM p AS Nokta = NEW Nokta()
+ p.Inc()
+ RETURN p.f
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

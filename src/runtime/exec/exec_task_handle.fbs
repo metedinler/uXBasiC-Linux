@@ -28,6 +28,7 @@ Type ExecTaskHandleRecord
     resultValue As ExecValue
     hasResult As Integer
     errorText As String
+    errorObserved As Integer ' K5: hata JOIN/RESULT/TASKGROUP.JOIN ile yukseldi ya da STATUS/ERRORTEXT ile okundu
 End Type
 
 Type ExecTaskGroupRecord
@@ -64,6 +65,7 @@ Private Function ExecTaskHandleAlloc() As Integer
     gExecTaskHandles(idx).taskName = ""
     gExecTaskHandles(idx).hasResult = 0
     gExecTaskHandles(idx).errorText = ""
+    gExecTaskHandles(idx).errorObserved = 0
     ExecValueInit gExecTaskHandles(idx).resultValue
     Return idx
 End Function
@@ -96,7 +98,21 @@ End Function
 ' olmali). Govde calisirken olusan HER hata yakalanir, bodyErrText'e yazilir,
 ' fonksiyon yine de 1 doner -- Mete'nin karari: "yakalanmamis asenkron hata
 ' gorev nesnesinde tutulur, WAIT/JOIN/RESULT'ta cagirana aktarilir."
-Private Function ExecSpawnBindAndRunBody(ByRef ps As ParseState, ByRef es As ExecState, ByVal routineIdx As Integer, ByVal callExprIdx As Integer, ByRef resultOut As ExecValue, ByRef hasResultOut As Integer, ByRef bodyErrText As String, ByRef bindErrText As String) As Integer
+' S-146 Model D: SPAWN iki adimdir -- argumanlar SPAWN aninda (cagiranin kapsaminda)
+' degerlendirilip baglanir (ExecSpawnPrepare); govde hemen ya da, acik LOCK tutulurken,
+' ertelenerek calisir (ExecSpawnRunPrepared).
+Type ExecSpawnPrepared
+    routineIdx As Integer
+    routineNodeIdx As Integer
+    callName As String
+    bodyStart As Integer
+    paramNames(Any) As String
+    paramTypes(Any) As String
+    boundValues(Any) As ExecValue
+    paramCount As Integer
+End Type
+
+Private Function ExecSpawnPrepare(ByRef ps As ParseState, ByRef es As ExecState, ByVal routineIdx As Integer, ByVal callExprIdx As Integer, ByRef prep As ExecSpawnPrepared, ByRef bindErrText As String) As Integer
     Dim routineNodeIdx As Integer
     routineNodeIdx = es.runtime.routineDefs(routineIdx).nodeIdx
     Dim callName As String
@@ -179,6 +195,44 @@ Private Function ExecSpawnBindAndRunBody(ByRef ps As ParseState, ByRef es As Exe
         If ExecApplyDeclaredType(argValues(ai), paramTypes(ai), boundValues(ai), bindErrText) = 0 Then Return 0
     Next ai
 
+    prep.routineIdx = routineIdx
+    prep.routineNodeIdx = routineNodeIdx
+    prep.callName = callName
+    prep.bodyStart = bodyStart
+    prep.paramCount = paramCount
+    If paramCount > 0 Then
+        ReDim prep.paramNames(paramCount - 1)
+        ReDim prep.paramTypes(paramCount - 1)
+        ReDim prep.boundValues(paramCount - 1)
+        For ai = 0 To paramCount - 1
+            prep.paramNames(ai) = paramNames(ai)
+            prep.paramTypes(ai) = paramTypes(ai)
+            prep.boundValues(ai) = boundValues(ai)
+        Next ai
+    End If
+    Return 1
+End Function
+
+Private Function ExecSpawnRunPrepared(ByRef ps As ParseState, ByRef es As ExecState, ByRef prep As ExecSpawnPrepared, ByRef resultOut As ExecValue, ByRef hasResultOut As Integer, ByRef bodyErrText As String, ByRef bindErrText As String) As Integer
+    Dim routineNodeIdx As Integer = prep.routineNodeIdx
+    Dim callName As String = prep.callName
+    Dim bodyStart As Integer = prep.bodyStart
+    Dim paramCount As Integer = prep.paramCount
+    Dim paramNames(Any) As String
+    Dim paramTypes(Any) As String
+    Dim boundValues(Any) As ExecValue
+    Dim ai As Integer
+    If paramCount > 0 Then
+        ReDim paramNames(paramCount - 1)
+        ReDim paramTypes(paramCount - 1)
+        ReDim boundValues(paramCount - 1)
+        For ai = 0 To paramCount - 1
+            paramNames(ai) = prep.paramNames(ai)
+            paramTypes(ai) = prep.paramTypes(ai)
+            boundValues(ai) = prep.boundValues(ai)
+        Next ai
+    End If
+
     Dim snapshotVars(Any) As ExecVar
     Dim snapshotCount As Integer
     Dim snapshotNextAddr As UInteger
@@ -222,7 +276,6 @@ Private Function ExecSpawnBindAndRunBody(ByRef ps As ParseState, ByRef es As Exe
     es.runtime.currentRoutineNodeIdx = routineNodeIdx
 
     Dim noByRefFlags(0) As Integer
-    Dim noCallerArgNames(0) As String
 
     Dim bodyRunErr As String
     Dim bodyOk As Integer
@@ -267,6 +320,24 @@ Private Function ExecSpawnBindAndRunBody(ByRef ps As ParseState, ByRef es As Exe
     If bodyOk <> 0 Then
         If es.runtime.callReturnHasValue <> 0 Then
             resultOut = es.runtime.callReturnValueEx
+            ' S-149: `THREAD Worker(...) AS I32` -- sonuc, FUNCTION donusu gibi
+            ' bildirilen tipe cevrilir (TASK OF I32'nin .RESULT'u gercekten I32).
+            Dim laneRetNode As Integer
+            laneRetNode = ps.ast.nodes(routineNodeIdx).firstChild
+            Do While laneRetNode <> -1
+                If UCase(Trim(ps.ast.nodes(laneRetNode).kind)) = "RETURN_TYPE" Then
+                    Dim typedResult As ExecValue
+                    Dim convErr As String
+                    If ExecApplyDeclaredType(resultOut, UCase(Trim(ps.ast.nodes(laneRetNode).value)), typedResult, convErr) = 0 Then
+                        bodyOk = 0
+                        bodyRunErr = convErr
+                    Else
+                        resultOut = typedResult
+                    End If
+                    Exit Do
+                End If
+                laneRetNode = ps.ast.nodes(laneRetNode).nextSibling
+            Loop
         Else
             ExecValueInit resultOut
         End If
@@ -280,7 +351,7 @@ Private Function ExecSpawnBindAndRunBody(ByRef ps As ParseState, ByRef es As Exe
     es.runtime.callReturnHasValue = savedReturnHasValue
     es.runtime.currentRoutineName = savedRoutineName
     es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-    ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0, noCallerArgNames()
+    ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0
 
     If bodyOk = 0 Then
         bodyErrText = bodyRunErr
@@ -291,8 +362,462 @@ Private Function ExecSpawnBindAndRunBody(ByRef ps As ParseState, ByRef es As Exe
     Return 1
 End Function
 
-' SPAWN_EXPR -> TASK tutamaci. Faz 1: govde HEMEN calisir; tutamac DONE/ERROR
-' durumunda doner.
+' ---------------------------------------------------------------------------
+' S-146 Model D: AST referans uygulamasinin kilit tablosu (MIR yorumlayicisiyla ayni
+' kurallar ve iletiler; bkz. src/interpreter/mir/mir_interp_task.fbs). Sahip GOREVDIR
+' (anahtar: ana program 0, gorev = tutamac kimligi). Acik LOCK tutulurken yapilan SPAWN
+' ertelenir; kilit sayisi sifira inince, gorevin WAIT/JOIN/RESULT/TASKGROUP.JOIN'inde ya
+' da program sonunda calisir. Otomatik deyim kilidi tek is parcacikta cakisamaz (islem yok).
+' ---------------------------------------------------------------------------
+Dim Shared gExecLkIds(Any) As LongInt
+Dim Shared gExecLkOwner(Any) As Integer
+Dim Shared gExecLkName(Any) As String
+Dim Shared gExecLkCount As Integer
+Dim Shared gExecLkHeldTotal As Integer
+Dim Shared gExecLkStackKey(Any) As Integer
+Dim Shared gExecLkStackIds(Any) As String
+Dim Shared gExecLkStackCount As Integer
+Dim Shared gExecCurrentTaskKey As Integer
+Dim Shared gExecMutexNext As LongInt
+Dim Shared gExecDefPrep(Any) As ExecSpawnPrepared
+Dim Shared gExecDefHandle(Any) As Integer
+Dim Shared gExecDefDone(Any) As Integer
+Dim Shared gExecDefCount As Integer
+
+Function ExecCurrentTaskKey() As Integer
+    Return gExecCurrentTaskKey
+End Function
+
+Sub ExecSyncReset()
+    gExecLkCount = 0
+    gExecLkHeldTotal = 0
+    gExecLkStackCount = 0
+    gExecCurrentTaskKey = 0
+    gExecMutexNext = 0
+    gExecDefCount = 0
+    Erase gExecLkIds, gExecLkOwner, gExecLkName, gExecLkStackKey, gExecLkStackIds
+    Erase gExecDefPrep, gExecDefHandle, gExecDefDone
+End Sub
+
+' Olumcul kilit tanisi: gorev hatasi olarak tutulmaz, TRY ile yakalanmaz.
+Function ExecIsLockFatal(ByRef textValue As String) As Integer
+    If InStr(textValue, "SELF_DEADLOCK:") > 0 Or InStr(textValue, "LOCK_DEADLOCK:") > 0 Or InStr(textValue, "TASK_WAIT_CYCLE:") > 0 Then Return 1
+    Return 0
+End Function
+
+Function ExecMutexNew() As LongInt
+    gExecMutexNext += 1
+    Return (1LL Shl 32) + gExecMutexNext
+End Function
+
+Private Function ExecLockRecord(ByVal id As LongInt, ByVal nameText As String) As Integer
+    Dim i As Integer
+    For i = 0 To gExecLkCount - 1
+        If gExecLkIds(i) = id Then
+            If gExecLkName(i) = "" Then gExecLkName(i) = nameText
+            Return i
+        End If
+    Next i
+    ReDim Preserve gExecLkIds(gExecLkCount)
+    ReDim Preserve gExecLkOwner(gExecLkCount)
+    ReDim Preserve gExecLkName(gExecLkCount)
+    gExecLkIds(gExecLkCount) = id
+    gExecLkOwner(gExecLkCount) = -1
+    gExecLkName(gExecLkCount) = nameText
+    gExecLkCount += 1
+    Return gExecLkCount - 1
+End Function
+
+Private Function ExecLockLabel(ByVal rec As Integer) As String
+    If gExecLkName(rec) <> "" Then Return "'" & gExecLkName(rec) & "'"
+    Return "MUTEX #" & LTrim(Str(gExecLkIds(rec) - (1LL Shl 32)))
+End Function
+
+Private Sub ExecLockReleaseIds(ByVal idsCsv As String)
+    Dim s As String = idsCsv & ","
+    Dim p As Integer = 1
+    Do While p < Len(s)
+        Dim q As Integer = InStr(p, s, ",")
+        If q = 0 Then Exit Do
+        Dim part As String = Trim(Mid(s, p, q - p))
+        If part <> "" Then
+            Dim id As LongInt = ValLng(part)
+            Dim i As Integer
+            For i = 0 To gExecLkCount - 1
+                If gExecLkIds(i) = id AndAlso gExecLkOwner(i) <> -1 Then
+                    gExecLkOwner(i) = -1
+                    gExecLkHeldTotal -= 1
+                    Exit For
+                End If
+            Next i
+        End If
+        p = q + 1
+    Loop
+End Sub
+
+Private Sub ExecLockPopEntry(ByVal entryIdx As Integer)
+    ExecLockReleaseIds gExecLkStackIds(entryIdx)
+    Dim i As Integer
+    For i = entryIdx To gExecLkStackCount - 2
+        gExecLkStackKey(i) = gExecLkStackKey(i + 1)
+        gExecLkStackIds(i) = gExecLkStackIds(i + 1)
+    Next i
+    gExecLkStackCount -= 1
+End Sub
+
+Private Sub ExecLockReleaseKeyAll(ByVal key As Integer)
+    Dim i As Integer = gExecLkStackCount - 1
+    Do While i >= 0
+        If gExecLkStackKey(i) = key Then ExecLockPopEntry i
+        i -= 1
+    Loop
+End Sub
+
+Declare Function ExecTaskDrainDeferred(ByRef ps As ParseState, ByRef es As ExecState, ByRef errText As String) As Integer
+
+' Hazirlanmis gorevi handleId tutamacina calistirir (anahtar = handleId). 0 = olumcul kilit hatasi.
+Private Function ExecTaskRunPreparedInto(ByRef ps As ParseState, ByRef es As ExecState, ByRef prep As ExecSpawnPrepared, ByVal handleId As Integer, ByRef errText As String) As Integer
+    gExecTaskHandles(handleId).statusText = UXB_TASK_STATUS_RUNNING
+    Dim prevKey As Integer = gExecCurrentTaskKey
+    gExecCurrentTaskKey = handleId
+    Dim bodyResult As ExecValue
+    Dim bodyHasResult As Integer
+    Dim bodyErrText As String
+    Dim bindErrText As String
+    Dim ok As Integer = ExecSpawnRunPrepared(ps, es, prep, bodyResult, bodyHasResult, bodyErrText, bindErrText)
+    ' Gorev biterken (normal ya da hatayla) hala tuttugu acik kilitler birakilir.
+    ExecLockReleaseKeyAll handleId
+    gExecCurrentTaskKey = prevKey
+    If ok = 0 Then
+        errText = bindErrText
+        Return 0
+    End If
+    If bodyErrText <> "" AndAlso ExecIsLockFatal(bodyErrText) <> 0 Then
+        errText = bodyErrText
+        Return 0
+    End If
+    If bodyErrText <> "" Then
+        gExecTaskHandles(handleId).statusText = UXB_TASK_STATUS_ERROR
+        gExecTaskHandles(handleId).errorText = bodyErrText
+        gExecTaskHandles(handleId).hasResult = 0
+    Else
+        gExecTaskHandles(handleId).statusText = UXB_TASK_STATUS_DONE
+        gExecTaskHandles(handleId).hasResult = bodyHasResult
+        If bodyHasResult <> 0 Then gExecTaskHandles(handleId).resultValue = bodyResult
+    End If
+    Return 1
+End Function
+
+' Ertelenmis (baslamamis) gorevi simdi calistirir. 0 = olumcul hata (errText dolu).
+Function ExecTaskRunIfDeferred(ByRef ps As ParseState, ByRef es As ExecState, ByVal handleId As Integer, ByRef errText As String) As Integer
+    ' S-146 adim 3: tek is parcacikli yorumlayicida RUNNING hedef, cagri yiginda bekleyen bir atadir.
+    If ExecTaskHandleValid(handleId) <> 0 AndAlso gExecTaskHandles(handleId).statusText = UXB_TASK_STATUS_RUNNING Then
+        errText = "TASK_WAIT_CYCLE: gorevler birbirini bekliyor (A.JOIN <-> B.JOIN)"
+        Return 0
+    End If
+    Dim d As Integer
+    For d = 0 To gExecDefCount - 1
+        If gExecDefHandle(d) <> handleId Or gExecDefDone(d) <> 0 Then Continue For
+        gExecDefDone(d) = 1
+        If gExecTaskHandles(handleId).statusText <> UXB_TASK_STATUS_PENDING Then Return 1   ' K6: baslamadan iptal
+        Return ExecTaskRunPreparedInto(ps, es, gExecDefPrep(d), handleId, errText)
+    Next d
+    Return 1
+End Function
+
+Function ExecTaskDrainDeferred(ByRef ps As ParseState, ByRef es As ExecState, ByRef errText As String) As Integer
+    Dim d As Integer = 0
+    Do While d < gExecDefCount
+        If gExecDefDone(d) = 0 Then
+            If ExecTaskRunIfDeferred(ps, es, gExecDefHandle(d), errText) = 0 Then Return 0
+        End If
+        d += 1
+    Loop
+    Return 1
+End Function
+
+' Program sonu (K5): ana programin kalan acik kilitleri birakilir, ertelenmis gorevler calisir.
+Function ExecTaskFinishProgram(ByRef ps As ParseState, ByRef es As ExecState, ByRef errText As String) As Integer
+    ExecLockReleaseKeyAll 0
+    Return ExecTaskDrainDeferred(ps, es, errText)
+End Function
+
+' LOCK a, b ... END LOCK
+Function ExecRunLockStmt(ByRef ps As ParseState, ByRef es As ExecState, ByVal stmtIdx As Integer, ByRef errText As String) As Integer
+    Dim ids(Any) As LongInt
+    Dim names(Any) As String
+    Dim cnt As Integer = 0
+    Dim bodyStart As Integer = 0
+    Dim total As Integer = ExecChildCount(ps, stmtIdx)
+    Dim p As Integer
+    For p = 0 To total - 1
+        Dim ch As Integer = ExecChildAt(ps, stmtIdx, p)
+        If ch = -1 Then Exit For
+        If UCase(Trim(ps.ast.nodes(ch).kind)) <> "LOCK_TARGET" Then Exit For
+        bodyStart = p + 1
+        Dim nm As String = UCase(Trim(ps.ast.nodes(ch).value))
+        Dim id As LongInt
+        Select Case UXBTaskLockTargetKind(ps, ch)
+        Case 1, 3   ' 3 = CONSOLE (S-146 adim 2): ayrilmis kimlik
+            id = UXBTaskSyncLockOrder(nm)
+        Case 2
+            Dim mv As ExecValue
+            If ExecGetVarValue(es, nm, mv) = 0 Then
+                errText = "exec: LOCK: MUTEX degiskeni okunamadi: " & nm
+                Return 0
+            End If
+            id = ExecValueToInteger(mv)
+            nm = ""
+        Case Else
+            errText = "exec: LOCK hedefi cozulemedi: " & nm
+            Return 0
+        End Select
+        ReDim Preserve ids(cnt)
+        ReDim Preserve names(cnt)
+        ids(cnt) = id
+        names(cnt) = nm
+        cnt += 1
+    Next p
+    ' lockOrderId sirasi + tekillestirme.
+    Dim i As Integer, j As Integer
+    For i = 1 To cnt - 1
+        Dim ki As LongInt = ids(i)
+        Dim kn As String = names(i)
+        j = i - 1
+        Do While j >= 0 AndAlso ids(j) > ki
+            ids(j + 1) = ids(j)
+            names(j + 1) = names(j)
+            j -= 1
+        Loop
+        ids(j + 1) = ki
+        names(j + 1) = kn
+    Next i
+    Dim w As Integer = 0
+    For i = 0 To cnt - 1
+        If w > 0 AndAlso ids(w - 1) = ids(i) Then Continue For
+        ids(w) = ids(i)
+        names(w) = names(i)
+        w += 1
+    Next i
+    cnt = w
+
+    Dim key As Integer = gExecCurrentTaskKey
+    For i = 0 To cnt - 1
+        Dim rec As Integer = ExecLockRecord(ids(i), names(i))
+        If gExecLkOwner(rec) = key Then
+            errText = "SELF_DEADLOCK: " & ExecLockLabel(rec) & " bu gorev tarafindan zaten LOCK ile tutuluyor; ayni kilidi ikinci kez LOCK etmek kendini kilitler"
+            Return 0
+        End If
+        If gExecLkOwner(rec) <> -1 Then
+            errText = "LOCK_DEADLOCK: " & ExecLockLabel(rec) & " kilidini tutan gorev, bu gorevin bitmesini bekliyor (LOCK icinde JOIN/WAIT ile karsilikli bekleme)"
+            Return 0
+        End If
+    Next i
+    Dim taken As String = ""
+    For i = 0 To cnt - 1
+        Dim rec2 As Integer = ExecLockRecord(ids(i), names(i))
+        gExecLkOwner(rec2) = key
+        gExecLkHeldTotal += 1
+        If taken <> "" Then taken &= ","
+        taken &= LTrim(Str(ids(i)))
+    Next i
+    ReDim Preserve gExecLkStackKey(gExecLkStackCount)
+    ReDim Preserve gExecLkStackIds(gExecLkStackCount)
+    gExecLkStackKey(gExecLkStackCount) = key
+    gExecLkStackIds(gExecLkStackCount) = taken
+    Dim myEntry As Integer = gExecLkStackCount
+    gExecLkStackCount += 1
+
+    ' Govde: her cikis yolunda (normal, RETURN/EXIT/GOTO istegi, hata/THROW) kilit birakilir.
+    Dim bodyOk As Integer = 1
+    For p = bodyStart To total - 1
+        Dim bodyStmt As Integer = ExecChildAt(ps, stmtIdx, p)
+        If bodyStmt = -1 Then Exit For
+        If ExecRunStmt(ps, es, bodyStmt, errText) = 0 Then bodyOk = 0: Exit For
+        If es.runtime.exitRequest <> "" Then Exit For
+    Next p
+    If myEntry < gExecLkStackCount AndAlso gExecLkStackKey(myEntry) = key Then ExecLockPopEntry myEntry
+    If bodyOk = 0 Then Return 0
+    If gExecLkHeldTotal = 0 Then
+        If ExecTaskDrainDeferred(ps, es, errText) = 0 Then Return 0
+    End If
+    Return 1
+End Function
+
+' Otomatik deyim kilidinin AST karsiligi: tek is parcacikta cakisma yalniz, deyimin dokundugu
+' global BASKA bir gorevin acik LOCK'unda iken olur (o gorev bu gorevi JOIN/WAIT ile bekliyor;
+' native'de bu gorev sonsuza dek bekler). Deyimin kendi ifadeleri taranir, ic deyim govdeleri
+' (kendi siralari gelince) taranmaz. Kilit tutulmuyorsa maliyet tek karsilastirmadir.
+Function ExecLockCheckStmtAccess(ByRef ps As ParseState, ByRef es As ExecState, ByVal stmtIdx As Integer, ByRef errText As String) As Integer
+    If gExecLkHeldTotal = 0 Then Return 1
+    Dim key As Integer = gExecCurrentTaskKey
+    Dim anyOther As Integer = 0
+    Dim i As Integer
+    For i = 0 To gExecLkCount - 1
+        If gExecLkOwner(i) <> -1 AndAlso gExecLkOwner(i) <> key AndAlso gExecLkName(i) <> "" Then anyOther = 1: Exit For
+    Next i
+    If anyOther = 0 Then Return 1
+    ' S-146 adim 2: konsol deyimi, konsolu BASKA gorev LOCK CONSOLE ile tutarken (o gorev bizi bekliyor).
+    Select Case UCase(Trim(ps.ast.nodes(stmtIdx).kind))
+    Case "PRINT_STMT", "CLS_STMT", "COLOR_STMT", "LOCATE_STMT", "INPUT_STMT", "INPUTF_STMT"
+        For i = 0 To gExecLkCount - 1
+            If gExecLkOwner(i) <> -1 AndAlso gExecLkOwner(i) <> key AndAlso gExecLkName(i) = "CONSOLE" Then
+                errText = "LOCK_DEADLOCK: " & ExecLockLabel(i) & " kilidini tutan gorev, bu gorevin bitmesini bekliyor (LOCK icinde JOIN/WAIT ile karsilikli bekleme)"
+                Return 0
+            End If
+        Next i
+    End Select
+    Dim stack(Any) As Integer
+    ReDim stack(15)
+    Dim sp As Integer = 0
+    Dim c As Integer = ps.ast.nodes(stmtIdx).firstChild
+    Do While c <> -1
+        If sp > UBound(stack) Then ReDim Preserve stack(sp * 2 + 8)
+        stack(sp) = c: sp += 1
+        c = ps.ast.nodes(c).nextSibling
+    Loop
+    If ps.ast.nodes(stmtIdx).left <> -1 Then
+        If sp > UBound(stack) Then ReDim Preserve stack(sp * 2 + 8)
+        stack(sp) = ps.ast.nodes(stmtIdx).left: sp += 1
+    End If
+    If ps.ast.nodes(stmtIdx).right <> -1 Then
+        If sp > UBound(stack) Then ReDim Preserve stack(sp * 2 + 8)
+        stack(sp) = ps.ast.nodes(stmtIdx).right: sp += 1
+    End If
+    Dim guard As Integer = 0
+    Do While sp > 0 And guard <= ps.ast.count * 4
+        guard += 1
+        sp -= 1
+        Dim n As Integer = stack(sp)
+        If n < 0 Or n >= ps.ast.count Then Continue Do
+        Dim k As String = UCase(Trim(ps.ast.nodes(n).kind))
+        If Right(k, 5) = "_STMT" Then Continue Do
+        If k = "IDENT" Or k = "IDENTIFIER" Then
+            Dim nm As String = UCase(Trim(ps.ast.nodes(n).value))
+            Dim vIdx As Integer = ExecFindVar(es, nm)
+            Dim isGlobal As Integer = 0
+            If vIdx <> -1 Then
+                If es.runtime.callContextDepth = 0 Then
+                    isGlobal = 1
+                ElseIf vIdx < es.runtime.callFrameBase(1) Then
+                    isGlobal = 1
+                End If
+            End If
+            If isGlobal <> 0 Then
+                For i = 0 To gExecLkCount - 1
+                    If gExecLkOwner(i) <> -1 AndAlso gExecLkOwner(i) <> key AndAlso gExecLkName(i) = nm Then
+                        errText = "LOCK_DEADLOCK: " & ExecLockLabel(i) & " kilidini tutan gorev, bu gorevin bitmesini bekliyor (LOCK icinde JOIN/WAIT ile karsilikli bekleme)"
+                        Return 0
+                    End If
+                Next i
+            End If
+        End If
+        c = ps.ast.nodes(n).firstChild
+        Do While c <> -1
+            If sp > UBound(stack) Then ReDim Preserve stack(sp * 2 + 8)
+            stack(sp) = c: sp += 1
+            c = ps.ast.nodes(c).nextSibling
+        Loop
+        If ps.ast.nodes(n).left <> -1 Then
+            If sp > UBound(stack) Then ReDim Preserve stack(sp * 2 + 8)
+            stack(sp) = ps.ast.nodes(n).left: sp += 1
+        End If
+        If ps.ast.nodes(n).right <> -1 Then
+            If sp > UBound(stack) Then ReDim Preserve stack(sp * 2 + 8)
+            stack(sp) = ps.ast.nodes(n).right: sp += 1
+        End If
+    Loop
+    Return 1
+End Function
+
+' S-146 Model D: ATOMIC metotlari (MIR yorumlayicisi ve native ile ayni anlam):
+'   LOAD() -> deger; STORE(v) -> yazilan deger; ADD(n)/SUB(n) -> YENI deger;
+'   EXCHANGE(v) -> ESKI deger; CAS(beklenen, yeni) -> esitse yazar, TRUE (-1) / FALSE (0).
+' -1 = alici ATOMIC degil (baska cozumleyici denesin), 0 = hata, 1 = tamam.
+Function ExecInvokeAtomicMember(ByRef ps As ParseState, ByRef es As ExecState, ByVal recvIdx As Integer, ByRef methodName As String, ByVal callNodeIdx As Integer, ByRef valueOut As ExecValue, ByRef errText As String) As Integer
+    If recvIdx < 0 Or recvIdx >= ps.ast.count Then Return -1
+    Dim rk As String = UCase(Trim(ps.ast.nodes(recvIdx).kind))
+    If rk <> "IDENT" And rk <> "IDENTIFIER" Then Return -1
+    Dim decl As Integer = UXBAtomicDeclFor(ps, ps.ast.nodes(recvIdx).value, recvIdx)
+    If decl = -1 Then Return -1
+    Dim declType As String = UXBAtomicDeclType(ps, decl)
+    Dim canon As String = UXBStep3TypeCanonical(declType)
+    Dim isFloat As Integer = IIf(canon = TYPE_F32 Or canon = TYPE_F64, 1, 0)
+    Dim vn As String = Trim(ps.ast.nodes(recvIdx).value)
+    Dim cur As ExecValue
+    If ExecGetVarValue(es, vn, cur) = 0 Then
+        errText = "exec: ATOMIC degisken okunamadi: " & vn
+        Return 0
+    End If
+    Dim argc As Integer = ExecChildCount(ps, callNodeIdx)
+    Dim argv(0 To 1) As ExecValue
+    Dim i As Integer
+    For i = 0 To argc - 1
+        If i > 1 Then Exit For
+        If ExecEvalExpression(ps, ExecChildAt(ps, callNodeIdx, i), es, argv(i), errText) = 0 Then Return 0
+    Next i
+    Dim m As String = UCase(Trim(methodName))
+    Dim nv As ExecValue
+    Dim raw As ExecValue
+    Select Case m
+    Case "LOAD"
+        valueOut = cur
+    Case "STORE", "EXCHANGE"
+        If ExecApplyDeclaredType(argv(0), declType, nv, errText) = 0 Then Return 0
+        ExecSetVarValue es, vn, nv
+        If m = "STORE" Then valueOut = nv Else valueOut = cur
+    Case "ADD", "SUB"
+        ExecValueInit raw
+        If isFloat <> 0 Then
+            Dim df As Double = ExecValueToFloat(argv(0))
+            If m = "SUB" Then df = -df
+            ExecValueSetFloat raw, ExecValueToFloat(cur) + df
+        Else
+            Dim di As LongInt = ExecValueToInteger(argv(0))
+            If m = "SUB" Then di = -di
+            ExecValueSetInteger raw, ExecValueToInteger(cur) + di
+        End If
+        If ExecApplyDeclaredType(raw, declType, nv, errText) = 0 Then Return 0
+        ExecSetVarValue es, vn, nv
+        valueOut = nv
+    Case "CAS"
+        Dim ex As ExecValue
+        If ExecApplyDeclaredType(argv(0), declType, ex, errText) = 0 Then Return 0
+        Dim eq As Integer
+        If isFloat <> 0 Then
+            eq = IIf(ExecValueToFloat(cur) = ExecValueToFloat(ex), 1, 0)
+        Else
+            eq = IIf(ExecValueToInteger(cur) = ExecValueToInteger(ex), 1, 0)
+        End If
+        If eq <> 0 Then
+            If ExecApplyDeclaredType(argv(1), declType, nv, errText) = 0 Then Return 0
+            ExecSetVarValue es, vn, nv
+        End If
+        ExecValueInit raw
+        ExecValueSetInteger raw, IIf(eq <> 0, -1, 0)
+        If ExecApplyDeclaredType(raw, "I32", valueOut, errText) = 0 Then Return 0
+    Case Else
+        errText = "exec: ATOMIC '" & UCase(vn) & "' uzerinde bilinmeyen metot: " & m
+        Return 0
+    End Select
+    Return 1
+End Function
+
+' UNSAFE ... END UNSAFE: yalniz semantik guvenceleri kaldirir; govde normal calisir.
+Function ExecRunUnsafeStmt(ByRef ps As ParseState, ByRef es As ExecState, ByVal stmtIdx As Integer, ByRef errText As String) As Integer
+    Dim total As Integer = ExecChildCount(ps, stmtIdx)
+    Dim p As Integer
+    For p = 0 To total - 1
+        Dim bodyStmt As Integer = ExecChildAt(ps, stmtIdx, p)
+        If bodyStmt = -1 Then Exit For
+        If ExecRunStmt(ps, es, bodyStmt, errText) = 0 Then Return 0
+        If es.runtime.exitRequest <> "" Then Exit For
+    Next p
+    Return 1
+End Function
+
+' SPAWN_EXPR -> TASK tutamaci. Govde HEMEN calisir (acik LOCK tutulmuyorsa); tutamac
+' DONE/ERROR durumunda doner. Acik LOCK tutulurken gorev PENDING olarak ertelenir.
 Function ExecRunSpawnExpr(ByRef ps As ParseState, ByRef es As ExecState, ByVal spawnNodeIdx As Integer, ByRef result As ExecValue, ByRef errText As String) As Integer
     Dim callExprIdx As Integer
     callExprIdx = ps.ast.nodes(spawnNodeIdx).left
@@ -317,31 +842,35 @@ Function ExecRunSpawnExpr(ByRef ps As ParseState, ByRef es As ExecState, ByVal s
         Return 0
     End If
 
-    Dim handleId As Integer
-    handleId = ExecTaskHandleAlloc()
-    gExecTaskHandles(handleId).kindText = IIf(routineKind = "THREAD_STMT", "THREAD", "PARALEL")
-    gExecTaskHandles(handleId).taskName = taskName
-    gExecTaskHandles(handleId).statusText = UXB_TASK_STATUS_RUNNING
-
-    Dim bodyResult As ExecValue
-    Dim bodyHasResult As Integer
-    Dim bodyErrText As String
+    ' Argumanlar SPAWN aninda cagiranin kapsaminda degerlendirilir. Baglama hatasi
+    ' (arity/tip/BYREF/dizi) cagiranin kendi hatasidir, TASK'a degil SPAWN'a mal edilir.
+    Dim prep As ExecSpawnPrepared
     Dim bindErrText As String
-    If ExecSpawnBindAndRunBody(ps, es, routineIdx, callExprIdx, bodyResult, bodyHasResult, bodyErrText, bindErrText) = 0 Then
-        ' Baglama hatasi (arity/tip/BYREF/dizi/yigin siniri) -- cagiranin kendi
-        ' hatasi, TASK'a degil SPAWN cagrisinin kendisine mal edilir.
+    If ExecSpawnPrepare(ps, es, routineIdx, callExprIdx, prep, bindErrText) = 0 Then
         errText = bindErrText
         Return 0
     End If
 
-    If bodyErrText <> "" Then
-        gExecTaskHandles(handleId).statusText = UXB_TASK_STATUS_ERROR
-        gExecTaskHandles(handleId).errorText = bodyErrText
-        gExecTaskHandles(handleId).hasResult = 0
+    Dim handleId As Integer
+    handleId = ExecTaskHandleAlloc()
+    gExecTaskHandles(handleId).kindText = IIf(routineKind = "THREAD_STMT", "THREAD", "PARALEL")
+    gExecTaskHandles(handleId).taskName = taskName
+    gExecTaskHandles(handleId).statusText = UXB_TASK_STATUS_PENDING
+    ' S-146 madde 9 / S-163: gorevin kendi RND uretecini ata baglaminda, SPAWN aninda tohumla.
+    UXBRngSpawnChild gExecCurrentTaskKey, handleId
+
+    If gExecLkHeldTotal > 0 Then
+        ' Acik LOCK tutulurken: gorev ertelenir (native'de kilidi bekleyecekti).
+        Dim d As Integer = gExecDefCount
+        ReDim Preserve gExecDefPrep(d)
+        ReDim Preserve gExecDefHandle(d)
+        ReDim Preserve gExecDefDone(d)
+        gExecDefPrep(d) = prep
+        gExecDefHandle(d) = handleId
+        gExecDefDone(d) = 0
+        gExecDefCount = d + 1
     Else
-        gExecTaskHandles(handleId).statusText = UXB_TASK_STATUS_DONE
-        gExecTaskHandles(handleId).hasResult = bodyHasResult
-        If bodyHasResult <> 0 Then gExecTaskHandles(handleId).resultValue = bodyResult
+        If ExecTaskRunPreparedInto(ps, es, prep, handleId, errText) = 0 Then Return 0
     End If
 
     ' S-030: TASK, bu koddaki TUM diger opak tutamaclarla (CLASS ornegi adresi,
@@ -418,6 +947,9 @@ Private Function ExecTaskReceiverInfo(ByRef ps As ParseState, ByRef es As ExecSt
         If varIdx = -1 Then Return -1
         Dim declT As String
         declT = UCase(Trim(es.vars(varIdx).declType))
+        ' Parametre degiskenleri declType'i PARAM_DECL typeName'inden alir; semantik kapi
+        ' onu kanonik "TYPE_TASK" bicimine cevirir (Step3InferNodeDeclaredOrInitializerType).
+        If Left(declT, 5) = "TYPE_" Then declT = Mid(declT, 6)
         If declT <> "TASK" And declT <> "TASKGROUP" Then Return -1
         If es.vars(varIdx).isArray <> 0 Then
             errText = "exec: " & declT & " dizisi eleman indeksi olmadan alici olamaz: " & receiverName & " -- " & receiverName & "(i) yazin"
@@ -460,13 +992,33 @@ End Function
 Private Function ExecTaskFailureText(ByVal handleId As Integer, ByRef errText As String) As Integer
     Select Case gExecTaskHandles(handleId).statusText
     Case UXB_TASK_STATUS_ERROR
+        gExecTaskHandles(handleId).errorObserved = 1
         errText = "exec: gorev hatasi (" & gExecTaskHandles(handleId).taskName & "): " & gExecTaskHandles(handleId).errorText
         Return 1
     Case UXB_TASK_STATUS_CANCELLED
+        gExecTaskHandles(handleId).errorObserved = 1
         errText = "exec: gorev iptal edildi (" & gExecTaskHandles(handleId).taskName & "): CANCELLED"
         Return 1
     End Select
     Return 0
+End Function
+
+' K5 (Mete, 2026-09-24): "Okunmamis gorev hatasi sessiz kaybolmaz: hata cikisina yazilir, cikis
+' kodu basarisiz olur." Program sonunda cagrilir. Iptal (CANCELLED) programin kendi istegidir,
+' hata sayilmaz; yalniz hic okunmamis ERROR raporlanir. 1 = en az bir okunmamis hata (errText dolu).
+Function ExecTaskUnreadErrors(ByRef errText As String) As Integer
+    errText = ""
+    Dim i As Integer
+    For i = 1 To gExecTaskHandleCount - 1
+        If gExecTaskHandles(i).used = 0 Then Continue For
+        If gExecTaskHandles(i).statusText <> UXB_TASK_STATUS_ERROR Then Continue For
+        If gExecTaskHandles(i).errorObserved <> 0 Then Continue For
+        If errText <> "" Then errText &= "; "
+        errText &= "okunmamis gorev hatasi (" & gExecTaskHandles(i).taskName & "): " & gExecTaskHandles(i).errorText
+    Next i
+    If errText = "" Then Return 0
+    errText = "exec: " & errText
+    Return 1
 End Function
 
 ' TASK/TASKGROUP alan OKUMASI: .STATUS / .RESULT / .ERRORTEXT (FIELD_EXPR).
@@ -487,6 +1039,7 @@ Private Function ExecReadTaskField(ByRef kindText As String, ByVal handleId As I
             valueOut.stringValue = UXB_TASK_STATUS_PENDING  ' hic SPAWN edilmemis (NULL) tutamac
         Else
             valueOut.stringValue = gExecTaskHandles(handleId).statusText
+            If valueOut.stringValue = UXB_TASK_STATUS_ERROR Or valueOut.stringValue = UXB_TASK_STATUS_CANCELLED Then gExecTaskHandles(handleId).errorObserved = 1
         End If
         Return 1
 
@@ -497,6 +1050,7 @@ Private Function ExecReadTaskField(ByRef kindText As String, ByVal handleId As I
             valueOut.stringValue = ""
         Else
             valueOut.stringValue = gExecTaskHandles(handleId).errorText
+            If valueOut.stringValue <> "" Then gExecTaskHandles(handleId).errorObserved = 1
         End If
         Return 1
 
@@ -536,6 +1090,7 @@ Private Function ExecInvokeTaskMember(ByRef ps As ParseState, ByRef es As ExecSt
                 errText = "exec: TASK.WAIT(): bos (NULL) gorev tutamaci"
                 Return 0
             End If
+            If ExecTaskRunIfDeferred(ps, es, handleId, errText) = 0 Then Return 0
             ' Faz 1: gorev SPAWN aninda zaten bitti (senkron referans uygulama) --
             ' WAIT hemen doner. Faz 2 gercek eszamanlilikta burasi gercekten bloke
             ' edecek; disariya gorunen sozlesme (arguman yok, deger yok) ayni kalir.
@@ -569,6 +1124,7 @@ Private Function ExecInvokeTaskMember(ByRef ps As ParseState, ByRef es As ExecSt
                 errText = "exec: TASK.JOIN(): bos (NULL) gorev tutamaci"
                 Return 0
             End If
+            If ExecTaskRunIfDeferred(ps, es, handleId, errText) = 0 Then Return 0
             Return ExecReadTaskField(kindText, handleId, "RESULT", valueOut, errText)
 
         Case Else
@@ -623,6 +1179,11 @@ Private Function ExecInvokeTaskMember(ByRef ps As ParseState, ByRef es As ExecSt
             ' Faz 1: her uye ADD aninda zaten bitmis; ilk HATALI/IPTAL uyeyi
             ' (varsa, EKLENME sirasina gore) cagirana yukselt.
             Dim gi As Integer
+            For gi = 0 To gExecTaskGroups(handleId).memberCount - 1
+                If ExecTaskHandleValid(gExecTaskGroups(handleId).memberIds(gi)) <> 0 Then
+                    If ExecTaskRunIfDeferred(ps, es, gExecTaskGroups(handleId).memberIds(gi), errText) = 0 Then Return 0
+                End If
+            Next gi
             For gi = 0 To gExecTaskGroups(handleId).memberCount - 1
                 Dim memberId As Integer
                 memberId = gExecTaskGroups(handleId).memberIds(gi)

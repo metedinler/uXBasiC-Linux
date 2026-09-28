@@ -90,7 +90,7 @@ if ($Variant -in @('libuv','full') -and -not $useUv) { throw "libuv gelistirme d
 if ($Variant -in @('tbb','full') -and -not $useTbb) { throw "oneTBB import library bulunamadi. Beklenen: $mingwRoot\lib\libtbb12.dll.a veya libtbb.dll.a" }
 
 $sources=@(
- 'uxb_runtime.cpp','uxb_runtime_mir.cpp','uxb_runtime_state.cpp','uxb_runtime_task.cpp','uxb_runtime_shell.cpp',
+ 'uxb_runtime.cpp','uxb_runtime_mir.cpp','uxb_runtime_state.cpp','uxb_runtime_task.cpp','uxb_runtime_task_v2.cpp','uxb_runtime_sync.cpp','uxb_runtime_shell.cpp',
  'backends\runtime_backend.cpp','backends\std_backend.cpp','backends\libuv_backend.cpp','backends\tbb_backend.cpp'
 ) | ForEach-Object { Join-Path $src $_ }
 $out=Join-Path $build 'uxb_runtime.dll'

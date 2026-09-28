@@ -718,15 +718,16 @@ MAIN
     uxraylib.VectorSlotSet(2, 4.0, 0.0, 0.0, 0.0)
     uxraylib.VectorSlotSet(3, 1.0, 0.0, 0.0, 0.0)
     uxraylib.Vector3CubicHermiteSlots(0, 1, 2, 3, 0.5)
-    ASSERT Near(uxraylib.ResX(), 1.875) = 1
+    ASSERT Near(uxraylib.ResX(), 2.0) = 1
     ASSERT Near(uxraylib.ResY(), 0.0) = 1
     uxraylib.VectorSlotSet(4, 1.0, 1.0, 0.0, 0.0)
     uxraylib.VectorSlotSet(5, 0.0, 0.0, 0.0, 0.0)
     uxraylib.VectorSlotSet(6, 4.0, 0.0, 0.0, 0.0)
     uxraylib.VectorSlotSet(7, 0.0, 4.0, 0.0, 0.0)
     uxraylib.Vector3BarycenterSlots(4, 5, 6, 7)
-    ASSERT Near(uxraylib.ResX(), 0.25) = 1
+    ASSERT Near(uxraylib.ResX(), 0.5) = 1
     ASSERT Near(uxraylib.ResY(), 0.25) = 1
+    ASSERT Near(uxraylib.ResZ(), 0.25) = 1
     DIM angle AS F64
     angle = uxraylib.QuaternionToAxisAngle(0, 0, 0.70710678, 0.70710678)
     ASSERT Near(angle, 1.5707963) = 1
@@ -735,9 +736,9 @@ MAIN
     b = uxraylib.MatrixTranslate(5, 6, 7)
     c = uxraylib.MatrixMultiply(a, b)
     uxraylib.MatrixDecompose(c)
-    ASSERT Near(uxraylib.ResGet(0, 0), 10.0) = 1
-    ASSERT Near(uxraylib.ResGet(0, 1), 18.0) = 1
-    ASSERT Near(uxraylib.ResGet(0, 2), 28.0) = 1
+    ASSERT Near(uxraylib.ResGet(0, 0), 5.0) = 1
+    ASSERT Near(uxraylib.ResGet(0, 1), 6.0) = 1
+    ASSERT Near(uxraylib.ResGet(0, 2), 7.0) = 1
     ASSERT Near(uxraylib.ResGet(2, 0), 2.0) = 1
     ASSERT Near(uxraylib.ResGet(2, 1), 3.0) = 1
     ASSERT Near(uxraylib.ResGet(2, 2), 4.0) = 1

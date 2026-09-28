@@ -1,0 +1,6 @@
+PIPE ReturnDouble(value AS I32) AS I32
+    RETURN value * 2
+END PIPE
+
+TRIGGER PIPE ReturnDouble, 21
+PRINT TASKOUT

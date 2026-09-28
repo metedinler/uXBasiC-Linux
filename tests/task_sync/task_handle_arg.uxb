@@ -1,0 +1,11 @@
+' S-146 adim 3: TASK tutamaci gorev argumani olarak gecer; tuketen gorev ureteni bekler.
+THREAD Uret(n AS I64) AS I64
+    RETURN n * 2
+END THREAD
+THREAD Tuket(t AS TASK OF I64) AS I64
+    RETURN t.JOIN() + 1
+END THREAD
+DIM u AS TASK OF I64 = SPAWN Uret(20)
+DIM k AS TASK OF I64 = SPAWN Tuket(u)
+PRINT k.JOIN()
+PRINT u.JOIN()

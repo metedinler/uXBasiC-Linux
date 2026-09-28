@@ -1,0 +1,46 @@
+' S-088 (Mete karari 2026-09-20): U32 op U32 = U32; her islem sonucu modulo 2^32 sarilir (yalniz atamada degil).
+' U8/U16 islemleri I32'ye terfi eder (200+100 = 300); U64 kurali S-077. Beklenen degerler C kuralindan elle hesaplandi.
+DIM a AS U32
+DIM b AS U32
+DIM m AS U32
+DIM c AS U32
+DIM i AS I32
+DIM u8a AS U8
+DIM u8b AS U8
+a = 1
+b = 2
+m = U32(4294967295)
+i = 5
+u8a = U8(200)
+u8b = U8(100)
+PRINT a - b
+PRINT b - a
+PRINT m + a
+PRINT m * b
+IF (a - b) > 5 THEN
+    PRINT "big"
+ELSE
+    PRINT "small"
+END IF
+IF a - b < 0 THEN
+    PRINT "neg"
+ELSE
+    PRINT "notneg"
+END IF
+PRINT -a
+PRINT a - i
+PRINT u8a + u8b
+c = a - b
+PRINT c
+c = 0
+c = c - 1
+PRINT c
+c = 3
+c -= 5
+PRINT c
+c = U32(3000000000)
+c += c
+PRINT c
+PRINT a << 31
+PRINT b << 31
+PRINT NOT a

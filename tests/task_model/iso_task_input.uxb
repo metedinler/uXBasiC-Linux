@@ -1,0 +1,10 @@
+' S-146 adim 2 (2026-09-26): INPUT gorevde serbest; test ortaminda girdi bos (eski negatif test neg_iso_input)
+THREAD W(x AS I32) AS I32
+ DIM s AS STRING
+ INPUT s
+ RETURN x
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

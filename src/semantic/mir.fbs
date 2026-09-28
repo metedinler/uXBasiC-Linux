@@ -108,6 +108,8 @@ Private Sub MIRAppendInstruction(ByRef module As MIRModule, ByVal fnIdx As Integ
     inst.resultType = ""
     inst.ffiStubId = 0
     inst.ffiArgStart = 0
+    inst.stmtSeq = gMIRCurrentStmtSeq
+    If gMirLowerTryDepth > 0 Then inst.tryTargetPlus1 = gMirLowerTryTarget(gMirLowerTryDepth - 1) + 1 Else inst.tryTargetPlus1 = 0
     inst.operandCount = operandCount
     If operandCount > 0 Then inst.operands(0) = op0
     If operandCount > 1 Then inst.operands(1) = op1
@@ -137,6 +139,14 @@ Private Sub MIRAppendInstruction(ByRef module As MIRModule, ByVal fnIdx As Integ
     blk->instructions(cnt) = inst
     blk->instructionCount = cnt + 1
 End Sub
+
+' S-162: ayristirma sonrasi normallestirilmis NAMESPACE degiskeni adi mi ("NS.NV"; bkz.
+' src/parser/parser/parser_namespace_vars.fbs). Noktali ad, metot cagrisi degil depo adidir.
+Function MIRIsNamespaceVarName(ByVal nameRaw As String) As Integer
+    Dim n As String = UCase(Trim(nameRaw))
+    If InStr(n, ".") = 0 Then Return 0
+    Return IIf(InStr(gNsVarKeys, "|" & n & "|") > 0, 1, 0)
+End Function
 
 Private Sub MIRSetLastInstructionMetadata(ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blockIdx As Integer, ByRef resultTypeRaw As String, ByVal ffiStubId As Integer = 0, ByVal ffiArgStart As Integer = 0)
     If fnIdx < 0 Or fnIdx >= module.functionCount Then Exit Sub
@@ -1967,9 +1977,24 @@ Private Function MIRTryInferExprTypeName(ByRef ps As ParseState, ByVal nodeIdx A
         If MIRResolveFieldRootType(ps, nodeIdx, rootName, rootType) = 0 Then Return 0
 
         Dim finalNode As Integer
-        If MIRResolveFieldPathType(ps, rootType, pathText, typeOut, finalNode) = 0 Then Return 0
-        typeOut = UCase(Trim(typeOut))
-        Return IIf(typeOut <> "", 1, 0)
+        If MIRResolveFieldPathType(ps, rootType, pathText, typeOut, finalNode) <> 0 Then
+            typeOut = UCase(Trim(typeOut))
+            Return IIf(typeOut <> "", 1, 0)
+        End If
+
+        ' TYPE/STRUCT fields are described by the layout table rather than by
+        ' class-member AST nodes.  Keep class resolution above, then fall back
+        ' to the same canonical layout resolver used by OFFSETOF and array
+        ' field lowering so a managed library value stored in a TYPE field can
+        ' still receive its COPY contract.
+        Dim layoutOffset As Integer
+        Dim layoutSize As Integer
+        Dim layoutErr As String
+        If TypeLayoutResolvePath(ps, rootType, pathText, layoutOffset, typeOut, layoutSize, layoutErr) <> 0 Then
+            typeOut = UCase(Trim(typeOut))
+            Return IIf(typeOut <> "", 1, 0)
+        End If
+        Return 0
     End If
 
     If k = "NEW_EXPR" Then

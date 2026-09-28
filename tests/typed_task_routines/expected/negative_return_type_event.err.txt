@@ -1,0 +1,1 @@
+EVENT: return type is only valid for PIPE

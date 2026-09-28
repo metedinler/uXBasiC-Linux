@@ -1,0 +1,9 @@
+' S-146/K3: yalniz TRIGGER ile calisan THREAD global kullanmaya devam eder.
+DIM g AS I32
+THREAD T1(x AS I32)
+ g = g + x
+END THREAD
+TRIGGER T1, 5
+PRINT g
+
+

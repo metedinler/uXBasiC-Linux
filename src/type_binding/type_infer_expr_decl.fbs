@@ -1,0 +1,9 @@
+#ifndef UXB_TYPE_INFER_EXPR_DECL_FBS
+#define UXB_TYPE_INFER_EXPR_DECL_FBS
+' type_infer_expr.fbs'in disaridan kullanilan fonksiyonlarinin ileri bildirimleri.
+' MIR indirgemesi (semantic/mir_lower_expr.fbs) tip cikarimindan ONCE derlenir ama
+' ayni kurali kullanmak zorundadir (S-030 Faz 1B: TASK alicisi, S-149 TASK OF);
+' bildirim tek yerde durur ki imzalar ayrismasin.
+Declare Function UXBStep3InferExprType(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef typeOut As String, ByRef errText As String) As Integer
+Declare Function UXBTaskExprResultType(ByRef ps As ParseState, ByVal exprIdx As Integer, ByRef isTaskOut As Integer) As String
+#endif

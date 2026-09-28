@@ -1,0 +1,12 @@
+' S-030 Faz 1: THREAD hedefine SPAWN, sonuc JOIN/RESULT ile alinir.
+THREAD Worker(x AS I32)
+    RETURN x + 1
+END THREAD
+
+DIM t AS TASK = SPAWN Worker(41)
+' Faz 2A: gercek eszamanlilikta STATUS ancak WAIT/JOIN sonrasi kesindir (senkron referansta gorev SPAWN aninda biter).
+t.WAIT()
+PRINT t.STATUS
+PRINT t.RESULT
+PRINT t.JOIN()
+PRINT "[" + t.ERRORTEXT + "]"

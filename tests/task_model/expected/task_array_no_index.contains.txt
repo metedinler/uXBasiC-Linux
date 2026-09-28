@@ -1,1 +1,0 @@
-AST=TASK dizisi eleman indeksi olmadan alici olamaz: g

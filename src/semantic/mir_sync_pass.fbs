@@ -1,0 +1,847 @@
+#ifndef UXB_MIR_SYNC_PASS_FBS
+#define UXB_MIR_SYNC_PASS_FBS
+
+' ===========================================================================
+' S-146 Model D (Mete 2026-09-26, belge §10 + §10.1): gorevlerle paylasilan
+' globallere OTOMATIK senkron. Dil garantisi: iki gorev `toplam += x` yaparsa
+' sonuc her motorda kesindir.
+'
+' Girdi: semantic_task_isolation.fbs'in senkron kumesi (SPAWN hedeflerinin gecisli
+' dokundugu globaller) ve her MIR buyrugunun stmtSeq'i (ureten deyim).
+' Cikti (kanonik MIR_CALL'lar, tum motorlar ayni):
+'   SYNC_ENTER "id1,id2" "AD1,AD2"   -- depo basina kilit, lockOrderId sirasiyla
+'   SYNC_LEAVE "id1,id2" "AD1,AD2"
+'   STR_SNAPSHOT t                   -- kilitli okunan STRING'in kilit disina tasinan kopyasi
+'
+' Kurallar:
+'  - Bir deyimin ayni bloktaki ardisik buyruklari tek parca kilitlenir ("deyim tek
+'    guvenli islem"). Kilit asla bir kullanici rutini cagrisi, gorev islemi, bekleyen
+'    giris ya da dallanma boyunca tutulmaz.
+'  - §10.1: deyimdeki kullanici rutini cagrilari (argumanlariyla) deyimin ortak depo
+'    okumalarindan ONCE hesaplanir; aradaki buyruklar yan etkisizse cagri dilimi one
+'    alinir. Boylece `g = g * 2 + F()` de tek kilit altinda okunup yazilir.
+'  - Cagriya/dallanmaya dogrudan islenen olarak giden ortak global once kendi kisa
+'    kilidi altinda gecici degere okunur.
+'  - Senkron kumesi bos (SPAWN yok) ise gecis hicbir sey yapmaz: sifir maliyet.
+' ===========================================================================
+
+Declare Function UXBTaskEnsureSyncAnalysis(ByRef ps As ParseState, ByRef errText As String) As Integer
+Declare Function UXBTaskSyncActive() As Integer
+Declare Function UXBTaskIsSyncGlobal(ByVal nameRaw As String) As Integer
+Declare Function UXBTaskSyncLockOrder(ByVal nameRaw As String) As Integer
+Declare Function UXBTaskNodeInsideUnsafe(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+
+Dim Shared gMirSyncLocals As String       ' "|AD|" gecerli fonksiyonun yerel+parametre adlari
+Dim Shared gMirSyncUserFns As String      ' "|AD|" modul fonksiyon adlari (kullanici kodu)
+Dim Shared gMirSyncTypeNames(Any) As String
+Dim Shared gMirSyncTypeValues(Any) As String
+Dim Shared gMirSyncTypeCount As Integer
+
+Private Function MIRSyncUnquote(ByVal s As String) As String
+    s = Trim(s)
+    If Len(s) >= 2 AndAlso Left(s, 1) = Chr(34) AndAlso Right(s, 1) = Chr(34) Then Return Mid(s, 2, Len(s) - 2)
+    Return s
+End Function
+
+' Islenenin depo adi (alan yolu "PT.X" -> "PT"); gecici/sabit/etiket icin "".
+Private Function MIRSyncBaseName(ByVal operandRaw As String) As String
+    Dim s As String = UCase(Trim(operandRaw))
+    If s = "" Then Return ""
+    Dim c As String = Left(s, 1)
+    If c = Chr(34) Or c = "-" Or c = "+" Or c = "." Or (c >= "0" And c <= "9") Then Return ""
+    If Left(s, 2) = "__" Then Return ""
+    Dim cut As Integer = 0
+    Dim i As Integer
+    For i = 1 To Len(s)
+        Dim ch As String = Mid(s, i, 1)
+        If ch = "." Or ch = "(" Or ch = "[" Then cut = i: Exit For
+    Next i
+    If cut > 0 Then s = Left(s, cut - 1)
+    Return s
+End Function
+
+Declare Function UXBTaskAtomicFastPath(ByVal nameRaw As String) As Integer
+Declare Function MIRSyncTypeOf(ByRef m As MIRModule, ByVal nameRaw As String) As String
+Dim Shared gMirSyncFastAtomics As String  ' "|AD|" kilitsiz hizli yoldaki ATOMIC globaller
+
+Declare Function UXBTaskUsesConsoleLock() As Integer
+Dim Shared gMirSyncConsole As Integer   ' program LOCK CONSOLE kullaniyor ve gorevli: konsol deyimleri konsol kilidine girer
+
+' S-146 adim 2: konsola dokunan cagri (cikti, konum/renk, klavye girdisi).
+Private Function MIRSyncIsConsoleCall(ByRef ins As MIRIRInstruction) As Integer
+    If gMirSyncConsole = 0 Then Return 0
+    Select Case UCase(Trim(ins.opcode))
+    Case "CALL", "MIR_CALL"
+    Case Else
+        Return 0
+    End Select
+    If ins.operandCount < 1 Then Return 0
+    Dim n As String = UCase(Trim(ins.operands(0)))
+    If Left(n, 5) = "PRINT" Then Return 1
+    Select Case n
+    Case "CLS", "COLOR", "LOCATE", "INPUT", "INPUTF", "LINE_INPUT", "LINEINPUT", "INKEY", "GETKEY", "BEEP", "WRITE", "WIDTH", "VIEW_PRINT"
+        Return 1
+    End Select
+    Return 0
+End Function
+Private Function MIRSyncIsSyncName(ByVal operandRaw As String) As Integer
+    Dim b As String = MIRSyncBaseName(operandRaw)
+    If b = "" Then Return 0
+    If InStr(gMirSyncLocals, "|" & b & "|") > 0 Then Return 0
+    ' Kilitsiz ATOMIC: her erisim tek CPU atomik islemi (okuma hizali qword, yazma xchg,
+    ' x = x +- c lock xadd) -- deyim kilidine girmez.
+    If InStr(gMirSyncFastAtomics, "|" & b & "|") > 0 Then Return 0
+    Return UXBTaskIsSyncGlobal(b)
+End Function
+
+' ---------------------------------------------------------------------------
+' ATOMIC kilitsiz hizli yol. Aday: senkron kumesinde, ATOMIC tamsayi/BOOLEAN, hic LOCK
+' hedefi olmayan global (UXBTaskAtomicFastPath). Adayin programdaki TUM yazimlari su
+' bicimlerden biri olmali; biri bile degilse degisken her yerde kilitli yoldan gider
+' (karisik erisimde kayip guncelleme olmasin):
+'   ATOMIC_* metot cagrisi; x = x + c / x = c + x / x = x - c (c x'i okumaz);
+'   x = <x'i okumayan ifade> (ATOMIC_STORE).
+' ---------------------------------------------------------------------------
+Private Function MIRSyncFnLocalsHas(ByRef m As MIRModule, ByVal fi As Integer, ByVal nameU As String) As Integer
+    Dim li As Integer
+    For li = 0 To m.functions(fi).localVarCount - 1
+        If UCase(Trim(m.functions(fi).localVars(li))) = nameU Then Return 1
+    Next li
+    For li = 0 To m.functions(fi).paramVarCount - 1
+        If UCase(Trim(m.functions(fi).paramVars(li))) = nameU Then Return 1
+    Next li
+    Return 0
+End Function
+
+' Ayni blok ve deyimde, idx'ten once `tempName`i ureten buyruk (-1: yok).
+Private Function MIRSyncProducer(ByRef m As MIRModule, ByVal fi As Integer, ByVal bi As Integer, ByVal idx As Integer, ByVal tempName As String) As Integer
+    Dim t As String = UCase(Trim(tempName))
+    If Left(t, 2) <> "__" Then Return -1
+    Dim i As Integer
+    For i = idx - 1 To 0 Step -1
+        With m.functions(fi).blocks(bi).instructions(i)
+            If .stmtSeq <> m.functions(fi).blocks(bi).instructions(idx).stmtSeq Then Return -1
+            If UCase(Trim(.result)) = t Then Return i
+        End With
+    Next i
+    Return -1
+End Function
+
+' `valueName` (ayni deyimde) gecisli olarak X'i okuyor mu.
+Private Function MIRSyncValueReadsVar(ByRef m As MIRModule, ByVal fi As Integer, ByVal bi As Integer, ByVal idx As Integer, ByVal valueName As String, ByVal xU As String, ByVal depth As Integer) As Integer
+    If depth > 64 Then Return 1
+    If MIRSyncBaseName(valueName) = xU Then Return 1
+    Dim p As Integer = MIRSyncProducer(m, fi, bi, idx, valueName)
+    If p = -1 Then Return 0
+    Dim k As Integer
+    With m.functions(fi).blocks(bi).instructions(p)
+        For k = 0 To .operandCount - 1
+            If MIRSyncValueReadsVar(m, fi, bi, p, .operands(k), xU, depth + 1) <> 0 Then Return 1
+        Next k
+    End With
+    Return 0
+End Function
+
+' STORE_VAR X <- src hizli yola uyuyor mu: 0 = hayir, 1 = ATOMIC_STORE, 2 = ADD/SUB kalibi (producerOut).
+Private Function MIRSyncAtomicStoreForm(ByRef m As MIRModule, ByVal fi As Integer, ByVal bi As Integer, ByVal idx As Integer, ByVal xU As String, ByRef producerOut As Integer) As Integer
+    producerOut = -1
+    Dim src As String = m.functions(fi).blocks(bi).instructions(idx).operands(0)
+    Dim p As Integer = MIRSyncProducer(m, fi, bi, idx, src)
+    If p <> -1 Then
+        With m.functions(fi).blocks(bi).instructions(p)
+            Dim pop As String = UCase(Trim(.opcode))
+            If (pop = "ADD" Or pop = "SUB") AndAlso .operandCount = 2 Then
+                Dim a0 As Integer = IIf(MIRSyncBaseName(.operands(0)) = xU AndAlso UCase(Trim(.operands(0))) = xU, 1, 0)
+                Dim a1 As Integer = IIf(MIRSyncBaseName(.operands(1)) = xU AndAlso UCase(Trim(.operands(1))) = xU, 1, 0)
+                If a0 = 1 AndAlso MIRSyncValueReadsVar(m, fi, bi, p, .operands(1), xU, 0) = 0 Then producerOut = p: Return 2
+                If pop = "ADD" AndAlso a1 = 1 AndAlso MIRSyncValueReadsVar(m, fi, bi, p, .operands(0), xU, 0) = 0 Then producerOut = p: Return 2
+            End If
+        End With
+    End If
+    If MIRSyncValueReadsVar(m, fi, bi, idx, src, xU, 0) <> 0 Then Return 0
+    Return 1
+End Function
+
+Private Sub MIRSyncPlanAtomicFastPath(ByRef m As MIRModule)
+    gMirSyncFastAtomics = "|"
+    Dim cands As String = "|"
+    Dim gi As Integer
+    For gi = 0 To m.globalVarCount - 1
+        Dim gnU As String = UCase(Trim(m.globalVars(gi)))
+        If UXBTaskIsSyncGlobal(gnU) <> 0 AndAlso UXBTaskAtomicFastPath(gnU) <> 0 Then cands &= gnU & "|"
+    Next gi
+    If Len(cands) <= 1 Then Exit Sub
+    Dim bad As String = "|"
+    Dim fi As Integer, bi As Integer, ii As Integer
+    For fi = 0 To m.functionCount - 1
+        For bi = 0 To m.functions(fi).blockCount - 1
+            For ii = 0 To m.functions(fi).blocks(bi).instructionCount - 1
+                With m.functions(fi).blocks(bi).instructions(ii)
+                    Dim resU As String = UCase(Trim(.result))
+                    Dim opU As String = UCase(Trim(.opcode))
+                    ' Yazim: sonuc hedefi aday.
+                    If resU <> "" AndAlso InStr(cands, "|" & resU & "|") > 0 AndAlso MIRSyncFnLocalsHas(m, fi, resU) = 0 Then
+                        Dim prod As Integer
+                        If opU <> "STORE_VAR" OrElse MIRSyncAtomicStoreForm(m, fi, bi, ii, resU, prod) = 0 Then
+                            If InStr(bad, "|" & resU & "|") = 0 Then bad &= resU & "|"
+                        End If
+                    End If
+                    ' Adayin adini isleneninde yazim amaciyla tasiyan diger buyruklar (dizi/alan yazimi, adres).
+                    If opU = "MIR_VARPTR" Or opU = "STORE_INDEXED" Or opU = "MIR_FIELD_STORE" Then
+                        Dim k As Integer
+                        For k = 0 To .operandCount - 1
+                            Dim oU As String = UCase(Trim(.operands(k)))
+                            If InStr(cands, "|" & oU & "|") > 0 AndAlso InStr(bad, "|" & oU & "|") = 0 Then bad &= oU & "|"
+                        Next k
+                    End If
+                End With
+            Next ii
+        Next bi
+    Next fi
+    Dim p As Integer = 2
+    Do While p < Len(cands)
+        Dim q As Integer = InStr(p, cands, "|")
+        If q = 0 Then Exit Do
+        Dim nm As String = Mid(cands, p, q - p)
+        If nm <> "" AndAlso InStr(bad, "|" & nm & "|") = 0 Then gMirSyncFastAtomics &= nm & "|"
+        p = q + 1
+    Loop
+End Sub
+
+' Hizli yoldaki ATOMIC globallere yazimlari atomik buyruklara cevirir.
+Private Sub MIRSyncRewriteAtomicStores(ByRef m As MIRModule)
+    If Len(gMirSyncFastAtomics) <= 1 Then Exit Sub
+    Dim fi As Integer, bi As Integer, ii As Integer
+    For fi = 0 To m.functionCount - 1
+        For bi = 0 To m.functions(fi).blockCount - 1
+            Dim blkP As MIRBasicBlock Ptr = @m.functions(fi).blocks(bi)
+            Dim removed As Integer = 0
+            For ii = 0 To blkP->instructionCount - 1
+                Dim resU As String = UCase(Trim(blkP->instructions(ii).result))
+                If UCase(Trim(blkP->instructions(ii).opcode)) <> "STORE_VAR" Then Continue For
+                If resU = "" OrElse InStr(gMirSyncFastAtomics, "|" & resU & "|") = 0 Then Continue For
+                If MIRSyncFnLocalsHas(m, fi, resU) <> 0 Then Continue For
+                Dim prod As Integer
+                Dim form As Integer = MIRSyncAtomicStoreForm(m, fi, bi, ii, resU, prod)
+                Dim target As String = Trim(blkP->instructions(ii).result)
+                If form = 2 Then
+                    With blkP->instructions(prod)
+                        Dim pop As String = UCase(Trim(.opcode))
+                        Dim other As String
+                        If UCase(Trim(.operands(0))) = resU Then other = .operands(1) Else other = .operands(0)
+                        .opcode = "CALL"
+                        .operandCount = 3
+                        .operands(0) = IIf(pop = "ADD", "ATOMIC_ADD", "ATOMIC_SUB")
+                        .operands(1) = target
+                        .operands(2) = other
+                        .resultType = MIRSyncTypeOf(m, target)
+                    End With
+                    blkP->instructions(ii).opcode = "__SYNC_DELETED__"
+                    removed += 1
+                ElseIf form = 1 Then
+                    Dim src As String = blkP->instructions(ii).operands(0)
+                    With blkP->instructions(ii)
+                        .opcode = "CALL"
+                        .result = ""
+                        .operandCount = 3
+                        .operands(0) = "ATOMIC_STORE"
+                        .operands(1) = target
+                        .operands(2) = src
+                        .resultType = MIRSyncTypeOf(m, target)
+                    End With
+                End If
+            Next ii
+            If removed > 0 Then
+                Dim w As Integer = 0
+                For ii = 0 To blkP->instructionCount - 1
+                    If blkP->instructions(ii).opcode = "__SYNC_DELETED__" Then Continue For
+                    blkP->instructions(w) = blkP->instructions(ii)
+                    w += 1
+                Next ii
+                blkP->instructionCount = w
+                ReDim Preserve blkP->instructions(w - 1)
+            End If
+        Next bi
+    Next fi
+End Sub
+
+Private Function MIRSyncIsCallOp(ByRef ins As MIRIRInstruction) As Integer
+    Select Case UCase(Trim(ins.opcode))
+    Case "CALL", "MIR_CALL", "METHOD_CALL", "MIR_METHOD_CALL", "MIR_VIRTUAL_CALL", "MIR_OBJECT_NEW", "NEW"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Private Function MIRSyncIsControlOp(ByRef ins As MIRIRInstruction) As Integer
+    Select Case UCase(Trim(ins.opcode))
+    Case "RET", "JMP", "JZ", "JNZ", "LABEL", "GOTO", "GOSUB", "INLINE", "MIR_RET", "MIR_JMP", "MIR_JZ", "MIR_JNZ", "RETURN_GOSUB"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' Kilit tutulurken yapilamayacak cagri: kullanici kodu, gorev/kilit islemi, bekleyen giris.
+Private Function MIRSyncIsBarrierCall(ByRef ins As MIRIRInstruction) As Integer
+    If MIRSyncIsCallOp(ins) = 0 Then Return 0
+    Dim op As String = UCase(Trim(ins.opcode))
+    If op <> "CALL" And op <> "MIR_CALL" Then Return 1   ' metot/sanal cagri/nesne kurucu = kullanici kodu
+    If ins.operandCount < 1 Then Return 0
+    Dim n As String = UCase(MIRSyncUnquote(ins.operands(0)))
+    If InStr(gMirSyncUserFns, "|" & n & "|") > 0 Then Return 1
+    If Left(n, 5) = "TASK_" Or Left(n, 5) = "SYNC_" Or Left(n, 5) = "LOCK_" Or Left(n, 6) = "MUTEX_" Or Left(n, 5) = "SLOT_" Then Return 1
+    If Left(n, 5) = "SHELL" Or Left(n, 5) = "EVENT" Or Left(n, 7) = "TRIGGER" Or Left(n, 4) = "PIPE" Then Return 1
+    Select Case n
+    Case "PROGRAM_END", "INPUT", "INPUTF", "LINE_INPUT", "LINEINPUT", "GETKEY", "SLEEP", "DELAY", "RAISE", "EMIT", "CALLPTR", "CALL_PTR", "INVOKE", "DISPATCH", "THROW"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' Buyrugun ortak global islenen indeksleri (CALL'da hedef adi haric). Bulunanlari "|i|" olarak dondurur;
+' sonuc (hedef) ortak ise resultIsSync = 1.
+Private Function MIRSyncTouches(ByRef ins As MIRIRInstruction, ByRef resultIsSync As Integer) As String
+    resultIsSync = 0
+    Dim found As String = ""
+    If Trim(ins.result) <> "" AndAlso MIRSyncIsSyncName(ins.result) <> 0 Then resultIsSync = 1
+    Dim firstOp As Integer = 0
+    Dim lastOp As Integer = ins.operandCount - 1
+    If MIRSyncIsCallOp(ins) <> 0 Then firstOp = 1
+    Select Case UCase(Trim(ins.opcode))
+    Case "LABEL", "GOTO", "GOSUB", "JMP", "MIR_JMP", "INLINE", "RETURN_GOSUB"
+        Return ""   ' islenenler etiket/blok adidir
+    Case "JZ", "JNZ", "MIR_JZ", "MIR_JNZ", "RET", "MIR_RET"
+        lastOp = 0  ' yalniz kosul / donus degeri
+    End Select
+    Dim i As Integer
+    For i = firstOp To lastOp
+        If MIRSyncIsSyncName(ins.operands(i)) <> 0 Then found &= "|" & LTrim(Str(i)) & "|"
+    Next i
+    Return found
+End Function
+
+Private Function MIRSyncInstrTouches(ByRef ins As MIRIRInstruction) As Integer
+    If MIRSyncIsConsoleCall(ins) <> 0 AndAlso MIRSyncIsBarrierCall(ins) = 0 Then Return 1
+    Dim r As Integer
+    Dim f As String = MIRSyncTouches(ins, r)
+    Return IIf(r <> 0 Or f <> "", 1, 0)
+End Function
+
+' Yan etkisiz (one alinan cagri diliminin atlayabilecegi) buyruk.
+Private Function MIRSyncIsPure(ByRef ins As MIRIRInstruction) As Integer
+    If MIRSyncIsCallOp(ins) <> 0 Then Return 0
+    If MIRSyncIsControlOp(ins) <> 0 Then Return 0
+    Select Case UCase(Trim(ins.opcode))
+    Case "STORE_VAR", "STORE_INDEXED", "MIR_FIELD_STORE", "MIR_ARRAY_FIELD_STORE", "DIM", "REDIM", "CONST", "DEF_TYPE", _
+         "SETSTRINGSIZE", "MIR_MEMORY_COPY", "MIR_MEMORY_FILL", "MIR_MEMORY_STORE", "MIR_MEMORY_WRITE_SEQUENCE", "MIR_VIRTUAL_INIT"
+        Return 0
+    End Select
+    Return 1
+End Function
+
+' Depo adinin tipi: once modul globali, sonra ayni adi yazan/okuyan buyrugun notu.
+Function MIRSyncTypeOf(ByRef m As MIRModule, ByVal nameRaw As String) As String
+    Dim n As String = UCase(Trim(nameRaw))
+    Dim i As Integer
+    For i = 0 To m.globalVarCount - 1
+        If UCase(Trim(m.globalVars(i))) = n Then Return UCase(Trim(m.globalVarTypes(i)))
+    Next i
+    For i = 0 To gMirSyncTypeCount - 1
+        If gMirSyncTypeNames(i) = n Then Return gMirSyncTypeValues(i)
+    Next i
+    Return ""
+End Function
+
+Private Function MIRSyncIsArrayGlobal(ByRef m As MIRModule, ByVal nameRaw As String) As Integer
+    Dim n As String = UCase(Trim(nameRaw))
+    Dim i As Integer
+    For i = 0 To m.globalVarCount - 1
+        If UCase(Trim(m.globalVars(i))) = n Then Return IIf(m.globalVarIsArray(i) <> 0, 1, 0)
+    Next i
+    Return 0
+End Function
+
+Private Sub MIRSyncCollectTypeNotes(ByRef m As MIRModule)
+    gMirSyncTypeCount = 0
+    Erase gMirSyncTypeNames
+    Erase gMirSyncTypeValues
+    Dim fi As Integer
+    For fi = 0 To m.functionCount - 1
+        Dim bi As Integer
+        For bi = 0 To m.functions(fi).blockCount - 1
+            Dim ii As Integer
+            For ii = 0 To m.functions(fi).blocks(bi).instructionCount - 1
+                Dim ins As MIRIRInstruction = m.functions(fi).blocks(bi).instructions(ii)
+                Dim nm As String = ""
+                Dim op As String = UCase(Trim(ins.opcode))
+                If op = "STORE_VAR" Then nm = ins.result
+                If op = "LOAD_VAR" AndAlso ins.operandCount >= 1 Then nm = ins.operands(0)
+                nm = UCase(Trim(nm))
+                If nm = "" Or InStr(nm, ".") = 0 Then Continue For
+                Dim ty As String = UCase(Trim(ins.resultType))
+                If ty = "" Or ty = "MISSING" Then Continue For
+                Dim k As Integer
+                Dim have As Integer = 0
+                For k = 0 To gMirSyncTypeCount - 1
+                    If gMirSyncTypeNames(k) = nm Then have = 1: Exit For
+                Next k
+                If have Then Continue For
+                ReDim Preserve gMirSyncTypeNames(gMirSyncTypeCount)
+                ReDim Preserve gMirSyncTypeValues(gMirSyncTypeCount)
+                gMirSyncTypeNames(gMirSyncTypeCount) = nm
+                gMirSyncTypeValues(gMirSyncTypeCount) = ty
+                gMirSyncTypeCount += 1
+            Next ii
+        Next bi
+    Next fi
+End Sub
+
+' Kume "|AD|" -> lockOrderId sirasiyla "id1,id2" ve "AD1,AD2".
+Private Sub MIRSyncOrderedLists(ByVal nameSet As String, ByRef idsOut As String, ByRef namesOut As String)
+    idsOut = ""
+    namesOut = ""
+    Dim names(Any) As String
+    Dim ids(Any) As Integer
+    Dim cnt As Integer = 0
+    Dim p As Integer = 2
+    Do While p < Len(nameSet)
+        Dim q As Integer = InStr(p, nameSet, "|")
+        If q = 0 Then Exit Do
+        Dim nm As String = Mid(nameSet, p, q - p)
+        If nm <> "" Then
+            ReDim Preserve names(cnt)
+            ReDim Preserve ids(cnt)
+            names(cnt) = nm
+            ids(cnt) = UXBTaskSyncLockOrder(nm)
+            cnt += 1
+        End If
+        p = q + 1
+    Loop
+    Dim i As Integer, j As Integer
+    For i = 1 To cnt - 1
+        Dim ki As Integer = ids(i)
+        Dim kn As String = names(i)
+        j = i - 1
+        Do While j >= 0 AndAlso ids(j) > ki
+            ids(j + 1) = ids(j)
+            names(j + 1) = names(j)
+            j -= 1
+        Loop
+        ids(j + 1) = ki
+        names(j + 1) = kn
+    Next i
+    For i = 0 To cnt - 1
+        If i > 0 Then idsOut &= ",": namesOut &= ","
+        idsOut &= LTrim(Str(ids(i)))
+        namesOut &= names(i)
+    Next i
+End Sub
+
+Private Sub MIRSyncMake(ByRef ins As MIRIRInstruction, ByRef tmpl As MIRIRInstruction, ByVal opcode As String, ByVal resultName As String, ByVal resultType As String, ByVal nOps As Integer, ByVal op0 As String = "", ByVal op1 As String = "", ByVal op2 As String = "")
+    Dim blank As MIRIRInstruction
+    ins = blank
+    ins.opcode = opcode
+    ins.result = resultName
+    ins.resultType = resultType
+    ins.blockId = tmpl.blockId
+    ins.srcLoc = tmpl.srcLoc
+    ins.flags = tmpl.flags
+    ins.stmtSeq = tmpl.stmtSeq
+    ins.operandCount = nOps
+    If nOps > 0 Then ins.operands(0) = op0
+    If nOps > 1 Then ins.operands(1) = op1
+    If nOps > 2 Then ins.operands(2) = op2
+End Sub
+
+Private Sub MIRSyncPush(outArr() As MIRIRInstruction, ByRef outCount As Integer, ByRef ins As MIRIRInstruction)
+    If outCount > UBound(outArr) Then ReDim Preserve outArr(outCount * 2 + 8)
+    outArr(outCount) = ins
+    outCount += 1
+End Sub
+
+Private Sub MIRSyncEmitEnterLeave(outArr() As MIRIRInstruction, ByRef outCount As Integer, ByRef tmpl As MIRIRInstruction, ByVal isEnter As Integer, ByVal nameSet As String)
+    Dim idsCsv As String, namesCsv As String
+    MIRSyncOrderedLists nameSet, idsCsv, namesCsv
+    Dim ins As MIRIRInstruction
+    MIRSyncMake ins, tmpl, "CALL", "", "", 3, IIf(isEnter <> 0, "SYNC_ENTER", "SYNC_LEAVE"), Chr(34) & idsCsv & Chr(34), Chr(34) & namesCsv & Chr(34)
+    MIRSyncPush outArr(), outCount, ins
+End Sub
+
+Private Function MIRSyncAddName(ByRef setText As String, ByVal operandRaw As String) As Integer
+    Dim b As String = MIRSyncBaseName(operandRaw)
+    If b = "" Then Return 0
+    If setText = "" Then setText = "|"
+    If InStr(setText, "|" & b & "|") = 0 Then setText &= b & "|"
+    Return 1
+End Function
+
+' Bir dilimin (runArr[a..b]) ortak depo kumesi.
+Private Function MIRSyncSetOf(runArr() As MIRIRInstruction, ByVal a As Integer, ByVal b As Integer) As String
+    Dim s As String = ""
+    Dim i As Integer
+    For i = a To b
+        If MIRSyncIsConsoleCall(runArr(i)) <> 0 Then MIRSyncAddName s, "CONSOLE"
+        Dim r As Integer
+        Dim f As String = MIRSyncTouches(runArr(i), r)
+        If r <> 0 Then MIRSyncAddName s, runArr(i).result
+        Dim k As Integer
+        For k = 0 To runArr(i).operandCount - 1
+            If InStr(f, "|" & LTrim(Str(k)) & "|") > 0 Then MIRSyncAddName s, runArr(i).operands(k)
+        Next k
+    Next i
+    Return s
+End Function
+
+Private Function MIRSyncIsLoadOp(ByRef ins As MIRIRInstruction) As Integer
+    Select Case UCase(Trim(ins.opcode))
+    Case "LOAD_VAR", "LOAD_INDEXED", "MIR_FIELD_LOAD", "FIELD_GET", "MIR_ARRAY_FIELD_LOAD"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' Fonksiyonda (gecis sonrasi dizi haric tutularak) ad kullaniliyor mu.
+Private Function MIRSyncTempUsedOutside(ByRef m As MIRModule, ByVal fi As Integer, ByVal tempName As String, runArr() As MIRIRInstruction, ByVal a As Integer, ByVal b As Integer, ByVal runCount As Integer) As Integer
+    Dim t As String = UCase(Trim(tempName))
+    Dim i As Integer, k As Integer
+    For i = 0 To runCount - 1
+        If i >= a And i <= b Then Continue For
+        For k = 0 To runArr(i).operandCount - 1
+            If UCase(Trim(runArr(i).operands(k))) = t Then Return 1
+        Next k
+    Next i
+    ' Deyim disindaki kullanimlar (baska bloklar dahil): sonuc gecicisi deyimler arasi tasinabilir.
+    Dim bi As Integer
+    For bi = 0 To m.functions(fi).blockCount - 1
+        For i = 0 To m.functions(fi).blocks(bi).instructionCount - 1
+            With m.functions(fi).blocks(bi).instructions(i)
+                If .stmtSeq = runArr(a).stmtSeq Then Continue For
+                For k = 0 To .operandCount - 1
+                    If UCase(Trim(.operands(k))) = t Then Return 1
+                Next k
+            End With
+        Next i
+    Next bi
+    Return 0
+End Function
+
+Private Sub MIRSyncRenameUses(runArr() As MIRIRInstruction, ByVal fromIdx As Integer, ByVal runCount As Integer, ByVal oldName As String, ByVal newName As String)
+    Dim o As String = UCase(Trim(oldName))
+    Dim i As Integer, k As Integer
+    For i = fromIdx To runCount - 1
+        For k = 0 To runArr(i).operandCount - 1
+            If UCase(Trim(runArr(i).operands(k))) = o Then runArr(i).operands(k) = newName
+        Next k
+    Next i
+End Sub
+
+' Ayni fonksiyonda baska deyimlerin (baska bloklar dahil) kullanimlari.
+Private Sub MIRSyncRenameLaterUses(ByRef m As MIRModule, ByVal fi As Integer, ByVal seq As Integer, ByVal oldName As String, ByVal newName As String)
+    Dim o As String = UCase(Trim(oldName))
+    Dim bi As Integer, i As Integer, k As Integer
+    For bi = 0 To m.functions(fi).blockCount - 1
+        For i = 0 To m.functions(fi).blocks(bi).instructionCount - 1
+            With m.functions(fi).blocks(bi).instructions(i)
+                If .stmtSeq = seq Then Continue For
+                For k = 0 To .operandCount - 1
+                    If UCase(Trim(.operands(k))) = o Then .operands(k) = newName
+                Next k
+            End With
+        Next i
+    Next bi
+End Sub
+
+' §10.1: runArr icinde, ilk ortak depo erisiminden sonra gelen engelleyici cagrilarin
+' bagimlilik dilimini (cagri + ayni deyimde urettigi islenenlerin ureticileri) one alir.
+Private Sub MIRSyncHoistCalls(runArr() As MIRIRInstruction, ByVal runCount As Integer)
+    Dim moved(Any) As Integer
+    If runCount <= 1 Then Exit Sub
+    ReDim moved(runCount - 1)
+    Dim guard As Integer = 0
+    Do
+        guard += 1
+        If guard > runCount + 1 Then Exit Do
+        ' Ilk ortak depo erisimi (one alinmis dilimler haric).
+        Dim firstTouch As Integer = -1
+        Dim i As Integer
+        For i = 0 To runCount - 1
+            If moved(i) <> 0 Then Continue For
+            If MIRSyncIsBarrierCall(runArr(i)) <> 0 Then Continue For
+            If MIRSyncInstrTouches(runArr(i)) <> 0 Then firstTouch = i: Exit For
+        Next i
+        If firstTouch < 0 Then Exit Do
+        ' firstTouch'tan sonraki ilk tasinmamis engelleyici cagri.
+        Dim c As Integer = -1
+        For i = firstTouch + 1 To runCount - 1
+            If moved(i) = 0 AndAlso MIRSyncIsBarrierCall(runArr(i)) <> 0 Then c = i: Exit For
+        Next i
+        If c < 0 Then Exit Do
+        ' Dilim: c ve [firstTouch, c) icindeki gecisli ureticileri.
+        Dim inSlice(Any) As Integer
+        ReDim inSlice(runCount - 1)
+        inSlice(c) = 1
+        Dim changed As Integer = 1
+        Do While changed
+            changed = 0
+            For i = c - 1 To firstTouch Step -1
+                If inSlice(i) <> 0 Then Continue For
+                Dim rn As String = UCase(Trim(runArr(i).result))
+                If rn = "" Then Continue For
+                Dim j As Integer, k As Integer
+                For j = i + 1 To c
+                    If inSlice(j) = 0 Then Continue For
+                    For k = 0 To runArr(j).operandCount - 1
+                        If UCase(Trim(runArr(j).operands(k))) = rn Then inSlice(i) = 1: changed = 1: Exit For
+                    Next k
+                    If inSlice(i) Then Exit For
+                Next j
+            Next i
+        Loop
+        ' Atlanacak buyruklar yan etkisiz olmali; degilse deyim cagri noktasinda bolunur (erisim basina kilit).
+        Dim ok As Integer = 1
+        For i = firstTouch To c - 1
+            If inSlice(i) = 0 AndAlso MIRSyncIsPure(runArr(i)) = 0 Then ok = 0: Exit For
+        Next i
+        If ok = 0 Then Exit Do
+        ' Yeniden sirala: [0,firstTouch) + dilim + [firstTouch,c] dilim disi + (c, son].
+        Dim tmp(Any) As MIRIRInstruction
+        Dim tmpMoved(Any) As Integer
+        ReDim tmp(runCount - 1)
+        ReDim tmpMoved(runCount - 1)
+        Dim w As Integer = 0
+        For i = 0 To firstTouch - 1
+            tmp(w) = runArr(i): tmpMoved(w) = moved(i): w += 1
+        Next i
+        For i = firstTouch To c
+            If inSlice(i) <> 0 Then tmp(w) = runArr(i): tmpMoved(w) = 1: w += 1
+        Next i
+        For i = firstTouch To c
+            If inSlice(i) = 0 Then tmp(w) = runArr(i): tmpMoved(w) = moved(i): w += 1
+        Next i
+        For i = c + 1 To runCount - 1
+            tmp(w) = runArr(i): tmpMoved(w) = moved(i): w += 1
+        Next i
+        For i = 0 To runCount - 1
+            runArr(i) = tmp(i)
+            moved(i) = tmpMoved(i)
+        Next i
+    Loop
+End Sub
+
+' Engelleyici buyrugun (cagri/dallanma) ortak global islenenlerini kisa kilit altinda gecicilere okur;
+' sonucu ortak globalse gecici uzerinden kilitli yazar.
+Private Function MIRSyncEmitBarrier(ByRef m As MIRModule, ByRef ps As ParseState, outArr() As MIRIRInstruction, ByRef outCount As Integer, ByVal insIn As MIRIRInstruction, ByRef tempSeed As Integer, ByRef errText As String) As Integer
+    Dim ins As MIRIRInstruction = insIn
+    Dim resultIsSync As Integer
+    Dim consoleBarrier As Integer = MIRSyncIsConsoleCall(insIn)
+    Dim found As String = MIRSyncTouches(ins, resultIsSync)
+    If found <> "" Then
+        Dim nameSet As String = ""
+        Dim k As Integer
+        For k = 0 To ins.operandCount - 1
+            If InStr(found, "|" & LTrim(Str(k)) & "|") = 0 Then Continue For
+            Dim baseNm As String = MIRSyncBaseName(ins.operands(k))
+            If MIRSyncIsArrayGlobal(m, baseNm) <> 0 AndAlso UCase(Trim(ins.operands(k))) = baseNm Then
+                errText = "mir: gorevlerle paylasilan dizi '" & baseNm & "' bir cagriya butun olarak veriliyor -- henuz uygulanmadi: S-146 adim 4 (BYREF/dizi paylasiminin omur ve senkron sozlesmesi)"
+                Return 0
+            End If
+            MIRSyncAddName nameSet, ins.operands(k)
+        Next k
+        MIRSyncEmitEnterLeave outArr(), outCount, ins, 1, nameSet
+        Dim snaps As String = ""
+        For k = 0 To ins.operandCount - 1
+            If InStr(found, "|" & LTrim(Str(k)) & "|") = 0 Then Continue For
+            Dim ty As String = MIRSyncTypeOf(m, ins.operands(k))
+            Dim tLoad As String = MIRNextTemp(tempSeed)
+            Dim ld As MIRIRInstruction
+            MIRSyncMake ld, ins, "LOAD_VAR", tLoad, ty, 1, ins.operands(k)
+            MIRSyncPush outArr(), outCount, ld
+            If ty = "STRING" Then
+                Dim tSnap As String = MIRNextTemp(tempSeed)
+                Dim sn As MIRIRInstruction
+                MIRSyncMake sn, ins, "CALL", tSnap, "STRING", 2, "STR_SNAPSHOT", tLoad
+                MIRSyncPush outArr(), outCount, sn
+                tLoad = tSnap
+            End If
+            ins.operands(k) = tLoad
+        Next k
+        MIRSyncEmitEnterLeave outArr(), outCount, ins, 0, nameSet
+    End If
+    If resultIsSync <> 0 Then
+        Dim target As String = ins.result
+        Dim tRes As String = MIRNextTemp(tempSeed)
+        ins.result = tRes
+        MIRSyncPush outArr(), outCount, ins
+        Dim rs As String = ""
+        MIRSyncAddName rs, target
+        MIRSyncEmitEnterLeave outArr(), outCount, ins, 1, rs
+        Dim st As MIRIRInstruction
+        MIRSyncMake st, ins, "STORE_VAR", target, ins.resultType, 1, tRes
+        MIRSyncPush outArr(), outCount, st
+        MIRSyncEmitEnterLeave outArr(), outCount, ins, 0, rs
+        Return 1
+    End If
+    If consoleBarrier <> 0 Then
+        ' Bekleyen konsol girdisi (INPUT...) konsol kilidi altinda: istem ve okuma baska gorevin satirlariyla karismaz.
+        MIRSyncEmitEnterLeave outArr(), outCount, ins, 1, "|CONSOLE|"
+        MIRSyncPush outArr(), outCount, ins
+        MIRSyncEmitEnterLeave outArr(), outCount, ins, 0, "|CONSOLE|"
+        Return 1
+    End If
+    MIRSyncPush outArr(), outCount, ins
+    Return 1
+End Function
+
+' Bir deyim parcasini (ayni stmtSeq, dallanmasiz) kilitleyerek yazar.
+Private Function MIRSyncEmitRun(ByRef m As MIRModule, ByRef ps As ParseState, ByVal fi As Integer, runArr() As MIRIRInstruction, ByVal runCount As Integer, outArr() As MIRIRInstruction, ByRef outCount As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer
+    If runCount <= 0 Then Return 1
+    Dim anyTouch As Integer = 0
+    Dim i As Integer
+    For i = 0 To runCount - 1
+        If MIRSyncInstrTouches(runArr(i)) <> 0 Then anyTouch = 1: Exit For
+    Next i
+    If anyTouch = 0 Then
+        For i = 0 To runCount - 1
+            MIRSyncPush outArr(), outCount, runArr(i)
+        Next i
+        Return 1
+    End If
+
+    ' Adresi alinan ortak global: ham erisim kilidi atlar (UNSAFE disinda tani).
+    For i = 0 To runCount - 1
+        If UCase(Trim(runArr(i).opcode)) = "MIR_VARPTR" AndAlso MIRSyncInstrTouches(runArr(i)) <> 0 Then
+            If UXBTaskNodeInsideUnsafe(ps, runArr(i).flags) = 0 Then
+                errText = "mir: gorevlerle paylasilan global icin VARPTR -- henuz uygulanmadi: S-146 adim 7 (isaretci/MemoryRef paylasimi); ham adresle erisim sorumlulugu UNSAFE ... END UNSAFE ile alinabilir"
+                Return 0
+            End If
+        End If
+    Next i
+
+    MIRSyncHoistCalls runArr(), runCount
+
+    ' Engelleyici cagrilarla bolunmus parcalar; her parca ilk..son erisim arasinda kilitlenir.
+    Dim segStart As Integer = 0
+    Do While segStart < runCount
+        Dim segEnd As Integer = segStart
+        Do While segEnd < runCount AndAlso MIRSyncIsBarrierCall(runArr(segEnd)) = 0
+            segEnd += 1
+        Loop
+        ' [segStart, segEnd) kilitlenebilir parca; segEnd (varsa) engelleyici.
+        Dim first As Integer = -1, last As Integer = -1
+        For i = segStart To segEnd - 1
+            If MIRSyncInstrTouches(runArr(i)) <> 0 Then
+                If first < 0 Then first = i
+                last = i
+            End If
+        Next i
+        If first < 0 Then
+            For i = segStart To segEnd - 1
+                MIRSyncPush outArr(), outCount, runArr(i)
+            Next i
+        Else
+            For i = segStart To first - 1
+                MIRSyncPush outArr(), outCount, runArr(i)
+            Next i
+            Dim nameSet As String = MIRSyncSetOf(runArr(), first, last)
+            MIRSyncEmitEnterLeave outArr(), outCount, runArr(first), 1, nameSet
+            For i = first To last
+                MIRSyncPush outArr(), outCount, runArr(i)
+                ' Kilit disina tasinan STRING okuma: sahibi olan global yazildiginda eski metin serbest
+                ' birakilir; kilit bitmeden kopyalanir ve sonraki kullanimlar kopyaya yonlenir.
+                If MIRSyncIsLoadOp(runArr(i)) <> 0 AndAlso Trim(runArr(i).result) <> "" AndAlso MIRSyncInstrTouches(runArr(i)) <> 0 Then
+                    Dim ty As String = UCase(Trim(runArr(i).resultType))
+                    If ty <> "STRING" AndAlso runArr(i).operandCount >= 1 Then ty = MIRSyncTypeOf(m, runArr(i).operands(0))
+                    If ty = "STRING" AndAlso MIRSyncTempUsedOutside(m, fi, runArr(i).result, runArr(), first, last, runCount) <> 0 Then
+                        Dim tSnap As String = MIRNextTemp(tempSeed)
+                        Dim sn As MIRIRInstruction
+                        MIRSyncMake sn, runArr(i), "CALL", tSnap, "STRING", 2, "STR_SNAPSHOT", runArr(i).result
+                        MIRSyncPush outArr(), outCount, sn
+                        MIRSyncRenameUses runArr(), last + 1, runCount, runArr(i).result, tSnap
+                        MIRSyncRenameLaterUses m, fi, runArr(i).stmtSeq, runArr(i).result, tSnap
+                    End If
+                End If
+            Next i
+            MIRSyncEmitEnterLeave outArr(), outCount, runArr(last), 0, nameSet
+            For i = last + 1 To segEnd - 1
+                MIRSyncPush outArr(), outCount, runArr(i)
+            Next i
+        End If
+        If segEnd < runCount Then
+            If MIRSyncEmitBarrier(m, ps, outArr(), outCount, runArr(segEnd), tempSeed, errText) = 0 Then Return 0
+            segEnd += 1
+        End If
+        segStart = segEnd
+    Loop
+    Return 1
+End Function
+
+Function MIRSyncPassModule(ByRef ps As ParseState, ByRef m As MIRModule, ByRef tempSeed As Integer, ByRef errText As String) As Integer
+    errText = ""
+    Dim syncAnalysisErr As String
+    UXBTaskEnsureSyncAnalysis ps, syncAnalysisErr   ' bilgi amacli (bkz. MIRBuildModuleFromAST)
+    If UXBTaskSyncActive() = 0 Then Return 1
+    gMirSyncConsole = UXBTaskUsesConsoleLock()
+    gMirSyncUserFns = "|"
+    Dim fi As Integer
+    For fi = 0 To m.functionCount - 1
+        gMirSyncUserFns &= UCase(Trim(m.functions(fi).name)) & "|"
+    Next fi
+    MIRSyncCollectTypeNotes m
+    gMirSyncFastAtomics = "|"
+    MIRSyncPlanAtomicFastPath m
+    MIRSyncRewriteAtomicStores m
+
+    For fi = 0 To m.functionCount - 1
+        gMirSyncLocals = "|"
+        Dim li As Integer
+        For li = 0 To m.functions(fi).localVarCount - 1
+            gMirSyncLocals &= UCase(Trim(m.functions(fi).localVars(li))) & "|"
+        Next li
+        For li = 0 To m.functions(fi).paramVarCount - 1
+            gMirSyncLocals &= UCase(Trim(m.functions(fi).paramVars(li))) & "|"
+        Next li
+
+        Dim bi As Integer
+        For bi = 0 To m.functions(fi).blockCount - 1
+            Dim n As Integer = m.functions(fi).blocks(bi).instructionCount
+            If n <= 0 Then Continue For
+            Dim outArr(Any) As MIRIRInstruction
+            ReDim outArr(n * 2 + 8)
+            Dim outCount As Integer = 0
+            Dim i As Integer = 0
+            Do While i < n
+                Dim head As MIRIRInstruction = m.functions(fi).blocks(bi).instructions(i)
+                If MIRSyncIsControlOp(head) <> 0 Then
+                    If MIRSyncEmitBarrier(m, ps, outArr(), outCount, head, tempSeed, errText) = 0 Then Return 0
+                    i += 1
+                    Continue Do
+                End If
+                Dim seq As Integer = head.stmtSeq
+                Dim j As Integer = i
+                Do While j < n
+                    If m.functions(fi).blocks(bi).instructions(j).stmtSeq <> seq Then Exit Do
+                    If MIRSyncIsControlOp(m.functions(fi).blocks(bi).instructions(j)) <> 0 Then Exit Do
+                    j += 1
+                Loop
+                Dim runArr(Any) As MIRIRInstruction
+                ReDim runArr(j - i - 1)
+                Dim r As Integer
+                For r = i To j - 1
+                    runArr(r - i) = m.functions(fi).blocks(bi).instructions(r)
+                Next r
+                If MIRSyncEmitRun(m, ps, fi, runArr(), j - i, outArr(), outCount, tempSeed, errText) = 0 Then Return 0
+                i = j
+            Loop
+            Dim blkP As MIRBasicBlock Ptr = @m.functions(fi).blocks(bi)
+            ReDim blkP->instructions(outCount - 1)
+            For i = 0 To outCount - 1
+                outArr(i).blockId = blkP->id
+                blkP->instructions(i) = outArr(i)
+            Next i
+            blkP->instructionCount = outCount
+        Next bi
+    Next fi
+    Return 1
+End Function
+
+#endif

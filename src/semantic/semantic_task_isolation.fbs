@@ -1,0 +1,1106 @@
+#ifndef UXB_SEMANTIC_TASK_ISOLATION_FBS
+#define UXB_SEMANTIC_TASK_ISOLATION_FBS
+
+' ===========================================================================
+' S-146 (Mete kararlari D1-D6, 2026-09-25): SPAWN sinirinda gorev izolasyonu.
+' Belge: docs/tasarim/UXB_S146_GOREV_PAYLASIMLI_VERI_ONERISI_20260925_TR.md
+'
+' Faz 2'de gorev govdesi baska bir OS is parcaciginda calisacak. Bugun senkron
+' calisan ama o zaman veri yarisi uretecek programlar SIMDIDEN reddedilir (D6),
+' boylece davranis sonradan degismez. Yalniz programdaki SPAWN hedefleri
+' denetlenir; yalniz TRIGGER ile calisan THREAD/PARALEL etkilenmez (K3).
+'
+'   R1  SPAWN argumani yalniz I8..U64, F32/F64/F80, BOOLEAN, STRING.
+'   R2  SPAWN hedefinin parametre tipleri de R1 kumesinde.
+'   R3  TASK OF T ve SPAWN hedefinin `AS T` sonuc tipi de R1 kumesinde.
+'   R4  Govde global/STATIC degisken okuyamaz/yazamaz (CONST serbest).
+'   R5  R4 GECISLIDIR (D1): govdenin cagirdigi rutinler ve onlarin cagirdiklari.
+'   R6  Klavye girdisi (INPUT/INKEY/GETKEY) yasak; PRINT serbest (K9).
+'   I3  Ortak durumlu yerlesikler (konsol durumu, dosya kanallari, RND/RANDOMIZE,
+'       SHELL, ham bellek/PTR, SLOT kaydi) ve saglayici gorev sozlesmesi olmayan
+'       FFI/kutuphane cagrilari fail-closed reddedilir (D1). Kutuphane tipleri,
+'       tip tanimina taskTransfer/threadSafety gelene kadar (D3) sinirdan gecemez.
+'
+' Yontem: rutin basina dogrudan etki bitleri + cagri kenarlari; sabit noktaya
+' kadar yayilim (ozyineleme dahil). Yontem kasitli olarak TUTUCUDUR: bir metot
+' cagrisinin alici tipi bilinmiyorsa ayni adli TUM sinif uyeleri kenar sayilir.
+' ===========================================================================
+
+#include once "../surface/uxb_surface_registry.fbs"
+#include once "library_type_contract.fbs"
+
+Const STI_E_GLOBAL As Integer = 1
+Const STI_E_RAWMEM As Integer = 2
+Const STI_E_FFI As Integer = 4
+Const STI_E_INPUT As Integer = 8
+Const STI_E_CONSOLE As Integer = 16
+Const STI_E_FILE As Integer = 32
+Const STI_E_RNG As Integer = 64
+Const STI_E_SHELL As Integer = 128
+Const STI_E_LIBTYPE As Integer = 256
+Const STI_E_UNKNOWN As Integer = 512
+Const STI_E_SLOT As Integer = 1024
+Const STI_E_END As Integer = 2048
+
+Dim Shared gStiRoutineOf(Any) As Integer    ' dugum -> en yakin rutin dugumu (-1: program geneli)
+Dim Shared gStiBucketFirst(Any) As Integer  ' rutin dugumu -> kovadaki ilk dugum
+Dim Shared gStiBucketNext(Any) As Integer   ' dugum -> ayni rutindeki sonraki dugum
+Dim Shared gStiEff(Any) As Integer          ' rutin dugumu -> etki bitleri
+Dim Shared gStiReason(Any) As String        ' rutin dugumu -> ilk nedenin aciklamasi (zincirli)
+Dim Shared gStiReasonBit(Any) As Integer
+Dim Shared gStiSkip(Any) As Integer         ' 1 = bu dugum ad referansi degil (uye adi, SPAWN cagrisi)
+Dim Shared gStiEdgeFrom(Any) As Integer
+Dim Shared gStiEdgeTo(Any) As Integer
+Dim Shared gStiEdgeCount As Integer
+Dim Shared gStiGlobals As String            ' "|AD|" program geneli degistirilebilir degiskenler
+Dim Shared gStiNamespaces As String
+Dim Shared gStiClassStatic As String        ' "|SINIF.ALAN|"
+Dim Shared gStiRoutineGlobals(Any) As String ' rutin dugumu -> dokundugu program geneli degiskenler (gecisli)
+' S-146 Model D: gorevlerin (SPAWN hedefleri + cagirdiklari) dokundugu globaller. Bu depolara HER
+' erisim (ana program dahil) MIR indirgemesinde otomatik kilitlenir. Kume disindaki globaller
+' eskisi gibi sifir maliyetlidir. Kilit sirasi (lockOrderId) = global bildirim sirasi.
+Dim Shared gStiSyncGlobals As String         ' "|AD|"
+Dim Shared gStiGlobalOrder As String         ' "|AD1|AD2|..." bildirim sirasi
+
+Private Function StiSetHas(ByRef setText As String, ByVal nameRaw As String) As Integer
+    Dim n As String = UCase(Trim(nameRaw))
+    If n = "" Then Return 0
+    Return IIf(InStr(setText, "|" & n & "|") > 0, 1, 0)
+End Function
+
+Private Sub StiSetAdd(ByRef setText As String, ByVal nameRaw As String)
+    Dim n As String = UCase(Trim(nameRaw))
+    If n = "" Then Exit Sub
+    If setText = "" Then setText = "|"
+    If InStr(setText, "|" & n & "|") = 0 Then setText &= n & "|"
+End Sub
+
+Private Function StiParentOf(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return -1
+    Dim p As Integer = ps.ast.nodes(nodeIdx).parent
+    If p = -1 Then p = UXBAstFindOwner(ps, nodeIdx)
+    If p = nodeIdx Then Return -1
+    Return p
+End Function
+
+' Dugumu iceren CLASS_STMT'nin adi; yoksa "".
+Private Function StiEnclosingClassName(ByRef ps As ParseState, ByVal nodeIdx As Integer) As String
+    Dim p As Integer = StiParentOf(ps, nodeIdx)
+    Dim guard As Integer = 0
+    Do While p >= 0 And guard <= ps.ast.count
+        If UCase(Trim(ps.ast.nodes(p).kind)) = "CLASS_STMT" Then Return UCase(Trim(ps.ast.nodes(p).value))
+        p = StiParentOf(ps, p)
+        guard += 1
+    Loop
+    Return ""
+End Function
+
+Private Function StiFindClassNode(ByRef ps As ParseState, ByVal nameRaw As String) As Integer
+    Dim n As String = UCase(Trim(nameRaw))
+    If n = "" Then Return -1
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) = "CLASS_STMT" AndAlso UCase(Trim(ps.ast.nodes(i).value)) = n Then Return i
+    Next i
+    Return -1
+End Function
+
+Private Function StiClassBaseName(ByRef ps As ParseState, ByVal classNode As Integer) As String
+    If classNode < 0 Then Return ""
+    Dim ch As Integer = ps.ast.nodes(classNode).firstChild
+    Do While ch <> -1
+        If UCase(Trim(ps.ast.nodes(ch).kind)) = "CLASS_BASE_REF" Then Return UCase(Trim(ps.ast.nodes(ch).value))
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return ""
+End Function
+
+' 1 = className, familyRoot'un kendisi ya da (dogrudan/dolayli) turevi.
+Private Function StiClassDerivesFrom(ByRef ps As ParseState, ByVal className As String, ByVal familyRoot As String) As Integer
+    Dim cur As String = UCase(Trim(className))
+    Dim hop As Integer = 0
+    Do While cur <> "" And hop < 64
+        If cur = familyRoot Then Return 1
+        cur = StiClassBaseName(ps, StiFindClassNode(ps, cur))
+        hop += 1
+    Loop
+    Return 0
+End Function
+
+' Sinif ailesi: kendisi + tabanlari + turevleri ("|A|B|").
+Private Function StiClassFamily(ByRef ps As ParseState, ByVal classRaw As String) As String
+    Dim fam As String = "|"
+    Dim c As String = UCase(Trim(classRaw))
+    Dim hop As Integer = 0
+    Dim cur As String = c
+    Do While cur <> "" And hop < 64
+        StiSetAdd fam, cur
+        cur = StiClassBaseName(ps, StiFindClassNode(ps, cur))
+        hop += 1
+    Loop
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) = "CLASS_STMT" Then
+            If StiClassDerivesFrom(ps, ps.ast.nodes(i).value, c) <> 0 Then StiSetAdd fam, ps.ast.nodes(i).value
+        End If
+    Next i
+    Return fam
+End Function
+
+Private Function StiIsClassMemberKind(ByRef k As String) As Integer
+    Select Case k
+    Case "CLASS_METHOD_DECL", "CLASS_CONSTRUCTOR_DECL", "CLASS_DESTRUCTOR_DECL", "CLASS_OPERATOR_DECL", "CLASS_PROPERTY_DECL"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Dim Shared gStiHasSpawn As Integer    ' programda SPAWN var mi (konsol kilidinin otomatik uygulanmasi icin)
+Dim Shared gStiNodeUnsafe As Integer   ' taranan dugum UNSAFE ... END UNSAFE icinde mi (madde 18)
+
+Private Sub StiAddEffect(ByVal routineIdx As Integer, ByVal effBit As Integer, ByRef detail As String)
+    If routineIdx < 0 Then Exit Sub
+    If gStiNodeUnsafe <> 0 AndAlso (effBit = STI_E_RAWMEM Or effBit = STI_E_FFI Or effBit = STI_E_UNKNOWN) Then Exit Sub
+    ' S-146 adim 2 (2026-09-26): RND (gorev basina uretec), dosya tablosu, konsol (+ LOCK CONSOLE), INPUT
+    ' ve SHELL gorevlerde serbest -- tum motorlarda is parcacigi guvenli. Engelleyici etki degildir.
+    If effBit = STI_E_RNG Or effBit = STI_E_FILE Or effBit = STI_E_CONSOLE Or effBit = STI_E_INPUT Or effBit = STI_E_SHELL Then Exit Sub
+    If (gStiEff(routineIdx) And effBit) = 0 Then gStiEff(routineIdx) Or= effBit
+    If gStiReason(routineIdx) = "" Then
+        gStiReason(routineIdx) = detail
+        gStiReasonBit(routineIdx) = effBit
+    End If
+End Sub
+
+Private Sub StiAddEdge(ByVal fromIdx As Integer, ByVal toIdx As Integer)
+    If fromIdx < 0 Or toIdx < 0 Or fromIdx = toIdx Then Exit Sub
+    If gStiEdgeCount = 0 Then
+        ReDim gStiEdgeFrom(15)
+        ReDim gStiEdgeTo(15)
+    ElseIf gStiEdgeCount > UBound(gStiEdgeFrom) Then
+        ReDim Preserve gStiEdgeFrom(gStiEdgeCount * 2)
+        ReDim Preserve gStiEdgeTo(gStiEdgeCount * 2)
+    End If
+    gStiEdgeFrom(gStiEdgeCount) = fromIdx
+    gStiEdgeTo(gStiEdgeCount) = toIdx
+    gStiEdgeCount += 1
+End Sub
+
+' Duz ada gore kullanici rutinleri (govdeli). Bulunan sayisi doner.
+Private Function StiAddEdgesToNamedRoutines(ByRef ps As ParseState, ByVal fromIdx As Integer, ByVal nameRaw As String, ByVal classMembersOnly As Integer) As Integer
+    Dim n As String = UCase(Trim(nameRaw))
+    If n = "" Then Return 0
+    Dim found As Integer = 0
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If UXBTaskIsRoutineKind(k) = 0 Then Continue For
+        If classMembersOnly <> 0 And StiIsClassMemberKind(k) = 0 Then Continue For
+        If classMembersOnly = 0 And StiIsClassMemberKind(k) <> 0 Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) = n Or UCase(Trim(ps.ast.nodes(i).symbolName)) = n Then
+            StiAddEdge fromIdx, i
+            found += 1
+        End If
+    Next i
+    Return found
+End Function
+
+' Bir sinifin kullanimi (NEW, sinif tipli DIM/parametre): ailedeki tum uye govdeleri
+' (kurucu, yikici, metot, operator, ozellik) cagrilabilir sayilir.
+Private Sub StiAddClassFamilyEdges(ByRef ps As ParseState, ByVal fromIdx As Integer, ByVal classRaw As String)
+    If StiFindClassNode(ps, classRaw) = -1 Then Exit Sub
+    Dim fam As String = StiClassFamily(ps, classRaw)
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If StiIsClassMemberKind(UCase(Trim(ps.ast.nodes(i).kind))) = 0 Then Continue For
+        If StiSetHas(fam, StiEnclosingClassName(ps, i)) <> 0 Then StiAddEdge fromIdx, i
+    Next i
+End Sub
+
+Private Function StiExternDeclareExists(ByRef ps As ParseState, ByVal nameRaw As String) As Integer
+    Dim n As String = UCase(Trim(nameRaw))
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If k <> "DECLARE_SUB_STMT" And k <> "DECLARE_FUNCTION_STMT" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> n Then Continue For
+        If Left(UCase(Trim(ps.ast.nodes(i).typeName)), 4) = "LIB=" Then Return 1
+    Next i
+    Return 0
+End Function
+
+Private Function StiTypeTransferable(ByVal typeRaw As String) As Integer
+    Dim t As String = UXBStep3TypeCanonical(typeRaw)
+    Select Case t
+    Case TYPE_BOOL, TYPE_I8, TYPE_U8, TYPE_I16, TYPE_U16, TYPE_I32, TYPE_U32, TYPE_I64, TYPE_U64, TYPE_F32, TYPE_F64, TYPE_F80, TYPE_STRING
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' S-146 adim 3: gorev argumani/parametresi olarak TASK/TASKGROUP/MUTEX tutamaclari da gecer (kimlik
+' degeri; calisma zamani tablolari is parcacigi guvenli). Sonuc tipi icin StiTypeTransferable gecerlidir.
+Private Function StiTypeArgTransferable(ByVal typeRaw As String) As Integer
+    Select Case UXBStep3TypeCanonical(typeRaw)
+    Case TYPE_TASK, TYPE_TASKGROUP, TYPE_MUTEX
+        Return 1
+    End Select
+    Return StiTypeTransferable(typeRaw)
+End Function
+
+' Gorev sinirindan henuz gecemeyen tipin hangi S-146 adiminda acilacagi (Model D siralamasi).
+Private Function StiTypeStepText(ByVal typeRaw As String) As String
+    Dim t As String = UXBStep3TypeCanonical(typeRaw)
+    Select Case t
+    Case TYPE_TASK, TYPE_TASKGROUP, TYPE_MUTEX
+        Return "henuz uygulanmadi: S-146 adim 3 (TASK/MUTEX tutamaclarinin gorevler arasi gecisi)"
+    Case TYPE_PTR
+        Return "henuz uygulanmadi: S-146 adim 7 (isaretci/MemoryRef paylasimi)"
+    End Select
+    Return "henuz uygulanmadi: S-146 adim 5 (COPY/CLONE/MOVE/RETAIN/SHARE ile yasam donguslu tiplerin gecisi)"
+End Function
+
+Private Function StiTypeLabel(ByVal typeRaw As String) As String
+    Dim t As String = UCase(Trim(typeRaw))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    If t = "" Then t = "(tipsiz)"
+    Return t
+End Function
+
+' Kullanici rutini / dizi / degisken olmayan cagri adinin etkisi.
+Private Function StiBuiltinEffect(ByVal nameRaw As String, ByRef detailOut As String) As Integer
+    Dim n As String = UCase(Trim(nameRaw))
+    If Right(n, 1) = "$" Then n = Left(n, Len(n) - 1)
+    detailOut = ""
+    Select Case n
+    Case "RND", "RANDOMIZE"
+        detailOut = "rastgele sayi uretecinin ortak durumu (" & n & ")": Return STI_E_RNG
+    Case "EOF", "LOF", "LOC", "FREEFILE"
+        detailOut = "dosya kanal tablosu (" & n & ")": Return STI_E_FILE
+    Case "INKEY", "GETKEY", "INPUT"
+        detailOut = "klavye girdisi (" & n & ")": Return STI_E_INPUT
+    Case "CALL", "DLL", "API"
+        detailOut = "FFI cagrisi (CALL DLL/API)": Return STI_E_FFI
+    Case "INLINE"
+        detailOut = "satir ici makine kodu (INLINE)": Return STI_E_RAWMEM
+    Case "SIZEOF", "OFFSETOF", "INSTANCEOF"
+        Return 0
+    Case "LIST_NEW", "LISTLEN", "LISTGET", "LISTSET", "LISTADD", "LISTREMOVE", "LISTCLEAR", _
+         "DICT_NEW", "DICTLEN", "DICTHAS", "DICTGET", "DICTSET", "DICTCLEAR", "DICTKEYAT", "DICTVALUEAT", _
+         "SET_NEW", "SETLEN", "SETHAS", "SETADD", "SETREMOVE", "SETCLEAR", "SETMEMBERAT"
+        ' Tutamaci yerel olan koleksiyonlar; global tutamac ad referansindan yakalanir.
+        Return 0
+    Case "BIGINIT"
+        detailOut = "genisletilmis sayi calisma zamaninin ortak ayari (BIGINIT)": Return STI_E_FFI
+    End Select
+    ' Yerlesik imza kaydi (type_builtin_registry.fbs): hedef politikasi etkiyi verir.
+    Dim regRet As String, regArgs As String, regTarget As String
+    If UXBBuiltinTypeRegistryReturnType(n, regRet, regArgs, regTarget) <> 0 Then
+        Select Case UCase(Trim(regTarget))
+        Case "NATIVE_RUNTIME"
+            detailOut = "ham bellek erisimi (" & n & ")": Return STI_E_RAWMEM
+        Case "CONSOLE_RUNTIME"
+            detailOut = "konsol/dosya calisma zamani durumu (" & n & ")": Return STI_E_CONSOLE
+        End Select
+        Return 0   ' ALL / EXTFP_RUNTIME donusturuculer: saf hesaplama
+    End If
+    Dim grp As String = UXBSurfaceGroup(n)
+    Select Case grp
+    Case "MEMORY"
+        detailOut = "ham bellek erisimi (" & n & ")": Return STI_E_RAWMEM
+    Case "IO"
+        Select Case n
+        Case "PRINT", "?"
+            Return 0
+        Case "OPEN", "CLOSE", "GET", "PUT", "SEEK"
+            detailOut = "dosya kanal tablosu (" & n & ")": Return STI_E_FILE
+        Case "SHELL"
+            detailOut = "SHELL ayarlari": Return STI_E_SHELL
+        Case Else
+            detailOut = "konsol durumu (" & n & ")": Return STI_E_CONSOLE
+        End Select
+    Case "LIBRARY"
+        detailOut = "calisma zamani kutuphane servisi (" & n & ")": Return STI_E_FFI
+    End Select
+    If UXBSurfaceKnown(n) <> 0 Then Return 0
+    detailOut = "etkisi bilinmeyen cagri hedefi '" & n & "'"
+    Return STI_E_UNKNOWN
+End Function
+
+' Model D (Mete 2026-09-26): gorevde tek DIL YASAGI END'dir. Digerleri dil kurali degil, sozlesmenin
+' henuz uygulanmamis adimlaridir (belge §10 sirasi); sessiz yanlis sonuc yerine acik tani verilir.
+Private Function StiRuleText(ByVal effBit As Integer) As String
+    Select Case effBit
+    Case STI_E_END
+        Return "S-146 madde 12: gorev zincirinde END yasak -- tum programi (diger gorevleri de) yarida keser; RETURN/THROW kullanin"
+    Case STI_E_GLOBAL
+        Return "henuz uygulanmadi: S-146 adim 5 -- sinif STATIC alaninin gorevler arasi senkronu (CLASS paylasimi)"
+    Case STI_E_INPUT, STI_E_CONSOLE, STI_E_FILE, STI_E_RNG, STI_E_SHELL, STI_E_SLOT
+        Return "henuz uygulanmadi: S-146 adim 2 -- gorev basina RND, is parcacigi guvenli dosya tablosu, konsol kilidi, SHELL"
+    Case STI_E_LIBTYPE
+        Return "henuz uygulanmadi: S-146 adim 5 -- kutuphane tipi gorev tanimi (taskTransfer/threadSafety)"
+    Case STI_E_FFI
+        Return "henuz uygulanmadi: S-146 adim 6 -- FFI is parcacigi sozlesmesi (DECLARE ... THREADSAFE vb.); sozlesmesiz cagri icin UNSAFE ... END UNSAFE"
+    Case STI_E_RAWMEM
+        Return "henuz uygulanmadi: S-146 adim 7 -- isaretci/MemoryRef paylasimi; ham adres icin UNSAFE ... END UNSAFE"
+    Case STI_E_UNKNOWN
+        Return "etkisi siniflandirilmamis cagri; gorev sozlesmesi yok (UNSAFE ... END UNSAFE ile programci sorumlulugunda cagrilabilir)"
+    End Select
+    Return "henuz uygulanmadi: S-146"
+End Function
+
+' UNSAFE ... END UNSAFE icindeki dugum (rutin sinirina kadar)? Madde 18: ham adres ve sozlesmesiz FFI
+' guvenceleri orada bilincli olarak kaldirilir.
+Private Function StiInsideUnsafe(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    Dim p As Integer = StiParentOf(ps, nodeIdx)
+    Dim guard As Integer = 0
+    Do While p >= 0 And guard <= ps.ast.count
+        Dim k As String = UCase(Trim(ps.ast.nodes(p).kind))
+        If k = "UNSAFE_STMT" Then Return 1
+        If UXBTaskIsRoutineKind(k) <> 0 Then Return 0
+        p = StiParentOf(ps, p)
+        guard += 1
+    Loop
+    Return 0
+End Function
+
+' Ad referansi: yerel degilse ve program geneli degistirilebilir degiskense (ya da
+' rutinin sinif ailesinde STATIC alan ise) GLOBAL etkisi.
+Private Sub StiCheckNameRef(ByRef ps As ParseState, ByVal routineIdx As Integer, ByRef localSet As String, ByVal nameRaw As String, ByVal classOfRoutine As String)
+    Dim n As String = UCase(Trim(nameRaw))
+    If n = "" Then Exit Sub
+    If StiSetHas(localSet, n) <> 0 Then Exit Sub
+    If n = "THIS" Or n = "ME" Or n = "SUPER" Then Exit Sub
+    If StiSetHas(gStiGlobals, n) <> 0 Then
+        ' Model D: global kullanimi hata DEGIL -- kaydedilir, senkron kumesine girer.
+        StiSetAdd gStiRoutineGlobals(routineIdx), n
+        Exit Sub
+    End If
+    If classOfRoutine <> "" Then
+        Dim cur As String = classOfRoutine
+        Dim hop As Integer = 0
+        Do While cur <> "" And hop < 64
+            If StiSetHas(gStiClassStatic, cur & "." & n) <> 0 Then
+                StiAddEffect routineIdx, STI_E_GLOBAL, "sinif STATIC alani " & cur & "." & n
+                Exit Sub
+            End If
+            cur = StiClassBaseName(ps, StiFindClassNode(ps, cur))
+            hop += 1
+        Loop
+    End If
+End Sub
+
+Private Function StiTypeRefOf(ByRef ps As ParseState, ByVal declNode As Integer) As String
+    Dim ch As Integer = ps.ast.nodes(declNode).firstChild
+    Do While ch <> -1
+        If UCase(Trim(ps.ast.nodes(ch).kind)) = "TYPE_REF" Then Return UCase(Trim(ps.ast.nodes(ch).value))
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return UCase(Trim(ps.ast.nodes(declNode).typeName))
+End Function
+
+Private Function StiFieldRootIdent(ByRef ps As ParseState, ByVal fieldNode As Integer) As Integer
+    Dim cur As Integer = ps.ast.nodes(fieldNode).left
+    If cur = -1 Then cur = ps.ast.nodes(fieldNode).firstChild
+    Dim guard As Integer = 0
+    Do While cur <> -1 And guard < 64
+        Dim k As String = UCase(Trim(ps.ast.nodes(cur).kind))
+        If k = "IDENT" Or k = "IDENTIFIER" Then Return cur
+        If k <> "FIELD_EXPR" Then Return -1
+        Dim nxt As Integer = ps.ast.nodes(cur).left
+        If nxt = -1 Then nxt = ps.ast.nodes(cur).firstChild
+        cur = nxt
+        guard += 1
+    Loop
+    Return -1
+End Function
+
+Private Function StiFieldMemberName(ByRef ps As ParseState, ByVal fieldNode As Integer) As String
+    Dim m As String = UCase(Trim(ps.ast.nodes(fieldNode).value))
+    If m = "" And ps.ast.nodes(fieldNode).right <> -1 Then m = UCase(Trim(ps.ast.nodes(ps.ast.nodes(fieldNode).right).value))
+    Return m
+End Function
+
+' Bir rutinin govdesindeki dogrudan etkiler ve cagri kenarlari.
+Private Sub StiScanRoutine(ByRef ps As ParseState, ByVal r As Integer)
+    Dim classOfRoutine As String = StiEnclosingClassName(ps, r)
+
+    ' 1. gecis: yerel adlar (parametre, DIM, yerel CONST). BASIC'te kapsam rutin geneli.
+    Dim localSet As String = "|"
+    Dim i As Integer = gStiBucketFirst(r)
+    Do While i <> -1
+        Select Case UCase(Trim(ps.ast.nodes(i).kind))
+        Case "PARAM_DECL", "DIM_DECL", "CONST_DECL"
+            StiSetAdd localSet, ps.ast.nodes(i).value
+        End Select
+        i = gStiBucketNext(i)
+    Loop
+
+    ' 2. gecis: referanslar, yerlesik etkiler, cagri kenarlari.
+    i = gStiBucketFirst(r)
+    Do While i <> -1
+        If gStiSkip(i) <> 0 Then
+            i = gStiBucketNext(i)
+            Continue Do
+        End If
+        gStiNodeUnsafe = StiInsideUnsafe(ps, i)
+        Dim k As String = UCase(Trim(ps.ast.nodes(i).kind))
+        Dim detail As String
+        Dim eff As Integer
+        Select Case k
+        Case "IDENT", "IDENTIFIER"
+            StiCheckNameRef ps, r, localSet, ps.ast.nodes(i).value, classOfRoutine
+
+        Case "FOR_STMT", "REDIM_DECL"
+            StiCheckNameRef ps, r, localSet, ps.ast.nodes(i).value, classOfRoutine
+
+        Case "FOR_EACH_STMT", "DO_EACH_STMT"
+            StiCheckNameRef ps, r, localSet, ps.ast.nodes(i).value, classOfRoutine
+            StiCheckNameRef ps, r, localSet, ps.ast.nodes(i).op, classOfRoutine
+
+        Case "DIM_DECL", "PARAM_DECL"
+            Dim declType As String = StiTypeRefOf(ps, i)
+            If declType = "PTR" Or UXBStep3TypeCanonical(declType) = TYPE_PTR Then
+                StiAddEffect r, STI_E_RAWMEM, "PTR degisken '" & UCase(Trim(ps.ast.nodes(i).value)) & "'"
+            ElseIf UXBLibraryTypeRegistryFind(declType) >= 0 Then
+                StiAddEffect r, STI_E_LIBTYPE, "kutuphane tipi " & declType & " ('" & UCase(Trim(ps.ast.nodes(i).value)) & "')"
+            Else
+                StiAddClassFamilyEdges ps, r, declType
+            End If
+
+        Case "NEW_EXPR"
+            StiAddClassFamilyEdges ps, r, ps.ast.nodes(i).value
+
+        Case "FIELD_EXPR"
+            Dim rootIdx As Integer = StiFieldRootIdent(ps, i)
+            Dim member As String = StiFieldMemberName(ps, i)
+            If rootIdx <> -1 And member <> "" Then
+                Dim rootName As String = UCase(Trim(ps.ast.nodes(rootIdx).value))
+                If StiSetHas(localSet, rootName) = 0 Then
+                    If StiSetHas(gStiNamespaces, rootName) <> 0 And StiSetHas(gStiGlobals, member) <> 0 Then
+                        StiSetAdd gStiRoutineGlobals(r), member   ' Model D: ad alani globali senkron kumesine
+                    ElseIf StiSetHas(gStiClassStatic, rootName & "." & member) <> 0 Then
+                        StiAddEffect r, STI_E_GLOBAL, "sinif STATIC alani " & rootName & "." & member
+                    End If
+                End If
+            End If
+            ' Ozellik (PROPERTY) erisimi govde calistirir.
+            If member <> "" Then
+                Dim pi As Integer
+                For pi = 0 To ps.ast.count - 1
+                    If UCase(Trim(ps.ast.nodes(pi).kind)) = "CLASS_PROPERTY_DECL" AndAlso UCase(Trim(ps.ast.nodes(pi).value)) = member Then StiAddEdge r, pi
+                Next pi
+            End If
+
+        Case "CALL_EXPR", "CALL_STMT"
+            Dim callName As String = UCase(Trim(ps.ast.nodes(i).value))
+            Dim ownerIdx As Integer, ownerType As String, ownerMember As String
+            If ps.ast.nodes(i).left <> -1 Then
+                ' Alicili cagri: obj.M(...)
+                Dim recvType As String
+                Dim recvErr As String
+                Dim recvIsTask As Integer = 0
+                If UXBStep3InferExprType(ps, ps.ast.nodes(i).left, recvType, recvErr) <> 0 Then
+                    recvType = UXBStep3TypeCanonical(recvType)
+                    If recvType = TYPE_TASK Or recvType = TYPE_TASKGROUP Then recvIsTask = 1
+                End If
+                ' ATOMIC metodu (LOAD/STORE/ADD/SUB/EXCHANGE/CAS) degiskenin kendisine erisimdir; alici
+                ' adi (IDENT) ayrica taranir ve global ise senkron kumesine girer.
+                Dim recvNode As Integer = ps.ast.nodes(i).left
+                Dim recvKindA As String = UCase(Trim(ps.ast.nodes(recvNode).kind))
+                If (recvKindA = "IDENT" Or recvKindA = "IDENTIFIER") AndAlso UXBAtomicDeclFor(ps, ps.ast.nodes(recvNode).value, recvNode) <> -1 Then recvIsTask = 1
+                If recvIsTask = 0 Then
+                    If UXBLibraryTypeFindCallOwner(callName, ownerIdx, ownerType, ownerMember) <> 0 Then
+                        StiAddEffect r, STI_E_LIBTYPE, "kutuphane tipi cagrisi " & callName
+                    Else
+                        Dim leaf As String = callName
+                        If InStrRev(leaf, ".") > 0 Then leaf = Mid(leaf, InStrRev(leaf, ".") + 1)
+                        If StiAddEdgesToNamedRoutines(ps, r, leaf, 1) = 0 Then
+                            StiAddEffect r, STI_E_UNKNOWN, "etkisi bilinmeyen metot cagrisi '" & callName & "'"
+                        End If
+                    End If
+                End If
+            ElseIf InStr(callName, ".") > 0 Then
+                ' Ad alani / modul nitelikli cagri: ns.F(...)
+                If UXBLibraryTypeFindCallOwner(callName, ownerIdx, ownerType, ownerMember) <> 0 Then
+                    StiAddEffect r, STI_E_LIBTYPE, "kutuphane tipi cagrisi " & callName
+                Else
+                    Dim nsLeaf As String = Mid(callName, InStrRev(callName, ".") + 1)
+                    If StiAddEdgesToNamedRoutines(ps, r, callName, 0) = 0 Then
+                        If StiAddEdgesToNamedRoutines(ps, r, nsLeaf, 0) = 0 Then
+                            If StiAddEdgesToNamedRoutines(ps, r, nsLeaf, 1) = 0 Then
+                                StiAddEffect r, STI_E_UNKNOWN, "etkisi bilinmeyen cagri hedefi '" & callName & "'"
+                            End If
+                        End If
+                    End If
+                End If
+            ElseIf callName <> "" Then
+                If StiSetHas(localSet, callName) <> 0 Then
+                    ' yerel dizi elemani
+                ElseIf StiSetHas(gStiGlobals, callName) <> 0 Then
+                    ' Model D: global dizi elemani erisimi de senkron kumesine girer (dizi basina kilit).
+                    StiSetAdd gStiRoutineGlobals(r), callName
+                ElseIf StiAddEdgesToNamedRoutines(ps, r, callName, 0) > 0 Then
+                    ' kullanici rutini: kenar eklendi
+                ElseIf StiExternDeclareExists(ps, callName) <> 0 Then
+                    StiAddEffect r, STI_E_FFI, "DECLARE ... LIB dis fonksiyonu " & callName
+                Else
+                    eff = StiBuiltinEffect(callName, detail)
+                    If eff <> 0 Then StiAddEffect r, eff, detail
+                End If
+            End If
+
+        Case "TRIGGER_STMT"
+            ' TRIGGER hedefi cagiranin baglaminda senkron calisir: cagri kenari.
+            Dim trgTarget As Integer = ps.ast.nodes(i).firstChild
+            If trgTarget <> -1 Then StiAddEdgesToNamedRoutines ps, r, ps.ast.nodes(trgTarget).value, 0
+
+        Case "PRINT_STMT"
+            If UCase(Trim(ps.ast.nodes(i).op)) = "FILE" Then StiAddEffect r, STI_E_FILE, "dosya kanal tablosu (PRINT #)"
+        Case "INPUT_STMT"
+            StiAddEffect r, STI_E_INPUT, "klavye/dosya girdisi (INPUT)"
+        Case "OPEN_STMT", "CLOSE_STMT", "GET_STMT", "PUT_STMT", "SEEK_STMT"
+            StiAddEffect r, STI_E_FILE, "dosya kanal tablosu (" & Left(k, Len(k) - 5) & ")"
+        Case "LOCATE_STMT", "COLOR_STMT", "CLS_STMT"
+            StiAddEffect r, STI_E_CONSOLE, "konsol durumu (" & Left(k, Len(k) - 5) & ")"
+        Case "RANDOMIZE_STMT"
+            StiAddEffect r, STI_E_RNG, "rastgele sayi uretecinin ortak durumu (RANDOMIZE)"
+        Case "SHELL_STMT"
+            StiAddEffect r, STI_E_SHELL, "SHELL ayarlari"
+        Case "INLINE_STMT", "VIRTUAL_STMT", "SETNEWOFFSET_STMT"
+            StiAddEffect r, STI_E_RAWMEM, "ham bellek (" & Left(k, Len(k) - 5) & ")"
+        Case "END_STMT"
+            StiAddEffect r, STI_E_END, "programi sonlandirma (END)"
+        Case "SLOT_CONTROL_STMT", "SLOT_TABLE_STMT", "SLOT_STMT"
+            StiAddEffect r, STI_E_SLOT, "SLOT kaydi (" & Left(k, Len(k) - 5) & ")"
+        Case Else
+            If Left(k, 4) = "POKE" Or Left(k, 7) = "MEMCOPY" Or Left(k, 7) = "MEMFILL" Then
+                StiAddEffect r, STI_E_RAWMEM, "ham bellek (" & Left(k, Len(k) - 5) & ")"
+            End If
+        End Select
+        i = gStiBucketNext(i)
+    Loop
+End Sub
+
+Private Function StiFindSpawnTarget(ByRef ps As ParseState, ByVal nameRaw As String) As Integer
+    Dim n As String = UCase(Trim(nameRaw))
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If k <> "THREAD_STMT" And k <> "PARALEL_STMT" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) = n Or UCase(Trim(ps.ast.nodes(i).symbolName)) = n Then Return i
+    Next i
+    Return -1
+End Function
+
+Private Function StiRoutineTitle(ByRef ps As ParseState, ByVal r As Integer) As String
+    Dim k As String = UCase(Trim(ps.ast.nodes(r).kind))
+    If Right(k, 5) = "_STMT" Then k = Left(k, Len(k) - 5)
+    Return k & " " & Trim(ps.ast.nodes(r).value)
+End Function
+
+Declare Function SemValidateSpawnIsolationCore(ByRef ps As ParseState, ByRef errText As String) As Integer
+Declare Function StiValidateLockTargets(ByRef ps As ParseState, ByRef errText As String) As Integer
+Declare Function StiValidateAtomic(ByRef ps As ParseState, ByRef errText As String) As Integer
+Declare Function StiFindDeclAny(ByRef ps As ParseState, ByVal nameRaw As String, ByVal useNodeIdx As Integer) As Integer
+
+' Analiz sonucu bu ParseState icin onbellekte: semantik kapisi calistirmayan yollar (ornek
+' `uxb mir`) MIR kurarken UXBTaskEnsureSyncAnalysis ile ayni analizi alir -- hicbir yol
+' senkron bilgisi olmadan MIR uretmez.
+Dim Shared gStiAnalyzedStamp As String
+Dim Shared gStiAnalyzedOk As Integer
+Dim Shared gStiAnalyzedErr As String
+
+Private Function StiAnalysisStamp(ByRef ps As ParseState) As String
+    Return LTrim(Str(ps.ast.count)) & ":" & LTrim(Str(ps.rootNode)) & ":" & ps.lx.sourceFile
+End Function
+
+Function SemValidateSpawnIsolation(ByRef ps As ParseState, ByRef errText As String) As Integer
+    gStiAnalyzedOk = SemValidateSpawnIsolationCore(ps, errText)
+    gStiAnalyzedErr = errText
+    gStiAnalyzedStamp = StiAnalysisStamp(ps)
+    Return gStiAnalyzedOk
+End Function
+
+Function UXBTaskEnsureSyncAnalysis(ByRef ps As ParseState, ByRef errText As String) As Integer
+    If gStiAnalyzedStamp <> "" AndAlso gStiAnalyzedStamp = StiAnalysisStamp(ps) Then
+        errText = gStiAnalyzedErr
+        Return gStiAnalyzedOk
+    End If
+    Return SemValidateSpawnIsolation(ps, errText)
+End Function
+
+Function SemValidateSpawnIsolationCore(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim n As Integer = ps.ast.count
+    If n <= 0 Then Return 1
+
+    ' R3: TASK OF <T> -- her yerde (SPAWN olmasa da), T gorev sinirindan gecebilmeli.
+    Dim i As Integer
+    For i = 0 To n - 1
+        Dim tk As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If tk <> "TYPE_REF" Or UCase(Trim(ps.ast.nodes(i).role)) <> "TASK_RESULT_TYPE" Then Continue For
+        If UXBLibraryTypeRegistryFind(ps.ast.nodes(i).value) >= 0 Then
+            errText = "semantic: TASK OF " & UCase(Trim(ps.ast.nodes(i).value)) & " -- henuz uygulanmadi: S-146 adim 5 (kutuphane tipinin gorev sozlesmesi taskTransfer/threadSafety, Codex ile) -- satir " & LTrim(Str(ps.ast.nodes(i).lineNo))
+            Return 0
+        End If
+        If StiTypeTransferable(ps.ast.nodes(i).value) = 0 Then
+            errText = "semantic: TASK OF " & StiTypeLabel(ps.ast.nodes(i).value) & " -- " & StiTypeStepText(ps.ast.nodes(i).value) & " -- satir " & LTrim(Str(ps.ast.nodes(i).lineNo))
+            Return 0
+        End If
+    Next i
+
+    ' Senkron kumesi her analizde yeniden kurulur (SPAWN yoksa bos: hicbir global kilitlenmez).
+    gStiSyncGlobals = "|"
+    gStiGlobalOrder = "|"
+    gStiHasSpawn = 0
+    gStiNodeUnsafe = 0
+
+    ' SPAWN olmasa da analiz yapilir: global bildirim sirasi (lockOrderId) acik LOCK'un
+    ' SELF_DEADLOCK tanisi icin gerekir. SPAWN'a ozgu adimlar SPAWN yoksa bos gecer; senkron
+    ' kumesi bos kalir (TRIGGER'li / gorevsiz programlarda hicbir global kilitlenmez).
+    If n <= 0 Then Return 1
+
+    ReDim gStiRoutineOf(n - 1)
+    ReDim gStiBucketFirst(n - 1)
+    ReDim gStiBucketNext(n - 1)
+    ReDim gStiEff(n - 1)
+    ReDim gStiReason(n - 1)
+    ReDim gStiReasonBit(n - 1)
+    ReDim gStiSkip(n - 1)
+    ReDim gStiRoutineGlobals(n - 1)
+    gStiEdgeCount = 0
+    gStiGlobals = "|"
+    gStiNamespaces = "|"
+    gStiClassStatic = "|"
+
+    For i = 0 To n - 1
+        gStiBucketFirst(i) = -1
+        gStiBucketNext(i) = -1
+        gStiRoutineOf(i) = UXBTaskEnclosingRoutine(ps, i)
+    Next i
+    ' Kovalar (ters sirayla ekle ki kaynak sirasi korunsun).
+    For i = n - 1 To 0 Step -1
+        Dim ro As Integer = gStiRoutineOf(i)
+        If ro >= 0 Then
+            gStiBucketNext(i) = gStiBucketFirst(ro)
+            gStiBucketFirst(ro) = i
+        End If
+    Next i
+
+    ' Ad referansi olmayan dugumler: FIELD_EXPR uye adlari; SPAWN'in kendi gorev cagrisi
+    ' (hedef ayri bir gorevdir -- kendi basina denetlenir; argumanlari yine taranir).
+    For i = 0 To n - 1
+        Dim sk As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If sk = "FIELD_EXPR" Then
+            If ps.ast.nodes(i).right <> -1 Then gStiSkip(ps.ast.nodes(i).right) = 1
+        ElseIf sk = "SPAWN_EXPR" Then
+            If ps.ast.nodes(i).left <> -1 Then gStiSkip(ps.ast.nodes(i).left) = 1
+        End If
+    Next i
+
+    ' Program geneli degistirilebilir degiskenler, ad alanlari, sinif STATIC alanlari.
+    For i = 0 To n - 1
+        Dim gk As String = UCase(Trim(ps.ast.nodes(i).kind))
+        Select Case gk
+        Case "NAMESPACE_STMT", "MODULE_STMT"
+            StiSetAdd gStiNamespaces, ps.ast.nodes(i).value
+        Case "CLASS_FIELD"
+            Dim fc As Integer = ps.ast.nodes(i).firstChild
+            Do While fc <> -1
+                If UCase(Trim(ps.ast.nodes(fc).kind)) = "CLASS_FIELD_FLAG" AndAlso UCase(Trim(ps.ast.nodes(fc).value)) = "STATIC" Then
+                    StiSetAdd gStiClassStatic, StiEnclosingClassName(ps, i) & "." & UCase(Trim(ps.ast.nodes(i).value))
+                    Exit Do
+                End If
+                fc = ps.ast.nodes(fc).nextSibling
+            Loop
+        End Select
+        If gStiRoutineOf(i) <> -1 Then Continue For
+        If StiEnclosingClassName(ps, i) <> "" Then Continue For
+        Select Case gk
+        Case "DIM_DECL", "REDIM_DECL", "FOR_STMT"
+            StiSetAdd gStiGlobals, ps.ast.nodes(i).value
+        Case "FOR_EACH_STMT", "DO_EACH_STMT"
+            StiSetAdd gStiGlobals, ps.ast.nodes(i).value
+            StiSetAdd gStiGlobals, ps.ast.nodes(i).op
+        Case "ASSIGN_STMT"
+            ' Program duzeyinde DIM'siz atama ortuk global olusturur.
+            Dim lhs As Integer = ps.ast.nodes(i).left
+            If lhs <> -1 Then
+                Dim lk As String = UCase(Trim(ps.ast.nodes(lhs).kind))
+                If lk = "IDENT" Or lk = "IDENTIFIER" Then StiSetAdd gStiGlobals, ps.ast.nodes(lhs).value
+            End If
+        End Select
+    Next i
+
+    gStiGlobalOrder = gStiGlobals   ' bildirim sirasi = kilit sirasi (lockOrderId)
+    If StiValidateLockTargets(ps, errText) = 0 Then Return 0
+    If StiValidateAtomic(ps, errText) = 0 Then Return 0
+
+    ' Rutin basina dogrudan etkiler ve kenarlar.
+    For i = 0 To n - 1
+        If UXBTaskIsRoutineKind(ps.ast.nodes(i).kind) <> 0 Then StiScanRoutine ps, i
+    Next i
+    gStiNodeUnsafe = 0
+
+    ' Gecisli yayilim (D1/R5): sabit nokta; ozyineleme de boylece sonlanir.
+    Dim changed As Integer = 1
+    Dim rounds As Integer = 0
+    Do While changed <> 0 And rounds <= n + 1
+        changed = 0
+        rounds += 1
+        Dim e As Integer
+        For e = 0 To gStiEdgeCount - 1
+            Dim f As Integer = gStiEdgeFrom(e)
+            Dim t As Integer = gStiEdgeTo(e)
+            ' Model D: dokunulan global kumeleri de cagri grafiginde yayilir (madde 13: etki analizi).
+            Dim gpos As Integer = 2
+            Dim gtext As String = gStiRoutineGlobals(t)
+            Do While gpos < Len(gtext)
+                Dim gend As Integer = InStr(gpos, gtext, "|")
+                If gend = 0 Then Exit Do
+                Dim gname As String = Mid(gtext, gpos, gend - gpos)
+                If gname <> "" AndAlso StiSetHas(gStiRoutineGlobals(f), gname) = 0 Then
+                    StiSetAdd gStiRoutineGlobals(f), gname
+                    changed = 1
+                End If
+                gpos = gend + 1
+            Loop
+            Dim newBits As Integer = gStiEff(t) And (Not gStiEff(f))
+            If newBits <> 0 Then
+                gStiEff(f) Or= newBits
+                If gStiReason(f) = "" Then
+                    gStiReason(f) = Trim(ps.ast.nodes(t).value) & "() -> " & gStiReason(t)
+                    gStiReasonBit(f) = gStiReasonBit(t)
+                End If
+                changed = 1
+            End If
+        Next e
+    Loop
+
+    ' Senkron kumesi (tani vermeden once, eksiksiz): SPAWN hedeflerinin (gecisli) dokundugu globaller.
+    For i = 0 To n - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "SPAWN_EXPR" Then Continue For
+        gStiHasSpawn = 1
+        If ps.ast.nodes(i).left = -1 Then Continue For
+        Dim syncTarget As Integer = StiFindSpawnTarget(ps, Trim(ps.ast.nodes(ps.ast.nodes(i).left).value))
+        If syncTarget = -1 Then Continue For
+        Dim spos As Integer = 2
+        Dim stext As String = gStiRoutineGlobals(syncTarget)
+        Do While spos < Len(stext)
+            Dim send As Integer = InStr(spos, stext, "|")
+            If send = 0 Then Exit Do
+            StiSetAdd gStiSyncGlobals, Mid(stext, spos, send - spos)
+            spos = send + 1
+        Loop
+    Next i
+
+    ' SPAWN noktalari: R1 argumanlar, R2 parametreler, R3 sonuc tipi, R4-R6 + I3 govde etkileri.
+    For i = 0 To n - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "SPAWN_EXPR" Then Continue For
+        Dim callIdx As Integer = ps.ast.nodes(i).left
+        If callIdx = -1 Then Continue For
+        Dim targetName As String = Trim(ps.ast.nodes(callIdx).value)
+        Dim target As Integer = StiFindSpawnTarget(ps, targetName)
+        If target = -1 Then Continue For   ' SemValidateSpawnCalls zaten reddetti
+
+        Dim argNo As Integer = 0
+        Dim a As Integer = ps.ast.nodes(callIdx).firstChild
+        Do While a <> -1
+            argNo += 1
+            Dim argType As String
+            Dim argErr As String
+            If UXBStep3InferExprType(ps, a, argType, argErr) = 0 Then argType = ""
+            If StiTypeArgTransferable(argType) = 0 Then
+                errText = "semantic: SPAWN " & targetName & ": " & LTrim(Str(argNo)) & ". arguman tipi " & StiTypeLabel(argType) & " gorev sinirindan gecemiyor -- " & StiTypeStepText(argType)
+                Return 0
+            End If
+            a = ps.ast.nodes(a).nextSibling
+        Loop
+
+        Dim pc As Integer = ps.ast.nodes(target).firstChild
+        Do While pc <> -1
+            Dim pk As String = UCase(Trim(ps.ast.nodes(pc).kind))
+            If pk = "PARAM_DECL" Then
+                Dim pType As String = StiTypeRefOf(ps, pc)
+                If StiTypeArgTransferable(pType) = 0 Then
+                    errText = "semantic: SPAWN hedefi " & StiRoutineTitle(ps, target) & ": parametre '" & Trim(ps.ast.nodes(pc).value) & "' tipi " & StiTypeLabel(pType) & " gorev sinirindan gecemiyor -- " & StiTypeStepText(pType)
+                    Return 0
+                End If
+            ElseIf pk = "RETURN_TYPE" Then
+                If StiTypeTransferable(ps.ast.nodes(pc).value) = 0 Then
+                    errText = "semantic: SPAWN hedefi " & StiRoutineTitle(ps, target) & ": sonuc tipi " & StiTypeLabel(ps.ast.nodes(pc).value) & " gorev sinirindan gecemiyor -- " & StiTypeStepText(ps.ast.nodes(pc).value)
+                    Return 0
+                End If
+            End If
+            pc = ps.ast.nodes(pc).nextSibling
+        Loop
+
+        If gStiEff(target) <> 0 Then
+            errText = "semantic: SPAWN hedefi " & StiRoutineTitle(ps, target) & " gorev sinirini asiyor: " & Trim(ps.ast.nodes(target).value) & ": " & gStiReason(target) & " (" & StiRuleText(gStiReasonBit(target)) & ")"
+            Return 0
+        End If
+    Next i
+
+    ' Senkron global icin henuz uygulanmamis adimlar (sessiz yaris yerine acik tani).
+    For i = 0 To n - 1
+        Dim dk As String = UCase(Trim(ps.ast.nodes(i).kind))
+        ' Ham adres kilidi atlar: UNSAFE disinda VARPTR(ortak global) adim 7'ye aittir.
+        If dk = "CALL_EXPR" AndAlso ps.ast.nodes(i).left = -1 AndAlso UCase(Trim(ps.ast.nodes(i).value)) = "VARPTR" Then
+            Dim vpArg As Integer = ps.ast.nodes(i).firstChild
+            If vpArg <> -1 Then
+                Dim vpk As String = UCase(Trim(ps.ast.nodes(vpArg).kind))
+                Dim vpName As String = ""
+                If vpk = "IDENT" Or vpk = "IDENTIFIER" Then vpName = ps.ast.nodes(vpArg).value
+                If vpk = "CALL_EXPR" Or vpk = "INDEX_EXPR" Then vpName = ps.ast.nodes(vpArg).value
+                If vpName <> "" AndAlso StiSetHas(gStiSyncGlobals, vpName) <> 0 AndAlso StiInsideUnsafe(ps, i) = 0 AndAlso UXBTaskEnclosingRoutine(ps, StiFindDeclAny(ps, vpName, i)) = -1 Then
+                    errText = "semantic: gorevlerle paylasilan global '" & UCase(Trim(vpName)) & "' icin VARPTR -- henuz uygulanmadi: S-146 adim 7 (isaretci/MemoryRef paylasimi); ham adresle erisim sorumlulugu UNSAFE ... END UNSAFE ile alinabilir -- satir " & LTrim(Str(ps.ast.nodes(i).lineNo))
+                    Return 0
+                End If
+            End If
+        End If
+        If dk = "DIM_DECL" AndAlso gStiRoutineOf(i) = -1 AndAlso StiSetHas(gStiSyncGlobals, ps.ast.nodes(i).value) <> 0 Then
+            Dim gType As String = StiTypeRefOf(ps, i)
+            ' S-146 adim 3: TASK/TASKGROUP tutamaci globali gorevler arasi paylasilabilir (deger = kimlik;
+            ' erisim otomatik kilitli). Bekleme cevrimi calisma zamaninda TASK_WAIT_CYCLE tanisidir.
+            ' LIST/DICT/SET: calisma zamani koleksiyon tablosu kilitli + deyim kilidi -> paylasim guvenli.
+            ' Kullanici CLASS/INTERFACE nesnesi ve is parcacigi sozlesmesi (threadSafety) henuz olmayan
+            ' kutuphane tipi adim 5'e aittir.
+            Dim gUp As String = UCase(Trim(gType))
+            Dim isCollection As Integer = IIf(gUp = "LIST" Or gUp = "DICT" Or gUp = "SET", 1, 0)
+            If StiFindClassNode(ps, gType) <> -1 Or UXBLibraryTypeRegistryFind(gType) >= 0 Or (UXBStep3TypeCanonical(gType) = TYPE_OBJECT AndAlso isCollection = 0) Then
+                errText = "semantic: global '" & UCase(Trim(ps.ast.nodes(i).value)) & "' (" & gType & ") gorevlerle paylasiliyor -- henuz uygulanmadi: S-146 adim 5 (CLASS nesnesinin gorevler arasi paylasimi: nesne basina kilit / SHARE sozlesmesi) -- satir " & LTrim(Str(ps.ast.nodes(i).lineNo))
+                Return 0
+            End If
+        End If
+        ' Senkron global BYREF parametreye verilirse cagrilan rutin ona kilitsiz yazar.
+        If (dk = "CALL_EXPR" Or dk = "CALL_STMT") AndAlso ps.ast.nodes(i).left = -1 Then
+            Dim calleeName As String = UCase(Trim(ps.ast.nodes(i).value))
+            Dim ri As Integer
+            For ri = 0 To n - 1
+                Dim rk As String = UCase(Trim(ps.ast.nodes(ri).kind))
+                If rk <> "SUB_STMT" And rk <> "FUNCTION_STMT" Then Continue For
+                If UCase(Trim(ps.ast.nodes(ri).value)) <> calleeName Then Continue For
+                Dim prm As Integer = ps.ast.nodes(ri).firstChild
+                Dim arg As Integer = ps.ast.nodes(i).firstChild
+                Do While prm <> -1 And arg <> -1
+                    If UCase(Trim(ps.ast.nodes(prm).kind)) <> "PARAM_DECL" Then Exit Do
+                    Dim ak As String = UCase(Trim(ps.ast.nodes(arg).kind))
+                    If UCase(Trim(ps.ast.nodes(prm).op)) = "BYREF" AndAlso (ak = "IDENT" Or ak = "IDENTIFIER") AndAlso StiSetHas(gStiSyncGlobals, ps.ast.nodes(arg).value) <> 0 Then
+                        errText = "semantic: gorevlerle paylasilan global '" & UCase(Trim(ps.ast.nodes(arg).value)) & "' BYREF parametreye (" & calleeName & "." & Trim(ps.ast.nodes(prm).value) & ") veriliyor -- henuz uygulanmadi: S-146 adim 4 (BYREF omur/paylasim) -- satir " & LTrim(Str(ps.ast.nodes(i).lineNo))
+                        Return 0
+                    End If
+                    prm = ps.ast.nodes(prm).nextSibling
+                    arg = ps.ast.nodes(arg).nextSibling
+                Loop
+                Exit For
+            Next ri
+        End If
+    Next i
+    Return 1
+End Function
+
+' `name` icin DIM/PARAM bildirimi: ayni rutindeki once, yoksa program geneli. Bulunamazsa -1.
+Function StiFindDeclAny(ByRef ps As ParseState, ByVal nameRaw As String, ByVal useNodeIdx As Integer) As Integer
+    Dim wanted As String = UCase(Trim(nameRaw))
+    If wanted = "" Then Return -1
+    Dim useRoutine As Integer = UXBTaskEnclosingRoutine(ps, useNodeIdx)
+    Dim fallback As Integer = -1
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If k <> "DIM_DECL" And k <> "PARAM_DECL" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> wanted Then Continue For
+        Dim declRoutine As Integer = UXBTaskEnclosingRoutine(ps, i)
+        If declRoutine = useRoutine Then Return i
+        If declRoutine = -1 And fallback = -1 Then fallback = i
+    Next i
+    Return fallback
+End Function
+
+' LOCK hedefi: 1 = program geneli (MUTEX olmayan) degisken, 2 = MUTEX degiskeni, 3 = CONSOLE,
+' 4 = yerel (MUTEX olmayan) degisken, 0 = bulunamadi.
+Function UXBTaskLockTargetKind(ByRef ps As ParseState, ByVal targetNode As Integer) As Integer
+    If targetNode < 0 Or targetNode >= ps.ast.count Then Return 0
+    Dim nm As String = UCase(Trim(ps.ast.nodes(targetNode).value))
+    If nm = "CONSOLE" Then Return 3
+    Dim decl As Integer = StiFindDeclAny(ps, nm, targetNode)
+    If decl = -1 Then
+        If StiSetHas(gStiGlobals, nm) <> 0 Then Return 1   ' DIM'siz program geneli atama ile dogan global
+        Return 0
+    End If
+    If UXBStep3TypeCanonical(StiTypeRefOf(ps, decl)) = TYPE_MUTEX Then Return 2
+    If UXBTaskEnclosingRoutine(ps, decl) = -1 Then Return 1
+    Return 4
+End Function
+
+' LOCK hedeflerinin derleme zamani tanilari (tum motorlar icin semantik katmanda).
+Function StiValidateLockTargets(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "LOCK_TARGET" Then Continue For
+        Dim nm As String = UCase(Trim(ps.ast.nodes(i).value))
+        Dim lineText As String = " -- satir " & LTrim(Str(ps.ast.nodes(i).lineNo))
+        Select Case UXBTaskLockTargetKind(ps, i)
+        Case 0
+            errText = "semantic: LOCK hedefi bulunamadi: " & nm & " (program geneli degisken, MUTEX ya da CONSOLE olmali)" & lineText
+            Return 0
+        Case 3
+            ' S-146 adim 2: LOCK CONSOLE -- konsol kilidi (ayrilmis kimlik, tum globallerden sonra siralanir).
+
+        Case 4
+            errText = "semantic: LOCK hedefi '" & nm & "' yerel degisken -- henuz uygulanmadi: S-146 adim 4 (yerel veriye gorevler arasi omur: SHARED)" & lineText
+            Return 0
+        End Select
+        ' Sozcuksel ic ice ayni kilit: SELF_DEADLOCK (cagri uzerinden olani calisma zamani yakalar).
+        Dim lockNode As Integer = StiParentOf(ps, i)
+        Dim p As Integer = StiParentOf(ps, lockNode)
+        Dim guard As Integer = 0
+        Do While p >= 0 And guard <= ps.ast.count
+            If UXBTaskIsRoutineKind(ps.ast.nodes(p).kind) <> 0 Then Exit Do
+            If UCase(Trim(ps.ast.nodes(p).kind)) = "LOCK_STMT" Then
+                Dim t As Integer = ps.ast.nodes(p).firstChild
+                Do While t <> -1
+                    If UCase(Trim(ps.ast.nodes(t).kind)) = "LOCK_TARGET" AndAlso UCase(Trim(ps.ast.nodes(t).value)) = nm Then
+                        errText = "semantic: SELF_DEADLOCK: '" & nm & "' zaten disaridaki LOCK ile tutuluyor; ayni kilidi ikinci kez LOCK etmek kendini kilitler" & lineText
+                        Return 0
+                    End If
+                    t = ps.ast.nodes(t).nextSibling
+                Loop
+            End If
+            p = StiParentOf(ps, p)
+            guard += 1
+        Loop
+    Next i
+    Return 1
+End Function
+
+' ---------------------------------------------------------------------------
+' S-146 Model D: ATOMIC depolama sinifi. Deger tipi tamsayi (I8..U64), BOOLEAN, F32 ya da
+' F64 olabilir; metotlar LOAD()/STORE(v)/ADD(n)/SUB(n)/EXCHANGE(v)/CAS(beklenen, yeni).
+' ADD/SUB sayisal tiplerde. ATOMIC olmayan degiskende bu metotlar yoktur (sinif metodu gibi
+' cozulur). Kilitsiz hizli yol (native): program genelinde ATOMIC, tamsayi/BOOLEAN ve hic
+' acik LOCK hedefi olmayan global.
+' ---------------------------------------------------------------------------
+Dim Shared gStiAtomicGlobals As String   ' "|AD|" program geneli ATOMIC tamsayi/BOOLEAN globaller
+Dim Shared gStiLockedNames As String     ' "|AD|" en az bir LOCK hedefi olan adlar
+
+Private Function StiAtomicTypeKind(ByVal typeRaw As String) As Integer
+    ' 1 = tamsayi, 2 = BOOLEAN, 3 = kayan noktali, 0 = gecersiz
+    Select Case UXBStep3TypeCanonical(typeRaw)
+    Case TYPE_I8, TYPE_U8, TYPE_I16, TYPE_U16, TYPE_I32, TYPE_U32, TYPE_I64, TYPE_U64
+        Return 1
+    Case TYPE_BOOL
+        Return 2
+    Case TYPE_F32, TYPE_F64
+        Return 3
+    End Select
+    Return 0
+End Function
+
+Function StiValidateAtomic(ByRef ps As ParseState, ByRef errText As String) As Integer
+    gStiAtomicGlobals = "|"
+    gStiLockedNames = "|"
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If k = "LOCK_TARGET" Then StiSetAdd gStiLockedNames, ps.ast.nodes(i).value
+        If k = "DIM_DECL" AndAlso UCase(Trim(ps.ast.nodes(i).op)) = "ATOMIC" Then
+            Dim aType As String = UXBAtomicDeclType(ps, i)
+            Dim tk As Integer = StiAtomicTypeKind(aType)
+            If tk = 0 Then
+                errText = "semantic: ATOMIC '" & UCase(Trim(ps.ast.nodes(i).value)) & "' tipi " & StiTypeLabel(aType) & " olamaz: ATOMIC tamsayi (I8..U64), BOOLEAN, F32 ya da F64 deger tutar (bilesik veri icin LOCK kullanin) -- satir " & LTrim(Str(ps.ast.nodes(i).lineNo))
+                Return 0
+            End If
+            If UXBTaskEnclosingRoutine(ps, i) = -1 AndAlso tk <> 3 Then StiSetAdd gStiAtomicGlobals, ps.ast.nodes(i).value
+        End If
+    Next i
+    ' ATOMIC alicili metot cagrilari.
+    For i = 0 To ps.ast.count - 1
+        Dim ck As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If ck <> "CALL_EXPR" And ck <> "CALL_STMT" Then Continue For
+        Dim recv As Integer = ps.ast.nodes(i).left
+        If recv < 0 Then Continue For
+        Dim rk As String = UCase(Trim(ps.ast.nodes(recv).kind))
+        If rk <> "IDENT" And rk <> "IDENTIFIER" Then Continue For
+        Dim decl As Integer = UXBAtomicDeclFor(ps, ps.ast.nodes(recv).value, recv)
+        If decl = -1 Then Continue For
+        Dim callName As String = UCase(Trim(ps.ast.nodes(i).value))
+        Dim dotPos As Integer = InStrRev(callName, ".")
+        Dim member As String = IIf(dotPos > 0, Mid(callName, dotPos + 1), callName)
+        Dim argc As Integer = 0
+        Dim a As Integer = ps.ast.nodes(i).firstChild
+        Do While a <> -1
+            argc += 1
+            a = ps.ast.nodes(a).nextSibling
+        Loop
+        Dim want As Integer = -1
+        Select Case member
+        Case "LOAD": want = 0
+        Case "STORE", "ADD", "SUB", "EXCHANGE": want = 1
+        Case "CAS": want = 2
+        End Select
+        Dim whereText As String = " -- satir " & LTrim(Str(ps.ast.nodes(i).lineNo))
+        Dim vn As String = UCase(Trim(ps.ast.nodes(recv).value))
+        If want = -1 Then
+            errText = "semantic: ATOMIC '" & vn & "' uzerinde bilinmeyen metot: " & member & " (LOAD, STORE, ADD, SUB, EXCHANGE, CAS)" & whereText
+            Return 0
+        End If
+        If argc <> want Then
+            errText = "semantic: ATOMIC " & vn & "." & member & " " & LTrim(Str(want)) & " arguman ister" & whereText
+            Return 0
+        End If
+        If (member = "ADD" Or member = "SUB") AndAlso StiAtomicTypeKind(UXBAtomicDeclType(ps, decl)) = 2 Then
+            errText = "semantic: ATOMIC " & vn & "." & member & ": BOOLEAN uzerinde aritmetik yok (STORE/EXCHANGE/CAS kullanin)" & whereText
+            Return 0
+        End If
+    Next i
+    Return 1
+End Function
+
+' Native kilitsiz hizli yol adayi: ATOMIC tamsayi/BOOLEAN global, hicbir acik LOCK'un hedefi degil.
+Function UXBTaskAtomicFastPath(ByVal nameRaw As String) As Integer
+    If StiSetHas(gStiAtomicGlobals, nameRaw) = 0 Then Return 0
+    If StiSetHas(gStiLockedNames, nameRaw) <> 0 Then Return 0
+    Return 1
+End Function
+
+' MIR senkron gecisi: senkron kumesi bos degil mi (SPAWN'li ve gorevin dokundugu global var).
+Function UXBTaskSyncActive() As Integer
+    If Len(gStiSyncGlobals) > 1 Then Return 1
+    If gStiHasSpawn <> 0 AndAlso StiSetHas(gStiLockedNames, "CONSOLE") <> 0 Then Return 1   ' adim 2: konsol kilidi
+    Return 0
+End Function
+
+Function UXBTaskNodeInsideUnsafe(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return 0
+    Return StiInsideUnsafe(ps, nodeIdx)
+End Function
+
+' MIR indirgemesi icin: ad gorevlerle paylasilan (otomatik kilitlenen) bir global mi?
+Function UXBTaskIsSyncGlobal(ByVal nameRaw As String) As Integer
+    If Len(gStiSyncGlobals) <= 1 Then Return 0
+    Return StiSetHas(gStiSyncGlobals, nameRaw)
+End Function
+
+' Kilit sirasi (lockOrderId, 1'den baslar): global bildirim sirasi. Bulunamazsa 0.
+' S-146 adim 2: LOCK CONSOLE'un ayrilmis kimligi (globallerden sonra, MUTEX kimliklerinden (1<<32) once).
+Const UXB_CONSOLE_LOCK_ID As Integer = 2147483647
+
+' Program LOCK CONSOLE kullaniyor mu (konsol deyimleri o zaman konsol kilidine girer).
+Function UXBTaskUsesConsoleLock() As Integer
+    Return StiSetHas(gStiLockedNames, "CONSOLE")
+End Function
+
+Function UXBTaskSyncLockOrder(ByVal nameRaw As String) As Integer
+    Dim key As String = "|" & UCase(Trim(nameRaw)) & "|"
+    If UCase(Trim(nameRaw)) = "CONSOLE" AndAlso InStr(gStiGlobalOrder, "|CONSOLE|") = 0 Then Return UXB_CONSOLE_LOCK_ID
+    Dim p As Integer = InStr(gStiGlobalOrder, key)
+    If p = 0 Then Return 0
+    Dim k As Integer = 0
+    Dim i As Integer
+    For i = 1 To p
+        If Mid(gStiGlobalOrder, i, 1) = "|" Then k += 1
+    Next i
+    Return k
+End Function
+
+#endif

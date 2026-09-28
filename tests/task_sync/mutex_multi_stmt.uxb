@@ -1,0 +1,23 @@
+' S-146 Model D: MUTEX dis kaynak / programci tanimli kritik bolge icindir. Uc ayri deyimlik
+' oku-degistir-yaz, LOCK m ile bolunmez olur (otomatik deyim kilidi tek deyimi korur).
+DIM m AS MUTEX
+DIM sayac AS I64 = 0
+THREAD Isci(n AS I64) AS I64
+    DIM i AS I64
+    DIM gecici AS I64
+    FOR i = 1 TO n
+        LOCK m
+            gecici = sayac
+            gecici = gecici + 1
+            sayac = gecici
+        END LOCK
+    NEXT i
+    RETURN n
+END THREAD
+DIM g AS TASKGROUP
+DIM k AS I64
+FOR k = 1 TO 6
+    g.ADD(SPAWN Isci(5000))
+NEXT k
+g.JOIN()
+PRINT sayac

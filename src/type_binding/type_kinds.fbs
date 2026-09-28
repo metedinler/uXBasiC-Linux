@@ -37,6 +37,8 @@ Const TYPE_JS_OBJECT As String = "TYPE_JS_OBJECT"
 Const TYPE_WASM_EXTERNREF As String = "TYPE_WASM_EXTERNREF"
 Const TYPE_TASK As String = "TYPE_TASK"
 Const TYPE_TASKGROUP As String = "TYPE_TASKGROUP"
+' S-146 Model D: dis kaynak / programci tanimli kritik bolge kilidi (opak tutamac).
+Const TYPE_MUTEX As String = "TYPE_MUTEX"
 Const TYPE_UNKNOWN As String = "TYPE_UNKNOWN"
 Const TYPE_ERROR As String = "TYPE_ERROR"
 #endif

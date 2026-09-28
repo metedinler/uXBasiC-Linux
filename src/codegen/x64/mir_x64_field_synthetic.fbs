@@ -133,6 +133,10 @@ Function MIRX64EmitStoreFieldSynthetic(ByRef ins As MIRIRInstruction, ByRef cg A
         MIRX64Emit cg, "    movss dword " & storeAddr & ", xmm0"
         Return 1
     End If
+    If UCase(Trim(ins.resultType)) = "STRING" Then
+        MIRX64EmitOwnedStringStore cg, "    lea rcx, " & storeAddr, "rax"   ' S-157: sahipli alan metni
+        Return 1
+    End If
     Select Case storeWidth
     Case 1
         MIRX64Emit cg, "    mov byte " & storeAddr & ", al"

@@ -1,0 +1,13 @@
+LIBTYPE "uxmath/rational.library_type.json"
+
+MAIN
+    DIM a AS RATIONAL
+    DIM b AS RATIONAL
+    DIM c AS RATIONAL
+    a = 3
+    b = RATIONAL.CLONE(a)
+    c = RATIONAL.COPY(a)
+    PRINT b
+    PRINT c
+    PRINT RATIONAL.TOSTRING(a)
+END MAIN

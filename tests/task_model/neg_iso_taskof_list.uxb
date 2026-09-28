@@ -1,0 +1,4 @@
+' S-146 izolasyon negatif testi: neg_iso_taskof_list
+DIM t AS TASK OF LIST
+
+

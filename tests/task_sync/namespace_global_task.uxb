@@ -1,0 +1,11 @@
+' S-146 izolasyon negatif testi: neg_iso_namespace_global
+NAMESPACE ns
+ DIM nv AS I32
+END NAMESPACE
+THREAD W(x AS I32) AS I32
+ RETURN ns.nv + x
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

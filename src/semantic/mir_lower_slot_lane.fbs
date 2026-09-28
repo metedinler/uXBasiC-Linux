@@ -112,6 +112,11 @@ Private Function MIRSlotLowerBlockRoutine(ByRef ps As ParseState, ByVal blockStm
         module.functions(slotFnIdx).returnType = MIRDeclaredTypeForAstNode(ps, blockStmtIdx, pipeReturnDefault)
     Else
         module.functions(slotFnIdx).returnType = "VOID"
+        ' S-149: `THREAD/PARALEL ... AS <tip>` -- SPAWN'in TASK OF <tip> sonucu.
+        ' (PIPE'in aksine blok typeName'i tur isaretini tutar; tip RETURN_TYPE alt dugumunden okunur.)
+        Dim laneRetNode As Integer
+        laneRetNode = MIRFindChildByKind(ps, blockStmtIdx, "RETURN_TYPE")
+        If laneRetNode <> -1 Then module.functions(slotFnIdx).returnType = MIRCanonicalTypeName(ps.ast.nodes(laneRetNode).value)
     End If
 
     Dim firstParamName As String

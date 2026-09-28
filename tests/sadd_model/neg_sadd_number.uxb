@@ -1,0 +1,4 @@
+' S-076 olumsuz: SADD yalnız string alır.
+DIM p AS PTR
+p = SADD(5)
+PRINT 1

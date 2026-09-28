@@ -733,6 +733,14 @@ End Sub
 
 Private Function ExecFindVar(ByRef es As ExecState, ByRef nameText As String) As Integer
     Dim fvIdx As Integer = ExecFindVarRaw(es, nameText)
+    ' S-167: BYREF takma adi -> cagiranin yuvasi (zincir: hedef her zaman daha eski yuva).
+    Dim aliasGuard As Integer = 0
+    Do While fvIdx >= 0 AndAlso fvIdx < es.count AndAlso es.vars(fvIdx).refIdxPlus1 > 0 AndAlso aliasGuard < 64
+        Dim aliasTarget As Integer = es.vars(fvIdx).refIdxPlus1 - 1
+        If aliasTarget >= fvIdx Then Exit Do
+        fvIdx = aliasTarget
+        aliasGuard += 1
+    Loop
     If fvIdx >= 0 Then
         ' A pinned scalar's truth is its raw cell (a POKE through VARPTR may
         ' have changed it) -- refresh the value before anyone reads it.
@@ -759,6 +767,7 @@ Function ExecAppendFrameVar(ByRef es As ExecState, ByRef nameText As String) As 
     es.vars(idx).arrayUpper = 0
     es.vars(idx).arrayBytes = 0
     es.vars(idx).pinned = 0
+    es.vars(idx).refIdxPlus1 = 0
     es.nextVarAddr += 4
     es.count += 1
     Return idx
@@ -920,7 +929,11 @@ Private Function ExecTryResolveArrayAccess(ByRef ps As ParseState, ByRef es As E
     Dim n As ASTNode
     n = ps.ast.nodes(nodeIdx)
     If UCase(n.kind) <> "CALL_EXPR" Then Return 0
-    If InStr(n.value, ".") > 0 Then Return 0
+    ' S-162: noktali ad yalnizca ayristirma sonrasi normallestirilmis bir ad alani
+    ' degiskeniyse ("NS.NV") dizi olabilir; digerleri metot/ad alani rutin cagrisidir.
+    If InStr(n.value, ".") > 0 Then
+        If InStr(gNsVarKeys, "|" & UCase(Trim(n.value)) & "|") = 0 Then Return 0
+    End If
 
     Dim firstChild As Integer
     firstChild = n.firstChild
@@ -1082,6 +1095,7 @@ Private Function ExecEnsureVar(ByRef es As ExecState, ByRef nameText As String) 
     es.vars(idx).arrayUpper = 0
     es.vars(idx).arrayBytes = 0
     es.vars(idx).pinned = 0
+    es.vars(idx).refIdxPlus1 = 0
     es.nextVarAddr += 4
     es.count += 1
 

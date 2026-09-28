@@ -13,6 +13,8 @@ Type MIRIRInstruction
     resultType As String
     ffiStubId As Integer
     ffiArgStart As Integer
+    stmtSeq As Integer  ' S-146 Model D: ureten deyimin sira numarasi (senkron gecisi deyim sinirini buradan bilir)
+    tryTargetPlus1 As Integer  ' S-160: buyruk uretilirken etkin TRY'nin CATCH/FINALLY blogu + 1 (0 = TRY disi)
 End Type
 
 Type MIRBasicBlock
@@ -145,6 +147,10 @@ End Type
 Dim Shared gMirInstr As MIRIRInstruction
 
 Dim Shared gMIRCurrentSource As SourceLocation
+' S-146 Model D: her MIRLowerTopLevelStmt cagrisi yeni sira numarasi alir; ic deyimden donuste
+' ust deyiminki geri yuklenir (dongu artirimi gibi ust deyim kodu ust deyimin numarasini tasir).
+Dim Shared gMIRCurrentStmtSeq As Integer
+Dim Shared gMIRStmtSeqCounter As Integer
 
 Sub MIRSetCurrentSource(ByRef srcLoc As SourceLocation)
     gMIRCurrentSource = srcLoc

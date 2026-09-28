@@ -1,0 +1,24 @@
+' S-146 Model D: ATOMIC metotlarinin anlami (tum motorlarda ayni).
+' ADD/SUB yeni degeri, EXCHANGE eski degeri, CAS TRUE(-1)/FALSE(0) dondurur.
+DIM ATOMIC sayac AS I64 = 0
+sayac += 5
+PRINT sayac.ADD(2)
+PRINT sayac.SUB(1)
+PRINT sayac.LOAD()
+PRINT sayac.EXCHANGE(10)
+PRINT sayac.CAS(7, 20)
+PRINT sayac
+PRINT sayac.CAS(10, 20)
+PRINT sayac
+PRINT sayac.STORE(3)
+sayac.ADD(4)
+PRINT sayac
+DIM ATOMIC k AS I32 = 2147483647
+PRINT k.ADD(1)
+DIM ATOMIC b AS BOOLEAN
+PRINT b.CAS(FALSE, TRUE)
+PRINT b
+DIM ATOMIC f AS F64 = 1.5
+PRINT f.ADD(2.25)
+PRINT f.CAS(3.75, 0.5)
+PRINT f

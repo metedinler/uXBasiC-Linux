@@ -1,0 +1,14 @@
+DIM g AS I32 = 1
+SUB S()
+    DIM g AS I32
+    g = 77
+    PRINT "ic "; g
+END SUB
+S()
+PRINT g
+FUNCTION F(k AS I32) AS I32
+    DIM g AS I32
+    g = k * 2
+    RETURN g
+END FUNCTION
+PRINT F(5); " "; g

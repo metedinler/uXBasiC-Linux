@@ -1,0 +1,14 @@
+' S-157: native'de STRING degeri 32 metin isleminden sonra eziliyordu (degisken halkayi gosteriyordu).
+TYPE Kayit
+    ad AS STRING
+END TYPE
+DIM k AS Kayit
+k.ad = STR(55) + "-alan"
+DIM t AS STRING
+DIM i AS I32
+FOR i = 1 TO 100
+    t = STR(i) + "x"
+NEXT
+PRINT k.ad
+
+

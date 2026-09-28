@@ -1,0 +1,12 @@
+' S-146 Model D: LOCK tutan gorev, o globale dokunan gorevi JOIN ile bekliyor -> LOCK_DEADLOCK.
+DIM toplam AS I64 = 0
+THREAD Artir(n AS I64) AS I64
+    toplam += n
+    RETURN n
+END THREAD
+PRINT "basla"
+LOCK toplam
+    DIM t AS TASK OF I64 = SPAWN Artir(5)
+    PRINT t.JOIN()
+END LOCK
+PRINT "bitti (olmamali)"

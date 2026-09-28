@@ -1,0 +1,2 @@
+AST=LPTR requires native x64
+MIR=CODEPTR/LPTR requires native x64

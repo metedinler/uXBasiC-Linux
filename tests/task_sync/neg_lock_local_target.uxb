@@ -1,0 +1,8 @@
+' Yerel (MUTEX olmayan) veri gorevler arasi paylasilmaz; SHARED adim 4'te.
+SUB S()
+    DIM y AS I64
+    LOCK y
+        y += 1
+    END LOCK
+END SUB
+S()

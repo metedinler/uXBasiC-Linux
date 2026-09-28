@@ -1,0 +1,16 @@
+' S-146 Model D (2026-09-26): gorevde global kullanimi serbest ve otomatik senkron (eski negatif test neg_iso_global_transitive)
+DIM toplam AS I64
+SUB Yardimci()
+ toplam += 1
+END SUB
+FUNCTION Ara(v AS I32) AS I32
+ Yardimci()
+ RETURN v
+END FUNCTION
+THREAD W(x AS I32) AS I32
+ RETURN Ara(x)
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

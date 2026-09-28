@@ -162,6 +162,7 @@ Function MIRX64EmitBuiltinOneArgResult(ByRef ins As MIRIRInstruction, ByRef cg A
 
     Case "STR", "STR$"
         ' S-142: STR of a float printed the raw IEEE bits as an integer (`4617878467915022336` for 5.5).
+        ' S-087: U64 >= 2^63 must use the unsigned formatter so it prints as a positive value.
         If MIRX64OperandIsFloat(cg, ins.operands(1)) <> 0 Then
             If MIRX64LoadFloatOperandToXmm(cg, ins.operands(1), "xmm0", errText) = 0 Then Return 0
             Dim strFloatSymbol As String
@@ -173,6 +174,9 @@ Function MIRX64EmitBuiltinOneArgResult(ByRef ins As MIRIRInstruction, ByRef cg A
             Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
         End If
         If MIRX64LoadOperandToReg(cg, ins.operands(1), "rax", errText) = 0 Then Return 0
+        If MIRX64OperandIsU64(cg, ins.operands(1)) <> 0 Then
+            Return MIRX64EmitRuntimeUnaryI64(cg, "__uxb_rt_str_u64", "rax", ins.result, errText)
+        End If
         Return MIRX64EmitRuntimeUnaryI64(cg, "__uxb_rt_str_i64", "rax", ins.result, errText)
     Case "LEN", "VAL", "CHR", "CHR$", "LCASE", "LCASE$", "UCASE", "UCASE$", "LTRIM", "LTRIM$", "RTRIM", "RTRIM$", "TRIM", "TRIM$", "SPACE", "SPACE$", "HEX", "HEX$", "OCT", "OCT$", "BIN", "BIN$", "BIGINIT"
         If MIRX64LoadOperandToReg(cg, ins.operands(1), "rax", errText) = 0 Then Return 0

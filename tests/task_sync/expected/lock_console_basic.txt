@@ -1,0 +1,6 @@
+gorev1 basla
+gorev1 bitti
+1
+gorev2 basla
+gorev2 bitti
+2

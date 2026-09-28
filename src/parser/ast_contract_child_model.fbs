@@ -1,4 +1,4 @@
-﻿' uXBasic ADIM4 AST child model contract.
+' uXBasic ADIM4 AST child model contract.
 #ifndef UXBASIC_AST_CONTRACT_CHILD_MODEL_FBS
 #define UXBASIC_AST_CONTRACT_CHILD_MODEL_FBS
 
@@ -39,6 +39,11 @@ Function UXBAstChildModelForKind(ByVal kindName As String) As Integer
         Return UXB_AST_CHILD_MODEL_BINARY_SHORTCUT
     Case ASTK_UNARY
         Return UXB_AST_CHILD_MODEL_UNARY_SHORTCUT
+    Case "INIT_EXPR", "SPAWN_EXPR", "INCDEC_EXPR", "INCDEC_STMT"
+        ' Parser tek islenenlerini .left'e yazar (DIM ilk degeri; SPAWN'in gorev cagrisi) ve
+        ' tum tuketiciler oradan okur. ROLE_LIST sayilmalari `ast` komutunun sozlesme
+        ' denetimini en basit `DIM x AS I32 = 1` programinda bile dusuruyordu.
+        Return UXB_AST_CHILD_MODEL_UNARY_SHORTCUT
     Case ASTK_CALL_EXPR
         ' Dotted calls keep the receiver in left and arguments in firstChild.
         ' Ordinary calls use the same model with left unset.
@@ -46,7 +51,8 @@ Function UXBAstChildModelForKind(ByVal kindName As String) As Integer
     End Select
 
     Select Case k
-    Case ASTK_IDENTIFIER, ASTK_NUMBER, ASTK_STRING, ASTK_BOOLEAN, ASTK_TYPE_REF, ASTK_RETURN_TYPE, ASTK_MODE_REF, ASTK_KEYWORD_REF, ASTK_CLASS_FLAG, ASTK_CLASS_FIELD_FLAG, ASTK_CLASS_METHOD_FLAG, ASTK_CLASS_PROPERTY_FLAG, ASTK_CLASS_ACCESS, ASTK_FRIEND_ITEM, ASTK_USING_ITEM, ASTK_ALIAS_TARGET, ASTK_CLASS_BASE_REF, ASTK_CLASS_IMPLEMENTS_REF, ASTK_CLASS_DECORATOR_REF, ASTK_CLASS_MIXIN_REF, ASTK_CASE_ELSE, ASTK_CASE_IS_VALUE
+    Case ASTK_IDENTIFIER, ASTK_NUMBER, ASTK_STRING, ASTK_BOOLEAN, ASTK_TYPE_REF, ASTK_RETURN_TYPE, ASTK_MODE_REF, ASTK_KEYWORD_REF, ASTK_CLASS_FLAG, ASTK_CLASS_FIELD_FLAG, ASTK_CLASS_METHOD_FLAG, ASTK_CLASS_PROPERTY_FLAG, ASTK_CLASS_ACCESS, ASTK_FRIEND_ITEM, ASTK_USING_ITEM, ASTK_ALIAS_TARGET, ASTK_CLASS_BASE_REF, ASTK_CLASS_IMPLEMENTS_REF, ASTK_CLASS_DECORATOR_REF, ASTK_CLASS_MIXIN_REF, ASTK_CASE_IS_VALUE, ASTK_LOCK_TARGET
+        ' CASE_ELSE yaprak DEGIL: CASE_BLOCK gibi govde deyimlerini alt liste olarak tasir.
         Return UXB_AST_CHILD_MODEL_LEAF
     End Select
 

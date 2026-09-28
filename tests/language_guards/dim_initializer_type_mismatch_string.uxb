@@ -1,0 +1,2 @@
+DIM bad AS STRING = 42
+PRINT bad

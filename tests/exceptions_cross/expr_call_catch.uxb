@@ -1,0 +1,19 @@
+' S-160: ifade icindeki fonksiyonun istisnasi ifadenin geri kalanini durdurur ve TRY'de yakalanir.
+DIM sayac AS I64 = 0
+FUNCTION F(n AS I64) AS I64
+    IF n > 2 THEN THROW "buyuk"
+    sayac += 1
+    RETURN n * 10
+END FUNCTION
+FUNCTION G(n AS I64) AS I64
+    RETURN F(n) + 1
+END FUNCTION
+DIM i AS I64
+FOR i = 1 TO 4
+    TRY
+        PRINT G(i)
+    CATCH
+        PRINT "yakalandi"; i
+    END TRY
+NEXT i
+PRINT sayac

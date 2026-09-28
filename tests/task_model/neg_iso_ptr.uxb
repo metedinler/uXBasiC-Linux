@@ -1,0 +1,9 @@
+' S-146 izolasyon negatif testi: neg_iso_ptr
+THREAD W(x AS I32) AS I32
+ DIM p AS PTR
+ RETURN x
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

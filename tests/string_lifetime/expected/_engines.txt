@@ -1,0 +1,5 @@
+# S-157/S-158 STRING yasam suresi; AST/MIR/native ayni cikti.
+# Legacy AST-x64 bu pakette KOSULMUYOR: ayni halka hatasi + STRING alan desteksizligi acik (SORUN_TAKIP S-157-L).
+AST=run
+MIR=run
+x64=run

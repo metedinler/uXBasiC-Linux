@@ -1,0 +1,15 @@
+' S-079: an F80 array element is a 16-byte cell holding the 10-byte x87 payload;
+' scalars and array elements round-trip through it.
+DIM x AS F80
+x = 1.5
+PRINT x
+DIM y(3) AS F80
+y(1) = 2.25
+y(2) = 3.5
+PRINT y(1)
+PRINT y(2)
+PRINT y(0)
+x = y(2)
+PRINT x
+PRINT SIZEOF(y)
+PRINT SIZEOF(F80)

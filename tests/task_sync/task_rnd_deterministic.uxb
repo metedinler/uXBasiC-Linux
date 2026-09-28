@@ -1,0 +1,15 @@
+' S-146 adim 2 / S-163: RND gorev basina uretec; her gorev SPAWN aninda ana uretecin siradaki
+' degeriyle tohumlanir -> ayni RANDOMIZE ile her motorda ayni sayilar.
+RANDOMIZE 7
+THREAD Zar(n AS I64) AS I64
+    DIM i AS I64
+    DIM s AS I64 = 0
+    FOR i = 1 TO n
+        s = s + INT(RND * 6) + 1
+    NEXT i
+    RETURN s
+END THREAD
+DIM a AS TASK OF I64 = SPAWN Zar(100)
+DIM b AS TASK OF I64 = SPAWN Zar(100)
+PRINT INT(RND * 1000000)
+PRINT a.JOIN(); " "; b.JOIN()

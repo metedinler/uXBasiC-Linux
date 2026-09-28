@@ -1,0 +1,11 @@
+' Paylasilan CLASS nesnesi globali -> adim 5.
+CLASS Sayac
+    n AS I64
+END CLASS
+DIM c AS Sayac = NEW Sayac
+THREAD W() AS I64
+    c.n = c.n + 1
+    RETURN 0
+END THREAD
+DIM u AS TASK OF I64 = SPAWN W()
+PRINT u.JOIN()

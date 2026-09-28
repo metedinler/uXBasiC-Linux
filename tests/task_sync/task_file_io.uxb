@@ -1,0 +1,25 @@
+' S-146 adim 2: dosya kanal tablosu gorevlerde is parcacigi guvenli.
+THREAD YazA(n AS I64) AS I64
+    OPEN "tests/task_sync/tmp/gorev_a.txt" FOR OUTPUT AS #1
+    PRINT #1, "A satiri"; n
+    CLOSE #1
+    RETURN n
+END THREAD
+THREAD YazB(n AS I64) AS I64
+    OPEN "tests/task_sync/tmp/gorev_b.txt" FOR OUTPUT AS #2
+    PRINT #2, "B satiri"; n
+    CLOSE #2
+    RETURN n
+END THREAD
+DIM a AS TASK OF I64 = SPAWN YazA(1)
+DIM b AS TASK OF I64 = SPAWN YazB(2)
+PRINT a.JOIN() + b.JOIN()
+DIM s AS STRING
+OPEN "tests/task_sync/tmp/gorev_a.txt" FOR INPUT AS #3
+INPUT #3, s
+CLOSE #3
+PRINT s
+OPEN "tests/task_sync/tmp/gorev_b.txt" FOR INPUT AS #3
+INPUT #3, s
+CLOSE #3
+PRINT s

@@ -473,6 +473,26 @@ If GetArgValue("--max-steps", maxStepsArg) <> 0 Then
     gUxbMaxSteps = ValLng(maxStepsText)
 End If
 
+' S-030 K4: --task-workers N -- native SPAWN isci sayisi (1..1024), derlenen programa gomulur.
+gMirX64TaskWorkers = 0
+Dim taskWorkersArg As String
+If GetArgValue("--task-workers", taskWorkersArg) <> 0 Then
+    Dim taskWorkersText As String = Trim(taskWorkersArg)
+    Dim taskWorkersOk As Integer = IIf(taskWorkersText <> "" And Len(taskWorkersText) <= 4, 1, 0)
+    Dim taskWorkersPos As Integer
+    For taskWorkersPos = 1 To Len(taskWorkersText)
+        If Mid(taskWorkersText, taskWorkersPos, 1) < "0" Or Mid(taskWorkersText, taskWorkersPos, 1) > "9" Then taskWorkersOk = 0
+    Next taskWorkersPos
+    If taskWorkersOk <> 0 Then
+        If ValInt(taskWorkersText) < 1 Or ValInt(taskWorkersText) > 1024 Then taskWorkersOk = 0
+    End If
+    If taskWorkersOk = 0 Then
+        UxbError "--task-workers 1 ile 1024 arasinda bir tamsayi ister: " & taskWorkersArg
+        End 2
+    End If
+    gMirX64TaskWorkers = ValInt(taskWorkersText)
+End If
+
 If Trim(outputContractPaths.stdoutOutPath) <> "" Then
     ' ABI10_GENERIC_EXEC_OUTPUT_FIX_20260711:
     ' --stdout-out requests a generic CLI stdout artifact.  Do not erase an

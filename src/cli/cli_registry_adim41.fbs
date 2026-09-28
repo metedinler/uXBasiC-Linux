@@ -25,7 +25,7 @@ Private Function UXBCliOptionNeedsValueAdim41(ByRef optName As String) As Intege
     If Right(u, 4) = "-out" Then Return 1
     If InStr(u, "json-out") > 0 Then Return 1
     Select Case u
-    Case "--target", "--stop-after", "--diag-format", "--error-limit", "--codegen-source", "--x64-mode", "--interpreter-backend", "--pp", "--preprocessor", "--artifact-root", "--out-root", "--run-id", "--extfp-runtime-dir", "--console-mode", "--message-lang", "--language", "--source", "-s", "--error-log-out", "--error-language-file", "-elo", "-elf", "--virtual", "--max-steps"
+    Case "--target", "--stop-after", "--diag-format", "--error-limit", "--codegen-source", "--x64-mode", "--interpreter-backend", "--pp", "--preprocessor", "--artifact-root", "--out-root", "--run-id", "--extfp-runtime-dir", "--console-mode", "--message-lang", "--language", "--source", "-s", "--error-log-out", "--error-language-file", "-elo", "-elf", "--virtual", "--max-steps", "--task-workers"
         Return 1
     End Select
     Return 0
@@ -50,7 +50,7 @@ Private Function UXBCliRegistryCountAdim41() As Integer
 End Function
 
 Sub UXBCliRegistryFillAdim41(items() As UXBCliOptionAdim41)
-    ReDim items(0 To 172) As UXBCliOptionAdim41
+    ReDim items(0 To 173) As UXBCliOptionAdim41
 
     items(0).longName = "--format-check"
     items(0).shortName = "fmt"
@@ -1958,6 +1958,18 @@ Sub UXBCliRegistryFillAdim41(items() As UXBCliOptionAdim41)
     items(172).isRemoved = 0
     items(172).needsValue = 1
     items(172).producesFile = 0
+
+    items(173).longName = "--task-workers"
+    items(173).shortName = "tw"
+    items(173).statusText = "Canonical/korunacak"
+    items(173).layerText = "Native x64 / gorev calisma zamani (S-030 K4)"
+    items(173).expectedExt = "yok / parametre"
+    items(173).examplePath = "--task-workers 4"
+    items(173).vscodeUse = "Dolayli"
+    items(173).validationText = "SPAWN gorevlerini yuruten isci sayisi (1..1024); derlenen native programa gomulur. Verilmezse AUTO = mantiksal CPU sayisi; calisma aninda UXB_TASK_WORKERS ortam degiskeni gomulu degerden once gelir. Yorumlayicilarda (senkron referans) etkisizdir."
+    items(173).isRemoved = 0
+    items(173).needsValue = 1
+    items(173).producesFile = 0
 
 End Sub
 

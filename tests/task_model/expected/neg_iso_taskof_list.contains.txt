@@ -1,0 +1,1 @@
+ALL=TASK OF LIST -- henuz uygulanmadi: S-146 adim 5

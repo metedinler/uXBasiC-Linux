@@ -1,0 +1,19 @@
+' S-146 Model D: iki+ gorev ayni globali artirir -> sonuc her motorda kesin.
+DIM toplam AS I64 = 0
+DIM metin AS STRING = ""
+THREAD Artir(n AS I64) AS I64
+    DIM i AS I64
+    FOR i = 1 TO n
+        toplam += 1
+    NEXT i
+    metin = metin + "x"
+    RETURN n
+END THREAD
+DIM g AS TASKGROUP
+DIM k AS I64
+FOR k = 1 TO 8
+    g.ADD(SPAWN Artir(10000))
+NEXT k
+g.JOIN()
+PRINT toplam
+PRINT LEN(metin)

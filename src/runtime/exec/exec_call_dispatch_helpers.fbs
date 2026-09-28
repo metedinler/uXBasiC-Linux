@@ -635,18 +635,13 @@ Private Function ExecRoutineNameIsLocal(ByRef ps As ParseState, ByVal routineNod
     Return 0
 End Function
 
-' BYREF-aware: byRefFlags(i)<>0 and callerArgNames(i)<>"" together mean parameter
-' paramNames(i) is BYREF and was called with a plain variable argument -- that
-' variable's caller-side value is overwritten with the parameter's final value once
-' the routine's own (snapshotted) scope is restored. Pass byRefArgCount=0 (with any
-' same-named dummy arrays) from call sites that have no BYREF/caller-argument
-' information available (e.g. the prepared-args calling convention, which has no
-' original call-site AST to inspect). This is a copy-in/copy-out implementation of
-' BYREF (the callee gets its own ordinary local, and its last value is written back
-' to the caller's variable at return) rather than true pointer aliasing --
-' observably identical for single-threaded, non-reentrant calls, and far simpler to
-' keep consistent with this interpreter's snapshot/restore scoping model.
-Private Sub ExecRestoreRoutineVars(ByRef ps As ParseState, ByRef es As ExecState, ByVal routineNodeIdx As Integer, paramNames() As String, ByVal paramCount As Integer, snapshotVars() As ExecVar, ByVal snapshotCount As Integer, ByVal snapshotNextAddr As UInteger, byRefFlags() As Integer, ByVal byRefArgCount As Integer, callerArgNames() As String)
+' S-167: BYREF parametre cagiranin yuvasinin takma adidir (ExecVar.refIdxPlus1): rutin icindeki
+' her okuma/yazma dogrudan o yuvaya gider (native ile ayni anlam; eskiden kopyala/geri-yaz idi ve
+' rutin icinde depo degismis gorunmuyor, ayni depoya iki BYREF'in son yazimi digerini eziyordu).
+' aliasSlotPlus1(i) > 0: i. parametrenin baglandigi cagiran yuvasi + 1. Bu yuvalar anlik goruntunun
+' icindedir (cagridan once vardilar); geri yukleme onlari eski degere dondurmesin diye son degerleri
+' yeniden yazilir. Takma ad bilgisi olmayan cagri yollari aliasCount=0 verir.
+Private Sub ExecRestoreRoutineVars(ByRef ps As ParseState, ByRef es As ExecState, ByVal routineNodeIdx As Integer, paramNames() As String, ByVal paramCount As Integer, snapshotVars() As ExecVar, ByVal snapshotCount As Integer, ByVal snapshotNextAddr As UInteger, aliasSlotPlus1() As Integer, ByVal aliasCount As Integer)
     Dim callerWrites(Any) As ExecVar
     Dim writeFlags(Any) As Integer
     If snapshotCount > 0 Then
@@ -665,20 +660,18 @@ Private Sub ExecRestoreRoutineVars(ByRef ps As ParseState, ByRef es As ExecState
         End If
     Next i
 
-    ' Capture each BYREF parameter's final value (in the about-to-be-discarded callee
-    ' scope) before the snapshot restore below wipes it out.
-    Dim byRefFinalValues(Any) As ExecValue
-    Dim byRefHasValue(Any) As Integer
-    If byRefArgCount > 0 Then
-        ReDim byRefFinalValues(byRefArgCount - 1)
-        ReDim byRefHasValue(byRefArgCount - 1)
-        For i = 0 To byRefArgCount - 1
-            If byRefFlags(i) <> 0 And Trim(callerArgNames(i)) <> "" Then
-                Dim paramVarIdx As Integer = ExecFindVar(es, paramNames(i))
-                If paramVarIdx >= 0 Then
-                    byRefFinalValues(i) = es.vars(paramVarIdx).value
-                    byRefHasValue(i) = 1
-                End If
+    ' BYREF takma ad hedeflerinin son degerleri (geri yukleme onlari ezmeden once).
+    Dim aliasFinalValues(Any) As ExecValue
+    Dim aliasHasValue(Any) As Integer
+    If aliasCount > 0 Then
+        ReDim aliasFinalValues(aliasCount - 1)
+        ReDim aliasHasValue(aliasCount - 1)
+        For i = 0 To aliasCount - 1
+            Dim aliasSlot As Integer = aliasSlotPlus1(i) - 1
+            If aliasSlot >= 0 And aliasSlot < snapshotCount And aliasSlot < es.count Then
+                If es.vars(aliasSlot).pinned <> 0 Then ExecVarPinLoad es, aliasSlot
+                aliasFinalValues(i) = es.vars(aliasSlot).value
+                aliasHasValue(i) = 1
             End If
         Next i
     End If
@@ -694,11 +687,11 @@ Private Sub ExecRestoreRoutineVars(ByRef ps As ParseState, ByRef es As ExecState
         End If
     Next i
 
-    ' Now that the caller's scope is back, write each BYREF parameter's final value
-    ' into the caller's own variable.
-    For i = 0 To byRefArgCount - 1
-        If byRefHasValue(i) <> 0 Then
-            ExecSetVarValue es, callerArgNames(i), byRefFinalValues(i)
+    For i = 0 To aliasCount - 1
+        If aliasHasValue(i) <> 0 Then
+            Dim restoredSlot As Integer = aliasSlotPlus1(i) - 1
+            es.vars(restoredSlot).value = aliasFinalValues(i)
+            If es.vars(restoredSlot).pinned <> 0 Then ExecVarPinStore es, restoredSlot
         End If
     Next i
 End Sub
@@ -818,14 +811,12 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
         writePos = 1
     End If
 
-    ' BYREF: for each argument that binds to a BYREF parameter and is itself a plain
-    ' variable reference at the call site, remember the caller's variable name so its
-    ' final value can be written back after the routine returns (see
-    ' ExecRestoreRoutineVars). Arguments that aren't a simple variable (a literal, an
-    ' expression, a field, ...) have nowhere to write back to and are left "" -- BYREF
-    ' then behaves like BYVAL for that one call, which is the only sensible fallback.
-    Dim callerArgNames(Any) As String
-    If paramCount > 0 Then ReDim callerArgNames(paramCount - 1)
+    ' S-167 BYREF: arguman cagiranin duz (dizi olmayan) degiskeniyse parametre o yuvanin takma adi
+    ' olur (aliasSlotPlus1 = yuva + 1); yuva cerceve acilmadan, cagiranin gozunden bulunur.
+    ' Degisken olmayan arguman (sabit, ifade, alan...) icin baglanacak depo yoktur: parametre o
+    ' cagri icin kendi yerel kopyasini alir (BYVAL gibi) -- tek anlamli yedek.
+    Dim aliasSlotPlus1(Any) As Integer
+    If paramCount > 0 Then ReDim aliasSlotPlus1(paramCount - 1) Else ReDim aliasSlotPlus1(0)
 
     Dim ai As Integer
     For ai = 0 To explicitArgCount - 1
@@ -837,7 +828,17 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
         End If
 
         If writePos < paramCount AndAlso paramByRef(writePos) <> 0 AndAlso UCase(Trim(ps.ast.nodes(argNode).kind)) = "IDENT" Then
-            callerArgNames(writePos) = ps.ast.nodes(argNode).value
+            Dim byRefParamType As String = UCase(Trim(paramTypes(writePos)))
+            If Not (Len(byRefParamType) > 2 AndAlso Right(byRefParamType, 2) = "[]") Then
+                Dim byRefSlot As Integer = ExecFindVar(es, ps.ast.nodes(argNode).value)
+                If byRefSlot < 0 Then byRefSlot = ExecEnsureVar(es, ps.ast.nodes(argNode).value)
+                If byRefSlot >= 0 AndAlso es.vars(byRefSlot).isArray = 0 Then
+                    aliasSlotPlus1(writePos) = byRefSlot + 1
+                    ExecValueInit argValues(writePos)
+                    writePos += 1
+                    Continue For
+                End If
+            End If
         End If
 
         If writePos < paramCount Then
@@ -870,7 +871,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
     Dim boundValues(Any) As ExecValue
     If paramCount > 0 Then ReDim boundValues(paramCount - 1)
     For ai = 0 To paramCount - 1
-        If arrayArgVarIdx(ai) <> -1 Then
+        If arrayArgVarIdx(ai) <> -1 Or aliasSlotPlus1(ai) > 0 Then
             ExecValueInit boundValues(ai)
             Continue For
         End If
@@ -892,6 +893,18 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
     es.runtime.callFrameBase(es.runtime.callContextDepth) = es.count
 
     For ai = 0 To paramCount - 1
+        If aliasSlotPlus1(ai) > 0 Then
+            ' S-167: BYREF takma adi -- her zaman bu cercevede yeni ad yuvasi, deger tasimaz.
+            Dim aliasNameSlot As Integer = ExecAppendFrameVar(es, paramNames(ai))
+            If aliasNameSlot = -1 Then
+                errText = "exec: local frame variable capacity exceeded"
+                es.runtime.callContextDepth -= 1
+                Return 0
+            End If
+            es.vars(aliasNameSlot).declType = es.vars(aliasSlotPlus1(ai) - 1).declType
+            es.vars(aliasNameSlot).refIdxPlus1 = aliasSlotPlus1(ai)
+            Continue For
+        End If
         If ExecFindVar(es, paramNames(ai)) < es.runtime.callFrameBase(es.runtime.callContextDepth) Then
             If ExecAppendFrameVar(es, paramNames(ai)) = -1 Then
                 errText = "exec: local frame variable capacity exceeded"
@@ -931,7 +944,9 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
     If isTaskRoutine <> 0 Then
         Dim compatibilityInput As ExecValue
         ExecValueInit compatibilityInput
-        If paramCount > 0 Then
+        If paramCount > 0 AndAlso aliasSlotPlus1(0) > 0 Then
+            compatibilityInput = es.vars(aliasSlotPlus1(0) - 1).value
+        ElseIf paramCount > 0 Then
             compatibilityInput = boundValues(0)
         ElseIf legacyTaskPayload <> 0 Then
             compatibilityInput = argValues(0)
@@ -1011,7 +1026,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
             es.runtime.callReturnHasValue = savedReturnHasValue
             es.runtime.currentRoutineName = savedRoutineName
             es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-            ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, paramByRef(), paramCount, callerArgNames()
+            ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, aliasSlotPlus1(), paramCount
             Return 0
         End If
 
@@ -1037,6 +1052,23 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
         bodyNode = ps.ast.nodes(bodyNode).nextSibling
     Loop
 
+    ' S-156: END deger ureten bir rutinden (FUNCTION; PRINT Say(5)) geldiyse ifadenin geri kalani
+    ' degerlendirilmemeli -- eskiden PRINT, cagrinin varsayilan donusunu (0) basiyordu. Basarisiz
+    ' yoldan donulur. Deger degerlendiricisi (ExecEvalNode) hatayi errText'in DOLU olmasindan anlar;
+    ' bos metin gorunmez kalip 0 basiliyordu -- bu yuzden isaret metni. exitRequest="END" korunur,
+    ' en ust dongu bunu hata degil normal bitis sayar.
+    If hasReturnValue <> 0 AndAlso UCase(es.runtime.exitRequest) = "END" Then
+        es.runtime.callContextDepth -= 1
+        es.runtime.callReturnValue = savedReturnValue
+        es.runtime.callReturnValueEx = savedReturnValueEx
+        es.runtime.callReturnHasValue = savedReturnHasValue
+        es.runtime.currentRoutineName = savedRoutineName
+        es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
+        ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, aliasSlotPlus1(), paramCount
+        errText = UXB_EXEC_END_SIGNAL_TEXT
+        Return 0
+    End If
+
     If hasReturnValue <> 0 Then
         Dim routineResultEx As ExecValue
         If es.runtime.callReturnHasValue <> 0 Then
@@ -1057,7 +1089,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
                 es.runtime.callReturnHasValue = savedReturnHasValue
                 es.runtime.currentRoutineName = savedRoutineName
                 es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-                ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, paramByRef(), paramCount, callerArgNames()
+                ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, aliasSlotPlus1(), paramCount
                 Return 0
             End If
             routineResultEx = convertedReturn
@@ -1076,7 +1108,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
     es.runtime.callReturnHasValue = savedReturnHasValue
     es.runtime.currentRoutineName = savedRoutineName
     es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-    ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, paramByRef(), paramCount, callerArgNames()
+    ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, aliasSlotPlus1(), paramCount
     Return 1
 End Function
 
@@ -1104,10 +1136,9 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
     Dim paramNames(Any) As String
     Dim paramCount As Integer
     ' This calling convention (pre-evaluated argument handles, no original call-site
-    ' AST) carries no caller-variable identity, so BYREF write-back isn't meaningful
-    ' here; pass empty/zero-count byref info to the shared restore helper.
+    ' AST) carries no caller-variable identity, so there is no BYREF alias to bind
+    ' here; pass a zero-count alias list to the shared restore helper.
     Dim noByRefFlags(0) As Integer
-    Dim noCallerArgNames(0) As String
 
     Dim bodyStart As Integer
     bodyStart = ps.ast.nodes(routineNodeIdx).firstChild
@@ -1268,7 +1299,7 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
             es.runtime.callReturnHasValue = savedReturnHasValue
             es.runtime.currentRoutineName = savedRoutineName
             es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-            ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0, noCallerArgNames()
+            ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0
             Return 0
         End If
 
@@ -1293,6 +1324,23 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
         bodyNode = ps.ast.nodes(bodyNode).nextSibling
     Loop
 
+    ' S-156: END deger ureten bir rutinden (FUNCTION; PRINT Say(5)) geldiyse ifadenin geri kalani
+    ' degerlendirilmemeli -- eskiden PRINT, cagrinin varsayilan donusunu (0) basiyordu. Basarisiz
+    ' yoldan donulur. Deger degerlendiricisi (ExecEvalNode) hatayi errText'in DOLU olmasindan anlar;
+    ' bos metin gorunmez kalip 0 basiliyordu -- bu yuzden isaret metni. exitRequest="END" korunur,
+    ' en ust dongu bunu hata degil normal bitis sayar.
+    If hasReturnValue <> 0 AndAlso UCase(es.runtime.exitRequest) = "END" Then
+        es.runtime.callContextDepth -= 1
+        es.runtime.callReturnValue = savedReturnValue
+        es.runtime.callReturnValueEx = savedReturnValueEx
+        es.runtime.callReturnHasValue = savedReturnHasValue
+        es.runtime.currentRoutineName = savedRoutineName
+        es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
+        ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0
+        errText = UXB_EXEC_END_SIGNAL_TEXT
+        Return 0
+    End If
+
     If hasReturnValue <> 0 Then
         Dim routineResultEx As ExecValue
         If es.runtime.callReturnHasValue <> 0 Then
@@ -1313,7 +1361,7 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
     es.runtime.callReturnHasValue = savedReturnHasValue
     es.runtime.currentRoutineName = savedRoutineName
     es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-    ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0, noCallerArgNames()
+    ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0
     Return 1
 End Function
 
@@ -1542,6 +1590,18 @@ Private Function ExecTryEvalReceiverMethodCall(ByRef ps As ParseState, ByRef es 
     If methodName = "" Then
         errText = "exec: method name missing in chained call"
         Return 0
+    End If
+
+    ' S-146 Model D: ATOMIC .LOAD()/.STORE()/.ADD()/.SUB()/.EXCHANGE()/.CAS().
+    Dim atomicResult As ExecValue
+    Dim atomicRv As Integer
+    atomicRv = ExecInvokeAtomicMember(ps, es, receiverNodeIdx, methodName, callNodeIdx, atomicResult, errText)
+    If atomicRv = 0 Then Return 0
+    If atomicRv > 0 Then
+        gExecLastCallValueEx = atomicResult
+        gExecLastCallValueExValid = 1
+        valueOut = ExecValueToInteger(atomicResult)
+        Return 1
     End If
 
     ' S-030: TASK/TASKGROUP .WAIT()/.JOIN()/.CANCEL()/.ADD()/.JOINALL() --

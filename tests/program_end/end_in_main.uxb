@@ -1,0 +1,6 @@
+' S-156: ana programdaki END (degisiklik yok; karsilastirma icin).
+PRINT "x"
+DIM k AS I32 = 1
+IF k = 1 THEN END
+PRINT "y"
+

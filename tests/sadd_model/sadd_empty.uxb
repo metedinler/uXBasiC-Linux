@@ -1,0 +1,6 @@
+' S-076: boş string'in adresi tek bir NUL baytını gösterir.
+DIM e AS STRING
+e = ""
+DIM p AS PTR
+p = SADD(e)
+PRINT PEEKB(p)

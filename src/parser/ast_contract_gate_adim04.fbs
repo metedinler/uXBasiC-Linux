@@ -160,7 +160,8 @@ Private Function UXBAstAdim04ValidateOneNode(ByRef p As ASTPool, ByVal nodeIdx A
         If leftOk <> 0 Or rightOk <> 0 Then
             Dim kindU As String
             kindU = UCase(Trim(p.nodes(nodeIdx).kind))
-            If kindU = "ASSIGN_STMT" Or kindU = "PRINT_ITEM" Or kindU = "FIELD_EXPR" Or kindU = "MEMBER_EXPR" Or kindU = "INDEX_EXPR" Or kindU = "EXPR_STMT" Or kindU = "RANGE_EXPR" Or kindU = "CONST_DECL" Then
+            If kindU = "ASSIGN_STMT" Or kindU = "PRINT_ITEM" Or kindU = "FIELD_EXPR" Or kindU = "MEMBER_EXPR" Or kindU = "INDEX_EXPR" Or kindU = "EXPR_STMT" Or kindU = "RANGE_EXPR" Or kindU = "CONST_DECL" Or kindU = "TERNARY_EXPR" Then
+                ' TERNARY_EXPR: kosul .left, yanlis dali .right, dogru dali firstChild (parser_expr.fbs).
                 UXBAstAdim04GateWarn r, "ROLE_LIST node has legacy left/right: " & UXBAstAdim04NodeLabel(p, nodeIdx)
             Else
                 r.leftRightMisuseCount += 1
@@ -175,7 +176,18 @@ Private Function UXBAstAdim04ValidateOneNode(ByRef p As ASTPool, ByVal nodeIdx A
 
     Case UXB_AST_CHILD_MODEL_LEAF
         r.leafNodeCount += 1
-        If leftOk <> 0 Or rightOk <> 0 Or listCount > 0 Then
+        ' S-149: `TASK OF <tip>` -- TASK tip dugumu (TYPE_REF/RETURN_TYPE) tek bir
+        ' role=TASK_RESULT_TYPE TYPE_REF alt dugumu tasir. Yalniz bu bicim yapraktan muaftir.
+        Dim taskOfLeafChildren As Integer
+        taskOfLeafChildren = 0
+        If listCount = 1 AndAlso leftOk = 0 AndAlso rightOk = 0 AndAlso UCase(Trim(p.nodes(nodeIdx).value)) = "TASK" Then
+            Dim taskOfChild As Integer
+            taskOfChild = p.nodes(nodeIdx).firstChild
+            If UXBAstAdim04IsValidIndex(p, taskOfChild) <> 0 Then
+                If UCase(Trim(p.nodes(taskOfChild).kind)) = "TYPE_REF" And UCase(Trim(p.nodes(taskOfChild).role)) = "TASK_RESULT_TYPE" Then taskOfLeafChildren = 1
+            End If
+        End If
+        If taskOfLeafChildren = 0 And (leftOk <> 0 Or rightOk <> 0 Or listCount > 0) Then
             r.leftRightMisuseCount += 1
             UXBAstAdim04GateError r, "LEAF node must not have children: " & UXBAstAdim04NodeLabel(p, nodeIdx)
         End If

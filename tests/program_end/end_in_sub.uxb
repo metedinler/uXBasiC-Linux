@@ -1,0 +1,9 @@
+' S-156: rutin icindeki END programi bitirir (eskiden MIR ve native yalniz rutinden donup devam ediyordu).
+SUB S(k AS I32)
+    PRINT "a"
+    IF k = 1 THEN END
+    PRINT "b"
+END SUB
+S(1)
+PRINT "c"
+

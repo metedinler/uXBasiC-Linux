@@ -1,0 +1,7 @@
+' S-110: 40000 tur x ~6 MIR komutu = ~240 bin adim (eskiden canonical-MIR 250 bin adimda kesiliyordu)
+DIM s AS I64
+DIM i AS I64
+FOR i = 1 TO 40000
+    s = s + i
+NEXT i
+PRINT s

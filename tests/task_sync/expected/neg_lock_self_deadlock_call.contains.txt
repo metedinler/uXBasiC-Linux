@@ -1,0 +1,3 @@
+AST=SELF_DEADLOCK: 'X' bu gorev tarafindan zaten LOCK ile tutuluyor
+MIR=SELF_DEADLOCK: 'X' bu gorev tarafindan zaten LOCK ile tutuluyor
+x64=SELF_DEADLOCK: 'X' bu gorev tarafindan zaten LOCK ile tutuluyor

@@ -1,0 +1,5 @@
+# S-160 motor durumu
+AST=run
+MIR=run
+x64=run
+AST-x64=run

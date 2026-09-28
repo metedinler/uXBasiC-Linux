@@ -1,0 +1,14 @@
+' S-157: native'de STRING degeri 32 metin isleminden sonra eziliyordu (degisken halkayi gosteriyordu).
+FUNCTION F() AS STRING
+    DIM s AS STRING
+    s = STR(9) + "-yerel"
+    DIM t AS STRING
+    DIM i AS I32
+    FOR i = 1 TO 100
+        t = STR(i) + "x"
+    NEXT
+    RETURN s
+END FUNCTION
+PRINT F()
+
+

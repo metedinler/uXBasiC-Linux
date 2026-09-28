@@ -1,0 +1,32 @@
+' S-146 Model D: acik LOCK a, b ... END LOCK birden cok deyimi bolunmez yapar.
+' Transfer gorevleri a'dan b'ye tasir; denetleyici her an a + b = 1000 gorur.
+DIM a AS I64 = 1000
+DIM b AS I64 = 0
+THREAD Transfer(n AS I64) AS I64
+    DIM i AS I64
+    FOR i = 1 TO n
+        LOCK a, b
+            a -= 1
+            b += 1
+        END LOCK
+    NEXT i
+    RETURN n
+END THREAD
+THREAD Denetle(n AS I64) AS I64
+    DIM i AS I64
+    DIM bozuk AS I64 = 0
+    FOR i = 1 TO n
+        LOCK b, a
+            IF a + b <> 1000 THEN bozuk += 1
+        END LOCK
+    NEXT i
+    RETURN bozuk
+END THREAD
+DIM g AS TASKGROUP
+g.ADD(SPAWN Transfer(200))
+g.ADD(SPAWN Transfer(300))
+DIM d AS TASK OF I64 = SPAWN Denetle(2000)
+g.ADD(SPAWN Transfer(250))
+g.JOIN()
+PRINT "bozuk="; d.JOIN()
+PRINT "a="; a; " b="; b; " toplam="; a + b

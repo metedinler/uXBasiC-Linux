@@ -1,0 +1,20 @@
+DIM x AS I32 = 1
+DIM y AS I32 = 2
+SUB Takas(BYREF a AS I32, BYREF b AS I32)
+    DIM t AS I32
+    t = a
+    a = b
+    b = t
+    PRINT "ic "; a; " "; b; " "; t
+END SUB
+Takas(x, y)
+PRINT x; " "; y
+DIM g AS I32 = 1
+SUB Golge(BYREF a AS I32)
+    DIM g AS I32
+    g = 77
+    a = 3
+    PRINT "golge "; g; " "; a
+END SUB
+Golge(g)
+PRINT g

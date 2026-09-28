@@ -40,6 +40,9 @@ Type ExecVar
     pinWidth As Integer
     pinType As String
     pinCell(0 To 15) As UByte
+    ' S-167: BYREF parametre cagiranin yuvasinin takma adidir: 0 degilse bu yuva yalniz bir ad
+    ' tasir, ExecFindVar (refIdxPlus1 - 1) yuvasini dondurur. Hedef daima daha eski bir yuvadir.
+    refIdxPlus1 As Integer
     ' typeBinding As TypeBinding
 End Type
 

@@ -1,0 +1,7 @@
+' The old task context spellings must fail loudly, not silently read a value
+' that no longer lands there.  New names are TASKIN and TASKOUT.
+PIPE LegacySpelling(value AS I32) AS I32
+    OUTPUT = INPUT * 2
+END PIPE
+
+TRIGGER PIPE LegacySpelling, 21

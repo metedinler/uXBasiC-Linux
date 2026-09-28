@@ -1,0 +1,21 @@
+' S-076: CODEPTR(rutin) yerel motorlarda GERÇEK kod adresi (aynı rutin = aynı adres, farklı rutin = farklı adres);
+' yorumlayıcılar (AST/MIR) kod adresi veremediği için net hata verir (eskiden AST uydurma bir sayı dönüyordu).
+SUB CbA()
+    PRINT 1
+END SUB
+SUB CbB()
+    PRINT 2
+END SUB
+DIM a AS PTR
+DIM b AS PTR
+DIM a2 AS PTR
+a = CODEPTR(CbA)
+b = CODEPTR(CbB)
+a2 = CODEPTR(CbA)
+IF a <> 0 THEN PRINT "A var"
+IF a = a2 THEN
+    PRINT "ayni rutin ayni adres"
+END IF
+IF a <> b THEN
+    PRINT "farkli rutin farkli adres"
+END IF

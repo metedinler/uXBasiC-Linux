@@ -1,0 +1,9 @@
+' S-056: one element past the end of an array is refused (the end address belongs to the array).
+DIM a(3) AS I32
+a(3) = 44
+DIM p AS PTR
+p = VARPTR(a)
+PRINT PEEKD(p + 12)
+PRINT PEEKD(p + 16)
+PRINT "unreachable"
+

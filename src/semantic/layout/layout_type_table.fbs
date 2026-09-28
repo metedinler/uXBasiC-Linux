@@ -1,6 +1,7 @@
 #include once "layout_shared_core.fbs"
 
 #include once "../library_type_contract.fbs"
+#include once "../library_type_manifest_io.fbs"
 
 Private Function EvalConstIntExpr(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef valueOut As Integer) As Integer
     If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return 0
@@ -236,6 +237,46 @@ Private Function ValidateCAbiFieldType(ByRef rawTypeName As String, ByRef reason
         reasonOut = "toolchain-dependent scalar requires a generated C adapter"
         Return 0
     End Select
+    Return 1
+End Function
+
+Private Function LoadLibraryTypeManifestsForLayout(ByRef ps As ParseState, ByRef errOut As String) As Integer
+    Dim referenceErr As String
+    If UXBLibraryTypeEnsureReferenceSet(referenceErr) < 0 Then
+        errOut = "layout: builtin library type registry init failed: " & referenceErr
+        Return 0
+    End If
+
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "INCLUDE_STMT" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).op)) <> "LIBTYPE" Then Continue For
+
+        Dim child As Integer
+        child = ps.ast.nodes(i).firstChild
+        Do While child <> -1
+            If UCase(Trim(ps.ast.nodes(child).kind)) = "STRING" Then
+                Dim manifestPath As String
+                manifestPath = Trim(ps.ast.nodes(child).value)
+                Dim resolvedPath As String
+                resolvedPath = UXBLibraryTypeResolveManifestPath(manifestPath, ps.ast.nodes(i).sourceFile)
+
+                Dim contract As UXBLibraryTypeContract
+                Dim loadErr As String
+                If UXBLibraryTypeReadManifestForSource(resolvedPath, ps.ast.nodes(i).sourceFile, contract, loadErr) = 0 Then
+                    errOut = "layout: library type manifest include failed: " & manifestPath & " (" & loadErr & ")"
+                    Return 0
+                End If
+                Dim registerErr As String
+                If UXBLibraryTypeRegistryRegister(contract, registerErr) < 0 Then
+                    errOut = "layout: library type manifest registration failed: " & manifestPath & " (" & registerErr & ")"
+                    Return 0
+                End If
+            End If
+            child = ps.ast.nodes(child).nextSibling
+        Loop
+    Next i
+
     Return 1
 End Function
 
@@ -516,6 +557,11 @@ Function BuildTypeLayoutTable(ByRef ps As ParseState) As Integer
     Dim ignoreAlign As Integer
 
     LayoutResetState
+
+    If LoadLibraryTypeManifestsForLayout(ps, errText) = 0 Then
+        ps.lastError = errText
+        Return 0
+    End If
 
     If CollectTypeDeclarations(ps, errText) = 0 Then
         ps.lastError = errText

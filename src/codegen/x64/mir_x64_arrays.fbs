@@ -679,6 +679,11 @@ Function MIRX64EmitStoreIndexed(ByRef ins As MIRIRInstruction, ByRef cg As MIRX6
     End If
 
     If MIRX64LoadOperandToReg(cg, ins.operands(2), "rax", errText) = 0 Then Return 0
+    If elemType = "STRING" Then
+        ' S-157: eleman metni sahipli kopya olarak saklanir (yuva adresi rcx'te).
+        MIRX64EmitOwnedStringStore cg, "    ; S-157 dizi elemani yuvasi rcx'te", "rax"
+        Return 1
+    End If
     Select Case cg.arrays(arrIdx).elementBytes
     Case 1: MIRX64Emit cg, "    mov byte [rcx], al"
     Case 2: MIRX64Emit cg, "    mov word [rcx], ax"
@@ -725,6 +730,10 @@ Function MIRX64EmitArrayFieldStore(ByRef ins As MIRIRInstruction, ByRef cg As MI
     Dim off As Integer = ValInt(ins.operands(5))
     Dim fieldWidthStore As Integer = ValInt(ins.operands(6))
     Dim suffix As String = IIf(off = 0, "", " + " & MIRX64ToStr(off))
+    If UCase(Trim(ins.operands(4))) = "STRING" Then
+        MIRX64EmitOwnedStringStore cg, "    lea rcx, [rcx" & suffix & "]", "rax"   ' S-157
+        Return 1
+    End If
     Select Case fieldWidthStore
     Case 1: MIRX64Emit cg, "    mov byte [rcx" & suffix & "], al"
     Case 2: MIRX64Emit cg, "    mov word [rcx" & suffix & "], ax"

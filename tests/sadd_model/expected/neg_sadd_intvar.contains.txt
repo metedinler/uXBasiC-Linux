@@ -1,0 +1,4 @@
+AST=SADD requires a STRING argument
+MIR=SADD requires a STRING argument
+x64=SADD requires a STRING argument
+AST-x64=SADD requires a STRING argument

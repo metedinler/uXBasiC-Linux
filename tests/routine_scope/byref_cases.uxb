@@ -1,0 +1,66 @@
+' S-167: BYREF gercek takma addir (kopyala/geri-yaz degil). Tum motorlarda ayni cikti.
+DIM g AS I32
+DIM s AS STRING
+SUB Ic(BYREF q AS I32)
+    q = q * 10
+END SUB
+SUB Dis(BYREF p AS I32)
+    p = p + 1
+    Ic(p)
+    PRINT "dis "; p; " "; g
+END SUB
+SUB Golge(BYREF a AS I32)
+    DIM g AS I32
+    g = 77
+    a = 3
+END SUB
+SUB Takas(BYREF a AS I32, BYREF b AS I32)
+    DIM t AS I32
+    t = a
+    a = b
+    b = t
+END SUB
+SUB Say(BYREF n AS I32, BYVAL k AS I32)
+    IF k > 0 THEN
+        n = n + k
+        Say(n, k - 1)
+    END IF
+END SUB
+SUB Ekle(BYREF t AS STRING)
+    t = t + "!"
+    PRINT t; " "; s
+END SUB
+FUNCTION Arttir(BYREF v AS I32) AS I32
+    v = v + 1
+    RETURN v * 2
+END FUNCTION
+SUB YerelVer()
+    DIM yer AS I32
+    yer = 4
+    Ic(yer)
+    PRINT "yerel "; yer
+END SUB
+SUB Sira(BYVAL a AS I32, BYVAL b AS I32)
+    PRINT "sira "; a; " "; b
+END SUB
+g = 1
+Dis(g)
+PRINT g
+Golge(g)
+PRINT g
+DIM x AS I32 = 1
+DIM y AS I32 = 2
+Takas(x, y)
+PRINT x; " "; y
+DIM a AS I32 = 10
+DIM b AS I32 = 20
+Sira(b, a)
+DIM n AS I32 = 0
+Say(n, 4)
+PRINT n
+s = "ab"
+Ekle(s)
+PRINT s
+DIM w AS I32 = 5
+PRINT Arttir(w); " "; w
+YerelVer()

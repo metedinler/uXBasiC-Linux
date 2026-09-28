@@ -1,0 +1,10 @@
+' S-146 adim 2 (2026-09-26): dosya kanal tablosu gorevde serbest (eski negatif test neg_iso_file_open)
+THREAD W(x AS I32) AS I32
+ OPEN "tests/task_model/tmp/gorev_dosya.txt" FOR OUTPUT AS #1
+ CLOSE #1
+ RETURN x
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

@@ -1,0 +1,5 @@
+EVENT SignedByte(value AS I8)
+    PRINT value
+END EVENT
+
+TRIGGER EVENT SignedByte, 255

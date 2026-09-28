@@ -1,0 +1,3 @@
+A var
+ayni rutin ayni adres
+farkli rutin farkli adres

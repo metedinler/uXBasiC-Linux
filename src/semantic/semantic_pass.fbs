@@ -521,12 +521,15 @@ Private Function SemValidateTaskRoutineSignature(ByRef ps As ParseState, ByVal t
             End If
         ElseIf childKind = "RETURN_TYPE" Then
             returnTypeCount += 1
-            If taskKindText <> "PIPE" Then
-                errText = "semantic: donus tipi yalniz PIPE icin gecerlidir"
+            ' S-149 (Mete, 2026-09-25): THREAD/PARALEL de istege bagli sonuc tipi
+            ' bildirebilir -- SPAWN'in urettigi `TASK OF <tip>` tutamacinin tipi.
+            ' EVENT senkron ve sonucsuz kalir.
+            If taskKindText <> "PIPE" And taskKindText <> "THREAD" And taskKindText <> "PARALEL" Then
+                errText = "semantic: donus tipi yalniz PIPE, THREAD ve PARALEL icin gecerlidir"
                 Return 0
             End If
             If Trim(ps.ast.nodes(ch).value) = "" Then
-                errText = "semantic: PIPE donus tipi bos olamaz"
+                errText = "semantic: " & taskKindText & " donus tipi bos olamaz"
                 Return 0
             End If
         End If
@@ -534,7 +537,7 @@ Private Function SemValidateTaskRoutineSignature(ByRef ps As ParseState, ByVal t
     Loop
 
     If returnTypeCount > 1 Then
-        errText = "semantic: PIPE birden fazla donus tipi bildiremez"
+        errText = "semantic: " & taskKindText & " birden fazla donus tipi bildiremez"
         Return 0
     End If
     Return 1
@@ -2386,4 +2389,5 @@ End Function
 
 #include once "type_binding.fbs"
 #include once "semantic_step3_gate.fbs"
+#include once "semantic_task_isolation.fbs"
 #include once "semantic_pass_tail.fbs"

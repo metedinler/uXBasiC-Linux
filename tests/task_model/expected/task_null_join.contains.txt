@@ -1,1 +1,3 @@
 AST=TASK.JOIN(): bos (NULL) gorev tutamaci
+MIR=TASK.JOIN(): bos (NULL) gorev tutamaci
+x64=TASK.JOIN(): bos (NULL) gorev tutamaci

@@ -1,0 +1,5 @@
+' Gercek sonsuz dongu: normal calismada sonsuza gider (native gibi); --max-steps ile kesilir.
+PRINT "basla"
+DO
+LOOP
+PRINT "hic gelmez"

@@ -1,0 +1,13 @@
+' S-056: NATIVE access through an array pointer stays inside the array.
+DIM a(3) AS I32
+a(0) = 11
+a(3) = 44
+DIM p AS PTR
+p = VARPTR(a)
+PRINT PEEKD(p)
+PRINT PEEKD(p + 12)
+POKED p + 4, 22
+PRINT a(1)
+MEMFILLD p, 7, 4
+PRINT a(0)
+PRINT a(3)

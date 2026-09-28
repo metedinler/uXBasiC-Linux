@@ -60,6 +60,9 @@ Function UXBStep3BindingCanonicalFromLegacy(ByVal legacyKind As String, ByVal le
     Case "TYPE": Return IIf(n <> "", n, TYPE_TYPEDEF)
     Case "ENUM": Return IIf(n <> "", n, TYPE_I32)
     Case "LIST", "DICT", "SET": Return TYPE_OBJECT
+    Case "TASK": Return TYPE_TASK
+    Case "TASKGROUP": Return TYPE_TASKGROUP
+    Case "MUTEX": Return TYPE_MUTEX
     End Select
     If n <> "" Then Return n
     Return UXBStep3TypeCanonical(k)

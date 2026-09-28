@@ -453,11 +453,35 @@ Sub MIRX64LoadVarNarrowFixup(ByRef cg As MIRX64Context, ByRef regName As String,
     End Select
 End Sub
 
+' S-157: STRING degeri bir degiskene / dizi elemanina / alana yazilirken sahipli kopya alinir
+' (__uxb_rt_str_store, native/uxb_runtime/uxb_runtime_mir.cpp). slotAddrSetup rcx'e yuva adresini
+' koyan komuttur ("lea rcx, [...]" ya da "mov rcx, <reg>"); valueReg metnin adresi.
+Sub MIRX64EmitOwnedStringStore(ByRef cg As MIRX64Context, ByRef slotAddrSetup As String, ByRef valueReg As String)
+    If InStr(cg.externText, "extern __uxb_rt_str_store") = 0 Then MIRX64EmitExtern cg, "extern __uxb_rt_str_store"
+    MIRX64Emit cg, "    mov r11, " & valueReg
+    MIRX64Emit cg, slotAddrSetup
+    MIRX64Emit cg, "    mov rdx, r11"
+    MIRX64Emit cg, "    sub rsp, 32"
+    MIRX64Emit cg, "    call __uxb_rt_str_store"
+    MIRX64Emit cg, "    add rsp, 32"
+End Sub
+
+' MIR gecici degerleri (__tN) halkadaki metni gosterebilir; yalniz kullanici yuvalari sahipli kopya tutar.
+Function MIRX64IsOwnedStringSlotName(ByRef cg As MIRX64Context, ByRef varName As String) As Integer
+    Dim u As String = UCase(Trim(varName))
+    If Left(u, 3) = "__T" Then Return 0
+    Return MIRX64OperandIsString(cg, varName)
+End Function
+
 Function MIRX64StoreRegToVar(ByRef cg As MIRX64Context, ByRef regName As String, ByRef varName As String, ByRef errText As String) As Integer
     Dim globalIdx As Integer
     If MIRX64FindGlobalSlot(cg, varName, globalIdx) <> 0 Then
         Dim globalType As String = cg.globals(globalIdx).typeName
         MIRX64NormalizeRegForType cg, regName, globalType
+        If MIRX64IsOwnedStringSlotName(cg, varName) <> 0 Then
+            MIRX64EmitOwnedStringStore cg, "    lea rcx, [rel " & cg.globals(globalIdx).labelText & "]", regName
+            Return 1
+        End If
         MIRX64Emit cg, "    mov qword [rel " & cg.globals(globalIdx).labelText & "], " & regName
         Return 1
     End If
@@ -487,11 +511,19 @@ Function MIRX64StoreRegToVar(ByRef cg As MIRX64Context, ByRef regName As String,
         ' through it (one extra indirection vs. an ordinary local/global).
         Dim scratchReg As String
         scratchReg = IIf(LCase(Trim(regName)) = "r11", "r10", "r11")
+        If MIRX64IsOwnedStringSlotName(cg, varName) <> 0 Then
+            MIRX64EmitOwnedStringStore cg, "    mov rcx, qword " & MIRX64RbpRef(off), regName
+            Return 1
+        End If
         MIRX64Emit cg, "    mov " & scratchReg & ", qword " & MIRX64RbpRef(off)
         MIRX64Emit cg, "    mov qword [" & scratchReg & "], " & regName
         Return 1
     End If
 
+    If MIRX64IsOwnedStringSlotName(cg, varName) <> 0 Then
+        MIRX64EmitOwnedStringStore cg, "    lea rcx, " & MIRX64RbpRef(off), regName
+        Return 1
+    End If
     MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(off) & ", " & regName
     Return 1
 End Function

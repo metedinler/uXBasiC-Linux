@@ -24,6 +24,10 @@ Type UXBMIRInterpVar
     pinWidth As Integer = 0
     pinType As String
     pinCell(0 To 15) As UByte
+    ' S-167: BYREF parametre cagiranin deposunun takma adidir (kopya degil). Sifir degilse bu
+    ' hucre yalniz bir ad tasir; tum okuma/yazmalar hedef hucreye gider (UXBMIRInterpFindVar /
+    ' UXBMIRInterpSetVar). Hedef daima daha dis bir kapsamdadir, bu hucreden once silinmez.
+    aliasOf As UXBMIRInterpVar Ptr = 0
 End Type
 
 Type UXBMIRInterpLabel
@@ -145,6 +149,7 @@ Declare Sub UXBMIRInterpEnterScope(ByRef st As UXBMIRInterpState)
 Declare Sub UXBMIRInterpLeaveScope(ByRef st As UXBMIRInterpState)
 Declare Sub UXBMIRInterpSetVar(ByRef st As UXBMIRInterpState, ByVal nameText As String, ByRef v As UXBInterpValue)
 Declare Sub UXBMIRInterpAssignVar(ByRef st As UXBMIRInterpState, ByVal nameText As String, ByRef v As UXBInterpValue)
+Declare Sub UXBMIRInterpBindAlias(ByRef st As UXBMIRInterpState, ByVal nameText As String, ByVal targetIdx As Integer)
 Declare Function UXBMIRInterpGetOperand(ByRef st As UXBMIRInterpState, ByVal operandText As String) As UXBInterpValue
 Declare Function UXBMIRInterpFindVar(ByRef st As UXBMIRInterpState, ByVal nameText As String) As Integer
 Declare Sub UXBMIRInterpAddLabel(ByRef st As UXBMIRInterpState, ByVal nameText As String, ByVal indexValue As Integer)

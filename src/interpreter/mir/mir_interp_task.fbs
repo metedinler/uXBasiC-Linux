@@ -1,0 +1,736 @@
+#ifndef UXB_MIR_INTERP_TASK_FBS
+#define UXB_MIR_INTERP_TASK_FBS
+#include once "../../common/uxb_rng.fbs"
+#include once "../../common/uxb_stdin.fbs"
+
+' S-030 Faz 1B (Mete K7, 2026-09-24): canonical-MIR yorumlayicisinin gorev
+' saglayicisi -- AST referans uygulamasinin (src/runtime/exec/exec_task_handle.fbs)
+' SENKRON esi. Kanonik adlar (mir_lower_expr.fbs basindaki sozlesme):
+'   TASK_SPAWN(lane, tur, ad, sonucTipi, arg1..) TASK_WAIT TASK_JOIN TASK_CANCEL
+'   TASK_STATUS TASK_RESULT TASK_ERROR TASK_GROUP_CREATE TASK_GROUP_ADD TASK_GROUP_JOIN
+' Faz 1 siniri (acikca belgelenmis, placeholder degil): TASK_SPAWN gorev govdesini
+' ayni cagri yiginda hemen calistirir; tutamac DONE/ERROR durumunda dogar,
+' .STATUS PENDING/RUNNING gormez. Govde hatasi (THROW dahil) YAKALANIR, gorevde
+' tutulur, bekleyen istisna durumu temizlenir; JOIN/RESULT/TASKGROUP.JOIN hatayi
+' cagirana aktarir (Mete K6: CANCELLED icin de).
+'
+' Tutamac: heap slotu (LIST/DICT/SET ile ayni yol), deger turu UXB_VAL_ARRAY +
+' typeName "TASK"/"TASKGROUP" -- UXBInterpApplyDeclaredType heap tutamaclarini
+' sayiya cevirmez (S-037). `DIM t AS TASK` 0 (I32) ile dogar = NULL; heap id'leri
+' 0'dan basladigi icin NULL, degerin TURUNE bakilarak ayirt edilir.
+' TASK slotu: values(0)=sonuc, names(0)=durum, names(1)=hata, names(2)=gorev adi, names(3)=tur,
+' names(4)="1" hata okundu (K5: JOIN/RESULT/GROUP_JOIN ile yukseldi ya da STATUS/ERRORTEXT ile sorgulandi).
+' TASKGROUP slotu: values(0..count-1)=uye TASK tutamaclari (ekleme sirasi).
+
+Private Function UXBMIRTaskUnquote(ByVal s As String) As String
+    s = Trim(s)
+    If Len(s) >= 2 AndAlso Left(s, 1) = Chr(34) AndAlso Right(s, 1) = Chr(34) Then Return Mid(s, 2, Len(s) - 2)
+    Return s
+End Function
+
+Private Function UXBMIRTaskHandleValue(ByVal kindText As String, ByVal id As Integer) As UXBInterpValue
+    Dim v As UXBInterpValue
+    v.kind = UXB_VAL_ARRAY
+    v.typeName = kindText
+    v.handleId = id
+    v.objectId = id
+    v.arrayId = id
+    v.intValue = id
+    Return v
+End Function
+
+' 1 = gecerli tutamac (slotOut dolu); 0 = NULL / baska turde deger.
+Private Function UXBMIRTaskSlot(ByRef ctx As UXBInterpContext, ByRef v As UXBInterpValue, ByVal kindText As String, ByRef slotOut As Integer) As Integer
+    slotOut = -1
+    If v.kind <> UXB_VAL_ARRAY Then Return 0
+    If UCase(Trim(v.typeName)) <> kindText Then Return 0
+    If v.arrayId < 0 Or v.arrayId >= ctx.heap.slotCount Then Return 0
+    If ctx.heap.slots(v.arrayId).active = 0 Then Return 0
+    If UCase(Trim(ctx.heap.slots(v.arrayId).slotKind)) <> kindText Then Return 0
+    slotOut = v.arrayId
+    Return 1
+End Function
+
+' Mete K6: ERROR ya da CANCELLED bitmis gorev -> 1 ve errText dolu.
+Private Function UXBMIRTaskFailureText(ByRef ctx As UXBInterpContext, ByVal slotId As Integer, ByRef errText As String) As Integer
+    Select Case ctx.heap.slots(slotId).names(0)
+    Case "ERROR"
+        ctx.heap.slots(slotId).names(4) = "1"
+        errText = "gorev hatasi (" & ctx.heap.slots(slotId).names(2) & "): " & ctx.heap.slots(slotId).names(1)
+        Return 1
+    Case "CANCELLED"
+        ctx.heap.slots(slotId).names(4) = "1"
+        errText = "gorev iptal edildi (" & ctx.heap.slots(slotId).names(2) & "): CANCELLED"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' K5: program sonunda hic okunmamis ERROR gorevleri (iptal hata sayilmaz). 1 = var (errOut dolu).
+Function UXBMIRTaskUnreadErrors(ByRef ctx As UXBInterpContext, ByRef errOut As String) As Integer
+    errOut = ""
+    Dim i As Integer
+    For i = 0 To ctx.heap.slotCount - 1
+        If ctx.heap.slots(i).active = 0 Then Continue For
+        If UCase(Trim(ctx.heap.slots(i).slotKind)) <> "TASK" Then Continue For
+        If UBound(ctx.heap.slots(i).names) < 4 Then Continue For
+        If ctx.heap.slots(i).names(0) <> "ERROR" Or ctx.heap.slots(i).names(4) = "1" Then Continue For
+        If errOut <> "" Then errOut &= "; "
+        errOut &= "okunmamis gorev hatasi (" & ctx.heap.slots(i).names(2) & "): " & ctx.heap.slots(i).names(1)
+    Next i
+    Return IIf(errOut <> "", 1, 0)
+End Function
+
+Private Function UXBMIRTaskError(ByVal textValue As String) As UXBInterpValue
+    Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, textValue)
+End Function
+
+' ---------------------------------------------------------------------------
+' S-146 Model D: kilit tablosu ve ertelenmis gorevler (tek is parcacikli referans).
+' Kilit sahibi GOREVDIR (anahtar: ana program 0, gorev = TASK slotu + 1). Yorumlayici
+' gorevi SPAWN aninda calistirir; bir gorev ya da ana program ACIK LOCK tutarken yapilan
+' SPAWN ertelenir (native'de o gorev kilidi bekleyecekti): kilit sayisi sifira inince,
+' gorevin JOIN/WAIT/RESULT/TASKGROUP.JOIN'inde ya da program sonunda calisir. Bu, native
+' zamanlamasinin gecerli bir ornegidir (gorevler arasi sira dil garantisi degil).
+' SYNC_ENTER/SYNC_LEAVE (otomatik deyim kilidi) tek is parcacikta cakisamaz: etkisiz.
+' Sahibi baska gorev olan kilidi istemek tek is parcacikta ilerleyemez = LOCK_DEADLOCK;
+' ayni gorevin ayni kilidi ikinci kez acikca istemesi = SELF_DEADLOCK. Ikisi de olumcul.
+' ---------------------------------------------------------------------------
+Dim Shared gMirLkIds(Any) As LongInt
+Dim Shared gMirLkOwner(Any) As Integer      ' -1 = serbest
+Dim Shared gMirLkName(Any) As String
+Dim Shared gMirLkCount As Integer
+Dim Shared gMirLkHeldTotal As Integer
+Dim Shared gMirLkStackKey(Any) As Integer   ' acik kilit yigini: girdi basina sahip anahtari
+Dim Shared gMirLkStackIds(Any) As String    ' ve alinan kimlikler "id,id"
+Dim Shared gMirLkStackCount As Integer
+Dim Shared gMirCurrentTaskKey As Integer
+Dim Shared gMirMutexNext As LongInt
+
+Dim Shared gMirDefSlot(Any) As Integer      ' ertelenmis gorevler (FIFO)
+Dim Shared gMirDefLane(Any) As String
+Dim Shared gMirDefResult(Any) As String
+Dim Shared gMirDefArgStart(Any) As Integer
+Dim Shared gMirDefArgCount(Any) As Integer
+Dim Shared gMirDefDone(Any) As Integer
+Dim Shared gMirDefCount As Integer
+Dim Shared gMirDefArgs(Any) As UXBInterpValue
+Dim Shared gMirDefArgTotal As Integer
+
+Sub UXBMIRSyncReset()
+    UXBRngResetAll
+    gMirLkCount = 0
+    gMirLkHeldTotal = 0
+    gMirLkStackCount = 0
+    gMirCurrentTaskKey = 0
+    gMirMutexNext = 0
+    gMirDefCount = 0
+    gMirDefArgTotal = 0
+    Erase gMirLkIds, gMirLkOwner, gMirLkName, gMirLkStackKey, gMirLkStackIds
+    Erase gMirDefSlot, gMirDefLane, gMirDefResult, gMirDefArgStart, gMirDefArgCount, gMirDefDone, gMirDefArgs
+End Sub
+
+Private Function UXBMIRLockFatal(ByVal textValue As String) As UXBInterpValue
+    Return UXBInterpValueError(UXB_INTERP_ERR_LOCK_FATAL, textValue)
+End Function
+
+Private Function UXBMIRLockRecord(ByVal id As LongInt, ByVal nameText As String) As Integer
+    Dim i As Integer
+    For i = 0 To gMirLkCount - 1
+        If gMirLkIds(i) = id Then
+            If gMirLkName(i) = "" Then gMirLkName(i) = nameText
+            Return i
+        End If
+    Next i
+    ReDim Preserve gMirLkIds(gMirLkCount)
+    ReDim Preserve gMirLkOwner(gMirLkCount)
+    ReDim Preserve gMirLkName(gMirLkCount)
+    gMirLkIds(gMirLkCount) = id
+    gMirLkOwner(gMirLkCount) = -1
+    gMirLkName(gMirLkCount) = nameText
+    gMirLkCount += 1
+    Return gMirLkCount - 1
+End Function
+
+Private Function UXBMIRLockLabel(ByVal rec As Integer) As String
+    If gMirLkName(rec) <> "" Then Return "'" & gMirLkName(rec) & "'"
+    Return "MUTEX #" & LTrim(Str(gMirLkIds(rec) - (1LL Shl 32)))
+End Function
+
+' Hedef listesi: "id,id" (statik) + MUTEX degerleri; lockOrderId sirasi, tekil. names paralel.
+Private Sub UXBMIRLockCollect(ByRef st As UXBMIRInterpState, ByRef ins As UXBMIRInstructionRecord, ids() As LongInt, names() As String, ByRef cnt As Integer)
+    cnt = 0
+    Dim idsCsv As String = UXBMIRTaskUnquote(ins.operands(1)) & ","
+    Dim namesCsv As String = ""
+    If ins.operandCount >= 3 Then namesCsv = UXBMIRTaskUnquote(ins.operands(2)) & ","
+    Dim p As Integer = 1
+    Dim np As Integer = 1
+    Do While p < Len(idsCsv)
+        Dim q As Integer = InStr(p, idsCsv, ",")
+        If q = 0 Then Exit Do
+        Dim part As String = Trim(Mid(idsCsv, p, q - p))
+        Dim nm As String = ""
+        Dim nq As Integer = InStr(np, namesCsv, ",")
+        If nq > 0 Then nm = Mid(namesCsv, np, nq - np): np = nq + 1
+        If part <> "" Then
+            ReDim Preserve ids(cnt)
+            ReDim Preserve names(cnt)
+            ids(cnt) = ValLng(part)
+            names(cnt) = nm
+            cnt += 1
+        End If
+        p = q + 1
+    Loop
+    Dim k As Integer
+    For k = 3 To ins.operandCount - 1
+        Dim v As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(k))
+        ReDim Preserve ids(cnt)
+        ReDim Preserve names(cnt)
+        ids(cnt) = v.intValue
+        names(cnt) = ""
+        cnt += 1
+    Next k
+    ' Siralama + tekillestirme.
+    Dim i As Integer, j As Integer
+    For i = 1 To cnt - 1
+        Dim ki As LongInt = ids(i)
+        Dim kn As String = names(i)
+        j = i - 1
+        Do While j >= 0 AndAlso ids(j) > ki
+            ids(j + 1) = ids(j)
+            names(j + 1) = names(j)
+            j -= 1
+        Loop
+        ids(j + 1) = ki
+        names(j + 1) = kn
+    Next i
+    Dim w As Integer = 0
+    For i = 0 To cnt - 1
+        If w > 0 AndAlso ids(w - 1) = ids(i) Then Continue For
+        ids(w) = ids(i)
+        names(w) = names(i)
+        w += 1
+    Next i
+    cnt = w
+End Sub
+
+Private Sub UXBMIRLockReleaseIds(ByVal idsCsv As String)
+    Dim s As String = idsCsv & ","
+    Dim p As Integer = 1
+    Do While p < Len(s)
+        Dim q As Integer = InStr(p, s, ",")
+        If q = 0 Then Exit Do
+        Dim part As String = Trim(Mid(s, p, q - p))
+        If part <> "" Then
+            Dim id As LongInt = ValLng(part)
+            Dim i As Integer
+            For i = 0 To gMirLkCount - 1
+                If gMirLkIds(i) = id AndAlso gMirLkOwner(i) <> -1 Then
+                    gMirLkOwner(i) = -1
+                    gMirLkHeldTotal -= 1
+                    Exit For
+                End If
+            Next i
+        End If
+        p = q + 1
+    Loop
+End Sub
+
+Private Sub UXBMIRLockPopEntry(ByVal entryIdx As Integer)
+    UXBMIRLockReleaseIds gMirLkStackIds(entryIdx)
+    Dim i As Integer
+    For i = entryIdx To gMirLkStackCount - 2
+        gMirLkStackKey(i) = gMirLkStackKey(i + 1)
+        gMirLkStackIds(i) = gMirLkStackIds(i + 1)
+    Next i
+    gMirLkStackCount -= 1
+End Sub
+
+Private Function UXBMIRLockKeyDepth(ByVal key As Integer) As Integer
+    Dim n As Integer = 0
+    Dim i As Integer
+    For i = 0 To gMirLkStackCount - 1
+        If gMirLkStackKey(i) = key Then n += 1
+    Next i
+    Return n
+End Function
+
+' Anahtarin acik kilit yiginini `mark` derinligine indirir (icten disa).
+Private Sub UXBMIRLockReleaseKeyTo(ByVal key As Integer, ByVal mark As Integer)
+    Do While UXBMIRLockKeyDepth(key) > mark
+        Dim i As Integer
+        For i = gMirLkStackCount - 1 To 0 Step -1
+            If gMirLkStackKey(i) = key Then UXBMIRLockPopEntry i: Exit For
+        Next i
+    Loop
+End Sub
+
+Declare Function UXBMIRTaskDrainDeferred(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState) As UXBInterpValue
+
+Private Function UXBMIRLockEnter(ByRef st As UXBMIRInterpState, ByRef ins As UXBMIRInstructionRecord) As UXBInterpValue
+    Dim ids(Any) As LongInt
+    Dim names(Any) As String
+    Dim cnt As Integer
+    UXBMIRLockCollect st, ins, ids(), names(), cnt
+    Dim key As Integer = gMirCurrentTaskKey
+    Dim i As Integer
+    For i = 0 To cnt - 1
+        Dim rec As Integer = UXBMIRLockRecord(ids(i), names(i))
+        If gMirLkOwner(rec) = key Then
+            Return UXBMIRLockFatal("SELF_DEADLOCK: " & UXBMIRLockLabel(rec) & " bu gorev tarafindan zaten LOCK ile tutuluyor; ayni kilidi ikinci kez LOCK etmek kendini kilitler")
+        End If
+        If gMirLkOwner(rec) <> -1 Then
+            Return UXBMIRLockFatal("LOCK_DEADLOCK: " & UXBMIRLockLabel(rec) & " kilidini tutan gorev, bu gorevin bitmesini bekliyor (LOCK icinde JOIN/WAIT ile karsilikli bekleme)")
+        End If
+    Next i
+    Dim taken As String = ""
+    For i = 0 To cnt - 1
+        Dim rec2 As Integer = UXBMIRLockRecord(ids(i), names(i))
+        gMirLkOwner(rec2) = key
+        gMirLkHeldTotal += 1
+        If taken <> "" Then taken &= ","
+        taken &= LTrim(Str(ids(i)))
+    Next i
+    ReDim Preserve gMirLkStackKey(gMirLkStackCount)
+    ReDim Preserve gMirLkStackIds(gMirLkStackCount)
+    gMirLkStackKey(gMirLkStackCount) = key
+    gMirLkStackIds(gMirLkStackCount) = taken
+    gMirLkStackCount += 1
+    Return UXBInterpValueVoid()
+End Function
+
+Private Function UXBMIRLockLeave(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState, ByRef ins As UXBMIRInstructionRecord) As UXBInterpValue
+    Dim key As Integer = gMirCurrentTaskKey
+    Dim i As Integer
+    For i = gMirLkStackCount - 1 To 0 Step -1
+        If gMirLkStackKey(i) = key Then
+            UXBMIRLockPopEntry i
+            Exit For
+        End If
+    Next i
+    If gMirLkHeldTotal = 0 Then Return UXBMIRTaskDrainDeferred(instructions(), instructionCount, ctx, st)
+    Return UXBInterpValueVoid()
+End Function
+
+' TASK_SPAWN: lane rutininin parametrelerini baglar, govdeyi calistirir, sonucu/hatayi
+' tutamaca yazar. Yalniz BAGLAMA hatasi (hedef yok, arguman sayisi) SPAWN cagrisinin
+' kendi hatasidir; govde hatasi gorevde kalir.
+Private Function UXBMIRTaskRunBody(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState, ByVal taskId As Integer, ByVal laneName As String, ByVal resultType As String, argValues() As UXBInterpValue, ByVal argStart As Integer, ByVal argCount As Integer) As UXBInterpValue
+    Dim labelIdx As Integer = UXBMIRInterpFindLabel(st, laneName)
+    Dim laneLabel As UXBMIRInstructionRecord = instructions(labelIdx)
+    ctx.heap.slots(taskId).names(0) = "RUNNING"
+    UXBMIRInterpEnterScope st
+    Dim i As Integer
+    For i = 0 To argCount - 1
+        Dim paramName As String = Trim(laneLabel.operands(i + 1))
+        If paramName <> "" Then UXBMIRInterpSetVar st, paramName, argValues(argStart + i)
+    Next i
+
+    Dim prevKey As Integer = gMirCurrentTaskKey
+    gMirCurrentTaskKey = taskId + 1
+    Dim bodyErr As String
+    Dim bodyValue As UXBInterpValue = UXBMIRInterpInvokeLabel(instructions(), instructionCount, ctx, st, laneName, bodyErr)
+    ' Gorev biterken (normal ya da hatayla) hala tuttugu acik kilitler birakilir.
+    UXBMIRLockReleaseKeyTo taskId + 1, 0
+    gMirCurrentTaskKey = prevKey
+    UXBMIRInterpLeaveScope st
+
+    ' S-160: gorev govdesi acik istisnayla bitti (yakalanmamis THROW) -> gorev hatasi.
+    If UXBInterpIsError(bodyValue) = 0 Then
+        Dim taskExcErr As String
+        If UXBMIRInterpPendingException(st, taskExcErr) <> 0 Then bodyValue = UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, taskExcErr)
+    End If
+    If UXBInterpIsError(bodyValue) <> 0 AndAlso (bodyValue.errorCode = UXB_INTERP_SIGNAL_PROGRAM_END Or bodyValue.errorCode = UXB_INTERP_ERR_LOCK_FATAL) Then
+        ' S-156 sinyali ve olumcul kilit hatasi gorev hatasi degildir: programin kendisini bitirir.
+        Return bodyValue
+    End If
+    If UXBInterpIsError(bodyValue) <> 0 Then
+        ' Mete: "yakalanmamis asenkron hata gorev nesnesinde tutulur" -- cagirana SIZMAZ.
+        ctx.heap.slots(taskId).names(0) = "ERROR"
+        ctx.heap.slots(taskId).names(1) = bodyValue.errorText
+        UXBMIRInterpAssignVar st, "__mir_exc_active", UXBInterpValueInt(0)
+        UXBMIRInterpAssignVar st, "__mir_exc_value", UXBInterpValueVoid()
+    Else
+        ' S-149: `THREAD ... AS <tip>` -> sonuc bildirilen tipte (FUNCTION donusu gibi).
+        If resultType <> "" Then bodyValue = UXBInterpApplyDeclaredType(bodyValue, resultType)
+        ctx.heap.slots(taskId).values(0) = bodyValue
+        ctx.heap.slots(taskId).names(0) = "DONE"
+    End If
+    Return UXBInterpValueVoid()
+End Function
+
+' Ertelenmis gorevi (varsa, baslamamissa) simdi calistirir.
+Private Function UXBMIRTaskRunDeferredSlot(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState, ByVal slotId As Integer) As UXBInterpValue
+    Dim d As Integer
+    For d = 0 To gMirDefCount - 1
+        If gMirDefSlot(d) <> slotId Or gMirDefDone(d) <> 0 Then Continue For
+        gMirDefDone(d) = 1
+        If ctx.heap.slots(slotId).names(0) <> "PENDING" Then Return UXBInterpValueVoid()   ' K6: baslamadan iptal
+        Return UXBMIRTaskRunBody(instructions(), instructionCount, ctx, st, slotId, gMirDefLane(d), gMirDefResult(d), gMirDefArgs(), gMirDefArgStart(d), gMirDefArgCount(d))
+    Next d
+    Return UXBInterpValueVoid()
+End Function
+
+Function UXBMIRTaskDrainDeferred(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState) As UXBInterpValue
+    Dim d As Integer = 0
+    Do While d < gMirDefCount
+        If gMirDefDone(d) = 0 Then
+            Dim r As UXBInterpValue = UXBMIRTaskRunDeferredSlot(instructions(), instructionCount, ctx, st, gMirDefSlot(d))
+            If UXBInterpIsError(r) <> 0 Then Return r
+        End If
+        d += 1
+    Loop
+    Return UXBInterpValueVoid()
+End Function
+
+' Program sonu (K5): ana programin hala tuttugu acik kilitler birakilir (END LOCK icinde
+' olabilir), ertelenmis gorevler calistirilir.
+Function UXBMIRTaskFinishProgram(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState) As UXBInterpValue
+    UXBMIRLockReleaseKeyTo 0, 0
+    Return UXBMIRTaskDrainDeferred(instructions(), instructionCount, ctx, st)
+End Function
+
+Private Function UXBMIRTaskSpawn(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState, ByRef ins As UXBMIRInstructionRecord) As UXBInterpValue
+    If ins.operandCount < 5 Then Return UXBMIRTaskError("MIR: TASK_SPAWN lane, tur, ad ve sonuc tipi ister")
+    Dim laneName As String = UCase(UXBMIRTaskUnquote(ins.operands(1)))
+    Dim kindText As String = UCase(UXBMIRTaskUnquote(ins.operands(2)))
+    Dim taskName As String = UCase(UXBMIRTaskUnquote(ins.operands(3)))
+    Dim resultType As String = UCase(UXBMIRTaskUnquote(ins.operands(4)))
+
+    Dim labelIdx As Integer = UXBMIRInterpFindLabel(st, laneName)
+    If labelIdx < 0 Or labelIdx >= instructionCount Then Return UXBMIRTaskError("MIR: SPAWN hedef rutini bulunamadi: " & taskName & " (" & laneName & ")")
+
+    Dim laneLabel As UXBMIRInstructionRecord = instructions(labelIdx)
+    Dim paramCount As Integer = laneLabel.operandCount - 1
+    If paramCount < 0 Then paramCount = 0
+    Dim argCount As Integer = ins.operandCount - 5
+    If argCount <> paramCount Then
+        Return UXBMIRTaskError("MIR: SPAWN cagri argumani uyusmuyor " & taskName & " beklenen=" & LTrim(Str(paramCount)) & " gelen=" & LTrim(Str(argCount)))
+    End If
+
+    ' Argumanlar CAGIRANIN kapsaminda degerlendirilir (BYVAL kopya), sonra yeni kapsama baglanir.
+    Dim argValues(Any) As UXBInterpValue
+    Dim i As Integer
+    If paramCount > 0 Then ReDim argValues(paramCount - 1)
+    For i = 0 To paramCount - 1
+        argValues(i) = UXBInterpLibraryValueCopy(UXBMIRInterpGetOperand(st, ins.operands(5 + i)))
+        If UXBInterpIsError(argValues(i)) <> 0 Then Return argValues(i)
+    Next i
+
+    For i = 0 To paramCount - 1
+        Dim paramName As String = Trim(laneLabel.operands(i + 1))
+        If Left(paramName, Len(UXB_MIR_CANONICAL_BYREF_PARAM_PREFIX)) = UXB_MIR_CANONICAL_BYREF_PARAM_PREFIX Then
+            Return UXBMIRTaskError("MIR: SPAWN: BYREF parametre asenkron gorevde desteklenmiyor: " & taskName)
+        End If
+    Next i
+
+    Dim taskId As Integer = UXBInterpHeapAlloc(ctx.heap, "TASK", "TASK")
+    With ctx.heap.slots(taskId)
+        ReDim .values(0)
+        ReDim .names(4)
+        .values(0) = UXBInterpValueVoid()
+        .names(0) = "PENDING"
+        .names(1) = ""
+        .names(2) = taskName
+        .names(3) = kindText
+        .count = 1
+    End With
+
+    ' S-146 madde 9 / S-163: gorevin kendi RND uretecini ata baglaminda, SPAWN aninda tohumla.
+    UXBRngSpawnChild gMirCurrentTaskKey, taskId + 1
+
+    If gMirLkHeldTotal > 0 Then
+        ' Acik LOCK tutulurken: gorev ertelenir (native'de kilidi bekleyecekti).
+        Dim d As Integer = gMirDefCount
+        ReDim Preserve gMirDefSlot(d)
+        ReDim Preserve gMirDefLane(d)
+        ReDim Preserve gMirDefResult(d)
+        ReDim Preserve gMirDefArgStart(d)
+        ReDim Preserve gMirDefArgCount(d)
+        ReDim Preserve gMirDefDone(d)
+        gMirDefSlot(d) = taskId
+        gMirDefLane(d) = laneName
+        gMirDefResult(d) = resultType
+        gMirDefArgStart(d) = gMirDefArgTotal
+        gMirDefArgCount(d) = paramCount
+        gMirDefDone(d) = 0
+        gMirDefCount = d + 1
+        For i = 0 To paramCount - 1
+            ReDim Preserve gMirDefArgs(gMirDefArgTotal)
+            gMirDefArgs(gMirDefArgTotal) = argValues(i)
+            gMirDefArgTotal += 1
+        Next i
+        Return UXBMIRTaskHandleValue("TASK", taskId)
+    End If
+
+    Dim runValue As UXBInterpValue = UXBMIRTaskRunBody(instructions(), instructionCount, ctx, st, taskId, laneName, resultType, argValues(), 0, paramCount)
+    If UXBInterpIsError(runValue) <> 0 Then Return runValue
+    Return UXBMIRTaskHandleValue("TASK", taskId)
+End Function
+
+Function UXBMIRInterpExecTaskCall(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState, ByRef ins As UXBMIRInstructionRecord, ByRef handledOut As Integer) As UXBInterpValue
+    handledOut = 0
+    If UXBMIRStep4CanonicalOpcode(ins.opcode) <> "MIR_CALL" Or ins.operandCount < 1 Then Return UXBInterpValueVoid()
+    Dim callName As String = UCase(Trim(ins.operands(0)))
+    Select Case callName
+    Case "TASK_SPAWN", "TASK_WAIT", "TASK_JOIN", "TASK_CANCEL", "TASK_STATUS", "TASK_RESULT", "TASK_ERROR", _
+         "TASK_GROUP_CREATE", "TASK_GROUP_ADD", "TASK_GROUP_JOIN", _
+         "SYNC_ENTER", "SYNC_LEAVE", "STR_SNAPSHOT", "LOCK_ENTER", "LOCK_LEAVE", "LOCK_MARK", "LOCK_RELEASE_TO", "MUTEX_NEW", _
+         "ATOMIC_LOAD", "ATOMIC_STORE", "ATOMIC_ADD", "ATOMIC_SUB", "ATOMIC_EXCHANGE", "ATOMIC_CAS", "RND", "RANDOMIZE", "CLS", "COLOR", "LOCATE", "INPUT"
+        handledOut = 1
+    Case Else
+        Return UXBInterpValueVoid()
+    End Select
+
+    Dim resultValue As UXBInterpValue = UXBInterpValueVoid()
+    Dim slotId As Integer
+    Dim failText As String
+
+    ' S-146 Model D: senkron ve kilit islemleri.
+    Select Case callName
+    Case "SYNC_LEAVE"
+        Return UXBInterpValueVoid()
+    Case "SYNC_ENTER"
+        ' Tek is parcacigi: otomatik deyim kilidi baska bir otomatik kilitle cakisamaz. Ancak depo
+        ' BASKA bir gorevin acik LOCK'unda ise (o gorev bu gorevi JOIN/WAIT ile bekliyor) native'de
+        ' bu gorev sonsuza dek bekler: ayni tani burada da verilir.
+        If gMirLkHeldTotal > 0 AndAlso ins.operandCount >= 2 Then
+            Dim sids(Any) As LongInt
+            Dim snames(Any) As String
+            Dim scnt As Integer
+            UXBMIRLockCollect st, ins, sids(), snames(), scnt
+            Dim si As Integer
+            For si = 0 To scnt - 1
+                Dim srec As Integer = UXBMIRLockRecord(sids(si), snames(si))
+                If gMirLkOwner(srec) <> -1 AndAlso gMirLkOwner(srec) <> gMirCurrentTaskKey Then
+                    Return UXBMIRLockFatal("LOCK_DEADLOCK: " & UXBMIRLockLabel(srec) & " kilidini tutan gorev, bu gorevin bitmesini bekliyor (LOCK icinde JOIN/WAIT ile karsilikli bekleme)")
+                End If
+            Next si
+        End If
+        Return UXBInterpValueVoid()
+    Case "STR_SNAPSHOT"
+        If ins.operandCount <> 2 Then Return UXBMIRTaskError("MIR: STR_SNAPSHOT tek deger ister")
+        resultValue = UXBInterpLibraryValueCopy(UXBMIRInterpGetOperand(st, ins.operands(1)))
+        If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, resultValue
+        Return resultValue
+    Case "LOCK_ENTER"
+        If ins.operandCount < 3 Then Return UXBMIRTaskError("MIR: LOCK_ENTER kimlik ve ad listesi ister")
+        Return UXBMIRLockEnter(st, ins)
+    Case "LOCK_LEAVE"
+        Return UXBMIRLockLeave(instructions(), instructionCount, ctx, st, ins)
+    Case "LOCK_MARK"
+        resultValue = UXBInterpValueInt(UXBMIRLockKeyDepth(gMirCurrentTaskKey))
+        If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, resultValue
+        Return resultValue
+    Case "LOCK_RELEASE_TO"
+        If ins.operandCount <> 2 Then Return UXBMIRTaskError("MIR: LOCK_RELEASE_TO tek derinlik ister")
+        UXBMIRLockReleaseKeyTo gMirCurrentTaskKey, CInt(UXBMIRInterpGetOperand(st, ins.operands(1)).intValue)
+        If gMirLkHeldTotal = 0 Then Return UXBMIRTaskDrainDeferred(instructions(), instructionCount, ctx, st)
+        Return UXBInterpValueVoid()
+    Case "ATOMIC_LOAD", "ATOMIC_STORE", "ATOMIC_ADD", "ATOMIC_SUB", "ATOMIC_EXCHANGE", "ATOMIC_CAS"
+        ' Islenen 1 = ATOMIC degiskenin adi. Tek is parcacikli yorumlayicida islem zaten bolunmez;
+        ' deger tipi (tasma/daraltma) degiskenin bildirilen tipine gore uygulanir.
+        If ins.operandCount < 2 Then Return UXBMIRTaskError("MIR: " & callName & " degisken adi ister")
+        Dim avName As String = Trim(ins.operands(1))
+        Dim acur As UXBInterpValue = UXBMIRInterpGetOperand(st, avName)
+        If UXBInterpIsError(acur) <> 0 Then Return acur
+        Dim aType As String = UCase(Trim(ins.resultType))
+        If callName = "ATOMIC_CAS" Or aType = "" Then aType = UCase(Trim(acur.typeName))
+        Dim aIsFloat As Integer = IIf(acur.kind = UXB_VAL_F64 Or acur.kind = UXB_VAL_F32, 1, 0)
+        Dim anew As UXBInterpValue
+        Select Case callName
+        Case "ATOMIC_LOAD"
+            resultValue = acur
+        Case "ATOMIC_STORE", "ATOMIC_EXCHANGE"
+            If ins.operandCount <> 3 Then Return UXBMIRTaskError("MIR: " & callName & " bir deger ister")
+            anew = UXBMIRInterpGetOperand(st, ins.operands(2))
+            If aType <> "" Then anew = UXBInterpApplyDeclaredType(anew, aType)
+            UXBMIRInterpAssignVar st, avName, anew
+            If callName = "ATOMIC_STORE" Then resultValue = anew Else resultValue = acur
+        Case "ATOMIC_ADD", "ATOMIC_SUB"
+            If ins.operandCount <> 3 Then Return UXBMIRTaskError("MIR: " & callName & " bir deger ister")
+            Dim adelta As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(2))
+            If aIsFloat <> 0 Then
+                Dim df As Double = IIf(adelta.kind = UXB_VAL_F64 Or adelta.kind = UXB_VAL_F32, adelta.floatValue, CDbl(adelta.intValue))
+                If callName = "ATOMIC_SUB" Then df = -df
+                anew = UXBInterpValueFloat(acur.floatValue + df)
+            Else
+                Dim di As LongInt = IIf(adelta.kind = UXB_VAL_F64 Or adelta.kind = UXB_VAL_F32, CLngInt(adelta.floatValue), adelta.intValue)
+                If callName = "ATOMIC_SUB" Then di = -di
+                anew = UXBInterpValueInt(acur.intValue + di)
+            End If
+            If aType <> "" Then anew = UXBInterpApplyDeclaredType(anew, aType)
+            UXBMIRInterpAssignVar st, avName, anew
+            resultValue = anew
+        Case "ATOMIC_CAS"
+            If ins.operandCount <> 4 Then Return UXBMIRTaskError("MIR: ATOMIC_CAS beklenen ve yeni deger ister")
+            Dim aexp As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(2))
+            If aType <> "" Then aexp = UXBInterpApplyDeclaredType(aexp, aType)
+            Dim aeq As Integer
+            If aIsFloat <> 0 Then
+                aeq = IIf(acur.floatValue = aexp.floatValue, 1, 0)
+            Else
+                aeq = IIf(acur.intValue = aexp.intValue, 1, 0)
+            End If
+            If aeq <> 0 Then
+                anew = UXBMIRInterpGetOperand(st, ins.operands(3))
+                If aType <> "" Then anew = UXBInterpApplyDeclaredType(anew, aType)
+                UXBMIRInterpAssignVar st, avName, anew
+            End If
+            resultValue = UXBInterpApplyDeclaredType(UXBInterpValueInt(IIf(aeq <> 0, -1, 0)), "I32")
+        End Select
+        If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, resultValue
+        Return resultValue
+    Case "CLS", "COLOR", "LOCATE"
+        ' S-164: AST ile ayni konsol yardimcilari (src/runtime/...: UxbConsoleCls/Color/Locate).
+        Select Case callName
+        Case "CLS"
+            UxbConsoleCls
+        Case "COLOR"
+            If ins.operandCount < 3 Then Return UXBMIRTaskError("MIR: COLOR on ve arka plan rengi ister")
+            UxbConsoleColor CInt(UXBMIRInterpGetOperand(st, ins.operands(1)).intValue), CInt(UXBMIRInterpGetOperand(st, ins.operands(2)).intValue)
+        Case "LOCATE"
+            If ins.operandCount < 3 Then Return UXBMIRTaskError("MIR: LOCATE satir ve sutun ister")
+            UxbConsoleLocate CInt(UXBMIRInterpGetOperand(st, ins.operands(1)).intValue), CInt(UXBMIRInterpGetOperand(st, ins.operands(2)).intValue)
+        End Select
+        Return UXBInterpValueVoid()
+    Case "INPUT"
+        ' S-164: konsoldan bir satir; hedefin bildirilen tipine atama (STORE_VAR) donusturur.
+        Dim inputLine As String
+        If ExecDebugInputQueuePop(inputLine) = 0 Then UxbStdinReadLine inputLine
+        resultValue = UXBInterpValueString(inputLine)
+        If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, resultValue
+        Return resultValue
+    Case "RND", "RANDOMIZE"
+        ' S-163 / S-146 madde 9: tum motorlarda ayni uretec (src/common/uxb_rng.fbs), gorev basina durum.
+        Dim rArgGiven As Integer = IIf(ins.operandCount >= 2, 1, 0)
+        Dim rArg As Double = 0
+        If rArgGiven <> 0 Then
+            Dim rv As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(1))
+            If rv.kind = UXB_VAL_F64 Or rv.kind = UXB_VAL_F32 Then rArg = rv.floatValue Else rArg = CDbl(rv.intValue)
+        End If
+        If callName = "RANDOMIZE" Then
+            If rArgGiven <> 0 Then UXBRngRandomize gMirCurrentTaskKey, CLngInt(Fix(rArg)) Else UXBRngRandomizeTime gMirCurrentTaskKey
+            Return UXBInterpValueVoid()
+        End If
+        resultValue = UXBInterpValueFloat(UXBRngRnd(gMirCurrentTaskKey, rArgGiven, rArg))
+        If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, resultValue
+        Return resultValue
+    Case "MUTEX_NEW"
+        gMirMutexNext += 1
+        resultValue = UXBInterpValueInt((1LL Shl 32) + gMirMutexNext)
+        If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, resultValue
+        Return resultValue
+    Case "TASK_WAIT", "TASK_JOIN", "TASK_RESULT"
+        ' Ertelenmis gorev beklenirken simdi calisir (tuttugumuz kilidi istiyorsa LOCK_DEADLOCK).
+        If ins.operandCount = 2 Then
+            Dim waitTarget As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(1))
+            Dim waitSlot As Integer
+            If UXBMIRTaskSlot(ctx, waitTarget, "TASK", waitSlot) <> 0 Then
+                Dim ranValue As UXBInterpValue = UXBMIRTaskRunDeferredSlot(instructions(), instructionCount, ctx, st, waitSlot)
+                If UXBInterpIsError(ranValue) <> 0 Then Return ranValue
+                ' S-146 adim 3: tek is parcacikli yorumlayicida RUNNING hedef, cagri yiginda bekleyen bir atadir.
+                If ctx.heap.slots(waitSlot).names(0) = "RUNNING" Then Return UXBMIRLockFatal("TASK_WAIT_CYCLE: gorevler birbirini bekliyor (A.JOIN <-> B.JOIN)")
+            End If
+        End If
+    Case "TASK_GROUP_JOIN"
+        If ins.operandCount = 2 Then
+            Dim waitGroup As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(1))
+            Dim groupSlot As Integer
+            If UXBMIRTaskSlot(ctx, waitGroup, "TASKGROUP", groupSlot) <> 0 Then
+                Dim gm As Integer
+                For gm = 0 To ctx.heap.slots(groupSlot).count - 1
+                    Dim memberSlot2 As Integer
+                    If UXBMIRTaskSlot(ctx, ctx.heap.slots(groupSlot).values(gm), "TASK", memberSlot2) <> 0 Then
+                        Dim ranGroup As UXBInterpValue = UXBMIRTaskRunDeferredSlot(instructions(), instructionCount, ctx, st, memberSlot2)
+                        If UXBInterpIsError(ranGroup) <> 0 Then Return ranGroup
+                        If ctx.heap.slots(memberSlot2).names(0) = "RUNNING" Then Return UXBMIRLockFatal("TASK_WAIT_CYCLE: gorevler birbirini bekliyor (A.JOIN <-> B.JOIN)")
+                    End If
+                Next gm
+            End If
+        End If
+    End Select
+
+    Select Case callName
+    Case "TASK_SPAWN"
+        resultValue = UXBMIRTaskSpawn(instructions(), instructionCount, ctx, st, ins)
+        If UXBInterpIsError(resultValue) <> 0 Then Return resultValue
+
+    Case "TASK_WAIT", "TASK_JOIN", "TASK_CANCEL", "TASK_STATUS", "TASK_RESULT", "TASK_ERROR"
+        If ins.operandCount <> 2 Then Return UXBMIRTaskError("MIR: " & callName & " tek bir TASK tutamaci ister")
+        Dim taskValue As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(1))
+        Dim isValid As Integer = UXBMIRTaskSlot(ctx, taskValue, "TASK", slotId)
+        Select Case callName
+        Case "TASK_STATUS"
+            ' AST ile ayni: SPAWN edilmemis (NULL) tutamacin durumu PENDING.
+            If isValid = 0 Then
+                resultValue = UXBInterpValueString("PENDING")
+            Else
+                If ctx.heap.slots(slotId).names(0) = "ERROR" Or ctx.heap.slots(slotId).names(0) = "CANCELLED" Then ctx.heap.slots(slotId).names(4) = "1"
+                resultValue = UXBInterpValueString(ctx.heap.slots(slotId).names(0))
+            End If
+        Case "TASK_ERROR"
+            If isValid = 0 Then
+                resultValue = UXBInterpValueString("")
+            Else
+                If ctx.heap.slots(slotId).names(1) <> "" Then ctx.heap.slots(slotId).names(4) = "1"
+                resultValue = UXBInterpValueString(ctx.heap.slots(slotId).names(1))
+            End If
+        Case "TASK_WAIT"
+            If isValid = 0 Then Return UXBMIRTaskError("TASK.WAIT(): bos (NULL) gorev tutamaci")
+            ' Faz 1: gorev SPAWN aninda bitti; WAIT hemen doner.
+        Case "TASK_CANCEL"
+            If isValid = 0 Then Return UXBMIRTaskError("TASK.CANCEL(): bos (NULL) gorev tutamaci")
+            ' K6: yalniz iptal ISTEGI; tekrar CANCEL zararsiz; baslamamis gorev CANCELLED olur.
+            If ctx.heap.slots(slotId).names(0) = "PENDING" Then
+                ctx.heap.slots(slotId).names(0) = "CANCELLED"
+                ctx.heap.slots(slotId).names(1) = "CANCELLED"
+            End If
+        Case "TASK_JOIN", "TASK_RESULT"
+            If isValid = 0 Then Return UXBMIRTaskError(IIf(callName = "TASK_JOIN", "TASK.JOIN()", "TASK.RESULT") & ": bos (NULL) gorev tutamaci")
+            If UXBMIRTaskFailureText(ctx, slotId, failText) <> 0 Then Return UXBMIRTaskError(failText)
+            resultValue = ctx.heap.slots(slotId).values(0)
+        End Select
+
+    Case "TASK_GROUP_CREATE"
+        If ins.operandCount <> 1 Then Return UXBMIRTaskError("MIR: TASK_GROUP_CREATE arguman almaz")
+        Dim groupId As Integer = UXBInterpHeapAlloc(ctx.heap, "TASKGROUP", "TASKGROUP")
+        ctx.heap.slots(groupId).count = 0
+        resultValue = UXBMIRTaskHandleValue("TASKGROUP", groupId)
+
+    Case "TASK_GROUP_ADD"
+        If ins.operandCount <> 3 Then Return UXBMIRTaskError("TASKGROUP.ADD(gorev) tam bir arguman ister")
+        Dim addGroup As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(1))
+        If UXBMIRTaskSlot(ctx, addGroup, "TASKGROUP", slotId) = 0 Then Return UXBMIRTaskError("TASKGROUP.ADD(): bos (NULL) grup tutamaci")
+        Dim member As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(2))
+        Dim memberSlot As Integer
+        If UXBMIRTaskSlot(ctx, member, "TASK", memberSlot) = 0 Then Return UXBMIRTaskError("TASKGROUP.ADD(): arguman bir TASK olmali")
+        With ctx.heap.slots(slotId)
+            If .count = 0 Then
+                ReDim .values(0)
+            Else
+                ReDim Preserve .values(.count)
+            End If
+            .values(.count) = member
+            .count += 1
+        End With
+
+    Case "TASK_GROUP_JOIN"
+        If ins.operandCount <> 2 Then Return UXBMIRTaskError("TASKGROUP.JOIN() arguman almaz")
+        Dim joinGroup As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(1))
+        If UXBMIRTaskSlot(ctx, joinGroup, "TASKGROUP", slotId) = 0 Then Return UXBMIRTaskError("TASKGROUP.JOIN(): bos (NULL) grup tutamaci")
+        ' Faz 1: uyeler zaten bitti; ilk HATALI/IPTAL uye (ekleme sirasina gore) cagirana yukselir.
+        Dim gi As Integer
+        For gi = 0 To ctx.heap.slots(slotId).count - 1
+            Dim memberSlotId As Integer
+            If UXBMIRTaskSlot(ctx, ctx.heap.slots(slotId).values(gi), "TASK", memberSlotId) <> 0 Then
+                If UXBMIRTaskFailureText(ctx, memberSlotId, failText) <> 0 Then Return UXBMIRTaskError(failText)
+            End If
+        Next gi
+    End Select
+
+    If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, resultValue
+    Return resultValue
+End Function
+
+#endif

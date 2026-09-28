@@ -7,6 +7,8 @@ Function MIRCommitInstruction(ByRef module As MIRModule, ByVal fnIdx As Integer,
     Dim inst As MIRIRInstruction
     If MIRBuilderToInstruction(b, inst, errText) = 0 Then Return 0
     inst.blockId = blockIdx
+    inst.stmtSeq = gMIRCurrentStmtSeq
+    If gMirLowerTryDepth > 0 Then inst.tryTargetPlus1 = gMirLowerTryTarget(gMirLowerTryDepth - 1) + 1 Else inst.tryTargetPlus1 = 0
     Dim blk As MIRBasicBlock Ptr
     blk = @module.functions(fnIdx).blocks(blockIdx)
     Dim cnt As Integer

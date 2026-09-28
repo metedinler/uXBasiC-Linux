@@ -1,0 +1,20 @@
+' S-146 adim 3: A, B'yi; B, A'yi bekler -> her motorda TASK_WAIT_CYCLE (olumcul, acik tani).
+' MUTEX iki tutamacin da atanmasini garanti eder (gorevler main LOCK'u birakana dek bekler).
+DIM ga AS TASK OF I64
+DIM gb AS TASK OF I64
+DIM m AS MUTEX
+THREAD A() AS I64
+    LOCK m
+    END LOCK
+    RETURN gb.JOIN()
+END THREAD
+THREAD B() AS I64
+    LOCK m
+    END LOCK
+    RETURN ga.JOIN()
+END THREAD
+LOCK m
+    ga = SPAWN A()
+    gb = SPAWN B()
+END LOCK
+PRINT ga.JOIN()

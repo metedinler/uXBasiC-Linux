@@ -1,0 +1,12 @@
+' S-146 adim 2: LOCK CONSOLE ... END LOCK birden cok konsol deyimini bolunmez yapar.
+THREAD Rapor(k AS I64) AS I64
+    LOCK CONSOLE
+        PRINT "gorev"; k; " basla"
+        PRINT "gorev"; k; " bitti"
+    END LOCK
+    RETURN k
+END THREAD
+DIM a AS TASK OF I64 = SPAWN Rapor(1)
+PRINT a.JOIN()
+DIM b AS TASK OF I64 = SPAWN Rapor(2)
+PRINT b.JOIN()

@@ -55,7 +55,13 @@ If execMemMode Then
         End If
         UxbConsoleReset
         Dim execErr As String
-        If ExecRunMemoryProgram(ps, execErr) = 0 Then
+        Dim execRunOk As Integer
+        execRunOk = ExecRunMemoryProgram(ps, execErr)
+        ' S-030 K5: okunmamis gorev hatasi sessiz kaybolmaz -- program basarili bitse de basarisiz sayilir.
+        If execRunOk <> 0 Then
+            If ExecTaskUnreadErrors(execErr) <> 0 Then execRunOk = 0
+        End If
+        If execRunOk = 0 Then
             astStatus = "FAIL"
             astErrText = execErr
             astStdErr = execErr

@@ -1,0 +1,14 @@
+' S-149: TASK OF I32 -- .JOIN()/.RESULT statik olarak I32, tipli degiskene cast'siz atanir.
+THREAD Worker(x AS I32) AS I32
+    RETURN x * 2
+END THREAD
+DIM t AS TASK OF I32 = SPAWN Worker(20)
+DIM n AS I32
+n = t.JOIN()
+PRINT n
+n = t.RESULT + 5
+PRINT n
+DIM s AS STRING
+s = t.STATUS
+PRINT s
+

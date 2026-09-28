@@ -1,1 +1,3 @@
 AST=exec: gorev hatasi (boom): exec: THROW(1001) THROW grup hatasi
+MIR=gorev hatasi (BOOM): MIR: uncaught THROW/ASSERT grup hatasi
+x64=gorev hatasi (BOOM): native: uncaught THROW grup hatasi

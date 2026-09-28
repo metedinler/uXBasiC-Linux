@@ -1,0 +1,35 @@
+#ifndef UXB_STDIN_FBS
+#define UXB_STDIN_FBS
+
+' S-164: yorumlayicilarin (AST/MIR) INPUT satir okuyucusu. FreeBASIC `Line Input`, standart girdi
+' dosyadan/borudan yonlendirildiginde okumuyordu (surec bekliyordu). Standart girdi tutamacindan
+' bayt bayt okunur: klavye (satir tamponlu), dosya ve boru ayni yoldan -- native INPUT ile ayni kaynak.
+' Proje genelindeki C/Windows bildirimleriyle cakismasin diye ozel adlarla bildirilir.
+#ifdef __FB_WIN32__
+Declare Function UxbStdinGetHandle StdCall Lib "kernel32" Alias "GetStdHandle" (ByVal which As Long) As Any Ptr
+Declare Function UxbStdinReadFile StdCall Lib "kernel32" Alias "ReadFile" (ByVal h As Any Ptr, ByVal buf As Any Ptr, ByVal toRead As ULong, ByVal readOut As ULong Ptr, ByVal overlapped As Any Ptr) As Long
+#endif
+
+' 1 = satir okundu (lineOut, satir sonu olmadan), 0 = girdi bitti (lineOut bos).
+Function UxbStdinReadLine(ByRef lineOut As String) As Integer
+    lineOut = ""
+#ifdef __FB_WIN32__
+    Dim h As Any Ptr = UxbStdinGetHandle(-10)   ' STD_INPUT_HANDLE
+    Dim gotAny As Integer = 0
+    Do
+        Dim ch As UByte
+        Dim n As ULong = 0
+        If UxbStdinReadFile(h, @ch, 1, @n, 0) = 0 OrElse n = 0 Then Exit Do
+        gotAny = 1
+        If ch = 10 Then Exit Do
+        If ch <> 13 Then lineOut &= Chr(ch)
+    Loop
+    Return gotAny
+#else
+    If Eof(0) Then Return 0
+    Line Input lineOut
+    Return 1
+#endif
+End Function
+
+#endif

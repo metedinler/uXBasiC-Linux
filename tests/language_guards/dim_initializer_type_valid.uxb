@@ -1,0 +1,4 @@
+DIM goodInt AS I32 = 42
+DIM goodText AS STRING = "ok"
+PRINT goodInt
+PRINT goodText

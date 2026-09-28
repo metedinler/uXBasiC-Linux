@@ -1,0 +1,15 @@
+' S-156: END ic ice cagrilarin (FUNCTION -> SUB) en derininden de programi bitirir.
+SUB Bitir(k AS I32)
+    IF k > 2 THEN END
+END SUB
+FUNCTION Say(n AS I32) AS I32
+    DIM i AS I32
+    FOR i = 1 TO n
+        PRINT i
+        Bitir(i)
+    NEXT
+    RETURN n
+END FUNCTION
+PRINT Say(5)
+PRINT "ulasilmaz"
+

@@ -1,0 +1,5 @@
+EVENT NeedsTwo(a AS I32, b AS I32)
+    PRINT a + b
+END EVENT
+
+TRIGGER EVENT NeedsTwo, 1

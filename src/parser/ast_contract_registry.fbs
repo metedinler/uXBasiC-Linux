@@ -68,7 +68,7 @@ Private Function AstContract_GroupForNode(ByRef nodeName As String) As String
     If Instr(n, "_DECL") > 0 Or n = ASTK_PARAM_DECL Or n = ASTK_DIM_BOUNDS Or n = ASTK_CONST_STMT Or n = ASTK_DIM_STMT Or n = ASTK_REDIM_STMT Or n = ASTK_DECLARE_SUB_STMT Or n = ASTK_DECLARE_FUNCTION_STMT Or n = ASTK_SUB_STMT Or n = ASTK_FUNCTION_STMT Then Return "DECLARATION"
     If n = ASTK_SPAWN_EXPR Then Return "RUNTIME_SERVICE"
     If Instr(n, "_EXPR") > 0 Or n = ASTK_BINARY Or n = ASTK_UNARY Or n = ASTK_IDENTIFIER Or n = ASTK_NUMBER Or n = ASTK_STRING Or n = ASTK_BOOLEAN Or n = ASTK_KEYWORD_REF Then Return "EXPRESSION"
-    If n = ASTK_EVENT_STMT Or n = ASTK_THREAD_STMT Or n = ASTK_PARALEL_STMT Or n = ASTK_PIPE_STMT Or n = ASTK_SLOT_STMT Or n = ASTK_SLOT_TABLE_STMT Or n = ASTK_SLOT_BIND_ENTRY Or n = ASTK_SLOT_HEADER_ARGS Or n = ASTK_SLOT_CONTROL_STMT Or n = ASTK_TRIGGER_STMT Then Return "RUNTIME_SERVICE"
+    If n = ASTK_EVENT_STMT Or n = ASTK_THREAD_STMT Or n = ASTK_PARALEL_STMT Or n = ASTK_PIPE_STMT Or n = ASTK_SLOT_STMT Or n = ASTK_SLOT_TABLE_STMT Or n = ASTK_SLOT_BIND_ENTRY Or n = ASTK_SLOT_HEADER_ARGS Or n = ASTK_SLOT_CONTROL_STMT Or n = ASTK_TRIGGER_STMT Or n = ASTK_LOCK_STMT Or n = ASTK_LOCK_TARGET Or n = ASTK_UNSAFE_STMT Then Return "RUNTIME_SERVICE"
     Return "STATEMENT"
 End Function
 
@@ -298,6 +298,9 @@ Sub AstContract_Init()
     AstContract_RegisterKnown ASTK_THREAD_STMT
     AstContract_RegisterKnown ASTK_THROW_STMT
     AstContract_RegisterKnown ASTK_TRIGGER_STMT
+    AstContract_RegisterKnown ASTK_LOCK_STMT
+    AstContract_RegisterKnown ASTK_LOCK_TARGET
+    AstContract_RegisterKnown ASTK_UNSAFE_STMT
     AstContract_RegisterKnown ASTK_TRY_BODY
     AstContract_RegisterKnown ASTK_TRY_STMT
     AstContract_RegisterKnown ASTK_TYPE_FIELD

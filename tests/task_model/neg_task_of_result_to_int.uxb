@@ -1,0 +1,8 @@
+' S-149: TASK OF STRING sonucu I32 degiskene atanamaz (statik tip STRING).
+THREAD Namer(x AS I32) AS STRING
+    RETURN STR(x)
+END THREAD
+DIM t AS TASK OF STRING = SPAWN Namer(1)
+DIM n AS I32
+n = t.RESULT
+

@@ -1,0 +1,9 @@
+' S-146 adim 2: konsolu LOCK CONSOLE ile tutarken konsola yazan gorevi JOIN etmek LOCK_DEADLOCK.
+THREAD Yaz(k AS I64) AS I64
+    PRINT "gorev"; k
+    RETURN k
+END THREAD
+LOCK CONSOLE
+    DIM t AS TASK OF I64 = SPAWN Yaz(1)
+    PRINT t.JOIN()
+END LOCK

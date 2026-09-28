@@ -1,0 +1,9 @@
+' S-076: SADD(s) = karakter verisinin GERÇEK adresi (NUL sonlu); NATIVE PEEK ile okunur.
+DIM s AS STRING
+s = "ABC"
+DIM p AS PTR
+p = SADD(s)
+PRINT PEEKB(p)
+PRINT PEEKB(p + 1)
+PRINT PEEKB(p + 2)
+PRINT PEEKB(p + 3)

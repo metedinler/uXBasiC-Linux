@@ -1,0 +1,1 @@
+ALL=BOOLEAN uzerinde aritmetik yok

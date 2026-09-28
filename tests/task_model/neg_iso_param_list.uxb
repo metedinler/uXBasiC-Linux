@@ -1,0 +1,7 @@
+' S-146 izolasyon negatif testi: neg_iso_param_list
+THREAD WL(v AS LIST) AS I32
+ RETURN 1
+END THREAD
+DIM t AS TASK OF I32 = SPAWN WL(5)
+
+

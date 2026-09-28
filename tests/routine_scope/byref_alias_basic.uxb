@@ -1,0 +1,17 @@
+DIM x AS I32
+SUB S(BYREF a AS I32)
+    a = 5
+    PRINT x
+    x = 9
+    PRINT a
+END SUB
+SUB T(BYREF p AS I32, BYREF q AS I32)
+    p = 1
+    q = q + 10
+END SUB
+x = 1
+S(x)
+PRINT x
+DIM y AS I32 = 0
+T(y, y)
+PRINT y

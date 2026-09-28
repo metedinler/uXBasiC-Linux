@@ -142,6 +142,9 @@ Private Function IsBuiltinTypeKeyword(ByRef typeName As String) As Integer
         Return 1
     Case "TASK", "TASKGROUP"
         Return 1
+    Case "MUTEX"
+        ' S-146 Model D (Mete 2026-09-26): dis kaynak / programci tanimli kritik bolge kilidi.
+        Return 1
     End Select
 
     Return 0
@@ -207,6 +210,30 @@ End Sub
 
 Private Sub RegisterDeclaredTypeName(ByRef typeName As String)
     AddUniqueTypeName gDeclaredTypeNames(), gDeclaredTypeCount, typeName
+End Sub
+
+' Library type manifests are source-level declarations, but fields and nested
+' declarations can be validated before the statement node is fully consumed.
+' Register every readable manifest up front so all parser paths see the same
+' user type set. Invalid manifests remain on the normal LIBTYPE error path.
+Private Sub PreRegisterLibraryTypeManifestNames(ByRef lx As LexerState)
+    Dim i As Integer
+    For i = 0 To lx.tokens.count - 2
+        Dim manifestKeyword As Token
+        manifestKeyword = TokenListAt(lx.tokens, i)
+        If UCase(Trim(manifestKeyword.lexeme)) <> "LIBTYPE" Then Continue For
+
+        Dim pathTok As Token
+        pathTok = TokenListAt(lx.tokens, i + 1)
+        If pathTok.kind <> "STRING" Then Continue For
+
+        Dim manifestType As UXBLibraryTypeContract
+        Dim manifestErr As String
+        manifestErr = ""
+        If UXBLibraryTypeReadManifestForSource(pathTok.lexeme, manifestKeyword.sourceFile, manifestType, manifestErr) <> 0 Then
+            RegisterDeclaredTypeName manifestType.typeName
+        End If
+    Next i
 End Sub
 
 Private Function ValidateTypeToken(ByRef ps As ParseState, ByRef tk As Token) As Integer

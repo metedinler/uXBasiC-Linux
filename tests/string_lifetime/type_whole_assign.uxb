@@ -1,0 +1,32 @@
+' S-159: TYPE degerinin butun atamasi deger kopyasidir (duz, ic ice, STRING alanli; global ve yerel).
+TYPE Nokta
+    x AS I32
+    y AS I32
+END TYPE
+TYPE Kutu
+    ad AS STRING
+    sol AS Nokta
+    sag AS Nokta
+END TYPE
+DIM k AS Kutu
+k.ad = "ilk"
+k.sol.x = 1
+k.sag.y = 9
+DIM k2 AS Kutu
+k2 = k
+k.ad = "degisti"
+k.sol.x = 7
+PRINT k.ad; " "; k.sol.x; " "; k2.ad; " "; k2.sol.x; " "; k2.sag.y
+DIM p AS Nokta
+p = k2.sag
+k2.sag.y = 0
+PRINT p.y; " "; k2.sag.y
+SUB Yerel()
+    DIM a AS Nokta
+    DIM b AS Nokta
+    a.x = 5
+    b = a
+    a.x = 6
+    PRINT a.x; " "; b.x
+END SUB
+Yerel()

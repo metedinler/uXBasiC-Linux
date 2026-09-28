@@ -1,0 +1,613 @@
+#ifndef UXB_MIR_X64_TASK_V2_FBS
+#define UXB_MIR_X64_TASK_V2_FBS
+
+' ===========================================================================
+' S-030 Faz 2A: native x64'te gercek eszamanli gorevler (gorev ABI v2).
+' Plan: docs/tasarim/UXB_S030_FAZ2A_NATIVE_ASYNC_PLANI_20260925_TR.md
+' Calisma zamani: native/uxb_runtime/uxb_runtime_task_v2.cpp (thunk sozlesmesi orada).
+'
+' Kanonik MIR cagrilari (mir_lower_expr.fbs basindaki sozlesme) calisma zamani
+' fonksiyonlarina iner:
+'   TASK_SPAWN   -> arguman blogu yigina yazilir + __uxb_rt_task_spawn(thunk, blok, ...)
+'   TASK_JOIN/RESULT/WAIT/CANCEL/STATUS/ERROR, TASK_GROUP_CREATE/ADD/JOIN -> __uxb_rt_task_*
+' Her SPAWN hedefi lane icin bir thunk uretilir: bloktan argumanlari Win64 kuraliyla
+' (ilk 4 register/xmm, kalani yigin) yukleyip lane'i cagirir, sonucu blok[0]'a yazar.
+' Blok duzeni: [0..7] sonuc, [8 + 8*i] i. arguman (tamsayi degeri / F64 bitleri /
+' F32 icin alt 32 bit / STRING adresi -- calisma zamani STRING'i SPAWN aninda kopyalar).
+' ===========================================================================
+
+Dim Shared gMirX64SpawnLanes As String   ' "|__SLOTLANE_THREAD_WORKER|..." -- MIRX64EmitModule doldurur
+' K4: --task-workers N (0 = verilmedi -> AUTO). main_program_entry.fbs ayristirir; SPAWN kullanan
+' programin main girisinde __uxb_rt_task_set_workers ile calisma zamanina gomulur.
+Dim Shared gMirX64TaskWorkers As Integer
+
+Private Function MIRX64TaskUnquote(ByVal s As String) As String
+    s = Trim(s)
+    If Len(s) >= 2 AndAlso Left(s, 1) = Chr(34) AndAlso Right(s, 1) = Chr(34) Then Return Mid(s, 2, Len(s) - 2)
+    Return s
+End Function
+
+Sub MIRX64CollectSpawnLanes(ByRef m As MIRModule)
+    gMirX64SpawnLanes = "|"
+    Dim fi As Integer
+    For fi = 0 To m.functionCount - 1
+        Dim bi As Integer
+        For bi = 0 To m.functions(fi).blockCount - 1
+            Dim ii As Integer
+            For ii = 0 To m.functions(fi).blocks(bi).instructionCount - 1
+                Dim ins As MIRIRInstruction
+                ins = m.functions(fi).blocks(bi).instructions(ii)
+                If MIRX64CanonicalEmitterOpcode(ins.opcode) <> "CALL" Or ins.operandCount < 5 Then Continue For
+                If UCase(Trim(ins.operands(0))) <> "TASK_SPAWN" Then Continue For
+                Dim lane As String
+                lane = UCase(MIRX64TaskUnquote(ins.operands(1)))
+                If InStr(gMirX64SpawnLanes, "|" & lane & "|") = 0 Then gMirX64SpawnLanes &= lane & "|"
+            Next ii
+        Next bi
+    Next fi
+End Sub
+
+Function MIRX64ModuleUsesSpawn() As Integer
+    Return IIf(Len(gMirX64SpawnLanes) > 1, 1, 0)
+End Function
+
+Function MIRX64IsSpawnLane(ByRef functionName As String) As Integer
+    Return IIf(InStr(gMirX64SpawnLanes, "|" & UCase(Trim(functionName)) & "|") > 0, 1, 0)
+End Function
+
+Private Function MIRX64TaskThunkLabel(ByRef laneName As String) As String
+    Return "__uxb_task_thunk_" & MIRX64SanitizeSymbolName(UCase(Trim(laneName)))
+End Function
+
+' 0=VOID, 1=I64, 2=F64, 3=STRING (calisma zamani ile ayni). Tipsiz gorev de tamsayi
+' sonuc tasiyabilir (AST/MIR'de `THREAD W(x) ... RETURN x` degeri JOIN ile okunur).
+Private Function MIRX64TaskResultKind(ByVal typeText As String) As Integer
+    Dim t As String = UCase(Trim(typeText))
+    If t = "STRING" Then Return 3
+    If MIRX64TypeIsFloat(t) <> 0 Then Return 2
+    Return 1
+End Function
+
+' Bir sonucu (rax'taki 64 bit) MIR sonuc degiskenine turune gore yazar.
+Private Function MIRX64TaskStoreRaxResult(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
+    If Trim(ins.result) = "" Then Return 1
+    If MIRX64OperandIsFloat(cg, ins.result) <> 0 Then
+        MIRX64Emit cg, "    movq xmm0, rax"
+        Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
+    End If
+    Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+End Function
+
+Private Function MIRX64TaskEmitHandleCall(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByRef symbolName As String, ByRef errText As String) As Integer
+    If ins.operandCount <> 2 Then
+        errText = "MIR x64 emitter: " & UCase(Trim(ins.operands(0))) & " tek bir tutamac ister"
+        Return 0
+    End If
+    If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
+    MIRX64EmitRuntimeCall1Reg cg, symbolName, "r10"
+    Return MIRX64TaskStoreRaxResult(ins, cg, errText)
+End Function
+
+Private Function MIRX64EmitTaskSpawnCall(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
+    If ins.operandCount < 5 Then
+        errText = "MIR x64 emitter: TASK_SPAWN lane, tur, ad ve sonuc tipi ister"
+        Return 0
+    End If
+    Dim laneName As String = MIRX64TaskUnquote(ins.operands(1))
+    Dim taskName As String = MIRX64TaskUnquote(ins.operands(3))
+    Dim resultType As String = MIRX64TaskUnquote(ins.operands(4))
+    Dim laneIdx As Integer = MIRX64FindUserFunctionIndex(cg, laneName)
+    If laneIdx < 0 Then
+        errText = "MIR x64 emitter: SPAWN hedef rutini bulunamadi: " & laneName
+        Return 0
+    End If
+    Dim argCount As Integer = ins.operandCount - 5
+    If argCount <> cg.modulePtr->functions(laneIdx).paramVarCount Then
+        errText = "MIR x64 emitter: SPAWN arguman sayisi uyusmuyor: " & taskName
+        Return 0
+    End If
+    If argCount > 61 Then
+        errText = "MIR x64 emitter: SPAWN en fazla 61 arguman alir"
+        Return 0
+    End If
+
+    Dim blockBytes As Integer = 8 + argCount * 8
+    If (blockBytes Mod 16) <> 0 Then blockBytes += 8
+    Dim stringMask As LongInt = 0
+
+    MIRX64Emit cg, "    ; S-030 SPAWN " & taskName & " -> " & laneName
+    MIRX64Emit cg, "    sub rsp, " & MIRX64ToStr(blockBytes)
+    MIRX64Emit cg, "    mov qword [rsp], 0"
+    Dim i As Integer
+    For i = 0 To argCount - 1
+        Dim paramType As String
+        paramType = UCase(Trim(cg.modulePtr->functions(laneIdx).paramVarTypes(i)))
+        Dim slotRef As String = "qword [rsp+" & MIRX64ToStr(8 + i * 8) & "]"
+        If MIRX64TypeIsFloat(paramType) <> 0 Then
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(5 + i), "xmm0", errText) = 0 Then Return 0
+            If paramType = "F32" Then
+                MIRX64Emit cg, "    cvtsd2ss xmm0, xmm0"
+                MIRX64Emit cg, "    movd eax, xmm0"
+            Else
+                MIRX64Emit cg, "    movq rax, xmm0"
+            End If
+        Else
+            If MIRX64LoadOperandToReg(cg, ins.operands(5 + i), "rax", errText) = 0 Then Return 0
+            If paramType = "STRING" Then stringMask = stringMask Or (1LL Shl i)
+        End If
+        MIRX64Emit cg, "    mov " & slotRef & ", rax"
+    Next i
+
+    Dim nameLabel As String
+    If MIRX64EnsureStringLiteralLabel(cg, Chr(34) & taskName & Chr(34), nameLabel) = 0 Then
+        errText = "MIR x64 emitter: SPAWN gorev adi etiketi olusturulamadi"
+        Return 0
+    End If
+    MIRX64EmitRuntimeExtern cg, "__uxb_rt_task_spawn"
+    MIRX64Emit cg, "    mov rdx, rsp"
+    MIRX64Emit cg, "    sub rsp, 48"
+    MIRX64Emit cg, "    lea rcx, [rel " & MIRX64TaskThunkLabel(laneName) & "]"
+    MIRX64Emit cg, "    mov r8, " & MIRX64ToStr(blockBytes)
+    MIRX64Emit cg, "    lea r9, [rel " & nameLabel & "]"
+    MIRX64Emit cg, "    mov qword [rsp+32], " & MIRX64ToStr(MIRX64TaskResultKind(resultType))
+    MIRX64Emit cg, "    mov rax, " & LTrim(Str(stringMask))
+    MIRX64Emit cg, "    mov qword [rsp+40], rax"
+    MIRX64Emit cg, "    call __uxb_rt_task_spawn"
+    MIRX64Emit cg, "    add rsp, " & MIRX64ToStr(48 + blockBytes)
+    Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+End Function
+
+' S-146 Model D: SYNC_ENTER/SYNC_LEAVE (mode 0) ve LOCK_ENTER/LOCK_LEAVE (mode 1).
+' Kimlik dizisi yigina yazilir: once statik "id1,id2" (lockOrderId), sonra MUTEX degerleri.
+'   __uxb_rt_sync_enter(ids, count, "AD1,AD2", mode) / __uxb_rt_sync_leave(ids, count, mode)
+Private Function MIRX64EmitSyncCall(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByVal isEnter As Integer, ByVal modeValue As Integer, ByRef errText As String) As Integer
+    If ins.operandCount < 3 Then
+        errText = "MIR x64 emitter: " & UCase(Trim(ins.operands(0))) & " kimlik ve ad listesi ister"
+        Return 0
+    End If
+    Dim idsCsv As String = MIRX64TaskUnquote(ins.operands(1)) & ","
+    Dim namesText As String = MIRX64TaskUnquote(ins.operands(2))
+    Dim staticIds(Any) As String
+    Dim staticCount As Integer = 0
+    Dim p As Integer = 1
+    Do While p < Len(idsCsv)
+        Dim q As Integer = InStr(p, idsCsv, ",")
+        If q = 0 Then Exit Do
+        Dim part As String = Trim(Mid(idsCsv, p, q - p))
+        If part <> "" Then
+            ReDim Preserve staticIds(staticCount)
+            staticIds(staticCount) = part
+            staticCount += 1
+        End If
+        p = q + 1
+    Loop
+    Dim dynCount As Integer = ins.operandCount - 3
+    Dim total As Integer = staticCount + dynCount
+    If total <= 0 Then Return 1
+    Dim bytes As Integer = total * 8
+    If (bytes Mod 16) <> 0 Then bytes += 8
+
+    Dim sym As String = IIf(isEnter <> 0, "__uxb_rt_sync_enter", "__uxb_rt_sync_leave")
+    MIRX64EmitRuntimeExtern cg, sym
+    MIRX64Emit cg, "    ; S-146 " & UCase(Trim(ins.operands(0))) & " " & MIRX64TaskUnquote(ins.operands(2))
+    MIRX64Emit cg, "    sub rsp, " & MIRX64ToStr(bytes)
+    Dim i As Integer
+    For i = 0 To staticCount - 1
+        MIRX64Emit cg, "    mov rax, " & staticIds(i)
+        MIRX64Emit cg, "    mov qword [rsp+" & MIRX64ToStr(i * 8) & "], rax"
+    Next i
+    For i = 0 To dynCount - 1
+        If MIRX64LoadOperandToReg(cg, ins.operands(3 + i), "rax", errText) = 0 Then Return 0
+        MIRX64Emit cg, "    mov qword [rsp+" & MIRX64ToStr((staticCount + i) * 8) & "], rax"
+    Next i
+    MIRX64Emit cg, "    mov rcx, rsp"
+    MIRX64Emit cg, "    sub rsp, 32"
+    MIRX64Emit cg, "    mov rdx, " & MIRX64ToStr(total)
+    If isEnter <> 0 Then
+        Dim namesLabel As String
+        If MIRX64EnsureStringLiteralLabel(cg, Chr(34) & namesText & Chr(34), namesLabel) = 0 Then
+            errText = "MIR x64 emitter: kilit ad listesi etiketi olusturulamadi"
+            Return 0
+        End If
+        MIRX64Emit cg, "    lea r8, [rel " & namesLabel & "]"
+        MIRX64Emit cg, "    mov r9, " & MIRX64ToStr(modeValue)
+    Else
+        MIRX64Emit cg, "    mov r8, " & MIRX64ToStr(modeValue)
+    End If
+    MIRX64Emit cg, "    call " & sym
+    MIRX64Emit cg, "    add rsp, " & MIRX64ToStr(32 + bytes)
+    Return 1
+End Function
+
+' S-146 Model D: ATOMIC_* -- islenen 1 degiskenin ADIDIR. Her degisken yuvasi 64 bittir (dar tipler
+' yazimda normallestirilir, okumada daraltilir). Tamsayi/BOOLEAN: gercek CPU atomikleri (kilitsiz
+' hizli yol icin guvenli): LOAD hizali qword okuma, STORE/EXCHANGE xchg, 64 bit ADD/SUB lock xadd,
+' dar tiplerde ADD/SUB ve CAS lock cmpxchg (bellek hep normal kalir, CAS dogru karsilastirir).
+' F32/F64: duz dizi (senkron gecisi paylasilan kayan noktali ATOMIC'i kilit altinda tutar).
+Private Function MIRX64AtomicSlot(ByRef cg As MIRX64Context, ByRef varName As String, ByRef memOut As String, ByRef typeOut As String) As Integer
+    Dim globalIdx As Integer
+    If MIRX64FindGlobalSlot(cg, varName, globalIdx) <> 0 Then
+        memOut = "qword [rel " & cg.globals(globalIdx).labelText & "]"
+        typeOut = UCase(Trim(cg.globals(globalIdx).typeName))
+        Return 1
+    End If
+    Dim off As Integer
+    Dim idx As Integer
+    If MIRX64FindLocalOffset(cg, varName, off) <> 0 AndAlso MIRX64FindLocalIndex(cg, varName, idx) <> 0 Then
+        If cg.locals(idx).isByRef <> 0 Then Return 0
+        memOut = "qword " & MIRX64RbpRef(off)
+        typeOut = UCase(Trim(cg.locals(idx).typeName))
+        Return 1
+    End If
+    Return 0
+End Function
+
+Private Function MIRX64EmitAtomicCall(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
+    Dim op As String = UCase(Trim(ins.operands(0)))
+    If ins.operandCount < 2 Then
+        errText = "MIR x64 emitter: " & op & " degisken adi ister"
+        Return 0
+    End If
+    Dim varName As String = Trim(ins.operands(1))
+    Dim mem As String, vt As String
+    If MIRX64AtomicSlot(cg, varName, mem, vt) = 0 Then
+        errText = "MIR x64 emitter: " & op & ": ATOMIC degisken yuvasi bulunamadi: " & varName
+        Return 0
+    End If
+    If Left(vt, 5) = "TYPE_" Then vt = Mid(vt, 6)
+    Dim needArgs As Integer = 1
+    Select Case op
+    Case "ATOMIC_LOAD": needArgs = 0
+    Case "ATOMIC_CAS": needArgs = 2
+    End Select
+    If ins.operandCount <> 2 + needArgs Then
+        errText = "MIR x64 emitter: " & op & " " & LTrim(Str(needArgs)) & " arguman ister"
+        Return 0
+    End If
+    MIRX64Emit cg, "    ; S-146 " & op & " " & varName
+
+    If MIRX64TypeIsFloat(vt) <> 0 Then
+        Select Case op
+        Case "ATOMIC_LOAD"
+            If MIRX64LoadFloatOperandToXmm(cg, varName, "xmm0", errText) = 0 Then Return 0
+            Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
+        Case "ATOMIC_STORE"
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(2), "xmm0", errText) = 0 Then Return 0
+            If MIRX64StoreXmmToVar(cg, "xmm0", varName, errText) = 0 Then Return 0
+            If Trim(ins.result) = "" Then Return 1
+            If MIRX64LoadFloatOperandToXmm(cg, varName, "xmm0", errText) = 0 Then Return 0
+            Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
+        Case "ATOMIC_EXCHANGE"
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(2), "xmm1", errText) = 0 Then Return 0
+            If MIRX64LoadFloatOperandToXmm(cg, varName, "xmm0", errText) = 0 Then Return 0
+            MIRX64Emit cg, "    movsd xmm5, xmm0"
+            If MIRX64StoreXmmToVar(cg, "xmm1", varName, errText) = 0 Then Return 0
+            Return MIRX64StoreXmmToVar(cg, "xmm5", ins.result, errText)
+        Case "ATOMIC_ADD", "ATOMIC_SUB"
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(2), "xmm1", errText) = 0 Then Return 0
+            If MIRX64LoadFloatOperandToXmm(cg, varName, "xmm0", errText) = 0 Then Return 0
+            MIRX64Emit cg, "    " & IIf(op = "ATOMIC_ADD", "addsd", "subsd") & " xmm0, xmm1"
+            If MIRX64StoreXmmToVar(cg, "xmm0", varName, errText) = 0 Then Return 0
+            If Trim(ins.result) = "" Then Return 1
+            If MIRX64LoadFloatOperandToXmm(cg, varName, "xmm0", errText) = 0 Then Return 0
+            Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
+        Case "ATOMIC_CAS"
+            Dim fNe As String = MIRX64NextLabel(cg, "atomic_fcas_ne")
+            Dim fDone As String = MIRX64NextLabel(cg, "atomic_fcas_done")
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(2), "xmm1", errText) = 0 Then Return 0
+            If MIRX64LoadFloatOperandToXmm(cg, varName, "xmm0", errText) = 0 Then Return 0
+            MIRX64Emit cg, "    ucomisd xmm0, xmm1"
+            MIRX64Emit cg, "    jne " & fNe
+            MIRX64Emit cg, "    jp " & fNe
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(3), "xmm2", errText) = 0 Then Return 0
+            If MIRX64StoreXmmToVar(cg, "xmm2", varName, errText) = 0 Then Return 0
+            MIRX64Emit cg, "    mov rax, -1"
+            MIRX64Emit cg, "    jmp " & fDone
+            MIRX64Emit cg, fNe & ":"
+            MIRX64Emit cg, "    xor eax, eax"
+            MIRX64Emit cg, fDone & ":"
+            If Trim(ins.result) = "" Then Return 1
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End Select
+        errText = "MIR x64 emitter: bilinmeyen ATOMIC islemi: " & op
+        Return 0
+    End If
+
+    Dim is64 As Integer = IIf(vt = "I64" Or vt = "U64" Or vt = "LONGINT" Or vt = "ULONGINT", 1, 0)
+    Select Case op
+    Case "ATOMIC_LOAD"
+        ' Hizali qword okuma x64'te atomiktir.
+        If MIRX64LoadOperandToReg(cg, varName, "rax", errText) = 0 Then Return 0
+    Case "ATOMIC_STORE"
+        If MIRX64LoadOperandToReg(cg, ins.operands(2), "rax", errText) = 0 Then Return 0
+        MIRX64NormalizeRegForType cg, "rax", vt
+        MIRX64Emit cg, "    mov r10, rax"
+        MIRX64Emit cg, "    xchg " & mem & ", r10"
+    Case "ATOMIC_EXCHANGE"
+        If MIRX64LoadOperandToReg(cg, ins.operands(2), "rax", errText) = 0 Then Return 0
+        MIRX64NormalizeRegForType cg, "rax", vt
+        MIRX64Emit cg, "    xchg " & mem & ", rax"
+        MIRX64LoadVarNarrowFixup cg, "rax", vt
+    Case "ATOMIC_ADD", "ATOMIC_SUB"
+        If MIRX64LoadOperandToReg(cg, ins.operands(2), "r10", errText) = 0 Then Return 0
+        If op = "ATOMIC_SUB" Then MIRX64Emit cg, "    neg r10"
+        If is64 <> 0 Then
+            MIRX64Emit cg, "    mov rax, r10"
+            MIRX64Emit cg, "    lock xadd " & mem & ", rax"
+            MIRX64Emit cg, "    add rax, r10"
+        Else
+            Dim retry As String = MIRX64NextLabel(cg, "atomic_rmw_retry")
+            MIRX64Emit cg, retry & ":"
+            MIRX64Emit cg, "    mov rax, " & mem
+            MIRX64Emit cg, "    mov r11, rax"
+            MIRX64Emit cg, "    add r11, r10"
+            MIRX64NormalizeRegForType cg, "r11", vt
+            MIRX64Emit cg, "    lock cmpxchg " & mem & ", r11"
+            MIRX64Emit cg, "    jne " & retry
+            MIRX64Emit cg, "    mov rax, r11"
+        End If
+    Case "ATOMIC_CAS"
+        If MIRX64LoadOperandToReg(cg, ins.operands(3), "r11", errText) = 0 Then Return 0
+        MIRX64NormalizeRegForType cg, "r11", vt
+        If MIRX64LoadOperandToReg(cg, ins.operands(2), "rax", errText) = 0 Then Return 0
+        MIRX64NormalizeRegForType cg, "rax", vt
+        MIRX64Emit cg, "    lock cmpxchg " & mem & ", r11"
+        MIRX64Emit cg, "    sete al"
+        MIRX64Emit cg, "    movzx rax, al"
+        MIRX64Emit cg, "    neg rax"
+    Case Else
+        errText = "MIR x64 emitter: bilinmeyen ATOMIC islemi: " & op
+        Return 0
+    End Select
+    If Trim(ins.result) = "" Then Return 1
+    Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+End Function
+
+Function MIRX64TryEmitTaskV2Call(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByRef handledOut As Integer, ByRef errText As String) As Integer
+    handledOut = 0
+    If ins.operandCount < 1 Then Return 1
+    Dim target As String = UCase(Trim(ins.operands(0)))
+    Select Case target
+    Case "FILE_PRINT_BEGIN"
+        ' S-146 adim 2: metin dosyasi PRINT # (yorumlayicilarla ayni bicim; satir tek kilitle yazilir).
+        handledOut = 1
+        If ins.operandCount < 2 Then
+            errText = "MIR x64 emitter: PRINT # kanal ister"
+            Return 0
+        End If
+        If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
+        MIRX64EmitRuntimeCall1Reg cg, "__uxb_rt_file_print_begin", "r10"
+        Return 1
+    Case "FILE_PRINT_ITEM"
+        handledOut = 1
+        If ins.operandCount < 3 Then
+            errText = "MIR x64 emitter: PRINT # deger ve ayrac ister"
+            Return 0
+        End If
+        If MIRX64OperandIsString(cg, ins.operands(1)) <> 0 Then
+            If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
+        ElseIf MIRX64OperandIsFloat(cg, ins.operands(1)) <> 0 Then
+            Dim textSym As String = IIf(MIRX64OperandIsF32(cg, ins.operands(1)) <> 0, "__uxb_rt_str_f32", "__uxb_rt_str_f64")
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(1), "xmm0", errText) = 0 Then Return 0
+            MIRX64EmitRuntimeExtern cg, textSym
+            MIRX64Emit cg, "    sub rsp, 32"
+            MIRX64Emit cg, "    call " & textSym
+            MIRX64Emit cg, "    add rsp, 32"
+            MIRX64Emit cg, "    mov r10, rax"
+        Else
+            If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
+            MIRX64EmitRuntimeCall1Reg cg, IIf(MIRX64OperandIsU64(cg, ins.operands(1)) <> 0, "__uxb_rt_str_u64", "__uxb_rt_str_i64"), "r10"
+            MIRX64Emit cg, "    mov r10, rax"
+        End If
+        If MIRX64LoadOperandToReg(cg, ins.operands(2), "r11", errText) = 0 Then Return 0
+        MIRX64EmitRuntimeCall2Reg cg, "__uxb_rt_file_print_text", "r10", "r11"
+        Return 1
+    Case "FILE_PRINT_END"
+        handledOut = 1
+        MIRX64EmitRuntimeCall0 cg, "__uxb_rt_file_print_end"
+        Return 1
+    Case "INPUTF"
+        ' S-146 adim 2: INPUT # bir satir metin (sayisal hedefe MIR indirgemesi VAL ekler).
+        handledOut = 1
+        If ins.operandCount < 2 Then
+            errText = "MIR x64 emitter: INPUT # kanal ister"
+            Return 0
+        End If
+        If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
+        MIRX64EmitRuntimeCall1Reg cg, "__uxb_rt_file_input_line", "r10"
+        Return MIRX64TaskStoreRaxResult(ins, cg, errText)
+    Case "RND"
+        ' S-163 / S-146 madde 9: __uxb_rt_rnd_f64(hasArg, arg) -> xmm0 (AST/MIR ile ayni uretec, gorev basina).
+        handledOut = 1
+        MIRX64EmitRuntimeExtern cg, "__uxb_rt_rnd_f64"
+        If ins.operandCount >= 2 Then
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(1), "xmm1", errText) = 0 Then Return 0
+            MIRX64Emit cg, "    mov rcx, 1"
+        Else
+            MIRX64Emit cg, "    pxor xmm1, xmm1"
+            MIRX64Emit cg, "    xor ecx, ecx"
+        End If
+        MIRX64Emit cg, "    sub rsp, 32"
+        MIRX64Emit cg, "    call __uxb_rt_rnd_f64"
+        MIRX64Emit cg, "    add rsp, 32"
+        If Trim(ins.result) = "" Then Return 1
+        Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
+    Case "RANDOMIZE"
+        ' S-163: __uxb_rt_randomize_seed(hasSeed, seed); ondalik tohum kesilir (AST/MIR ile ayni).
+        handledOut = 1
+        MIRX64EmitRuntimeExtern cg, "__uxb_rt_randomize_seed"
+        If ins.operandCount >= 2 Then
+            If MIRX64OperandIsFloat(cg, ins.operands(1)) <> 0 Then
+                If MIRX64LoadFloatOperandToXmm(cg, ins.operands(1), "xmm0", errText) = 0 Then Return 0
+                MIRX64Emit cg, "    cvttsd2si rdx, xmm0"
+            Else
+                If MIRX64LoadOperandToReg(cg, ins.operands(1), "rdx", errText) = 0 Then Return 0
+            End If
+            MIRX64Emit cg, "    mov rcx, 1"
+        Else
+            MIRX64Emit cg, "    xor ecx, ecx"
+            MIRX64Emit cg, "    xor edx, edx"
+        End If
+        MIRX64Emit cg, "    sub rsp, 32"
+        MIRX64Emit cg, "    call __uxb_rt_randomize_seed"
+        MIRX64Emit cg, "    add rsp, 32"
+        Return 1
+    Case "ATOMIC_LOAD", "ATOMIC_STORE", "ATOMIC_ADD", "ATOMIC_SUB", "ATOMIC_EXCHANGE", "ATOMIC_CAS"
+        handledOut = 1
+        Return MIRX64EmitAtomicCall(ins, cg, errText)
+    Case "SYNC_ENTER"
+        handledOut = 1
+        Return MIRX64EmitSyncCall(ins, cg, 1, 0, errText)
+    Case "SYNC_LEAVE"
+        handledOut = 1
+        Return MIRX64EmitSyncCall(ins, cg, 0, 0, errText)
+    Case "LOCK_ENTER"
+        handledOut = 1
+        Return MIRX64EmitSyncCall(ins, cg, 1, 1, errText)
+    Case "LOCK_LEAVE"
+        handledOut = 1
+        Return MIRX64EmitSyncCall(ins, cg, 0, 1, errText)
+    Case "LOCK_MARK"
+        handledOut = 1
+        MIRX64EmitRuntimeCall0 cg, "__uxb_rt_lock_mark"
+        Return MIRX64TaskStoreRaxResult(ins, cg, errText)
+    Case "LOCK_RELEASE_TO"
+        handledOut = 1
+        Return MIRX64TaskEmitHandleCall(ins, cg, "__uxb_rt_lock_release_to", errText)
+    Case "MUTEX_NEW"
+        handledOut = 1
+        MIRX64EmitRuntimeCall0 cg, "__uxb_rt_mutex_new"
+        Return MIRX64TaskStoreRaxResult(ins, cg, errText)
+    Case "STR_SNAPSHOT"
+        ' Kilit altinda okunan STRING, kilit disina cagiran is parcacigina ozel gecici kopya olarak cikar.
+        handledOut = 1
+        Return MIRX64TaskEmitHandleCall(ins, cg, "__uxb_rt_str_temp", errText)
+    Case "TASK_SPAWN"
+        handledOut = 1
+        Return MIRX64EmitTaskSpawnCall(ins, cg, errText)
+    Case "TASK_JOIN"
+        handledOut = 1
+        Return MIRX64TaskEmitHandleCall(ins, cg, "__uxb_rt_task_join", errText)
+    Case "TASK_RESULT"
+        handledOut = 1
+        Return MIRX64TaskEmitHandleCall(ins, cg, "__uxb_rt_task_result", errText)
+    Case "TASK_WAIT"
+        handledOut = 1
+        Return MIRX64TaskEmitHandleCall(ins, cg, "__uxb_rt_task_wait", errText)
+    Case "TASK_CANCEL"
+        handledOut = 1
+        Return MIRX64TaskEmitHandleCall(ins, cg, "__uxb_rt_task_cancel", errText)
+    Case "TASK_STATUS"
+        handledOut = 1
+        Return MIRX64TaskEmitHandleCall(ins, cg, "__uxb_rt_task_status", errText)
+    Case "TASK_ERROR"
+        handledOut = 1
+        Return MIRX64TaskEmitHandleCall(ins, cg, "__uxb_rt_task_error", errText)
+    Case "TASK_GROUP_CREATE"
+        handledOut = 1
+        MIRX64EmitRuntimeCall0 cg, "__uxb_rt_task_group_create"
+        Return MIRX64TaskStoreRaxResult(ins, cg, errText)
+    Case "TASK_GROUP_JOIN"
+        handledOut = 1
+        Return MIRX64TaskEmitHandleCall(ins, cg, "__uxb_rt_task_group_join", errText)
+    Case "PROGRAM_END"
+        ' S-156: rutin icindeki END -- calisma zamani K5 kapanisini yapip sureci bitirir (donmez).
+        handledOut = 1
+        MIRX64EmitRuntimeCall0 cg, "__uxb_rt_program_end"
+        Return 1
+    Case "TASK_GROUP_ADD"
+        handledOut = 1
+        If ins.operandCount <> 3 Then
+            errText = "MIR x64 emitter: TASK_GROUP_ADD grup ve gorev ister"
+            Return 0
+        End If
+        If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
+        If MIRX64LoadOperandToReg(cg, ins.operands(2), "r11", errText) = 0 Then Return 0
+        MIRX64EmitRuntimeCall2Reg cg, "__uxb_rt_task_group_add", "r10", "r11"
+        Return MIRX64TaskStoreRaxResult(ins, cg, errText)
+    End Select
+    Return 1
+End Function
+
+' K6 isbirlikci iptal noktasi: SPAWN lane'inde her DONGU GERI DONUSUNDE (hedef blok <= mevcut blok)
+' calisma zamanina sorulur; iptal istendiyse lane derhal doner (calisma zamani gorevi CANCELLED yapar).
+' Bilinen sinir (plan belgesi): lane'in cagirdigi yardimci rutinlerin kendi donguleri iptali
+' ancak lane'e dondukten sonra gorur -- native'de cagrilar arasi erken donus mekanizmasi yok.
+Dim Shared gMirX64CurrentBlockId As Integer
+
+Sub MIRX64EmitTaskCancelPointIfBackEdge(ByRef cg As MIRX64Context, ByVal targetBlockId As Integer)
+    If MIRX64IsSpawnLane(cg.currentFunctionName) = 0 Then Exit Sub
+    If targetBlockId > gMirX64CurrentBlockId Then Exit Sub
+    Dim okLabel As String = MIRX64NextLabel(cg, "task_not_cancelled")
+    MIRX64EmitRuntimeCall0 cg, "__uxb_rt_task_cancel_point"
+    MIRX64Emit cg, "    test rax, rax"
+    MIRX64Emit cg, "    jz " & okLabel
+    MIRX64Emit cg, "    xor eax, eax"
+    MIRX64Emit cg, "    jmp " & MIRX64CurrentEpilogueLabel(cg)
+    MIRX64Emit cg, okLabel & ":"
+End Sub
+
+' Yakalanmamis THROW, SPAWN lane'inde ekrana basilmaz: gorev kaydina ERROR olarak yazilir
+' (Mete: "yakalanmamis asenkron hata gorev nesnesinde tutulur"). Deger rax'ta.
+Sub MIRX64EmitTaskFailFromRax(ByRef cg As MIRX64Context, ByVal valueIsString As Integer)
+    Dim sym As String
+    sym = IIf(valueIsString <> 0, "__uxb_rt_task_fail_cstr", "__uxb_rt_task_fail_i64")
+    MIRX64EmitRuntimeCall1Reg cg, sym, "rax"
+End Sub
+
+' SPAWN hedefi her lane icin thunk: int64 thunk(void* blok).
+Function MIRX64EmitSpawnThunks(ByRef m As MIRModule, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
+    If MIRX64ModuleUsesSpawn() = 0 Then Return 1
+    Dim fi As Integer
+    For fi = 0 To m.functionCount - 1
+        If MIRX64IsSpawnLane(m.functions(fi).name) = 0 Then Continue For
+        Dim fn As MIRFunction Ptr = @m.functions(fi)
+        Dim argCount As Integer = fn->paramVarCount
+        Dim extraCount As Integer = argCount - 4
+        If extraCount < 0 Then extraCount = 0
+        ' Giriste rsp = 16k+8; push rbp, push rbx sonrasi 16k+8 -> cagrida 16 hizali olmali.
+        Dim frameBytes As Integer = 32 + extraCount * 8
+        If (frameBytes Mod 16) = 0 Then frameBytes += 8
+
+        MIRX64Emit cg, MIRX64TaskThunkLabel(fn->name) & ":"
+        MIRX64Emit cg, "    push rbp"
+        MIRX64Emit cg, "    mov rbp, rsp"
+        MIRX64Emit cg, "    push rbx"
+        MIRX64Emit cg, "    sub rsp, " & MIRX64ToStr(frameBytes)
+        MIRX64Emit cg, "    mov rbx, rcx"
+        Dim i As Integer
+        For i = 4 To argCount - 1
+            MIRX64Emit cg, "    mov rax, qword [rbx+" & MIRX64ToStr(8 + i * 8) & "]"
+            MIRX64Emit cg, "    mov qword [rsp+" & MIRX64ToStr(32 + (i - 4) * 8) & "], rax"
+        Next i
+        For i = 0 To IIf(argCount < 4, argCount, 4) - 1
+            Dim paramType As String
+            paramType = UCase(Trim(fn->paramVarTypes(i)))
+            Dim off As String = MIRX64ToStr(8 + i * 8)
+            If MIRX64TypeIsFloat(paramType) <> 0 Then
+                If paramType = "F32" Then
+                    MIRX64Emit cg, "    movd " & UXBWin64FloatArgReg(i) & ", dword [rbx+" & off & "]"
+                Else
+                    MIRX64Emit cg, "    movq " & UXBWin64FloatArgReg(i) & ", qword [rbx+" & off & "]"
+                End If
+            Else
+                MIRX64Emit cg, "    mov " & UXBWin64IntegerArgReg(i) & ", qword [rbx+" & off & "]"
+            End If
+        Next i
+        MIRX64Emit cg, "    call " & MIRX64FunctionLabel(fn->name)
+        If MIRX64TypeIsFloat(fn->returnType) <> 0 Then
+            If UCase(Trim(fn->returnType)) = "F32" Then MIRX64Emit cg, "    cvtss2sd xmm0, xmm0"
+            MIRX64Emit cg, "    movq qword [rbx], xmm0"
+        Else
+            MIRX64Emit cg, "    mov qword [rbx], rax"
+        End If
+        MIRX64Emit cg, "    xor eax, eax"
+        MIRX64Emit cg, "    add rsp, " & MIRX64ToStr(frameBytes)
+        MIRX64Emit cg, "    pop rbx"
+        MIRX64Emit cg, "    pop rbp"
+        MIRX64Emit cg, "    ret"
+    Next fi
+    Return 1
+End Function
+
+#endif

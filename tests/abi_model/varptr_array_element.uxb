@@ -1,0 +1,36 @@
+' S-081: VARPTR(dizi(i)) = dizinin i. elemanının adresi = VARPTR(dizi) + (i - LBOUND) * adım.
+' Adım paylaşılan tür ABI tablosundan gelir (I32=4, I64=8, U8=1, F64=8).
+DIM a(3) AS I32
+a(0) = 10 : a(1) = 11 : a(2) = 12 : a(3) = 13
+DIM p AS PTR
+p = VARPTR(a(2))
+PRINT PEEKD(p)
+PRINT VARPTR(a(1)) - VARPTR(a)
+PRINT VARPTR(a(3)) - VARPTR(a(0))
+POKED VARPTR(a(1)), 99
+PRINT a(1)
+
+DIM q(2) AS I64
+q(0) = 5 : q(1) = 6 : q(2) = 7
+PRINT VARPTR(q(2)) - VARPTR(q(0))
+PRINT PEEKQ(VARPTR(q(1)))
+
+DIM b(2) AS U8
+b(0) = U8(200) : b(1) = U8(201) : b(2) = U8(202)
+PRINT VARPTR(b(2)) - VARPTR(b(0))
+PRINT PEEKB(VARPTR(b(1)))
+
+DIM r(1 TO 3) AS I32
+r(1) = 21 : r(2) = 22 : r(3) = 23
+IF VARPTR(r(1)) = VARPTR(r) THEN
+    PRINT "ayni"
+ELSE
+    PRINT "farkli"
+END IF
+PRINT VARPTR(r(3)) - VARPTR(r(1))
+PRINT PEEKD(VARPTR(r(2)))
+
+DIM k AS INTEGER
+k = 2
+PRINT PEEKD(VARPTR(a(k)))
+PRINT PEEKD(VARPTR(a(k + 1)))

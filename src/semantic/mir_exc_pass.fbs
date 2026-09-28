@@ -1,0 +1,151 @@
+#ifndef UXB_MIR_EXC_PASS_FBS
+#define UXB_MIR_EXC_PASS_FBS
+
+' ===========================================================================
+' S-160 (2026-09-26): THROW/ASSERT istisnasi rutin sinirini gecer.
+' Istisna durumu `__mir_exc_active` / `__mir_exc_value` ile tasinir (MIR yorumlayicisi:
+' program geneli degisken; native: is parcacigina ozel calisma zamani durumu -- gorevler
+' birbirinden bagimsiz). Bu gecis, program THROW/ASSERT kullaniyorsa her kullanici kodu
+' cagrisindan (kullanici rutini, metot, sanal cagri, nesne kurucusu) sonra blogu boler:
+'     t = LOAD_VAR __mir_exc_active
+'     JZ t, <devam>
+'     JMP <etkin TRY'nin CATCH/FINALLY blogu>     (cagri TRY icindeyse)
+'     RET __result__                              (degilse: istisna cagirana gecer)
+' En ustte (MAIN) hala acik istisna "yakalanmamis" raporlanir; gorevde gorev hatasidir.
+' Senkron gecisinden SONRA calisir: cagrilar hic bir kilitli bolumun icinde degildir
+' (senkron gecisi kilidi cagri boyunca tutmaz), bolme acik bir kilidi ikiye ayirmaz.
+' ===========================================================================
+
+Private Function MIRExcProgramUsesThrow(ByRef ps As ParseState) As Integer
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Select Case UCase(Trim(ps.ast.nodes(i).kind))
+        Case "THROW_STMT", "ASSERT_STMT"
+            Return 1
+        End Select
+    Next i
+    Return 0
+End Function
+
+Private Function MIRExcIsUserCall(ByRef ins As MIRIRInstruction, ByRef userFns As String) As Integer
+    Select Case UCase(Trim(ins.opcode))
+    Case "METHOD_CALL", "MIR_METHOD_CALL", "MIR_VIRTUAL_CALL", "MIR_OBJECT_NEW"
+        Return 1
+    Case "CALL", "MIR_CALL"
+        If ins.operandCount < 1 Then Return 0
+        Dim n As String = UCase(Trim(ins.operands(0)))
+        If Left(n, 1) = Chr(34) Then Return 0
+        If InStr(userFns, "|" & n & "|") > 0 Then Return 1
+    End Select
+    Return 0
+End Function
+
+Private Function MIRExcIsUncondTerminator(ByRef ins As MIRIRInstruction) As Integer
+    Select Case UCase(Trim(ins.opcode))
+    Case "JMP", "RET", "GOTO", "MIR_JMP", "MIR_RET"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Private Sub MIRExcMake(ByRef ins As MIRIRInstruction, ByRef tmpl As MIRIRInstruction, ByVal opcode As String, ByVal resultName As String, ByVal nOps As Integer, ByVal op0 As String = "", ByVal op1 As String = "")
+    Dim blank As MIRIRInstruction
+    ins = blank
+    ins.opcode = opcode
+    ins.result = resultName
+    ins.srcLoc = tmpl.srcLoc
+    ins.flags = tmpl.flags
+    ins.stmtSeq = tmpl.stmtSeq
+    ins.tryTargetPlus1 = tmpl.tryTargetPlus1
+    ins.operandCount = nOps
+    If nOps > 0 Then ins.operands(0) = op0
+    If nOps > 1 Then ins.operands(1) = op1
+End Sub
+
+Function MIRExcPassModule(ByRef ps As ParseState, ByRef m As MIRModule, ByRef tempSeed As Integer, ByRef errText As String) As Integer
+    errText = ""
+    If MIRExcProgramUsesThrow(ps) = 0 Then Return 1
+    Dim userFns As String = "|"
+    Dim fi As Integer
+    For fi = 0 To m.functionCount - 1
+        userFns &= UCase(Trim(m.functions(fi).name)) & "|"
+    Next fi
+
+    For fi = 0 To m.functionCount - 1
+        Dim origCount As Integer = m.functions(fi).blockCount
+        Dim bi As Integer = 0
+        Do While bi < m.functions(fi).blockCount
+            Dim n As Integer = m.functions(fi).blocks(bi).instructionCount
+            Dim i As Integer
+            Dim splitAt As Integer = -1
+            For i = 0 To n - 1
+                If MIRExcIsUserCall(m.functions(fi).blocks(bi).instructions(i), userFns) <> 0 Then splitAt = i: Exit For
+            Next i
+            If splitAt < 0 Then
+                bi += 1
+                Continue Do
+            End If
+
+            Dim callIns As MIRIRInstruction = m.functions(fi).blocks(bi).instructions(splitAt)
+            Dim tailCount As Integer = n - splitAt - 1
+            Dim tail(Any) As MIRIRInstruction
+            If tailCount > 0 Then
+                ReDim tail(tailCount - 1)
+                For i = 0 To tailCount - 1
+                    tail(i) = m.functions(fi).blocks(bi).instructions(splitAt + 1 + i)
+                Next i
+            End If
+            ' Ozgun (bolunmemis) blok son buyrugu kosulsuz sonlandirici degilse sonraki bloga
+            ' dusuyordu; kuyruk en sona tasininca bu dusme acik JMP ile korunur.
+            Dim needFallJump As Integer = 0
+            If bi < origCount AndAlso bi + 1 < origCount Then
+                If tailCount = 0 Then
+                    needFallJump = 1
+                ElseIf MIRExcIsUncondTerminator(tail(tailCount - 1)) = 0 Then
+                    needFallJump = 1
+                End If
+            End If
+
+            Dim contBlk As Integer = MIRAllocBlock(m, fi)
+            Dim cp As MIRBasicBlock Ptr = @m.functions(fi).blocks(contBlk)
+            Dim cCount As Integer = tailCount + needFallJump
+            If cCount > 0 Then
+                ReDim cp->instructions(cCount - 1)
+                For i = 0 To tailCount - 1
+                    tail(i).blockId = contBlk
+                    cp->instructions(i) = tail(i)
+                Next i
+                If needFallJump <> 0 Then
+                    Dim fj As MIRIRInstruction
+                    MIRExcMake fj, callIns, "JMP", "", 1, LTrim(Str(bi + 1))
+                    fj.blockId = contBlk
+                    cp->instructions(tailCount) = fj
+                End If
+            End If
+            cp->instructionCount = cCount
+
+            Dim bp As MIRBasicBlock Ptr = @m.functions(fi).blocks(bi)
+            Dim headCount As Integer = splitAt + 1 + 3
+            ReDim Preserve bp->instructions(headCount - 1)
+            Dim tEx As String = MIRNextTemp(tempSeed)
+            Dim ld As MIRIRInstruction, jz As MIRIRInstruction, esc As MIRIRInstruction
+            MIRExcMake ld, callIns, "LOAD_VAR", tEx, 1, "__mir_exc_active"
+            ld.resultType = "I64"
+            MIRExcMake jz, callIns, "JZ", "", 2, tEx, LTrim(Str(contBlk))
+            If callIns.tryTargetPlus1 > 0 Then
+                MIRExcMake esc, callIns, "JMP", "", 1, LTrim(Str(callIns.tryTargetPlus1 - 1))
+            Else
+                MIRExcMake esc, callIns, "RET", "", 1, "__result__"
+            End If
+            ld.blockId = bi : jz.blockId = bi : esc.blockId = bi
+            bp->instructions(splitAt + 1) = ld
+            bp->instructions(splitAt + 2) = jz
+            bp->instructions(splitAt + 3) = esc
+            bp->instructionCount = headCount
+            bi += 1
+        Loop
+    Next fi
+    Return 1
+End Function
+
+#endif

@@ -911,6 +911,186 @@ Private Function SemValidateSpawnCalls(ByRef ps As ParseState, ByRef errText As 
     Return 1
 End Function
 
+' S-149 (Mete, 2026-09-25): `TASK OF <tip>` uyumu. Tipli bir gorev tutamacina
+' yalniz ayni sonuc tipini tasiyan bir TASK kaynagi baglanabilir: dogrudan
+' `SPAWN Hedef(...)` (hedef THREAD/PARALEL `AS <tip>` bildirmeli), ayni tipte
+' TASK OF degisken/dizi elemani/parametre, ya da `AS TASK OF <tip>` donduren
+' FUNCTION. Tipsiz TASK -> TASK OF atamasi reddedilir (sonuc tipi dogrulanamaz);
+' TASK OF -> tipsiz TASK serbesttir. Kapsam: DIM ilk degeri, atama (dizi elemani
+' ve BASIC tarzi `FonksiyonAdi = ...` dahil), RETURN, kullanici SUB/FUNCTION
+' cagri argumanlari. Kural (ifade -> sonuc tipi) type_infer_expr.fbs'teki
+' UXBTaskExprResultType ile tip cikarimiyla ortaktir.
+Private Function SemTaskOfCheckSource(ByRef ps As ParseState, ByVal exprIdx As Integer, ByRef wantedType As String, ByRef contextText As String, ByRef errText As String) As Integer
+    If wantedType = "" Then Return 1
+    Dim isTask As Integer
+    Dim gotType As String
+    gotType = UXBTaskExprResultType(ps, exprIdx, isTask)
+    If isTask = 0 Then Return 1   ' TASK kaynagi degil: tip uyumsuzlugunu genel atama denetimi yakalar
+    If gotType = "" Then
+        errText = "semantic: " & contextText & ": TASK OF " & wantedType & " bekleniyor ama kaynak tipsiz bir TASK (sonuc tipi dogrulanamaz); hedef THREAD/PARALEL'e 'AS " & wantedType & "' ekleyin ya da hedefi tipsiz TASK yapin"
+        Return 0
+    End If
+    If UCase(gotType) <> UCase(wantedType) Then
+        errText = "semantic: " & contextText & ": TASK OF " & wantedType & " bekleniyor, kaynak TASK OF " & gotType
+        Return 0
+    End If
+    Return 1
+End Function
+
+' TASK OF sonuc tipi: rutinin RETURN_TYPE'i TASK ise alt dugumunden, degilse "" (isTaskOut=0).
+Private Function SemTaskOfRoutineReturn(ByRef ps As ParseState, ByVal routineIdx As Integer, ByRef isTaskOut As Integer) As String
+    isTaskOut = 0
+    If routineIdx < 0 Then Return ""
+    Dim ch As Integer
+    ch = ps.ast.nodes(routineIdx).firstChild
+    Do While ch <> -1
+        If UCase(Trim(ps.ast.nodes(ch).kind)) = "RETURN_TYPE" Then
+            If UCase(Trim(ps.ast.nodes(ch).value)) <> "TASK" Then Return ""
+            isTaskOut = 1
+            Return UXBTaskOfResultTypeFromTypeNode(ps, ch)
+        End If
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return ""
+End Function
+
+' `DIM g(3) AS TASK : g.JOIN()` -- dizi adi indekssiz TASK alicisi olamaz. Her motor
+' ayni derleme hatasini verir (eskiden AST calisma aninda, MIR "NULL gorev" diyordu).
+Private Function SemTaskArrayReceiverCheck(ByRef ps As ParseState, ByVal receiverIdx As Integer, ByRef errText As String) As Integer
+    If receiverIdx < 0 Or receiverIdx >= ps.ast.count Then Return 1
+    Dim rk As String
+    rk = UCase(Trim(ps.ast.nodes(receiverIdx).kind))
+    If rk <> "IDENT" And rk <> "IDENTIFIER" Then Return 1
+    Dim declIdx As Integer
+    declIdx = UXBTaskFindDeclForName(ps, ps.ast.nodes(receiverIdx).value, receiverIdx)
+    If declIdx = -1 Then Return 1
+    Dim dc As Integer
+    dc = ps.ast.nodes(declIdx).firstChild
+    Do While dc <> -1
+        If UCase(Trim(ps.ast.nodes(dc).kind)) = "DIM_BOUNDS" Then
+            errText = "semantic: TASK dizisi eleman indeksi olmadan alici olamaz: " & ps.ast.nodes(receiverIdx).value & " -- " & ps.ast.nodes(receiverIdx).value & "(i) yazin"
+            Return 0
+        End If
+        dc = ps.ast.nodes(dc).nextSibling
+    Loop
+    Return 1
+End Function
+
+Private Function SemValidateTaskOfTypes(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String
+        k = UCase(Trim(ps.ast.nodes(i).kind))
+        Select Case k
+        Case "DIM_DECL"
+            Dim dimType As String
+            dimType = UXBTaskOfResultTypeFromTypeNode(ps, UXBTaskDeclTypeNode(ps, i))
+            If dimType = "" Then Continue For
+            Dim dc As Integer
+            dc = ps.ast.nodes(i).firstChild
+            Do While dc <> -1
+                If UCase(Trim(ps.ast.nodes(dc).kind)) = "INIT_EXPR" Then
+                    If SemTaskOfCheckSource(ps, ps.ast.nodes(dc).left, dimType, "DIM " & ps.ast.nodes(i).value, errText) = 0 Then Return 0
+                End If
+                dc = ps.ast.nodes(dc).nextSibling
+            Loop
+
+        Case "ASSIGN_STMT"
+            Dim lhs As Integer
+            lhs = ps.ast.nodes(i).left
+            If lhs = -1 Then Continue For
+            Dim lhsKind As String
+            lhsKind = UCase(Trim(ps.ast.nodes(lhs).kind))
+            If lhsKind <> "IDENT" And lhsKind <> "IDENTIFIER" And lhsKind <> "CALL_EXPR" Then Continue For
+            If lhsKind = "CALL_EXPR" AndAlso ps.ast.nodes(lhs).left <> -1 Then Continue For
+            Dim lhsName As String
+            lhsName = Trim(ps.ast.nodes(lhs).value)
+            Dim wanted As String
+            wanted = ""
+            Dim lhsDecl As Integer
+            lhsDecl = UXBTaskFindDeclForName(ps, lhsName, lhs)
+            If lhsDecl <> -1 Then
+                wanted = UXBTaskOfResultTypeFromTypeNode(ps, UXBTaskDeclTypeNode(ps, lhsDecl))
+            Else
+                ' BASIC tarzi donus: FUNCTION govdesinde `FonksiyonAdi = ifade`
+                Dim ownerFn As Integer
+                ownerFn = UXBTaskEnclosingRoutine(ps, i)
+                If ownerFn <> -1 AndAlso UCase(Trim(ps.ast.nodes(ownerFn).kind)) = "FUNCTION_STMT" AndAlso UCase(Trim(ps.ast.nodes(ownerFn).value)) = UCase(lhsName) Then
+                    Dim fnIsTask As Integer
+                    wanted = SemTaskOfRoutineReturn(ps, ownerFn, fnIsTask)
+                End If
+            End If
+            If SemTaskOfCheckSource(ps, ps.ast.nodes(i).right, wanted, "atama " & lhsName, errText) = 0 Then Return 0
+
+        Case "RETURN_STMT"
+            Dim retOwner As Integer
+            retOwner = UXBTaskEnclosingRoutine(ps, i)
+            If retOwner = -1 Then Continue For
+            Dim retOwnerKind As String
+            retOwnerKind = UCase(Trim(ps.ast.nodes(retOwner).kind))
+            Dim retExpr As Integer
+            retExpr = ps.ast.nodes(i).left
+            If retExpr = -1 Then retExpr = ps.ast.nodes(i).firstChild
+            If retOwnerKind = "FUNCTION_STMT" Then
+                Dim retIsTask As Integer
+                Dim retWanted As String
+                retWanted = SemTaskOfRoutineReturn(ps, retOwner, retIsTask)
+                If retIsTask <> 0 And retExpr <> -1 Then
+                    If SemTaskOfCheckSource(ps, retExpr, retWanted, "FUNCTION " & ps.ast.nodes(retOwner).value & " RETURN", errText) = 0 Then Return 0
+                End If
+            ElseIf retOwnerKind = "THREAD_STMT" Or retOwnerKind = "PARALEL_STMT" Then
+                ' Donus tipi bildiren gorev degersiz RETURN ile bitemez: TASK OF sonucu tanimsiz kalirdi.
+                Dim laneRet As Integer
+                laneRet = ps.ast.nodes(retOwner).firstChild
+                Do While laneRet <> -1
+                    If UCase(Trim(ps.ast.nodes(laneRet).kind)) = "RETURN_TYPE" Then
+                        If retExpr = -1 Then
+                            errText = "semantic: " & IIf(retOwnerKind = "THREAD_STMT", "THREAD", "PARALEL") & " " & ps.ast.nodes(retOwner).value & " AS " & ps.ast.nodes(laneRet).value & " bildiriyor; RETURN bir deger dondurmeli"
+                            Return 0
+                        End If
+                        Exit Do
+                    End If
+                    laneRet = ps.ast.nodes(laneRet).nextSibling
+                Loop
+            End If
+
+        Case "FIELD_EXPR"
+            If SemTaskArrayReceiverCheck(ps, ps.ast.nodes(i).left, errText) = 0 Then Return 0
+
+        Case "CALL_EXPR", "CALL_STMT"
+            If ps.ast.nodes(i).left <> -1 Then
+                ' metot cagrisi: TASK dizisi indekssiz alici olamaz
+                If SemTaskArrayReceiverCheck(ps, ps.ast.nodes(i).left, errText) = 0 Then Return 0
+                Continue For
+            End If
+            Dim callName As String
+            callName = UCase(Trim(ps.ast.nodes(i).value))
+            If callName = "" Then Continue For
+            Dim ri As Integer
+            For ri = 0 To ps.ast.count - 1
+                Dim rk As String
+                rk = UCase(Trim(ps.ast.nodes(ri).kind))
+                If rk <> "FUNCTION_STMT" And rk <> "SUB_STMT" Then Continue For
+                If UCase(Trim(ps.ast.nodes(ri).value)) <> callName Then Continue For
+                Dim pNode As Integer
+                pNode = ps.ast.nodes(ri).firstChild
+                Dim argNode As Integer
+                argNode = ps.ast.nodes(i).firstChild
+                Do While pNode <> -1 And argNode <> -1
+                    If UCase(Trim(ps.ast.nodes(pNode).kind)) <> "PARAM_DECL" Then Exit Do
+                    Dim paramWanted As String
+                    paramWanted = UXBTaskOfResultTypeFromTypeNode(ps, UXBTaskDeclTypeNode(ps, pNode))
+                    If SemTaskOfCheckSource(ps, argNode, paramWanted, callName & " parametresi " & ps.ast.nodes(pNode).value, errText) = 0 Then Return 0
+                    pNode = ps.ast.nodes(pNode).nextSibling
+                    argNode = ps.ast.nodes(argNode).nextSibling
+                Loop
+                Exit For
+            Next ri
+        End Select
+    Next i
+    Return 1
+End Function
+
 ' S-067: `MAIN` belongs to the `MAIN ... END MAIN` program-entry block, and the compiler
 ' names its own top-level driver function "MAIN" internally. A user routine of that
 ' name used to collide with it: native x64 and canonical-MIR ran the user's SUB as the
@@ -1166,6 +1346,7 @@ Function SemanticAnalyze(ByRef ps As ParseState, ByRef errText As String) As Int
     If SemValidateArrayBoundsCalls(ps, errText) = 0 Then Return 0
     If SemValidateEachSources(ps, errText) = 0 Then Return 0
     If SemValidateSpawnCalls(ps, errText) = 0 Then Return 0
+    If SemValidateTaskOfTypes(ps, errText) = 0 Then Return 0
     If SemValidateExplicitMethodAccess(ps, errText) = 0 Then Return 0
     If SemValidateImportNodes(ps, errText) = 0 Then Return 0
     If SemValidateInputNodes(ps, errText) = 0 Then Return 0
@@ -1196,6 +1377,9 @@ Function SemanticAnalyze(ByRef ps As ParseState, ByRef errText As String) As Int
         errText = "semantic-step3: " & step3Err
         Return 0
     End If
+
+    ' S-146 (D6): SPAWN sinirinda gorev izolasyonu -- tip cikarimi hazir olduktan sonra.
+    If SemValidateSpawnIsolation(ps, errText) = 0 Then Return 0
 
     Return 1
 End Function

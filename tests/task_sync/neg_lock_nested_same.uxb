@@ -1,0 +1,7 @@
+' S-146: ayni kilidi sozcuksel olarak ic ice LOCK etmek derleme zamaninda SELF_DEADLOCK.
+DIM x AS I64
+LOCK x
+    LOCK x
+        x += 1
+    END LOCK
+END LOCK

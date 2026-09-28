@@ -1,0 +1,123 @@
+#ifndef UXB_RNG_FBS
+#define UXB_RNG_FBS
+
+' ===========================================================================
+' S-163 + S-146 adim 2 (Model D madde 9): RND/RANDOMIZE -- tum motorlarda AYNI uretec.
+' Algoritma: xoshiro256** (durum SplitMix64 ile tohumlanir). Native karsiligi birebir ayni:
+' native/uxb_runtime/uxb_runtime_task_v2.cpp (UxbRng). Ayni tohum -> ayni dizi, her motorda.
+'   RND / RND()     -> [0, 1) F64 (53 bit)
+'   RND(x)          -> x < 0: x ile yeniden tohumla, sonra yeni deger; x = 0: son degeri
+'                      tekrarla; x > 0: yeni deger (QBasic anlami)
+'   RANDOMIZE n     -> n ile tohumla; RANDOMIZE (argumansiz) -> zaman tohumu
+'   Varsayilan tohum sabittir (RANDOMIZE'siz program her calismada ayni diziyi uretir).
+' Gorev basina uretec: her gorev SPAWN aninda, ata uretecinin SIRADAKI 64 bitlik degeriyle
+' tohumlanir (belirlenimci: gorevler ayni noktalarda SPAWN edilirse her motorda ayni sayilar).
+' Anahtar: ana program 0, gorev = motorun gorev anahtari.
+' ===========================================================================
+
+Const UXB_RNG_DEFAULT_SEED As ULongInt = &H5EED0000C0FFEE01ULL
+
+Type UXBRngState
+    s0 As ULongInt
+    s1 As ULongInt
+    s2 As ULongInt
+    s3 As ULongInt
+    lastValue As Double
+End Type
+
+Private Function UXBRngSplitMix(ByRef x As ULongInt) As ULongInt
+    x += &H9E3779B97F4A7C15ULL
+    Dim z As ULongInt = x
+    z = (z Xor (z Shr 30)) * &HBF58476D1CE4E5B9ULL
+    z = (z Xor (z Shr 27)) * &H94D049BB133111EBULL
+    Return z Xor (z Shr 31)
+End Function
+
+Private Function UXBRngRotl(ByVal v As ULongInt, ByVal k As Integer) As ULongInt
+    Return (v Shl k) Or (v Shr (64 - k))
+End Function
+
+Sub UXBRngSeed(ByRef r As UXBRngState, ByVal seed As ULongInt)
+    Dim x As ULongInt = seed
+    r.s0 = UXBRngSplitMix(x)
+    r.s1 = UXBRngSplitMix(x)
+    r.s2 = UXBRngSplitMix(x)
+    r.s3 = UXBRngSplitMix(x)
+    r.lastValue = 0
+End Sub
+
+Function UXBRngNextU64(ByRef r As UXBRngState) As ULongInt
+    Dim result As ULongInt = UXBRngRotl(r.s1 * 5ULL, 7) * 9ULL
+    Dim t As ULongInt = r.s1 Shl 17
+    r.s2 = r.s2 Xor r.s0
+    r.s3 = r.s3 Xor r.s1
+    r.s1 = r.s1 Xor r.s2
+    r.s0 = r.s0 Xor r.s3
+    r.s2 = r.s2 Xor t
+    r.s3 = UXBRngRotl(r.s3, 45)
+    Return result
+End Function
+
+Function UXBRngNextF64(ByRef r As UXBRngState) As Double
+    Dim v As Double = CDbl(UXBRngNextU64(r) Shr 11) * (1.0 / 9007199254740992.0)
+    r.lastValue = v
+    Return v
+End Function
+
+' --- gorev anahtari -> uretec kaydi ---
+Dim Shared gUxbRngKeys(Any) As Integer
+Dim Shared gUxbRngStates(Any) As UXBRngState
+Dim Shared gUxbRngCount As Integer
+
+Sub UXBRngResetAll()
+    gUxbRngCount = 1
+    ReDim gUxbRngKeys(0)
+    ReDim gUxbRngStates(0)
+    gUxbRngKeys(0) = 0
+    UXBRngSeed gUxbRngStates(0), UXB_RNG_DEFAULT_SEED
+End Sub
+
+Private Function UXBRngIndexFor(ByVal key As Integer) As Integer
+    If gUxbRngCount = 0 Then UXBRngResetAll
+    Dim i As Integer
+    For i = gUxbRngCount - 1 To 0 Step -1
+        If gUxbRngKeys(i) = key Then Return i
+    Next i
+    ' Kaydi olmayan anahtar (olmamali: gorevler SPAWN aninda kaydedilir) ana uretecten turetilir.
+    ReDim Preserve gUxbRngKeys(gUxbRngCount)
+    ReDim Preserve gUxbRngStates(gUxbRngCount)
+    gUxbRngKeys(gUxbRngCount) = key
+    ' Kayit yalniz acilir; tohum SPAWN aninda UXBRngSpawnChild verir (ata uretecinden TEK deger --
+    ' native ile ayni). Ana uretec burada ilerletilmez.
+    UXBRngSeed gUxbRngStates(gUxbRngCount), UXB_RNG_DEFAULT_SEED Xor Cast(ULongInt, key)
+    gUxbRngCount += 1
+    Return gUxbRngCount - 1
+End Function
+
+' SPAWN aninda (ata baglaminda) cagrilir: cocuk gorevin uretecini atanin siradaki degeriyle tohumlar.
+Sub UXBRngSpawnChild(ByVal parentKey As Integer, ByVal childKey As Integer)
+    Dim p As Integer = UXBRngIndexFor(parentKey)
+    Dim seed As ULongInt = UXBRngNextU64(gUxbRngStates(p))
+    Dim c As Integer = UXBRngIndexFor(childKey)
+    UXBRngSeed gUxbRngStates(c), seed
+End Sub
+
+Sub UXBRngRandomize(ByVal key As Integer, ByVal seed As LongInt)
+    UXBRngSeed gUxbRngStates(UXBRngIndexFor(key)), Cast(ULongInt, seed)
+End Sub
+
+' RANDOMIZE argumansiz: zaman tohumu.
+Sub UXBRngRandomizeTime(ByVal key As Integer)
+    UXBRngSeed gUxbRngStates(UXBRngIndexFor(key)), Cast(ULongInt, CLngInt(Timer * 1000000000.0)) Xor (Cast(ULongInt, gUxbRngCount) * &H9E3779B97F4A7C15ULL)
+End Sub
+
+Function UXBRngRnd(ByVal key As Integer, ByVal hasArg As Integer, ByVal arg As Double) As Double
+    Dim i As Integer = UXBRngIndexFor(key)
+    If hasArg <> 0 Then
+        If arg = 0 Then Return gUxbRngStates(i).lastValue
+        If arg < 0 Then UXBRngSeed gUxbRngStates(i), Cast(ULongInt, CLngInt(Fix(arg)))
+    End If
+    Return UXBRngNextF64(gUxbRngStates(i))
+End Function
+
+#endif

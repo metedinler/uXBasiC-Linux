@@ -216,6 +216,20 @@ Function MIRX64FindGlobalSlot(ByRef cg As MIRX64Context, ByRef nameText As Strin
     Dim target As String
     target = UCase(Trim(nameText))
     Dim i As Integer
+    ' S-168: derlenen rutinin kendi parametresi ya da yereli (DIM/CONST) ayni adli globali golgeler.
+    ' Eskiden global once araniyordu: rutindeki `DIM g` globale yaziyor, parametre `x` globale
+    ' yaziliyor, yerel okuma cop veriyordu. MAIN duzeyindeki bildirimler zaten globaldir.
+    If cg.modulePtr <> 0 AndAlso cg.currentFunctionIndex >= 0 AndAlso cg.currentFunctionIndex < cg.modulePtr->functionCount Then
+        Dim shadowFn As MIRFunction Ptr = @cg.modulePtr->functions(cg.currentFunctionIndex)
+        If UCase(Trim(shadowFn->name)) <> "MAIN" Then
+            For i = 0 To shadowFn->paramVarCount - 1
+                If UCase(Trim(shadowFn->paramVars(i))) = target Then Return 0
+            Next i
+            For i = 0 To shadowFn->localVarCount - 1
+                If UCase(Trim(shadowFn->localVars(i))) = target Then Return 0
+            Next i
+        End If
+    End If
     For i = 0 To cg.globalCount - 1
         If UCase(Trim(cg.globals(i).nameText)) = target Then
             idxOut = i
@@ -229,7 +243,14 @@ Function MIRX64EnsureGlobalSlot(ByRef cg As MIRX64Context, ByRef nameText As Str
     Dim n As String
     n = UCase(Trim(nameText))
     If n = "" Then Return 0
-    If MIRX64FindGlobalSlot(cg, n, idxOut) <> 0 Then Return 1
+    ' Golgeleme denetimi yok: ayni etiketli ikinci global yuvasi acilmamali (S-168).
+    Dim gi As Integer
+    For gi = 0 To cg.globalCount - 1
+        If UCase(Trim(cg.globals(gi).nameText)) = n Then
+            idxOut = gi
+            Return 1
+        End If
+    Next gi
 
     idxOut = cg.globalCount
     If cg.globalCount = 0 Then

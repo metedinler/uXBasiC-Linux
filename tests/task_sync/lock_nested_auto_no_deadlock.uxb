@@ -1,0 +1,30 @@
+' S-146 Model D: acik LOCK y icinde x'e (otomatik kilit) dokunan gorev ile tek deyimde hem x hem
+' y'ye dokunan gorev birlikte calisir -- deyim kilitleri "ya hepsi ya hicbiri" alinir, kilitlenme yok.
+DIM x AS I64 = 0
+DIM y AS I64 = 0
+DIM toplam AS I64 = 0
+THREAD A(n AS I64) AS I64
+    DIM i AS I64
+    FOR i = 1 TO n
+        LOCK y
+            y += 1
+            x += 1
+        END LOCK
+    NEXT i
+    RETURN n
+END THREAD
+THREAD B(n AS I64) AS I64
+    DIM i AS I64
+    FOR i = 1 TO n
+        toplam = toplam + x - x + y - y + 1
+    NEXT i
+    RETURN n
+END THREAD
+DIM g AS TASKGROUP
+DIM k AS I64
+FOR k = 1 TO 4
+    g.ADD(SPAWN A(3000))
+    g.ADD(SPAWN B(3000))
+NEXT k
+g.JOIN()
+PRINT x; " "; y; " "; toplam

@@ -1,0 +1,13 @@
+' S-160: gorevin alt rutininden atilan istisna gorev hatasidir; JOIN cagirana aktarir.
+SUB Patla(n AS I64)
+    IF n = 2 THEN THROW 42
+END SUB
+THREAD W(n AS I64) AS I64
+    Patla(n)
+    RETURN n
+END THREAD
+DIM a AS TASK OF I64 = SPAWN W(1)
+DIM b AS TASK OF I64 = SPAWN W(2)
+PRINT a.JOIN()
+b.WAIT()
+PRINT b.STATUS

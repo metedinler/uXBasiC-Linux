@@ -1,0 +1,12 @@
+' S-160: SUB icinden atilan THROW, cagirandaki TRY/CATCH ile yakalanir.
+DIM x AS I64 = 0
+SUB Patla()
+    x += 1
+    THROW 9
+END SUB
+TRY
+    Patla()
+CATCH
+    PRINT "yakalandi"
+END TRY
+PRINT x

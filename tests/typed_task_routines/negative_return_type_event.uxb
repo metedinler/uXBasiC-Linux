@@ -1,0 +1,3 @@
+EVENT InvalidResult(value AS I32) AS I32
+    PRINT value
+END EVENT

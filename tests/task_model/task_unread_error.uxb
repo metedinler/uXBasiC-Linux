@@ -1,0 +1,8 @@
+' S-030 K5: hic okunmamis gorev hatasi sessiz kaybolmaz; program sonunda hata cikisina yazilir, cikis basarisiz.
+THREAD Boom(x AS I32) AS I32
+    THROW "sessiz degil"
+    RETURN x
+END THREAD
+DIM t AS TASK OF I32 = SPAWN Boom(1)
+PRINT "once"
+

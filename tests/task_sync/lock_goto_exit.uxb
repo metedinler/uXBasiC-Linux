@@ -1,0 +1,13 @@
+' S-146 Model D: ust duzeyde GOTO ile LOCK disina atlamak kilidi birakir (birakilmasaydi
+' sonraki LOCK x SELF_DEADLOCK verirdi).
+DIM x AS I64 = 0
+LOCK x
+    x += 100
+    GOTO disari
+END LOCK
+PRINT "atlanmamali"
+disari:
+LOCK x
+    x += 1000
+END LOCK
+PRINT x

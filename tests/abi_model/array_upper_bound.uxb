@@ -1,0 +1,18 @@
+' S-093: DIM a(N) has N+1 elements (0..N). The highest element must not alias a
+' neighbouring variable, and pointer arithmetic over the array sees the same cells.
+DIM a(3) AS I32
+a(0) = 10
+a(1) = 11
+a(2) = 12
+a(3) = 13
+DIM p AS PTR
+DIM tail AS I32
+tail = 777
+p = VARPTR(a)
+PRINT PEEKD(p)
+PRINT PEEKD(p + 4)
+PRINT PEEKD(p + 8)
+PRINT PEEKD(p + 12)
+PRINT a(3)
+PRINT tail
+PRINT SIZEOF(a)

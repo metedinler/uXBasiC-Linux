@@ -1,0 +1,37 @@
+NAMESPACE nsk
+CONST K = 5
+CONST L AS F64 = 2
+CONST S = "ns"
+FUNCTION UsesK(v AS I32) AS I32
+    DIM i AS I32
+    DIM t AS I32
+    t = 0
+    FOR i = 1 TO K
+        t = t + 1
+    NEXT
+    IF K > 3 THEN t = t + 100
+    RETURN v + K + t
+END FUNCTION
+FUNCTION UsesL() AS F64
+    RETURN L * 1.5
+END FUNCTION
+FUNCTION UsesS() AS STRING
+    RETURN S + "!"
+END FUNCTION
+END NAMESPACE
+CONST TOPK = 7
+CONST HALFV = 0.5
+FUNCTION Hv() AS F64
+    RETURN HALFV * 4
+END FUNCTION
+FUNCTION Loc() AS I32
+    CONST LK = 9
+    RETURN LK + TOPK
+END FUNCTION
+MAIN
+    PRINT nsk.UsesK(6)
+    PRINT nsk.UsesL()
+    PRINT nsk.UsesS()
+    PRINT Hv()
+    PRINT Loc()
+END MAIN

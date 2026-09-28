@@ -1,0 +1,13 @@
+' S-078: hexadecimal integer literals -- a hex digit E is not a decimal exponent.
+DIM n AS I64
+n = &h00007FF812345678
+PRINT n
+DIM m AS I32
+m = &hFE
+PRINT m
+DIM q AS U64
+q = &hFFFFFFFFFFFFFFFF
+PRINT q
+DIM r AS I32
+r = &h7FFFFFFE
+PRINT r

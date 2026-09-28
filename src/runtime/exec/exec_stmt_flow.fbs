@@ -359,6 +359,8 @@ Private Function ExecRunTryStmt(ByRef ps As ParseState, ByRef es As ExecState, B
     savedException = es.runtime.execException
 
     If ExecRunTryPart(ps, es, tryBodyNode, errText) = 0 Then
+        ' S-146: olumcul kilit tanisi (SELF_DEADLOCK/LOCK_DEADLOCK) TRY ile yakalanmaz.
+        If ExecIsLockFatal(errText) <> 0 Then Return 0
         hasError = 1
         capturedErr = errText
         errText = ""
@@ -1307,6 +1309,12 @@ Private Function ExecRunFlowStmt(ByRef ps As ParseState, ByRef es As ExecState, 
 
     Case "ASSERT_STMT"
         Return ExecRunAssertStmt(ps, es, stmtIdx, errText)
+
+    Case "LOCK_STMT"
+        Return ExecRunLockStmt(ps, es, stmtIdx, errText)
+
+    Case "UNSAFE_STMT"
+        Return ExecRunUnsafeStmt(ps, es, stmtIdx, errText)
     End Select
 
     Return -2

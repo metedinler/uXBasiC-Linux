@@ -1,0 +1,1 @@
+ALL=SELF_DEADLOCK: 'X' zaten disaridaki LOCK ile tutuluyor

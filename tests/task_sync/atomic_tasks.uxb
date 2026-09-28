@@ -1,0 +1,29 @@
+' S-146 Model D: ATOMIC gorevler arasinda. `hizli` yalniz atomik bicimlerle yazilir -> kilitsiz
+' (lock xadd / lock cmpxchg); `karma`ya bir yerde x = x * 1 + 1 yazildigi icin tum erisimleri
+' deyim kilidine gecer. Iki durumda da sonuc kesin.
+DIM ATOMIC hizli AS I64 = 0
+DIM ATOMIC dar AS I32 = 0
+DIM ATOMIC enBuyuk AS I64 = 0
+DIM ATOMIC karma AS I64 = 0
+THREAD Isci(n AS I64) AS I64
+    DIM i AS I64
+    DIM eski AS I64
+    FOR i = 1 TO n
+        hizli += 1
+        dar.ADD(2)
+        karma = karma * 1 + 1
+        DO
+            eski = enBuyuk.LOAD()
+            IF i <= eski THEN EXIT DO
+            IF enBuyuk.CAS(eski, i) THEN EXIT DO
+        LOOP
+    NEXT i
+    RETURN n
+END THREAD
+DIM g AS TASKGROUP
+DIM k AS I64
+FOR k = 1 TO 8
+    g.ADD(SPAWN Isci(5000 + k))
+NEXT k
+g.JOIN()
+PRINT hizli; " "; dar; " "; enBuyuk; " "; karma

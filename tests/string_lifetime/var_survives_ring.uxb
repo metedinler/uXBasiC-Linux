@@ -1,0 +1,12 @@
+' S-157: native'de STRING degeri 32 metin isleminden sonra eziliyordu (degisken halkayi gosteriyordu).
+DIM s AS STRING
+s = STR(12345) + "-kalici"
+DIM t AS STRING
+DIM i AS I32
+FOR i = 1 TO 100
+    t = STR(i) + "x"
+NEXT
+PRINT s
+PRINT t
+
+

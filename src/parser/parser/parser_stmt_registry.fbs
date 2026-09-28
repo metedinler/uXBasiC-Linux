@@ -424,6 +424,81 @@ Private Function IsExtendedAssignOp(ByRef opText As String) As Integer
     Return 0
 End Function
 
+' ===========================================================================
+' S-146 Model D (Mete 2026-09-26): LOCK ... END LOCK ve UNSAFE ... END UNSAFE.
+' Ikisi de BAGLAMSAL: anahtar sozcuk tablosuna eklenmedi, `lock`/`unsafe` adli
+' degiskenler etkilenmez. LOCK ancak ardindan bir ad (kilit hedefi) gelirse,
+' UNSAFE ancak satirda tek basinaysa blok baslatir.
+'   LOCK_STMT : cocuklar = LOCK_TARGET (value = hedef adi; CONSOLE dahil) + govde deyimleri
+'   UNSAFE_STMT : cocuklar = govde deyimleri
+' ===========================================================================
+Private Function IsEndOfConcurrencyBlock(ByRef ps As ParseState, ByRef blockWord As String) As Integer
+    If IsKw(ps, "END") = 0 Then Return 0
+    Dim t1 As Token = LookToken(ps, 1)
+    If t1.kind <> "KEYWORD" And t1.kind <> "IDENT" Then Return 0
+    Return IIf(UCase(Trim(t1.lexeme)) = blockWord, 1, 0)
+End Function
+
+Private Function ParseConcurrencyBlockBody(ByRef ps As ParseState, ByVal blockNode As Integer, ByRef blockWord As String) As Integer
+    SkipSeparators ps
+    Do While CurToken(ps).kind <> "EOF"
+        If IsEndOfConcurrencyBlock(ps, blockWord) Then Exit Do
+        Dim st As Integer
+        st = ParseSimpleStatement(ps)
+        If st = -1 Then Return 0
+        ASTAddChild ps.ast, blockNode, st
+        SkipSeparators ps
+    Loop
+    If IsEndOfConcurrencyBlock(ps, blockWord) = 0 Then
+        ps.lastError = "missing END " & blockWord
+        Return 0
+    End If
+    AdvanceTok ps
+    AdvanceTok ps
+    Return 1
+End Function
+
+Private Function TryParseConcurrencyStatement(ByRef ps As ParseState, ByRef tk As Token) As Integer
+    If tk.kind <> "IDENT" And tk.kind <> "KEYWORD" Then Return -2
+    Dim w As String = UCase(Trim(tk.lexeme))
+    Dim nextTok As Token = LookToken(ps, 1)
+
+    If w = "LOCK" AndAlso (nextTok.kind = "IDENT" Or nextTok.kind = "KEYWORD") Then
+        AdvanceTok ps
+        Dim lockNode As Integer
+        lockNode = MakeNodeFromToken(ps, "LOCK_STMT", "", "", tk)
+        Do
+            Dim targetTok As Token = CurToken(ps)
+            If targetTok.kind <> "IDENT" And targetTok.kind <> "KEYWORD" Then
+                ps.lastError = "LOCK: kilit hedefi (degisken, MUTEX ya da CONSOLE) bekleniyor"
+                Return -1
+            End If
+            AdvanceTok ps
+            Dim targetNode As Integer
+            targetNode = MakeNodeFromToken(ps, "LOCK_TARGET", targetTok.lexeme, "", targetTok)
+            ps.ast.nodes(targetNode).role = "LOCK_TARGET"
+            ASTAddChild ps.ast, lockNode, targetNode
+            If MatchOp(ps, ",") = 0 Then Exit Do
+        Loop
+        If IsBasicStmtTerminator(CurToken(ps)) = 0 Then
+            ps.lastError = "LOCK: hedef listesinden sonra satir sonu bekleniyor"
+            Return -1
+        End If
+        If ParseConcurrencyBlockBody(ps, lockNode, "LOCK") = 0 Then Return -1
+        Return lockNode
+    End If
+
+    If w = "UNSAFE" AndAlso (nextTok.kind = "EOL" Or (nextTok.kind = "OP" And nextTok.lexeme = ":")) Then
+        AdvanceTok ps
+        Dim unsafeNode As Integer
+        unsafeNode = MakeNodeFromToken(ps, "UNSAFE_STMT", "", "", tk)
+        If ParseConcurrencyBlockBody(ps, unsafeNode, "UNSAFE") = 0 Then Return -1
+        Return unsafeNode
+    End If
+
+    Return -2
+End Function
+
 Private Function TryParseIdentifierStatement(ByRef ps As ParseState, ByRef tk As Token) As Integer
     If tk.kind <> "IDENT" Then
         If tk.kind = "KEYWORD" Then
@@ -590,7 +665,11 @@ Private Function ParseExpressionStatement(ByRef ps As ParseState, ByRef tk As To
                 If lhsNode <> -1 Then
                     Dim lhsKind As String
                     lhsKind = UCase(ps.ast.nodes(lhsNode).kind)
-                    If lhsKind = "FIELD_EXPR" Then
+                    ' S-162: deyim basindaki `a.b(i) = x` (nitelikli dizi / alan dizisi) da atamadir;
+                    ' eskiden karsilastirma olarak EXPR_STMT'e dusup sessizce hicbir sey yapmiyordu.
+                    Dim lhsIsQualifiedIndex As Integer = 0
+                    If lhsKind = "CALL_EXPR" AndAlso InStr(ps.ast.nodes(lhsNode).value, ".") > 0 Then lhsIsQualifiedIndex = 1
+                    If lhsKind = "FIELD_EXPR" Or lhsIsQualifiedIndex <> 0 Then
                         Dim assignNode As Integer
                         assignNode = ASTNewNode(ps.ast, "ASSIGN_STMT", "", exprOp, tk.lineNo, tk.colNo)
                         ' S-032 class fix: lhsNode/rhsNode are being re-parented
@@ -624,6 +703,10 @@ Function ParseSimpleStatement(ByRef ps As ParseState) As Integer
     Dim kwStmt As Integer
     kwStmt = DispatchKeywordStatement(ps, tk)
     If kwStmt <> -2 Then Return kwStmt
+
+    Dim concurrencyStmt As Integer
+    concurrencyStmt = TryParseConcurrencyStatement(ps, tk)
+    If concurrencyStmt <> -2 Then Return concurrencyStmt
 
     Dim identStmt As Integer
     identStmt = TryParseIdentifierStatement(ps, tk)

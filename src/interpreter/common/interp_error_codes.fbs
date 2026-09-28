@@ -19,6 +19,12 @@ Const UXB_INTERP_ERR_MIR_TYPE_LEAK As Integer = 5114
 Const UXB_INTERP_ERR_LIMIT As Integer = 5115
 Const UXB_INTERP_ERR_IO As Integer = 5116
 Const UXB_INTERP_ERR_BAD_ARGUMENT As Integer = 5117
+' S-156: HATA DEGIL -- rutin icindeki END programi bitirir; ic ice cagrilari cozmek icin hata yolunu
+' kullanan sinyal. En ustteki calistirma dongusu bunu basarili bitis sayar.
+Const UXB_INTERP_SIGNAL_PROGRAM_END As Integer = 5199
+' S-146 Model D: SELF_DEADLOCK / LOCK_DEADLOCK -- programi durduran kilit hatasi. Gorev hatasi
+' olarak gorevde tutulmaz ve TRY ile yakalanmaz (native'de de surec acik taniyla biter).
+Const UXB_INTERP_ERR_LOCK_FATAL As Integer = 5198
 
 Function UXBInterpErrorName(ByVal codeValue As Integer) As String
     Select Case codeValue

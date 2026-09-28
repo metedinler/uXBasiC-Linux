@@ -1,0 +1,16 @@
+' S-146 Model D (2026-09-26): gorevde global kullanimi serbest ve otomatik senkron (eski negatif test neg_iso_recursion)
+DIM g AS I32
+FUNCTION A(n AS I32) AS I32
+ IF n = 0 THEN RETURN g
+ RETURN B(n - 1)
+END FUNCTION
+FUNCTION B(n AS I32) AS I32
+ RETURN A(n)
+END FUNCTION
+THREAD W(x AS I32) AS I32
+ RETURN B(x)
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

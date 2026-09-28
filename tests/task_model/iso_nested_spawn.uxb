@@ -1,0 +1,12 @@
+' S-146: govde icinde ic ice SPAWN serbest (hedef ayrica denetlenir).
+THREAD Inner(x AS I32) AS I32
+ RETURN x + 1
+END THREAD
+THREAD W(x AS I32) AS I32
+ DIM q AS TASK OF I32 = SPAWN Inner(x)
+ RETURN q.JOIN()
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+PRINT t.JOIN()
+
+

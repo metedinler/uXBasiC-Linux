@@ -1,0 +1,6 @@
+' S-076: LPTR(etiket) yerel motorlarda gerçek etiket adresi; yorumlayıcılarda net hata.
+DIM p AS PTR
+p = LPTR(hedef)
+IF p <> 0 THEN PRINT "etiket adresi var"
+hedef:
+PRINT 5
