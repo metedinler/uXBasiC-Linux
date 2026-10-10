@@ -1,0 +1,49 @@
+' Boyer-Moore: cogunluk yok. Aday bulunur ama dogrulama gecisi reddeder (kisa surum burada yanlis sonuc verirdi).
+FUNCTION MajorityCandidate(arr AS I32[]) AS I32
+    DIM i AS I32
+    DIM cand AS I32
+    DIM c AS I32
+    cand = 0
+    c = 0
+    FOR i = LBOUND(arr) TO UBOUND(arr)
+        IF c == 0 THEN
+            cand = arr(i)
+        END IF
+        IF arr(i) == cand THEN
+            c = c + 1
+        ELSE
+            c = c - 1
+        END IF
+    NEXT i
+    RETURN cand
+END FUNCTION
+
+FUNCTION CountOf(arr AS I32[], x AS I32) AS I32
+    DIM i AS I32
+    DIM c AS I32
+    c = 0
+    FOR i = LBOUND(arr) TO UBOUND(arr)
+        IF arr(i) == x THEN
+            c = c + 1
+        END IF
+    NEXT i
+    RETURN c
+END FUNCTION
+
+DIM a(1 TO 6) AS I32
+a(1) = 1
+a(2) = 2
+a(3) = 3
+a(4) = 1
+a(5) = 2
+a(6) = 3
+
+DIM cand AS I32
+DIM k AS I32
+cand = MajorityCandidate(a)
+k = CountOf(a, cand)
+IF k * 2 > UBOUND(a) - LBOUND(a) + 1 THEN
+    PRINT cand
+ELSE
+    PRINT "yok"
+END IF

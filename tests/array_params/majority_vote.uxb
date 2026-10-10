@@ -1,0 +1,52 @@
+' Boyer-Moore cogunluk oylamasi: dizi parametresi (I32[]) ile genel fonksiyonlar.
+' O(n) zaman, O(1) ek bellek; sozluk/hash/yardimci dizi yok. 1. gecis aday, 2. gecis dogrulama.
+FUNCTION MajorityCandidate(arr AS I32[]) AS I32
+    DIM i AS I32
+    DIM cand AS I32
+    DIM c AS I32
+    cand = 0
+    c = 0
+    FOR i = LBOUND(arr) TO UBOUND(arr)
+        IF c == 0 THEN
+            cand = arr(i)
+        END IF
+        IF arr(i) == cand THEN
+            c = c + 1
+        ELSE
+            c = c - 1
+        END IF
+    NEXT i
+    RETURN cand
+END FUNCTION
+
+FUNCTION CountOf(arr AS I32[], x AS I32) AS I32
+    DIM i AS I32
+    DIM c AS I32
+    c = 0
+    FOR i = LBOUND(arr) TO UBOUND(arr)
+        IF arr(i) == x THEN
+            c = c + 1
+        END IF
+    NEXT i
+    RETURN c
+END FUNCTION
+
+DIM a(6) AS I32
+a(0) = 2
+a(1) = 3
+a(2) = 2
+a(3) = 2
+a(4) = 5
+a(5) = 2
+a(6) = 2
+
+DIM cand AS I32
+DIM k AS I32
+cand = MajorityCandidate(a)
+k = CountOf(a, cand)
+IF k * 2 > UBOUND(a) - LBOUND(a) + 1 THEN
+    PRINT cand
+    PRINT k
+ELSE
+    PRINT "yok"
+END IF
