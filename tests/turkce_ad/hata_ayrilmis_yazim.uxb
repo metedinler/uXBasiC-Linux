@@ -1,0 +1,3 @@
+' S-579: tarihsel dosya adı korunur; ASCII kod benzeri adlar geçerlidir ve Türkçe adla çakışmaz
+DIM bu015fxa AS I32 = 1
+PRINT bu015fxa

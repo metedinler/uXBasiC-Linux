@@ -1,0 +1,859 @@
+' S-030/T2.6: scalar numeric statement locks use the shared semantic storage
+' identities and the same native runtime as MIR. Calls run before the lock;
+' their values live in each invocation's frame, never in global scratch cells.
+' Numeric scalar/array/field updates share the resolved-lvalue path. STRING
+' arguments and scalar updates own their snapshots before leaving the lock.
+' Object lifetime, STATIC initialization and explicit locks remain separate.
+Dim Shared gX64SyncCallNode(0 To 2047) As Integer
+Dim Shared gX64SyncCallOffset(0 To 2047) As Integer
+Dim Shared gX64SyncCallKind(0 To 2047) As Integer
+Dim Shared gX64SyncCallCount As Integer
+Dim Shared gX64SyncValid(0 To 2047) As Integer
+Dim Shared gX64SyncHeldNames As String
+Dim Shared gX64SyncIncDecCount As Integer
+
+Private Function X64SyncCachedValue(ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByVal floatKind As Integer) As Integer
+    For i As Integer = 0 To gX64SyncCallCount - 1
+        If gX64SyncValid(i) = 0 Then Continue For
+        If gX64SyncCallNode(i) <> nodeIdx Then Continue For
+        Dim srcKind As Integer = gX64SyncCallKind(i)
+        Dim cell As String = X64FormatRbpRef(gX64SyncCallOffset(i))
+        If srcKind <= 0 Then
+            X64EmitText cg, "    mov rax, " & cell
+            If floatKind = UXF_F32 Then X64EmitText cg, "    cvtsi2ss xmm0, rax"
+            If floatKind = UXF_F64 Then X64EmitText cg, "    cvtsi2sd xmm0, rax"
+        ElseIf floatKind = 0 Then
+            If srcKind = UXF_F32 Then
+                X64EmitText cg, "    movss xmm0, " & cell
+                X64EmitText cg, "    cvttss2si rax, xmm0"
+            Else
+                X64EmitText cg, "    movsd xmm0, " & cell
+                X64EmitText cg, "    cvttsd2si rax, xmm0"
+            End If
+        Else
+            If srcKind = UXF_F32 Then X64EmitText cg, "    movss xmm0, " & cell Else X64EmitText cg, "    movsd xmm0, " & cell
+            If srcKind = UXF_F32 And floatKind = UXF_F64 Then X64EmitText cg, "    cvtss2sd xmm0, xmm0"
+            If srcKind = UXF_F64 And floatKind = UXF_F32 Then X64EmitText cg, "    cvtsd2ss xmm0, xmm0"
+        End If
+        Return 1
+    Next
+    Return 0
+End Function
+
+Private Function X64SyncNumericType(ByVal typeText As String) As Integer
+    Dim t As String = UXBStep3TypeCanonical(UXBStep3StorageType(typeText))
+    Select Case UCase(t)
+    Case TYPE_I8, TYPE_I16, TYPE_I32, TYPE_I64, TYPE_U8, TYPE_U16, TYPE_U32, TYPE_U64, TYPE_BOOL, TYPE_F32, TYPE_F64
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Private Function X64SyncValueType(ByVal typeText As String) As Integer
+    Return UXBTaskSyncValueType(typeText)
+End Function
+
+Private Function X64SyncSharedName(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByVal n As Integer) As String
+    Dim nameText As String = UCase(Trim(ps.ast.nodes(n).value))
+    Dim localOffset As Integer
+    If X64TryFindLocalOffset(cg, nameText, localOffset) <> 0 Then Return ""
+    If UXBTaskIsSyncGlobal(nameText) = 0 Then Return ""
+    Return nameText
+End Function
+
+' Detect direct shared argument reads. Only numeric user-routine arguments
+' with a complete expression plan can use the snapshot path below.
+Private Function X64SyncCallArgsSafe(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByVal n As Integer, ByVal depth As Integer = 0) As Integer
+    If n < 0 Then Return 1
+    If n >= ps.ast.count Or depth > 256 Then Return 0
+    Dim k As String = UCase(ps.ast.nodes(n).kind)
+    If k = "IDENT" Or k = "IDENTIFIER" Then
+        If X64SyncSharedName(ps, cg, n) <> "" Then Return 0
+    End If
+    If X64SyncCallArgsSafe(ps, cg, ps.ast.nodes(n).left, depth + 1) = 0 Then Return 0
+    If X64SyncCallArgsSafe(ps, cg, ps.ast.nodes(n).right, depth + 1) = 0 Then Return 0
+    Dim child As Integer = ps.ast.nodes(n).firstChild
+    Do While child <> -1
+        If X64SyncCallArgsSafe(ps, cg, child, depth + 1) = 0 Then Return 0
+        child = ps.ast.nodes(child).nextSibling
+    Loop
+    Return 1
+End Function
+
+Private Function X64SyncPlanExpr(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByVal n As Integer, ByRef names As String, ByRef ids As String, ByRef lockCount As Integer, ByVal depth As Integer = 0) As Integer
+    If n < 0 Or n >= ps.ast.count Or depth > 256 Then Return 0
+    Dim k As String = UCase(ps.ast.nodes(n).kind)
+    Select Case k
+    Case "NUMBER", "INTEGER", "INT", "INT_LITERAL", "STRING", "STRING_LITERAL"
+        Return 1
+    Case "IDENT", "IDENTIFIER"
+        Dim t As String
+        If X64TryGetVarType(cg, ps.ast.nodes(n).value, t) = 0 Then X64FindDeclaredTypeName ps, ps.ast.nodes(n).value, t
+        If X64SyncValueType(t) = 0 Then Return 0
+        Dim sharedName As String = X64SyncSharedName(ps, cg, n)
+        If sharedName <> "" And InStr("," & names & ",", "," & sharedName & ",") = 0 Then
+            Dim id As Integer = UXBTaskSyncLockOrder(sharedName)
+            If id <= 0 Then Return 0
+            If lockCount > 0 Then names &= ",": ids &= ","
+            names &= sharedName: ids &= LTrim(Str(id)): lockCount += 1
+        End If
+        Return 1
+    Case "UNARY"
+        Dim op As String = UCase(ps.ast.nodes(n).op)
+        If op <> "+" And op <> "-" And op <> "NOT" And op <> "~" Then Return 0
+        Dim arg As Integer = ps.ast.nodes(n).left
+        If arg < 0 Then arg = ps.ast.nodes(n).right
+        Return X64SyncPlanExpr(ps, cg, arg, names, ids, lockCount, depth + 1)
+    Case "BINARY", "BINARY_EXPR", "BINOP"
+        ' No conditional evaluation or fault/unwind operations inside this lock.
+        Select Case UCase(ps.ast.nodes(n).op)
+        Case "+", "-", "*", "AND", "OR", "XOR", "=", "<>", "<", ">", "<=", ">="
+        Case Else: Return 0
+        End Select
+        If X64SyncPlanExpr(ps, cg, ps.ast.nodes(n).left, names, ids, lockCount, depth + 1) = 0 Then Return 0
+        Return X64SyncPlanExpr(ps, cg, ps.ast.nodes(n).right, names, ids, lockCount, depth + 1)
+    Case "INCDEC_EXPR"
+        Dim target As Integer = ps.ast.nodes(n).left
+        If target < 0 Then Return 0
+        Dim targetKind As String = UCase(ps.ast.nodes(target).kind)
+        If targetKind <> "IDENT" And targetKind <> "IDENTIFIER" Then Return 0
+        gX64SyncIncDecCount += 1
+        Return X64SyncPlanExpr(ps, cg, target, names, ids, lockCount, depth + 1)
+    Case "FIELD_EXPR"
+        Dim fieldRoot As String, fieldPath As String, fieldRootNode As Integer
+        Dim fieldRootType As String, fieldOffset As Integer, fieldType As String, fieldBytes As Integer, fieldErr As String
+        If X64ResolveFieldInfo(ps, n, cg, fieldRoot, fieldPath, fieldRootNode, fieldRootType, fieldOffset, fieldType, fieldBytes, fieldErr) = 0 Then Return 0
+        If X64SyncValueType(fieldType) = 0 Then Return 0
+        Dim getter As String, propertyType As String
+        X64ResolvePropertyAccessorRoutine ps, fieldRootType, fieldPath, "GET", getter, propertyType
+        If getter <> "" Then Return 0
+        Dim fieldLocalOffset As Integer
+        If X64TryFindLocalOffset(cg, fieldRoot, fieldLocalOffset) = 0 And UXBTaskIsSyncGlobal(fieldRoot) <> 0 Then
+            Dim fieldName As String = UCase(fieldRoot)
+            If InStr("," & names & ",", "," & fieldName & ",") = 0 Then
+                If lockCount > 0 Then names &= ",": ids &= ","
+                names &= fieldName: ids &= LTrim(Str(UXBTaskSyncLockOrder(fieldName))): lockCount += 1
+            End If
+        End If
+        Dim indexedField As String, fieldIndex As Integer
+        If X64TryExtractIndexedTarget(ps, fieldRootNode, indexedField, fieldIndex) <> 0 Then
+            If gX64SyncCallCount >= 2048 Then Return 0
+            gX64SyncCallNode(gX64SyncCallCount) = fieldIndex
+            gX64SyncCallKind(gX64SyncCallCount) = 0: gX64SyncValid(gX64SyncCallCount) = 0
+            gX64SyncCallCount += 1
+        End If
+        Return 1
+    Case "CALL_EXPR"
+        Dim arrayName As String, arrayIndex As Integer, arrayType As String
+        If X64TryExtractIndexedTarget(ps, n, arrayName, arrayIndex) <> 0 Then
+            If X64TryGetVarType(cg, arrayName, arrayType) <> 0 Then
+                Dim elemType As String, elemErr As String
+                If UXBStep3InferExprType(ps, n, elemType, elemErr) = 0 Then Return 0
+                If X64SyncValueType(elemType) = 0 Then Return 0
+                Dim arrayShared As String = X64SyncSharedName(ps, cg, n)
+                If arrayShared <> "" And InStr("," & names & ",", "," & arrayShared & ",") = 0 Then
+                    If lockCount > 0 Then names &= ",": ids &= ","
+                    names &= arrayShared: ids &= LTrim(Str(UXBTaskSyncLockOrder(arrayShared))): lockCount += 1
+                End If
+                If gX64SyncCallCount >= 2048 Then Return 0
+                gX64SyncCallNode(gX64SyncCallCount) = arrayIndex
+                gX64SyncCallKind(gX64SyncCallCount) = 0: gX64SyncValid(gX64SyncCallCount) = 0
+                gX64SyncCallCount += 1
+                Return 1
+            End If
+        End If
+        ' The syntax-only indexed-target helper also matches F(x). Resolve the
+        ' callable's return type instead; an array without a routine fails here.
+        Dim rt As String
+        If UXBTaskBuiltinCanStayInSync(ps.ast.nodes(n).value) <> 0 Then
+            Dim builtinErr As String
+            If UXBStep3InferExprType(ps, n, rt, builtinErr) = 0 Then Return 0
+            If X64SyncValueType(rt) = 0 Then Return 0
+            Dim builtinArg As Integer = ps.ast.nodes(n).firstChild
+            Do While builtinArg <> -1
+                If X64SyncPlanExpr(ps, cg, builtinArg, names, ids, lockCount, depth + 1) = 0 Then Return 0
+                builtinArg = ps.ast.nodes(builtinArg).nextSibling
+            Loop
+            Return 1
+        End If
+        If X64TryResolveCallReturnType(ps, n, cg, rt) = 0 Then Return 0
+        If X64SyncValueType(rt) = 0 Then Return 0
+        If X64SyncCallArgsSafe(ps, cg, n) = 0 Then
+            Dim expected As Integer, isFunction As Integer
+            If X64TryGetRoutineSignature(cg, ps.ast.nodes(n).value, expected, isFunction) = 0 Then Return 0
+            Dim savedCount As Integer = gX64SyncCallCount
+            Dim savedIncDec As Integer = gX64SyncIncDecCount
+            Dim arg As Integer = ps.ast.nodes(n).firstChild, argIndex As Integer = 0
+            Dim safe As Integer = 1
+            Do While arg <> -1
+                Dim paramType As String, argNames As String, argIds As String, argLocks As Integer
+                If X64TryGetRoutineParamType(cg, ps.ast.nodes(n).value, argIndex, paramType) = 0 Then safe = 0: Exit Do
+                If X64SyncValueType(paramType) = 0 Then safe = 0: Exit Do
+                Dim beforeCalls As Integer = gX64SyncCallCount, beforeIncDec As Integer = gX64SyncIncDecCount
+                If X64SyncPlanExpr(ps, cg, arg, argNames, argIds, argLocks, depth + 1) = 0 Then safe = 0: Exit Do
+                If gX64SyncCallCount > beforeCalls And gX64SyncIncDecCount > beforeIncDec Then safe = 0: Exit Do
+                gX64SyncCallCount = savedCount
+                argIndex += 1: arg = ps.ast.nodes(arg).nextSibling
+            Loop
+            gX64SyncCallCount = savedCount: gX64SyncIncDecCount = savedIncDec
+            If safe = 0 Then Return 0
+        End If
+        For i As Integer = 0 To gX64SyncCallCount - 1
+            If gX64SyncCallNode(i) = n Then Return 1
+        Next
+        If gX64SyncCallCount >= 2048 Then Return 0
+        gX64SyncValid(gX64SyncCallCount) = 0
+        gX64SyncCallNode(gX64SyncCallCount) = n
+        gX64SyncCallKind(gX64SyncCallCount) = X64TypeToFloatKind(rt)
+        If X64TypeNameIsStringLike(rt) <> 0 Then gX64SyncCallKind(gX64SyncCallCount) = -1
+        gX64SyncCallCount += 1
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Private Function X64SyncEmitRawStatement(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
+    If UCase(ps.ast.nodes(nodeIdx).kind) = "INCDEC_STMT" Then Return X64EmitIncDecStmt(ps, nodeIdx, cg, errText)
+    Return X64EmitAssignStmt(ps, nodeIdx, cg, errText)
+End Function
+
+Private Sub X64SyncEnter(ByRef cg As X64CodegenContext, ByRef names As String, ByRef ids As String, ByVal count As Integer, ByRef idLabel As String)
+    If count = 0 Then Exit Sub
+    idLabel = X64NextLabel(cg, "sync_ids")
+    Dim nameLabel As String = X64CreateCStringConstant(cg, names, "sync_names")
+    X64EmitData cg, "align 8"
+    X64EmitData cg, idLabel & ": dq " & ids
+    X64EmitComment cg, "AUTO_SYNC scalar: " & names
+    X64EmitText cg, "    lea rcx, [rel " & idLabel & "]"
+    X64EmitText cg, "    mov rdx, " & LTrim(Str(count))
+    X64EmitText cg, "    lea r8, [rel " & nameLabel & "]"
+    X64EmitText cg, "    xor r9d, r9d"
+    X64EmitCall0 cg, "__uxb_rt_sync_enter"
+End Sub
+
+Private Sub X64SyncLeave(ByRef cg As X64CodegenContext, ByRef idLabel As String, ByVal count As Integer)
+    If count = 0 Then Exit Sub
+    X64EmitText cg, "    lea rcx, [rel " & idLabel & "]"
+    X64EmitText cg, "    mov rdx, " & LTrim(Str(count))
+    X64EmitText cg, "    xor r8d, r8d"
+    X64EmitCall0 cg, "__uxb_rt_sync_leave"
+End Sub
+
+' Explicit LOCK and compiler-generated STATIC guards use the existing native
+' lock stack. Save its entry depth in this invocation's frame: cleanup never
+' re-evaluates MUTEX expressions or releases a caller's surrounding locks.
+Private Function X64LockMarkSlot(ByRef cg As X64CodegenContext, ByVal nodeIdx As Integer) As Integer
+    Return X64EnsureLocalSlot(cg, "__uxb_lock_mark_" & LTrim(Str(nodeIdx)), 1, 8)
+End Function
+
+Private Sub X64LockLeave(ByRef cg As X64CodegenContext, ByVal nodeIdx As Integer)
+    X64EmitText cg, "    mov rcx, " & X64FormatRbpRef(X64LockMarkSlot(cg, nodeIdx))
+    X64EmitCall0 cg, "__uxb_rt_lock_release_to"
+End Sub
+
+Private Function X64EmitLockStmt(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
+    Dim count As Integer = 0, ch As Integer = ps.ast.nodes(nodeIdx).firstChild
+    Dim names As String
+    Do While ch <> -1
+        If UCase(ps.ast.nodes(ch).kind) <> "LOCK_TARGET" Then Exit Do
+        count += 1
+        If names <> "" Then names &= ","
+        names &= UCase(Trim(ps.ast.nodes(ch).value))
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    If count = 0 Then errText = "legacy AST-x64: LOCK requires a storage or MUTEX target": Return 0
+    Dim idsSlot As Integer = X64EnsureLocalSlot(cg, "__uxb_lock_ids_" & LTrim(Str(nodeIdx)), count, 8)
+    Dim markSlot As Integer = X64LockMarkSlot(cg, nodeIdx)
+    X64EmitCall0 cg, "__uxb_rt_lock_mark"
+    X64EmitText cg, "    mov " & X64FormatRbpRef(markSlot) & ", rax"
+    Dim target As Integer = ps.ast.nodes(nodeIdx).firstChild
+    For i As Integer = 0 To count - 1
+        Dim nm As String = UCase(Trim(ps.ast.nodes(target).value))
+        Select Case UXBTaskLockTargetKind(ps, target)
+        Case 1, 3
+            Dim lockId As Integer = UXBTaskSyncLockOrder(nm)
+            If lockId <= 0 Then errText = "legacy AST-x64: LOCK storage identity missing: " & nm: Return 0
+            X64EmitText cg, "    mov rax, " & LTrim(Str(lockId))
+        Case 2
+            X64EmitLoadVar cg, nm
+        Case Else
+            errText = "legacy AST-x64: unresolved LOCK target: " & nm
+            Return 0
+        End Select
+        X64EmitText cg, "    mov " & X64FormatRbpRef(idsSlot + i * 8) & ", rax"
+        target = ps.ast.nodes(target).nextSibling
+    Next
+    Dim namesLabel As String = X64CreateCStringConstant(cg, names, "lock_names")
+    X64EmitText cg, "    lea rcx, " & X64FormatRbpRef(idsSlot)
+    X64EmitText cg, "    mov rdx, " & LTrim(Str(count))
+    X64EmitText cg, "    lea r8, [rel " & namesLabel & "]"
+    X64EmitText cg, "    mov r9, 1"
+    X64EmitCall0 cg, "__uxb_rt_sync_enter"
+    Do While ch <> -1
+        If X64EmitNode(ps, ch, cg, errText) = 0 Then Return 0
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    X64LockLeave cg, nodeIdx
+    Return 1
+End Function
+
+' EXIT IF and GOTO may leave locks without passing their lexical end. Other
+' structured exits use the existing FINALLY walker so release order is lexical.
+Private Sub X64LockUnwindTransfer(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByVal destinationKind As String, ByVal labelName As String)
+    Dim ancestor As Integer = ps.ast.nodes(nodeIdx).parent
+    Do While ancestor >= 0
+        Dim k As String = UCase(ps.ast.nodes(ancestor).kind)
+        If UXBTaskIsRoutineKind(k) <> 0 Then Exit Do
+        If destinationKind = "IF" And k = "IF_STMT" Then Exit Do
+        If k = "LOCK_STMT" Then
+            If destinationKind = "GOTO" Then
+                ' Existing MIR label analysis also handles labels in child blocks.
+                If MIRLockSubtreeHasLabel(ps, ancestor, labelName) <> 0 Then Exit Do
+            End If
+            X64LockLeave cg, ancestor
+        End If
+        ancestor = ps.ast.nodes(ancestor).parent
+    Loop
+End Sub
+
+Private Function X64SyncSaveResult(ByRef cg As X64CodegenContext, ByVal kind As Integer, ByRef errText As String) As Integer
+    If kind = -1 Then
+        Dim textSlot As Integer = X64CreateCallTextSlot(cg, errText)
+        If textSlot <> 0 Then X64StoreCallText cg, textSlot
+        Return textSlot
+    End If
+    If cg.localCount >= 2048 Then errText = "legacy AST-x64: synchronization snapshot frame capacity exceeded": Return 0
+    Dim tempName As String = X64NextLabel(cg, "sync_snapshot")
+    Dim slot As Integer = X64EnsureLocalSlot(cg, tempName, 1, 8)
+    Dim instruction As String = "mov"
+    Dim source As String = "rax"
+    If kind = UXF_F32 Then instruction = "movss": source = "xmm0"
+    If kind = UXF_F64 Then instruction = "movsd": source = "xmm0"
+    X64EmitText cg, "    " & instruction & " " & X64FormatRbpRef(slot) & ", " & source
+    Return slot
+End Function
+
+Private Sub X64SyncLoadResult(ByRef cg As X64CodegenContext, ByVal slot As Integer, ByVal kind As Integer)
+    Dim instruction As String = "mov", target As String = "rax"
+    If kind = UXF_F32 Then instruction = "movss": target = "xmm0"
+    If kind = UXF_F64 Then instruction = "movsd": target = "xmm0"
+    X64EmitText cg, "    " & instruction & " " & target & ", " & X64FormatRbpRef(slot)
+End Sub
+
+' Adapt one already-typed ATOMIC operation to the existing MIR native emitter.
+' The shared storage is held while its value is in frame-local cells; ordinary
+' legacy assignments take the same storage lock. This preserves narrow/BOOL/
+' float semantics without a second atomic arithmetic implementation or ABI.
+Private Function X64AtomicEmitValue(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByVal requestedFloat As Integer, ByRef handled As Integer, ByRef errText As String) As Integer
+    handled = 0
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return 1
+    Dim nk As String = UCase(ps.ast.nodes(nodeIdx).kind)
+    If nk <> "CALL_EXPR" And nk <> "CALL_STMT" Then Return 1
+    Dim recv As Integer = ps.ast.nodes(nodeIdx).left
+    If recv < 0 Then Return 1
+    Dim rk As String = UCase(ps.ast.nodes(recv).kind)
+    If rk <> "IDENT" And rk <> "IDENTIFIER" Then Return 1
+    Dim nameText As String = ps.ast.nodes(recv).value
+    Dim decl As Integer = UXBAtomicDeclFor(ps, nameText, recv)
+    If decl < 0 Then Return 1
+    handled = 1
+    Dim vt As String = UXBStep3TypeCanonical(UXBAtomicDeclType(ps, decl))
+    If Left(vt, 5) = "TYPE_" Then vt = Mid(vt, 6)
+    Dim fk As Integer = X64TypeToFloatKind(vt)
+    Dim member As String = UCase(X64MethodLeafName(ps.ast.nodes(nodeIdx).value))
+    Dim argc As Integer = X64ChildCount(ps, nodeIdx)
+    Dim wanted As Integer = 1
+    If member = "LOAD" Then wanted = 0
+    If member = "CAS" Then wanted = 2
+    If argc <> wanted Then errText = "legacy AST-x64: ATOMIC argument count mismatch": Return 0
+    Dim bridge As MIRX64Context
+    MIRX64Init bridge
+    bridge.labelCounter = cg.labelSeed
+    bridge.localCount = 4
+    ReDim bridge.locals(3)
+    Dim cellNames(0 To 3) As String = {"__ATOMIC_TARGET", "__ATOMIC_ARG0", "__ATOMIC_ARG1", "__ATOMIC_RESULT"}
+    For i As Integer = 0 To 3
+        bridge.locals(i).nameText = cellNames(i)
+        bridge.locals(i).typeName = vt
+        bridge.locals(i).hasDeclaredType = 1
+        bridge.locals(i).sizeBytes = 8
+        bridge.locals(i).offset = X64EnsureLocalSlot(cg, X64NextLabel(cg, "atomic_cell"), 1, 8)
+    Next
+    If member = "CAS" Then bridge.locals(3).typeName = "BOOL"
+    ' All user expressions run before the storage lock, once, in source order.
+    For i As Integer = 0 To argc - 1
+        Dim arg As Integer = X64ChildAt(ps, nodeIdx, i)
+        If fk = 0 Then
+            If X64EmitExprToRax(ps, arg, cg, errText) = 0 Then Return 0
+            X64EmitText cg, "    mov " & X64FormatRbpRef(bridge.locals(i + 1).offset) & ", rax"
+        Else
+            If X64EmitExprToXmm0As(ps, arg, cg, fk, errText) = 0 Then Return 0
+            X64EmitText cg, "    " & IIf(fk = UXF_F32, "movss ", "movsd ") & X64FormatRbpRef(bridge.locals(i + 1).offset) & ", xmm0"
+        End If
+    Next
+    Dim names As String = UCase(nameText), ids As String, lockLabel As String, lockCount As Integer = 0
+    Dim localOffset As Integer
+    If X64TryFindLocalOffset(cg, nameText, localOffset) = 0 Then
+        Dim lockId As Integer = UXBTaskSyncLockOrder(nameText)
+        If lockId > 0 Then ids = LTrim(Str(lockId)): lockCount = 1
+    End If
+    X64SyncEnter cg, names, ids, lockCount, lockLabel
+    If fk = 0 Then
+        X64EmitLoadVar cg, nameText
+        X64EmitText cg, "    mov " & X64FormatRbpRef(bridge.locals(0).offset) & ", rax"
+    Else
+        If X64EmitLoadFloatVarToXmm0As(ps, cg, nameText, fk, errText) = 0 Then Return 0
+        X64EmitText cg, "    " & IIf(fk = UXF_F32, "movss ", "movsd ") & X64FormatRbpRef(bridge.locals(0).offset) & ", xmm0"
+    End If
+    Dim ins As MIRIRInstruction
+    ins.opcode = "CALL"
+    ins.result = cellNames(3)
+    ins.operandCount = 2 + argc
+    ins.operands(0) = "ATOMIC_" & member
+    ins.operands(1) = cellNames(0)
+    For i As Integer = 0 To argc - 1
+        ins.operands(2 + i) = cellNames(i + 1)
+    Next
+    bridge.labelCounter = cg.labelSeed
+    If MIRX64EmitAtomicCall(ins, bridge, errText) = 0 Then Return 0
+    cg.textSection &= bridge.asmText
+    bridge.asmText = ""
+    If member <> "LOAD" Then
+        If fk = 0 Then
+            If MIRX64LoadOperandToReg(bridge, cellNames(0), "rax", errText) = 0 Then Return 0
+            cg.textSection &= bridge.asmText: bridge.asmText = ""
+            X64EmitStoreVar cg, nameText
+        Else
+            If MIRX64LoadFloatOperandToXmm(bridge, cellNames(0), "xmm0", errText) = 0 Then Return 0
+            cg.textSection &= bridge.asmText: bridge.asmText = ""
+            If fk = UXF_F32 Then X64EmitText cg, "    cvtsd2ss xmm0, xmm0"
+            If X64EmitStoreXmm0ToFloatVarAs(cg, nameText, fk, errText) = 0 Then Return 0
+        End If
+    End If
+    Dim resultKind As Integer = IIf(member = "CAS", 0, fk)
+    If resultKind = 0 Then
+        If MIRX64LoadOperandToReg(bridge, cellNames(3), "rax", errText) = 0 Then Return 0
+    Else
+        If MIRX64LoadFloatOperandToXmm(bridge, cellNames(3), "xmm0", errText) = 0 Then Return 0
+        resultKind = UXF_F64
+    End If
+    cg.textSection &= bridge.asmText
+    If bridge.labelCounter > cg.labelSeed Then cg.labelSeed = bridge.labelCounter
+    Dim saved As Integer = X64SyncSaveResult(cg, resultKind, errText)
+    X64SyncLeave cg, lockLabel, lockCount
+    X64SyncLoadResult cg, saved, resultKind
+    If requestedFloat <> 0 Then
+        If resultKind = 0 Then
+            X64EmitIntRaxToXmm0 cg, requestedFloat, IIf(vt = "U64", 1, 0)
+        ElseIf requestedFloat = UXF_F32 Then
+            X64EmitText cg, "    cvtsd2ss xmm0, xmm0"
+        End If
+    End If
+    Return 1
+End Function
+
+Private Function X64SyncPrepareCalls(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByVal first As Integer, ByVal last As Integer, ByRef errText As String) As Integer
+    For i As Integer = first To last - 1
+        Dim ok As Integer
+        If gX64SyncCallKind(i) <= 0 Then
+            ok = X64EmitExprToRax(ps, gX64SyncCallNode(i), cg, errText)
+        Else
+            ok = X64EmitExprToXmm0As(ps, gX64SyncCallNode(i), cg, gX64SyncCallKind(i), errText)
+        End If
+        If ok = 0 Then Return 0
+        gX64SyncCallOffset(i) = X64SyncSaveResult(cg, gX64SyncCallKind(i), errText)
+        If gX64SyncCallOffset(i) = 0 Then Return 0
+        gX64SyncValid(i) = 1
+    Next
+    Return 1
+End Function
+
+Private Function X64SyncBeginCallArguments(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef calleeName As String, ByVal argCount As Integer, ByVal argOffset As Integer, ByVal receiver As Integer, ByRef savedCount As Integer, ByRef errText As String) As Integer
+    savedCount = gX64SyncCallCount
+    If receiver <> 0 Or UXBTaskSyncActive() = 0 OrElse UXBTaskNodeInsideUnsafe(ps, nodeIdx) <> 0 Then Return 1
+    Dim oldIncDec As Integer = gX64SyncIncDecCount
+    Dim names As String, ids As String, count As Integer, eligible As Integer = 1
+    For i As Integer = 0 To argCount - 1
+        Dim arg As Integer = X64ChildAt(ps, nodeIdx, i + argOffset), paramType As String
+        If X64TryGetRoutineParamType(cg, calleeName, i, paramType) = 0 Then eligible = 0: Exit For
+        If X64SyncValueType(paramType) = 0 Then eligible = 0: Exit For
+        If X64SyncPlanExpr(ps, cg, arg, names, ids, count) = 0 Then eligible = 0: Exit For
+    Next
+    Dim last As Integer = gX64SyncCallCount
+    If last > savedCount And gX64SyncIncDecCount > oldIncDec Then eligible = 0
+    gX64SyncIncDecCount = oldIncDec
+    If eligible = 0 Or count = 0 Then gX64SyncCallCount = savedCount: Return 1
+    ' Calls across the entire argument list precede shared reads (§10.1).
+    ' An INCDEC write prevents hoisting; nested cache entries remain private.
+    If X64SyncPrepareCalls(ps, cg, savedCount, last, errText) = 0 Then gX64SyncCallCount = savedCount: Return 0
+    Return 1
+End Function
+
+Private Sub X64SyncEndCallArguments(ByVal savedCount As Integer)
+    gX64SyncCallCount = savedCount
+End Sub
+
+' Nested plans append cache entries and restore the parent's count. Valid bits,
+' not a contiguous ready prefix, keep an unfinished outer call invisible.
+Private Function X64SyncEmitArgument(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByVal floatKind As Integer, ByRef errText As String, ByVal ownedStringSlot As Integer) As Integer
+    ' Conditional branches are separate planning regions: never execute the
+    ' unselected branch, but still snapshot a selected shared read after calls.
+    ' Propagate the consumer's owned STRING slot through the selected branch,
+    ' so its source storage cannot die between unlocking and the final copy.
+    If nodeIdx >= 0 AndAlso UXBTaskSyncActive() <> 0 AndAlso UXBTaskNodeInsideUnsafe(ps, nodeIdx) = 0 Then
+        Dim nodeKind As String = UCase(ps.ast.nodes(nodeIdx).kind)
+        If nodeKind = "TERNARY_EXPR" Then
+            Dim cond As Integer = ps.ast.nodes(nodeIdx).left
+            Dim yesNode As Integer = X64ChildAt(ps, nodeIdx, 0)
+            Dim noNode As Integer = ps.ast.nodes(nodeIdx).right
+            If cond < 0 Or yesNode < 0 Or noNode < 0 Then errText = "x64-codegen: ternary expression incomplete": Return 0
+            Dim noLabel As String = X64NextLabel(cg, "sync_branch_no")
+            Dim endLabel As String = X64NextLabel(cg, "sync_branch_end")
+            If X64EmitConditionToRax(ps, cond, cg, errText) = 0 Then Return 0
+            X64EmitText cg, "    test rax, rax"
+            X64EmitText cg, "    jz " & noLabel
+            If X64SyncEmitArgument(ps, yesNode, cg, floatKind, errText, ownedStringSlot) = 0 Then Return 0
+            X64EmitText cg, "    jmp " & endLabel
+            X64EmitLabel cg, noLabel
+            If X64SyncEmitArgument(ps, noNode, cg, floatKind, errText, ownedStringSlot) = 0 Then Return 0
+            X64EmitLabel cg, endLabel
+            Return 1
+        End If
+        If nodeKind = "BINARY" Or nodeKind = "BINARY_EXPR" Or nodeKind = "BINOP" Then
+            Dim branchOp As String = UCase(ps.ast.nodes(nodeIdx).op)
+            If branchOp = "ANDALSO" Or branchOp = "&&" Or branchOp = "ORELSE" Or branchOp = "||" Then
+                Dim isAnd As Integer = IIf(branchOp = "ANDALSO" Or branchOp = "&&", 1, 0)
+                Dim shortLabel As String = X64NextLabel(cg, "sync_logic_short")
+                Dim endLabel As String = X64NextLabel(cg, "sync_logic_end")
+                If X64EmitConditionToRax(ps, ps.ast.nodes(nodeIdx).left, cg, errText) = 0 Then Return 0
+                X64EmitText cg, "    test rax, rax"
+                X64EmitText cg, "    " & IIf(isAnd <> 0, "jz ", "jnz ") & shortLabel
+                If X64EmitConditionToRax(ps, ps.ast.nodes(nodeIdx).right, cg, errText) = 0 Then Return 0
+                X64EmitText cg, "    test rax, rax"
+                X64EmitText cg, "    setne al"
+                X64EmitText cg, "    movzx eax, al"
+                X64EmitText cg, "    neg rax"
+                X64EmitText cg, "    jmp " & endLabel
+                X64EmitLabel cg, shortLabel
+                X64EmitText cg, "    mov rax, " & IIf(isAnd <> 0, "0", "-1")
+                X64EmitLabel cg, endLabel
+                If floatKind <> 0 Then X64EmitIntRaxToXmm0 cg, floatKind, 0
+                Return 1
+            End If
+        End If
+    End If
+    Dim first As Integer = gX64SyncCallCount
+    Dim oldIncDec As Integer = gX64SyncIncDecCount
+    Dim names As String, ids As String, count As Integer, eligible As Integer
+    If UXBTaskSyncActive() <> 0 AndAlso UXBTaskNodeInsideUnsafe(ps, nodeIdx) = 0 Then eligible = X64SyncPlanExpr(ps, cg, nodeIdx, names, ids, count)
+    Dim last As Integer = gX64SyncCallCount
+    If last > first And gX64SyncIncDecCount > oldIncDec Then eligible = 0
+    gX64SyncIncDecCount = oldIncDec
+    If eligible = 0 Or count = 0 Then
+        gX64SyncCallCount = first
+        If floatKind = 0 Then
+            Dim rawResult As Integer = X64EmitExprToRax(ps, nodeIdx, cg, errText)
+            If rawResult <> 0 And ownedStringSlot <> 0 Then X64StoreCallText cg, ownedStringSlot
+            Return rawResult
+        End If
+        Return X64EmitExprToXmm0As(ps, nodeIdx, cg, floatKind, errText)
+    End If
+    Dim result As Integer = X64SyncPrepareCalls(ps, cg, first, last, errText)
+    Dim idLabel As String, oldHeld As String = gX64SyncHeldNames
+    If result <> 0 Then
+        X64SyncEnter cg, names, ids, count, idLabel
+        gX64SyncHeldNames = names
+        If floatKind = 0 Then result = X64EmitExprToRax(ps, nodeIdx, cg, errText) Else result = X64EmitExprToXmm0As(ps, nodeIdx, cg, floatKind, errText)
+        Dim slot As Integer
+        If result <> 0 Then
+            If ownedStringSlot <> 0 Then
+                X64StoreCallText cg, ownedStringSlot
+                slot = ownedStringSlot
+            Else
+                slot = X64SyncSaveResult(cg, floatKind, errText)
+                If slot = 0 Then result = 0
+            End If
+        End If
+        X64SyncLeave cg, idLabel, count
+        If result <> 0 Then X64SyncLoadResult cg, slot, floatKind
+    End If
+    gX64SyncHeldNames = oldHeld: gX64SyncCallCount = first
+    Return result
+End Function
+
+Private Function X64SyncEmitAssign(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
+    gX64SyncCallCount = 0: gX64SyncIncDecCount = 0
+    If UXBTaskSyncActive() = 0 OrElse UXBTaskNodeInsideUnsafe(ps, nodeIdx) <> 0 Then Return X64SyncEmitRawStatement(ps, nodeIdx, cg, errText)
+    Dim lhs As Integer = ps.ast.nodes(nodeIdx).left
+    Dim rhs As Integer = ps.ast.nodes(nodeIdx).right
+    Dim names As String, ids As String, count As Integer, eligible As Integer
+    Dim op As String = ps.ast.nodes(nodeIdx).op
+    Dim isIncDec As Integer = IIf(UCase(ps.ast.nodes(nodeIdx).kind) = "INCDEC_STMT", 1, 0)
+    If lhs >= 0 Then
+        Dim k As String = UCase(ps.ast.nodes(lhs).kind)
+        If k = "IDENT" Or k = "IDENTIFIER" Then
+            If isIncDec <> 0 Then
+                eligible = X64SyncPlanExpr(ps, cg, lhs, names, ids, count)
+            ElseIf op = "=" Or op = "" Or op = "+=" Or op = "-=" Or op = "*=" Then
+                If X64SyncPlanExpr(ps, cg, lhs, names, ids, count) <> 0 Then eligible = X64SyncPlanExpr(ps, cg, rhs, names, ids, count)
+            End If
+        End If
+    End If
+    ' A store in INCDEC is a sequencing barrier; never move a call over it.
+    If gX64SyncCallCount > 0 And gX64SyncIncDecCount > 0 Then eligible = 0
+    If eligible = 0 Or count = 0 Then
+        gX64SyncCallCount = 0
+        Return X64SyncEmitRawStatement(ps, nodeIdx, cg, errText)
+    End If
+    Dim firstText As Integer = gX64CallTextCount
+    Dim result As Integer = X64SyncPrepareCalls(ps, cg, 0, gX64SyncCallCount, errText)
+    If result = 0 Then gX64SyncCallCount = 0: gX64CallTextCount = firstText: Return 0
+    Dim idLabel As String
+    X64SyncEnter cg, names, ids, count, idLabel
+    gX64SyncHeldNames = names
+    result = X64SyncEmitRawStatement(ps, nodeIdx, cg, errText)
+    gX64SyncHeldNames = "": gX64SyncCallCount = 0
+    X64SyncLeave cg, idLabel, count
+    X64ReleaseCallText cg, firstText
+    Return result
+End Function
+
+Private Function X64IncDecRoutineName(ByRef ps As ParseState, ByVal nameText As String) As String
+    Dim exactName As String
+    If X64FindRoutineSymbolName(ps, nameText, exactName) <> 0 Then Return exactName
+    Return LCase(nameText)
+End Function
+
+' Resolve one value lvalue for ASSIGN and numeric INCDEC. Index calls precede its lock;
+' the address and old/new values use this invocation's frame. This replaces
+' separate statement/field/index implementations (S-634/S-635).
+Private Function X64EmitLValueUpdate(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByVal floatKind As Integer, ByRef errText As String) As Integer
+    Dim isAssignment As Integer = IIf(UCase(ps.ast.nodes(nodeIdx).kind) = "ASSIGN_STMT", 1, 0)
+    Dim updateOp As String = Trim(ps.ast.nodes(nodeIdx).op)
+    If updateOp = "" Then updateOp = "="
+    Dim rhs As Integer = ps.ast.nodes(nodeIdx).right
+    Dim lhs As Integer = ps.ast.nodes(nodeIdx).left
+    If lhs < 0 Then errText = "x64-codegen: INCDEC target missing": Return 0
+    Dim targetKind As String = UCase(ps.ast.nodes(lhs).kind)
+    Dim isScalar As Integer = IIf(targetKind = "IDENT" Or targetKind = "IDENTIFIER", 1, 0)
+    Dim isField As Integer = IIf(targetKind = "FIELD_EXPR", 1, 0)
+    Dim nameText As String, typeText As String, indexExpr As Integer = -1
+    Dim rootNode As Integer = -1, rootType As String, pathText As String
+    Dim fieldOffset As Integer, storageSize As Integer
+    Dim getRoutine As String, setRoutine As String, propertyType As String
+    If isScalar <> 0 Then
+        nameText = ps.ast.nodes(lhs).value
+        If X64TryGetVarType(cg, nameText, typeText) = 0 Then X64FindDeclaredTypeName ps, nameText, typeText
+    ElseIf isField <> 0 Then
+        If X64ResolveFieldInfo(ps, lhs, cg, nameText, pathText, rootNode, rootType, fieldOffset, typeText, storageSize, errText) = 0 Then Return 0
+        Dim indexedName As String
+        X64TryExtractIndexedTarget ps, rootNode, indexedName, indexExpr
+        X64ResolvePropertyAccessorRoutine ps, rootType, pathText, "GET", getRoutine, propertyType
+        X64ResolvePropertyAccessorRoutine ps, rootType, pathText, "SET", setRoutine, propertyType
+    Else
+        If X64TryExtractIndexedTarget(ps, lhs, nameText, indexExpr) = 0 Then errText = "x64-codegen: invalid INCDEC target": Return 0
+        If InStr(nameText, ".") > 0 And X64DottedNameIsDeclaredArray(ps, nameText) = 0 Then
+            isField = 1
+            If X64ResolveFieldInfo(ps, lhs, cg, nameText, pathText, rootNode, rootType, fieldOffset, typeText, storageSize, errText) = 0 Then Return 0
+        Else
+            If UXBStep3InferExprType(ps, lhs, typeText, errText) = 0 Then Return 0
+        End If
+    End If
+    Dim isString As Integer = X64TypeNameIsStringLike(typeText)
+    If isString <> 0 Then
+        If isAssignment = 0 OrElse (updateOp <> "=" And updateOp <> "+=") Then errText = "legacy AST-x64: STRING lvalue requires = or +=": Return 0
+    ElseIf X64SyncNumericType(typeText) = 0 Then
+        errText = "legacy AST-x64: update requires a numeric or STRING lvalue": Return 0
+    End If
+    Dim nativeKind As Integer = X64TypeToFloatKind(typeText)
+    Dim snapshotKind As Integer = IIf(isString <> 0, -1, nativeKind)
+    Dim firstCache As Integer = gX64SyncCallCount
+    Dim firstText As Integer = gX64CallTextCount
+    Dim rhsSlot As Integer, rhsPlanned As Integer
+    Dim names As String, ids As String, idLabel As String, count As Integer
+    If isAssignment <> 0 Then
+        ' Preserve eager RHS-before-target evaluation. Calls/waits are completed
+        ' before automatic locks; planned shared reads stay with the final store.
+        Dim priorIncDec As Integer = gX64SyncIncDecCount
+        If UXBTaskSyncActive() <> 0 AndAlso UXBTaskNodeInsideUnsafe(ps, nodeIdx) = 0 AndAlso getRoutine = "" AndAlso setRoutine = "" Then rhsPlanned = X64SyncPlanExpr(ps, cg, rhs, names, ids, count)
+        ' S-650: a write is a sequencing barrier, exactly as in scalar planning.
+        ' Evaluate a mixed write/call RHS in order before locking its target.
+        If gX64SyncCallCount > firstCache And gX64SyncIncDecCount > priorIncDec Then rhsPlanned = 0
+        gX64SyncIncDecCount = priorIncDec
+        If rhsPlanned <> 0 Then
+            If X64SyncPrepareCalls(ps, cg, firstCache, gX64SyncCallCount, errText) = 0 Then Return 0
+        Else
+            gX64SyncCallCount = firstCache: names = "": ids = "": count = 0
+            If nativeKind = 0 Then
+                If X64EmitExprToRax(ps, rhs, cg, errText) = 0 Then Return 0
+            Else
+                If X64EmitExprToXmm0As(ps, rhs, cg, nativeKind, errText) = 0 Then Return 0
+            End If
+            rhsSlot = X64SyncSaveResult(cg, snapshotKind, errText)
+            If rhsSlot = 0 Then Return 0
+        End If
+    End If
+    If indexExpr >= 0 Then
+        If X64EmitExprToRax(ps, indexExpr, cg, errText) = 0 Then Return 0
+        Dim indexSlot As Integer = X64SyncSaveResult(cg, 0, errText)
+        If indexSlot = 0 Then Return 0
+        If gX64SyncCallCount >= 2048 Then errText = "legacy AST-x64: INCDEC cache capacity exceeded": Return 0
+        gX64SyncCallNode(gX64SyncCallCount) = indexExpr
+        gX64SyncCallOffset(gX64SyncCallCount) = indexSlot
+        gX64SyncCallKind(gX64SyncCallCount) = 0: gX64SyncValid(gX64SyncCallCount) = 1
+        gX64SyncCallCount += 1
+    End If
+    Dim localOffset As Integer
+    If UXBTaskSyncActive() <> 0 AndAlso UXBTaskNodeInsideUnsafe(ps, nodeIdx) = 0 Then
+        If X64TryFindLocalOffset(cg, nameText, localOffset) = 0 And UXBTaskIsSyncGlobal(nameText) <> 0 Then
+            Dim targetName As String = UCase(nameText)
+            If InStr("," & gX64SyncHeldNames & ",", "," & targetName & ",") = 0 And InStr("," & names & ",", "," & targetName & ",") = 0 Then
+                If count > 0 Then names &= ",": ids &= ","
+                names &= targetName: ids &= LTrim(Str(UXBTaskSyncLockOrder(targetName))): count += 1
+            End If
+        End If
+    End If
+    ' Accessor bodies are user code; their calls cannot hold automatic locks.
+    If getRoutine <> "" Or setRoutine <> "" Then count = 0
+    X64SyncEnter cg, names, ids, count, idLabel
+    Dim oldHeld As String = gX64SyncHeldNames
+    If count > 0 Then
+        If gX64SyncHeldNames <> "" Then gX64SyncHeldNames &= ","
+        gX64SyncHeldNames &= names
+    End If
+    Dim pointerSlot As Integer, receiverSlot As Integer
+    If isScalar = 0 Then
+        If getRoutine <> "" Or setRoutine <> "" Then
+            If X64EmitFieldRootAddress(ps, cg, nameText, rootNode, rootType, errText) = 0 Then Return 0
+            receiverSlot = X64SyncSaveResult(cg, 0, errText)
+            If receiverSlot = 0 Then Return 0
+        End If
+        If getRoutine = "" Or setRoutine = "" Then
+            If isField <> 0 Then
+                If X64EmitAddrOfFieldExpr(ps, lhs, cg, typeText, storageSize, errText) = 0 Then Return 0
+            Else
+                storageSize = 8
+                If X64TryGetLocalElemBytes(cg, nameText, storageSize) = 0 Then X64TryGetGlobalElemBytes cg, nameText, storageSize
+                If X64SdaKind(ps, nameText) <> 0 Then storageSize = X64SdaStride(ps, nameText)
+                If X64EmitAddrOfIndexedLocal(ps, cg, nameText, indexExpr, storageSize, errText) = 0 Then
+                    If X64EmitAddrOfIndexedGlobal(ps, cg, nameText, indexExpr, storageSize, errText) = 0 Then Return 0
+                End If
+            End If
+            pointerSlot = X64SyncSaveResult(cg, 0, errText)
+            If pointerSlot = 0 Then Return 0
+        End If
+    End If
+    If isAssignment <> 0 And rhsPlanned <> 0 Then
+        If nativeKind = 0 Then
+            If X64EmitExprToRax(ps, rhs, cg, errText) = 0 Then Return 0
+        Else
+            If X64EmitExprToXmm0As(ps, rhs, cg, nativeKind, errText) = 0 Then Return 0
+        End If
+        rhsSlot = X64SyncSaveResult(cg, snapshotKind, errText)
+        If rhsSlot = 0 Then Return 0
+    End If
+    If isAssignment <> 0 And (updateOp = "=" Or updateOp = "=+" Or updateOp = "=-") Then
+        ' Plain assignment does not execute GET or read an uninitialised target.
+        X64SyncLoadResult cg, rhsSlot, nativeKind
+    Else
+    If getRoutine <> "" Then
+        X64EmitText cg, "    mov rcx, " & X64FormatRbpRef(receiverSlot)
+        X64EmitCall0 cg, X64IncDecRoutineName(ps, getRoutine)
+    ElseIf isScalar <> 0 Then
+        If nativeKind = 0 Then
+            X64EmitLoadVar cg, nameText
+        Else
+            If X64EmitLoadFloatVarToXmm0As(ps, cg, nameText, nativeKind, errText) = 0 Then Return 0
+        End If
+    Else
+        X64EmitText cg, "    mov rcx, " & X64FormatRbpRef(pointerSlot)
+        If nativeKind = 0 Then
+            X64EmitElemLoadToRax cg, storageSize, X64TypeNameIsUnsignedInteger(typeText)
+        Else
+            X64EmitText cg, IIf(nativeKind = UXF_F32, "    movss xmm0, [rcx]", "    movsd xmm0, [rcx]")
+        End If
+    End If
+    End If
+    Dim postSlot As Integer
+    Dim isPost As Integer = IIf(UCase(Trim(ps.ast.nodes(nodeIdx).value)) = "POST", 1, 0)
+    If isAssignment <> 0 Then isPost = 0
+    If isPost <> 0 Then postSlot = X64SyncSaveResult(cg, nativeKind, errText): If postSlot = 0 Then Return 0
+    If isAssignment <> 0 Then
+        If updateOp = "=" Or updateOp = "=+" Then
+            X64SyncLoadResult cg, rhsSlot, nativeKind
+        ElseIf isString <> 0 Then
+            X64EmitText cg, "    mov rcx, rax"
+            X64EmitText cg, "    mov rdx, " & X64FormatRbpRef(rhsSlot)
+            X64EmitCall0 cg, "__uxb_rt_str_concat"
+        ElseIf nativeKind = 0 Then
+            X64EmitText cg, "    mov rbx, " & X64FormatRbpRef(rhsSlot)
+            If X64EmitIntegerAssignOp(ps, lhs, rhs, updateOp, cg, errText) = 0 Then Return 0
+        Else
+            X64EmitText cg, IIf(nativeKind = UXF_F32, "    movss xmm1, ", "    movsd xmm1, ") & X64FormatRbpRef(rhsSlot)
+            If X64EmitFloatAssignOp(cg, updateOp, nativeKind, errText) = 0 Then Return 0
+        End If
+        If nativeKind = 0 And isString = 0 Then X64TryEmitNarrowRegToType cg, "rax", typeText
+    Else
+    If nativeKind = 0 Then
+        X64EmitText cg, IIf(Trim(ps.ast.nodes(nodeIdx).op) = "--", "    sub rax, 1", "    add rax, 1")
+        X64TryEmitNarrowRegToType cg, "rax", typeText
+    Else
+        Dim oneText As String = "1", oneLabel As String = X64CreateFloatConstant(cg, oneText, nativeKind)
+        Dim instruction As String = IIf(Trim(ps.ast.nodes(nodeIdx).op) = "--", "sub", "add") & IIf(nativeKind = UXF_F32, "ss", "sd")
+        X64EmitText cg, "    " & instruction & " xmm0, [rel " & oneLabel & "]"
+    End If
+    End If
+    If setRoutine <> "" Then
+        Dim newSlot As Integer = X64SyncSaveResult(cg, snapshotKind, errText)
+        If newSlot = 0 Then Return 0
+        If nativeKind = UXF_F32 Then
+            X64EmitText cg, "    movss xmm1, " & X64FormatRbpRef(newSlot)
+        ElseIf nativeKind = UXF_F64 Then
+            X64EmitText cg, "    movsd xmm1, " & X64FormatRbpRef(newSlot)
+        Else
+            X64EmitText cg, "    mov rdx, " & X64FormatRbpRef(newSlot)
+        End If
+        X64EmitText cg, "    mov rcx, " & X64FormatRbpRef(receiverSlot)
+        X64EmitCall0 cg, X64IncDecRoutineName(ps, setRoutine)
+        X64SyncLoadResult cg, newSlot, nativeKind
+    ElseIf isScalar <> 0 Then
+        If nativeKind = 0 Then
+            X64EmitStoreVar cg, nameText
+        Else
+            If X64EmitStoreXmm0ToFloatVarAs(cg, nameText, nativeKind, errText) = 0 Then Return 0
+        End If
+    Else
+        X64EmitText cg, "    mov rcx, " & X64FormatRbpRef(pointerSlot)
+        If isString <> 0 Then X64EmitStringElemAssign cg
+        If nativeKind <> 0 Then
+            X64EmitText cg, IIf(nativeKind = UXF_F32, "    movss [rcx], xmm0", "    movsd [rcx], xmm0")
+        Else
+            Select Case storageSize
+            Case 1: X64EmitText cg, "    mov byte [rcx], al"
+            Case 2: X64EmitText cg, "    mov word [rcx], ax"
+            Case 4: X64EmitText cg, "    mov dword [rcx], eax"
+            Case Else: X64EmitText cg, "    mov [rcx], rax"
+            End Select
+        End If
+    End If
+    If isPost <> 0 Then X64SyncLoadResult cg, postSlot, nativeKind
+    If floatKind = 0 And nativeKind <> 0 Then
+        X64EmitText cg, IIf(nativeKind = UXF_F32, "    cvttss2si rax, xmm0", "    cvttsd2si rax, xmm0")
+    ElseIf floatKind <> 0 And nativeKind = 0 Then
+        X64EmitText cg, IIf(floatKind = UXF_F32, "    cvtsi2ss xmm0, rax", "    cvtsi2sd xmm0, rax")
+    ElseIf floatKind = UXF_F32 And nativeKind = UXF_F64 Then
+        X64EmitText cg, "    cvtsd2ss xmm0, xmm0"
+    ElseIf floatKind = UXF_F64 And nativeKind = UXF_F32 Then
+        X64EmitText cg, "    cvtss2sd xmm0, xmm0"
+    End If
+    If count > 0 Or gX64CallTextCount > firstText Then
+        Dim slot As Integer = X64SyncSaveResult(cg, floatKind, errText)
+        If slot = 0 Then Return 0
+        X64SyncLeave cg, idLabel, count
+        X64ReleaseCallText cg, firstText
+        X64SyncLoadResult cg, slot, floatKind
+    End If
+    gX64SyncHeldNames = oldHeld
+    gX64SyncCallCount = firstCache
+    Return 1
+End Function

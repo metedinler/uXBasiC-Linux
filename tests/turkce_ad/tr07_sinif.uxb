@@ -1,0 +1,22 @@
+' S-579: Türkçe harfli sınıf, alan, kurucu ve metot adları
+CLASS Şekil
+    PUBLIC
+    DIM genişlik AS I32
+    DIM yükseklik AS I32
+    CONSTRUCTOR(g AS I32, y AS I32)
+        genişlik = g
+        yükseklik = y
+    END CONSTRUCTOR
+    METHOD Alan() AS I32
+        RETURN genişlik * yükseklik
+    END METHOD
+    METHOD Çevre() AS I32
+        RETURN 2 * (genişlik + yükseklik)
+    END METHOD
+END CLASS
+DIM şk AS Şekil = NEW Şekil(3, 4)
+PRINT şk.Alan()
+PRINT ŞK.ÇEVRE()
+PRINT şk.genişlik
+şk.yükseklik = 10
+PRINT şk.alan()

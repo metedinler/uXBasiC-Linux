@@ -214,6 +214,21 @@ Sub MIRAppendFunctionLocal(ByRef module As MIRModule, ByVal fnIdx As Integer, By
     fn->localVarCount += 1
 End Sub
 
+' S-599: does `typeName` (a canonical return type) have a plain zero value (number, text, pointer, object reference) that a result
+' variable can start with? Aggregates (TYPE / UNION), LIST / DICT / SET and the like are built by their own constructors and are
+' left alone.
+Private Function MIRReturnTypeHasScalarZero(ByRef ps As ParseState, ByRef typeNameRaw As String) As Integer
+    Dim t As String
+    t = UCase(Trim(typeNameRaw))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    Select Case t
+    Case "BOOL", "BOOLEAN", "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "F32", "F64", "F80", "STRING", "PTR", "STRPTR", "WSTRPTR", "OBJECT"
+        Return 1
+    End Select
+    If t <> "" And MIRHasClassDecl(ps, t) <> 0 Then Return 1
+    Return 0
+End Function
+
 Private Function MIRLowerRoutineNodeCore(ByRef ps As ParseState, ByVal routineNodeIdx As Integer, ByRef module As MIRModule, ByRef tempSeed As Integer, ByRef errText As String) As Integer
     If routineNodeIdx < 0 Or routineNodeIdx >= ps.ast.count Then Return 1
 
@@ -226,9 +241,10 @@ Private Function MIRLowerRoutineNodeCore(ByRef ps As ParseState, ByVal routineNo
         Return 1
     End Select
 
-    If MIRRoutineBodyStmtCount(ps, routineNodeIdx) <= 0 Then
-        If k = "SUB_STMT" Or k = "FUNCTION_STMT" Then Return 1
-    End If
+    ' S-597 (2026-10-17): a SUB / FUNCTION whose body holds no statement used to be dropped here, so every call to it ended as
+    ' an unknown call ("runtime library service has no bound implementation" in MIR, "neither a known runtime call nor a
+    ' function" in native x64, "host binding missing" in JS) while WASM and legacy x64 ran it. An empty routine is a real
+    ' routine (a placeholder stub): it gets its function entry and the default return below, exactly like an empty METHOD.
 
     Dim routineName As String
     If MIRResolveRoutineEntryName(ps, routineNodeIdx, routineName) = 0 Then
@@ -248,7 +264,13 @@ Private Function MIRLowerRoutineNodeCore(ByRef ps As ParseState, ByVal routineNo
     Else
         routineDefaultType = "I64"
     End If
+    Dim accessorValueType As String = "I64"
+    If k = "CLASS_PROPERTY_GET_STMT" Or k = "CLASS_PROPERTY_SET_STMT" Then
+        Dim ownerProperty As Integer = ps.ast.nodes(routineNodeIdx).parent
+        If ownerProperty >= 0 Then accessorValueType = MIRDeclaredTypeForAstNode(ps, ownerProperty, "I64")
+    End If
     module.functions(fnIdx).returnType = MIRDeclaredTypeForAstNode(ps, routineNodeIdx, routineDefaultType)
+    If k = "CLASS_PROPERTY_GET_STMT" Then module.functions(fnIdx).returnType = accessorValueType
 
     Dim memberHasReceiver As Integer
     memberHasReceiver = 0
@@ -265,7 +287,7 @@ Private Function MIRLowerRoutineNodeCore(ByRef ps As ParseState, ByVal routineNo
     End If
     If memberHasReceiver <> 0 Then MIRAppendFunctionParam module, fnIdx, "THIS", "PTR"
     If k = "CLASS_PROPERTY_SET_STMT" Then
-        MIRAppendFunctionParam module, fnIdx, "VALUE", "I64"
+        MIRAppendFunctionParam module, fnIdx, "VALUE", accessorValueType
     End If
 
     Dim ch As Integer
@@ -285,6 +307,45 @@ Private Function MIRLowerRoutineNodeCore(ByRef ps As ParseState, ByVal routineNo
 
     Dim bodyBlock As Integer
     bodyBlock = 0
+
+    ' S-599 (2026-10-17): the result variable of a FUNCTION / value-returning METHOD starts as the typed zero. A function that
+    ' never assigned its result (or assigned it on one branch only) returned garbage in native x64 (a leftover register),
+    ' `undefined` in JS, a stray last value in legacy x64, and did not even compile for WASM (`local.get $F` on an
+    ' undeclared local); AST and MIR already read 0. The final default return below returns this variable.
+    If k <> "SUB_STMT" And k <> "CLASS_PROPERTY_SET_STMT" And k <> "CLASS_CONSTRUCTOR_DECL" And k <> "CLASS_DESTRUCTOR_DECL" Then
+        Dim resultInitType As String
+        resultInitType = UCase(Trim(module.functions(fnIdx).returnType))
+        If MIRReturnTypeHasScalarZero(ps, resultInitType) <> 0 Then
+            Dim resultInitName As String
+            resultInitName = "__result__"
+            If k = "FUNCTION_STMT" Then
+                resultInitName = UCase(Trim(ps.ast.nodes(routineNodeIdx).value))
+                ' S-612 (2026-10-17): a PARAMETER named like the function (`FUNCTION Topla(topla AS I32)`) is the parameter, not the result
+                ' variable: zeroing "TOPLA" here overwrote the argument (`Topla(4)` returned 1 on MIR, native x64, JS and WASM).
+                Dim resultParamChild As Integer
+                resultParamChild = ps.ast.nodes(routineNodeIdx).firstChild
+                Do While resultParamChild <> -1
+                    If UCase(Trim(ps.ast.nodes(resultParamChild).kind)) = "PARAM_DECL" Then
+                        If UCase(Trim(ps.ast.nodes(resultParamChild).value)) = resultInitName Then resultInitName = ""
+                    End If
+                    resultParamChild = ps.ast.nodes(resultParamChild).nextSibling
+                Loop
+            End If
+            If resultInitName <> "" Then
+                MIRAppendFunctionLocal module, fnIdx, resultInitName, resultInitType
+                Dim resultInitTmp As String
+                resultInitTmp = MIRNextTemp(tempSeed)
+                If resultInitType = "STRING" Then
+                    MIRAppendInstruction module, fnIdx, bodyBlock, MIR_OP_LOAD_CONST, resultInitTmp, 1, Chr(34) & Chr(34)
+                Else
+                    MIRAppendInstruction module, fnIdx, bodyBlock, MIR_OP_LOAD_CONST, resultInitTmp, 1, "0"
+                End If
+                MIRSetLastInstructionMetadata module, fnIdx, bodyBlock, resultInitType
+                MIRAppendInstruction module, fnIdx, bodyBlock, MIR_OP_STORE_VAR, resultInitName, 1, resultInitTmp
+                MIRSetLastInstructionMetadata module, fnIdx, bodyBlock, resultInitType
+            End If
+        End If
+    End If
 
     ch = ps.ast.nodes(routineNodeIdx).firstChild
     Do While ch <> -1
@@ -691,6 +752,23 @@ Private Function MIRKnownValueType(ByRef fn As MIRFunction, ByRef tokenText As S
     Return ""
 End Function
 
+' S-517: declared type of a module-level (global) variable, "" when the name is no global. MIRKnownValueType only sees
+' the parameters and locals of ONE function, so a routine that assigns to a global used to type the STORE by the
+' value written (`gl = 16777217` in a SUB: I64 instead of the global's F32) and the JS/WASM emitters, which round an
+' F32 only when the instruction says F32, never rounded it.
+Private Function MIRModuleGlobalType(ByRef module As MIRModule, ByRef nameText As String) As String
+    Dim nameUpper As String = UCase(Trim(nameText))
+    If nameUpper = "" Then Return ""
+    Dim gi As Integer
+    For gi = 0 To module.globalVarCount - 1
+        If UCase(Trim(module.globalVars(gi))) = nameUpper Then
+            If module.globalVarIsArray(gi) <> 0 Then Return ""
+            Return UCase(Trim(module.globalVarTypes(gi)))
+        End If
+    Next gi
+    Return ""
+End Function
+
 Private Sub MIRAnnotateModuleResultTypes(ByRef module As MIRModule)
     Dim passNo As Integer
     For passNo = 0 To 31
@@ -715,6 +793,7 @@ Private Sub MIRAnnotateModuleResultTypes(ByRef module As MIRModule)
                         If inst->operandCount >= 1 Then inferredType = MIRKnownValueType(*fn, inst->operands(0))
                     Case "LOAD_VAR", "STORE_VAR", "MOVE", "ASSIGN", "CAST", "COERCE", "CONV", "CONVERT"
                         inferredType = MIRKnownValueType(*fn, inst->result)
+                        If inferredType = "" And (op = "STORE_VAR" Or op = "LOAD_VAR") Then inferredType = MIRModuleGlobalType(module, inst->result)
                         If inferredType = "" And inst->operandCount >= 1 Then inferredType = MIRKnownValueType(*fn, inst->operands(0))
                     Case "FADD", "FSUB", "FMUL", "FDIV", "FNEG"
                         inferredType = "F64"
@@ -747,6 +826,29 @@ Private Sub MIRAnnotateModuleResultTypes(ByRef module As MIRModule)
         Next fi
         If changed = 0 Then Exit For
     Next passNo
+End Sub
+
+' S-505: a comparison is represented as BOOLEAN (-1/0), but unary numeric
+' negation is arithmetic and therefore produces an integer value (1/0).  The
+' semantic pass may annotate the source UNARY node as BOOL before MIR lowering;
+' normalize the completed module as the final authority so every MIR consumer
+' (interpreter, x64 emitter and bridge) sees the same result type.
+Private Sub MIRNormalizeBooleanNegationResults(ByRef module As MIRModule)
+    Dim fi As Integer
+    For fi = 0 To module.functionCount - 1
+        Dim bi As Integer
+        For bi = 0 To module.functions(fi).blockCount - 1
+            Dim ii As Integer
+            For ii = 0 To module.functions(fi).blocks(bi).instructionCount - 1
+                Dim inst As MIRIRInstruction Ptr
+                inst = @module.functions(fi).blocks(bi).instructions(ii)
+                If UCase(Trim(inst->opcode)) <> "NEG" Then Continue For
+                Dim resultType As String
+                resultType = UCase(Trim(inst->resultType))
+                If resultType = "BOOL" Or resultType = "BOOLEAN" Then inst->resultType = "I64"
+            Next ii
+        Next bi
+    Next fi
 End Sub
 
 
@@ -921,6 +1023,8 @@ Function MIRBuildModuleFromAST(ByRef ps As ParseState, ByRef moduleOut As MIRMod
 
     ' S-160: istisna rutin sinirini gecer (her kullanici cagrisindan sonra bayrak denetimi).
     If MIRExcPassModule(ps, moduleOut, tempSeed, errText) = 0 Then Return 0
+
+    MIRNormalizeBooleanNegationResults moduleOut
 
     If MIRFinalizeCfg(moduleOut, errText) = 0 Then Return 0
 

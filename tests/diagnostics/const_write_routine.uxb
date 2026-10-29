@@ -1,0 +1,5 @@
+CONST A = 3
+SUB Change()
+    A = 99
+END SUB
+CALL Change()

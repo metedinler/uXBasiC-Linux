@@ -1,0 +1,11 @@
+' S-564 (2026-10-17): NULL and NOTHING are two spellings of the same empty value (an empty pointer). Before, both were rejected on every engine
+' ("type: unknown symbol: nothing"). PRINT NULL writes 0.
+DIM p AS PTR
+p = NOTHING
+IF p = NULL THEN PRINT 1
+p = NULL
+IF p = NOTHING THEN PRINT 2
+PRINT NULL
+PRINT NOTHING
+DIM q AS PTR = NULL
+IF q = NOTHING THEN PRINT 3

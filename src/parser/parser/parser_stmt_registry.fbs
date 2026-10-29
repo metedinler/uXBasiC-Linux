@@ -124,6 +124,7 @@ Private Sub InitStatementDispatchRegistry()
     AddStatementDispatchEntry "GOSUB", STMT_HANDLER_GOSUB, "", 0
     AddStatementDispatchEntry "RETURN", STMT_HANDLER_RETURN, "", 0
     AddStatementDispatchEntry "EXIT", STMT_HANDLER_EXIT, "", 0
+    AddStatementDispatchEntry "CONTINUE", STMT_HANDLER_EXIT, "", 0
     AddStatementDispatchEntry "END", STMT_HANDLER_END, "", 0
     AddStatementDispatchEntry "TRY", STMT_HANDLER_TRY, "", 0
     AddStatementDispatchEntry "THROW", STMT_HANDLER_THROW, "", 0
@@ -135,6 +136,7 @@ Private Sub InitStatementDispatchRegistry()
     AddStatementDispatchEntry "FUNCTION", STMT_HANDLER_FUNCTION, "", 0
     AddStatementDispatchEntry "CONST", STMT_HANDLER_CONST, "", 0
     AddStatementDispatchEntry "DIM", STMT_HANDLER_DIM, "", 0
+    AddStatementDispatchEntry "STATIC", STMT_HANDLER_DIM, "", 0
     AddStatementDispatchEntry "REDIM", STMT_HANDLER_REDIM, "", 0
     AddStatementDispatchEntry "TYPE", STMT_HANDLER_TYPE, "", 0
     AddStatementDispatchEntry "STRUCT", STMT_HANDLER_TYPE, "", 0
@@ -380,6 +382,25 @@ Private Function DispatchStatementByHandlerId(ByRef ps As ParseState, ByRef tk A
     Return -1
 End Function
 
+' S-572 (2026-10-16): the lexer reads a word that follows ABSTRACT / FINAL / SEALED (also STATIC, PUBLIC, ...)
+' as a plain IDENT (lexer_keyword_table.fbs, KeywordRequiresIdentifierAfter: "declaration contexts expect a new
+' user identifier"), so `ABSTRACT CLASS Sekil` reached this dispatcher as KEYWORD(ABSTRACT) IDENT(CLASS) IDENT(Sekil).
+' MatchKeyword() needs kind = KEYWORD and failed; the CLASS handler then took the word CLASS as the class NAME and
+' parsed `Sekil` as a field ("CLASS: missing AS in field declaration"), so the semantic and runtime checks that
+' already exist (NEW of an ABSTRACT class, extending a FINAL/SEALED class) could never be reached from source.
+' The lookahead word is compared by text, like UXBClassDeclMatchKeywordLike does inside a class body.
+Private Function MatchLookaheadKeywordLike(ByRef ps As ParseState, ByRef kw As String) As Integer
+    Dim tkLook As Token
+    tkLook = CurToken(ps)
+    If tkLook.kind = "KEYWORD" Or tkLook.kind = "IDENT" Then
+        If UCase(Trim(tkLook.lexeme)) = UCase(Trim(kw)) Then
+            AdvanceTok ps
+            Return 1
+        End If
+    End If
+    Return 0
+End Function
+
 Private Function DispatchKeywordStatement(ByRef ps As ParseState, ByRef tk As Token) As Integer
     If tk.kind <> "KEYWORD" Then Return -2
 
@@ -398,7 +419,7 @@ Private Function DispatchKeywordStatement(ByRef ps As ParseState, ByRef tk As To
     AdvanceTok ps
 
     If entry.lookaheadKeyword <> "" Then
-        If MatchKeyword(ps, entry.lookaheadKeyword) Then
+        If MatchLookaheadKeywordLike(ps, entry.lookaheadKeyword) Then
             Return DispatchStatementByHandlerId(ps, tk, entry.lookaheadHandlerId)
         End If
     End If
@@ -520,7 +541,7 @@ Private Function TryParseIdentifierStatement(ByRef ps As ParseState, ByRef tk As
         Return -1
     End If
 
-    If IsDisabledUnderscoreCommand(identTok.lexeme, n1) Then
+    If IsDisabledUnderscoreCommand(identTok.lexeme, n1, ps.trustedGeneratedInput) Then
         ps.lastError = "underscore commands are disabled"
         Return -1
     End If
@@ -613,6 +634,7 @@ Private Function TryParseIdentifierStatement(ByRef ps As ParseState, ByRef tk As
 
             Dim assignIndexed As Integer
             assignIndexed = MakeNodeFromToken(ps, "ASSIGN_STMT", "", opTok.lexeme, opTok)
+            If UCase(ps.ast.nodes(lhsCall).value) = "MID" And opTok.lexeme = "=" Then ps.ast.nodes(assignIndexed).op = "MID": ps.ast.nodes(assignIndexed).value = "MID_ASSIGN"
             ' S-032: same fix as the plain-identifier assignment above -- use
             ' ASTSetLeft/ASTSetRight so lhsCall (the "a(i)" CALL_EXPR) gets a
             ' real .parent. Without it, Step3ValidateAssignments's array-index
@@ -645,6 +667,40 @@ Private Function TryParseIdentifierStatement(ByRef ps As ParseState, ByRef tk As
     Return -2
 End Function
 
+Private Function LiftEmbeddedFieldAssignment(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef assignmentNodeOut As Integer) As Integer
+    If nodeIdx = -1 Then Return 0
+    Dim nodeKind As String
+    nodeKind = UCase(Trim(ps.ast.nodes(nodeIdx).kind))
+    If nodeKind <> "BINARY" Then Return 0
+
+    Dim opText As String
+    opText = Trim(ps.ast.nodes(nodeIdx).op)
+    If opText = "=" Then
+        Dim lhsIdx As Integer
+        lhsIdx = ps.ast.nodes(nodeIdx).left
+        If lhsIdx = -1 Then Return 0
+        Dim lhsKind As String
+        lhsKind = UCase(Trim(ps.ast.nodes(lhsIdx).kind))
+        If lhsKind <> "FIELD_EXPR" Then
+            If lhsKind <> "CALL_EXPR" Or InStr(ps.ast.nodes(lhsIdx).value, ".") = 0 Then Return 0
+        End If
+        assignmentNodeOut = nodeIdx
+        Return 1
+    End If
+
+    ' ParseRelation consumes '=' before the logical/bitwise levels.  Rebuild
+    ' the intended right-hand expression while walking the left spine:
+    ' AND(=(field, a), b) becomes =(field, AND(a, b)).
+    If LiftEmbeddedFieldAssignment(ps, ps.ast.nodes(nodeIdx).left, assignmentNodeOut) = 0 Then Return 0
+
+    Dim combinedNode As Integer
+    combinedNode = ASTNewNode(ps.ast, "BINARY", "", ps.ast.nodes(nodeIdx).op, ps.ast.nodes(nodeIdx).lineNo, ps.ast.nodes(nodeIdx).colNo)
+    ASTSetLeft ps.ast, combinedNode, ps.ast.nodes(assignmentNodeOut).right
+    ASTSetRight ps.ast, combinedNode, ps.ast.nodes(nodeIdx).right
+    ASTSetRight ps.ast, assignmentNodeOut, combinedNode
+    Return 1
+End Function
+
 Private Function ParseExpressionStatement(ByRef ps As ParseState, ByRef tk As Token) As Integer
     Dim exprNode As Integer
     exprNode = ParseExpression(ps)
@@ -656,9 +712,34 @@ Private Function ParseExpressionStatement(ByRef ps As ParseState, ByRef tk As To
     If exprNode <> -1 Then
         Dim exprKind As String
         exprKind = UCase(ps.ast.nodes(exprNode).kind)
+
+        ' A bare callable name used to become a no-op EXPR_STMT.  That made
+        ' `Selam "Ayse"` and `Selam` silently disappear while explicit CALL
+        ' already required parentheses.  Keep expression statements for
+        ' compound expressions, but reject the two callable-shaped forms at
+        ' the common parser boundary so every backend sees the same error.
+        If exprKind = "IDENT" Or exprKind = "FIELD_EXPR" Then
+            Dim callName As String
+            callName = Trim(ps.ast.nodes(exprNode).value)
+            If callName = "" Then callName = Trim(tk.lexeme)
+            ps.lastError = "UXB_CALL_PAREN_REQUIRED: CALL: missing ( after " & callName & "; use " & callName & "(...)"
+            Return -1
+        End If
+
         If exprKind = "BINARY" Then
             Dim exprOp As String
             exprOp = Trim(ps.ast.nodes(exprNode).op)
+            If IsExtendedAssignOp(exprOp) = 0 Then
+                Dim embeddedAssignment As Integer
+                embeddedAssignment = -1
+                If LiftEmbeddedFieldAssignment(ps, exprNode, embeddedAssignment) <> 0 Then
+                    Dim liftedAssign As Integer
+                    liftedAssign = ASTNewNode(ps.ast, "ASSIGN_STMT", "", "=", ps.ast.nodes(embeddedAssignment).lineNo, ps.ast.nodes(embeddedAssignment).colNo)
+                    ASTSetLeft ps.ast, liftedAssign, ps.ast.nodes(embeddedAssignment).left
+                    ASTSetRight ps.ast, liftedAssign, ps.ast.nodes(embeddedAssignment).right
+                    Return liftedAssign
+                End If
+            End If
             If IsExtendedAssignOp(exprOp) <> 0 Then
                 Dim lhsNode As Integer
                 lhsNode = ps.ast.nodes(exprNode).left
@@ -669,6 +750,12 @@ Private Function ParseExpressionStatement(ByRef ps As ParseState, ByRef tk As To
                     ' eskiden karsilastirma olarak EXPR_STMT'e dusup sessizce hicbir sey yapmiyordu.
                     Dim lhsIsQualifiedIndex As Integer = 0
                     If lhsKind = "CALL_EXPR" AndAlso InStr(ps.ast.nodes(lhsNode).value, ".") > 0 Then lhsIsQualifiedIndex = 1
+                    If lhsKind = "CALL_EXPR" And UCase(ps.ast.nodes(lhsNode).value) = "MID" And exprOp = "=" Then
+                        Dim midAssignment As Integer = ASTNewNode(ps.ast, "ASSIGN_STMT", "MID_ASSIGN", "MID", tk.lineNo, tk.colNo)
+                        ASTSetLeft ps.ast, midAssignment, lhsNode
+                        ASTSetRight ps.ast, midAssignment, ps.ast.nodes(exprNode).right
+                        Return midAssignment
+                    End If
                     If lhsKind = "FIELD_EXPR" Or lhsIsQualifiedIndex <> 0 Then
                         Dim assignNode As Integer
                         assignNode = ASTNewNode(ps.ast, "ASSIGN_STMT", "", exprOp, tk.lineNo, tk.colNo)

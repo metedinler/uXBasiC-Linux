@@ -1,0 +1,9 @@
+' S-579: değişken adlarında Türkçe harfler (ç ğ ı ö ş ü) — altı motorda aynı sonuç
+DIM çay AS I32 = 1
+DIM ğ AS I32 = 2
+DIM ışık AS I32 = 3
+DIM öğle AS I32 = 4
+DIM şeker AS I32 = 5
+DIM ürün AS I32 = 6
+PRINT çay + ğ + ışık + öğle + şeker + ürün
+PRINT çay * 100000 + ğ * 10000 + ışık * 1000 + öğle * 100 + şeker * 10 + ürün

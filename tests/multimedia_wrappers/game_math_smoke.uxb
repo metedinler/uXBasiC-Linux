@@ -1,0 +1,9 @@
+INCLUDE "include/modules/uxraylib.uxmh"
+
+ASSERT uxraylib.RectCollision(10, 10, 32, 32, 30, 20, 32, 32) == 1
+ASSERT uxraylib.RectCollision(10, 10, 8, 8, 30, 20, 8, 8) == 0
+ASSERT uxraylib.CircleCollision(0, 0, 10, 12, 0, 3) == 1
+ASSERT uxraylib.CircleCollision(0, 0, 4, 20, 0, 4) == 0
+ASSERT uxraylib.SpriteFrame(9, 4) == 1
+ASSERT uxraylib.SpriteFrame(-1, 4) == 3
+PRINT "GAME_MATH_SMOKE_PASS"

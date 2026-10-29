@@ -1,0 +1,7 @@
+DEFINT a-z
+
+PRINT 5 == 5
+PRINT 5 != 4
+PRINT 6 ^ 3
+PRINT !0
+PRINT ~0

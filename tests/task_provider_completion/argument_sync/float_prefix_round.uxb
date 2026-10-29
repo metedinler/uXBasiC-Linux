@@ -1,0 +1,10 @@
+DIM a AS F32 = 16777216.0
+DIM r AS F64 = ++a
+PRINT r
+PRINT F64(a)
+DIM b AS F32 = 0.25
+DIM first AS F64 = b++
+DIM second AS F64 = ++b
+PRINT first
+PRINT second
+PRINT b

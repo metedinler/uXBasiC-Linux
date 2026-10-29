@@ -1,0 +1,15 @@
+' S-669: %%REPEAT [n] ... %%UNTILMETA kosul bir SON-KOSULLU dongudur: her tur once tam islenir, sonra kosul sinanir; kosul dogruysa
+' dongu biter. {{INDEX}} tur numarasidir (1'den). n varsa en cok n tur doner. Govde bir makroyu degistirirse kosul bunu gorur.
+%%REPEAT 10
+PRINT {{INDEX}}
+%%UNTILMETA {{INDEX}} >= 3
+%%DEFINE BITTI 0
+%%REPEAT
+PRINT {{INDEX}} * 100
+%%IFN {{INDEX}} == 4
+%%SET BITTI = 1
+%%ENDIF
+%%UNTILMETA BITTI == 1
+%%REPEAT 2
+PRINT 7
+%%UNTILMETA FALSE

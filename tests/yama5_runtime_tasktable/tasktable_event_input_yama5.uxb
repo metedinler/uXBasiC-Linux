@@ -1,0 +1,10 @@
+EVENT VeriGeldi
+    PRINT "EVENT_INPUT"
+    PRINT INPUT
+END EVENT
+
+SLOT
+    Kaydet 5 ON EVENT VeriGeldi
+END SLOT
+
+TRIGGER VeriGeldi, 42

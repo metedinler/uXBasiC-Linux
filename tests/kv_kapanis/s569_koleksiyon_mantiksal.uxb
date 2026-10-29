@@ -1,0 +1,12 @@
+' S-569 / S-246: DICTHAS ve SETHAS DOGRU degerini -1 yazdirir (AST, MIR, x64 ile ayni); JS'te 1 yaziyordu.
+DIM d AS DICT
+DIM s AS SET
+DICTSET(d, "a", 1)
+SETADD(s, 5)
+PRINT DICTHAS(d, "a")
+PRINT DICTHAS(d, "yok")
+PRINT SETHAS(s, 5)
+PRINT SETHAS(s, 9)
+DIM b AS BOOLEAN
+b = DICTHAS(d, "a")
+PRINT b

@@ -1,0 +1,29 @@
+DIM count AS I32 = 0
+IF I32(2.7) = 2 THEN count += 1
+IF I32(-2.7) = -2 THEN count += 1
+IF 0.5 THEN count += 1
+DIM negativeZero AS F64 = 0.0
+DIM negativeZeroCalls AS I32 = 0
+FUNCTION MakeNegativeZero(value AS F64) AS F64
+    negativeZeroCalls += 1
+    RETURN value * -1.0
+END FUNCTION
+negativeZero = MakeNegativeZero(negativeZero)
+IF negativeZero THEN count += 100
+IF F64(0.5) THEN count += 1
+DIM n AS I32 = 0
+DO WHILE 0.5
+    n += 1
+    EXIT DO
+LOOP
+DO
+    n += 1
+    IF n > 8 THEN THROW "fractional loop condition did not terminate"
+    CONTINUE
+LOOP UNTIL 0.5
+WHILE F64(0.5)
+    n += 1
+    EXIT WHILE
+WEND
+PRINT count
+PRINT n

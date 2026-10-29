@@ -95,7 +95,10 @@ Declare Function fclose CDecl Alias "fclose" (ByVal fp As Any Ptr) As Integer
 
 Private Function UXBAdim26WriteText(ByRef filePath As String, ByRef textValue As String, ByRef errText As String) As Integer
     errText = ""
-    If Trim(filePath) = "" Then Return 1
+    If Trim(filePath) = "" Then
+        errText = "ADIM26 output path is empty"
+        Return 0
+    End If
     UXBAdim26EnsureParentDir(filePath)
     
     #ifdef __FB_WIN32__
@@ -104,8 +107,12 @@ Private Function UXBAdim26WriteText(ByRef filePath As String, ByRef textValue As
         errText = "ADIM26 cannot open file for writing: " & filePath
         Return 0
     End If
-    fputs(textValue, fp)
-    fclose(fp)
+    Dim writeResult As Integer = fputs(textValue, fp)
+    Dim closeResult As Integer = fclose(fp)
+    If writeResult < 0 Or closeResult <> 0 Then
+        errText = "ADIM26 cannot complete file write: " & filePath
+        Return 0
+    End If
     Return 1
     #else
     Dim ff As Integer = FreeFile
@@ -135,7 +142,7 @@ Function UXBJsOpcodeEmitClassAdim26(ByVal opcodeText As String) As String
         Return "RUNTIME_JS"
     Case "JMP", "JZ", "JNZ", "RET"
         Return "CONTROL_JS"
-    Case "DIM", "REDIM", "ARRAY_NEW", "ARRAY_LOAD", "ARRAY_STORE", "OBJECT_NEW", "FIELD_LOAD", "FIELD_STORE", "METHOD_CALL", "VIRTUAL_CALL"
+    Case "DIM", "REDIM", "ARRAY_NEW", "ARRAY_LOAD", "ARRAY_STORE", "ARRAY_FIELD_LOAD", "ARRAY_FIELD_STORE", "OBJECT_NEW", "FIELD_LOAD", "FIELD_STORE", "METHOD_CALL", "VIRTUAL_CALL"
         Return "RUNTIME_OBJECT_JS"
     Case "OPEN", "CLOSE", "GET", "PUT", "SEEK", "DELETE", "EOF", "LOF", "MEMCOPY", "MEMFILL", "PEEK", "POKE"
         Return "HOST_FALLBACK_JS"

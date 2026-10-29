@@ -1,0 +1,25 @@
+DIM sharedText(0 TO 1) AS STRING
+sharedText(0) = "AB" + CHR(0) + "CD"
+FUNCTION Suffix(ready AS I64, peer AS I64) AS STRING
+    DIM rc AS I32
+    UNSAFE
+        CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", ready)
+        rc = CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", peer, 5000)
+    END UNSAFE
+    IF rc <> 0 THEN RETURN "timeout"
+    RETURN "x"
+END FUNCTION
+THREAD Writer(ready AS I64, peer AS I64) AS I32
+    sharedText(0) += Suffix(ready, peer)
+    RETURN 1
+END THREAD
+DIM firstReady AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM secondReady AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM first AS TASK OF I32 = SPAWN Writer(firstReady, secondReady)
+DIM second AS TASK OF I32 = SPAWN Writer(secondReady, firstReady)
+PRINT first.JOIN()
+PRINT second.JOIN()
+PRINT LEN(sharedText(0))
+PRINT ASC(MID(sharedText(0), 3, 1))
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", firstReady)
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", secondReady)

@@ -8,6 +8,7 @@
 #include once "uxb_backend_web_gate_adim14.fbs"
 #include once "uxb_backend_web_report_adim14.fbs"
 #include once "common/backend_result.fbs"
+#include once "common/backend_json_report.fbs"
 #include once "../common/report_writer.fbs"
 #include once "../semantic/mir_verification_gate.fbs"
 #include once "../codegen/js/uxb_js_backend_strict_adim14.fbs"
@@ -46,7 +47,7 @@ End Function
 Private Function UXBWebWriteResultReport(ByRef ctx As UXBBackendContext, ByRef r As UXBBackendResult, ByRef errText As String) As Integer
     errText = ""
     If Trim(ctx.backendReportOutPath) = "" Then Return 1
-    Return UXBReportWriteText(ctx.backendReportOutPath, UXBBackendResultToJson(r), errText)
+    Return UXBReportWriteText(ctx.backendReportOutPath, UXBBackendFlatReportJson(ctx, r), errText)
 End Function
 
 Private Function UXBWebEmitWatOnly(ByRef m As MIRModule, ByRef ctx As UXBBackendContext, ByRef result As UXBBackendResult) As Integer
@@ -61,6 +62,50 @@ Private Function UXBWebEmitWatOnly(ByRef m As MIRModule, ByRef ctx As UXBBackend
         Return 0
     End If
     UXBBackendResultPass result, ctx.watOutPath, "WAT emitted"
+    Return 1
+End Function
+
+' %%EXPORT_BASIC Name AS "RET(PARAMS)": the program must define that function with exactly that signature.
+Private Function UXBWebCheckPackageExports(ByRef m As MIRModule, ByRef errText As String) As Integer
+    errText = ""
+    Dim seen As String = "|"
+    Dim i As Integer, j As Integer, fi As Integer
+    For i = 0 To gLastPreprocessResult.manifestCount - 1
+        Dim k As String = gLastPreprocessResult.manifest(i).keyText
+        If Left(k, 8) <> "exports." Or Right(k, 10) <> ".signature" Then Continue For
+        Dim nm As String = Mid(k, 9, Len(k) - 8 - 10)
+        If nm = "" Or InStr(seen, "|" & UCase(nm) & "|") > 0 Then Continue For
+        seen &= UCase(nm) & "|"
+        Dim sigText As String = ""
+        For j = 0 To gLastPreprocessResult.manifestCount - 1
+            If gLastPreprocessResult.manifest(j).keyText = k Then sigText = gLastPreprocessResult.manifest(j).valueText
+        Next j
+        Dim found As Integer = -1
+        For fi = 0 To m.functionCount - 1
+            If UCase(Trim(m.functions(fi).name)) = UCase(nm) Then found = fi: Exit For
+        Next fi
+        If found < 0 Then
+            errText = "EXPORT_BASIC_FUNCTION_MISSING: %%EXPORT_BASIC names " & nm & ", but the program defines no such function"
+            Return 0
+        End If
+        Dim wantRet As String, wantParams As String
+        If UXBPkgSigParts(sigText, wantRet, wantParams) = 0 Then
+            errText = "EXPORT_BASIC_SIGNATURE_INVALID: " & nm & " AS """ & sigText & """ is not of the form RET(PARAM,PARAM)"
+            Return 0
+        End If
+        Dim haveRet As String = UCase(Trim(m.functions(found).returnType))
+        If haveRet = "" Or haveRet = "NONE" Then haveRet = "VOID"
+        Dim haveParams As String = ""
+        Dim pi As Integer
+        For pi = 0 To m.functions(found).paramVarCount - 1
+            If haveParams <> "" Then haveParams &= ","
+            haveParams &= UCase(Trim(m.functions(found).paramVarTypes(pi)))
+        Next pi
+        If wantRet <> haveRet Or wantParams <> haveParams Then
+            errText = "EXPORT_BASIC_SIGNATURE_MISMATCH: " & nm & " is declared " & wantRet & "(" & wantParams & ") but the function is " & haveRet & "(" & haveParams & ")"
+            Return 0
+        End If
+    Next i
     Return 1
 End Function
 
@@ -153,10 +198,25 @@ Function UXBBackendRunWebPipeline( _
         Return 0
     End If
 
+    Dim exportErr As String
+    If UXBWebCheckPackageExports(mirModule, exportErr) = 0 Then
+        outResult.errorsText = exportErr
+        outResult.result = UXBBackendResultMake(outResult.target)
+        UXBBackendResultFail outResult.result, UXB_BACKEND_E_TARGET, exportErr
+        Return 0
+    End If
+
     Select Case outResult.target
     Case UXB_TARGET_JS
         If UXBAdim14JsBackendEmitStrict(mirModule, outResult.context, outResult.result) = 0 Then
             outResult.errorsText = outResult.result.errorText
+            UXBWebWriteResultReport outResult.context, outResult.result, ctxErr
+            Return 0
+        End If
+        ' %%EMITNOTE comments and the %%EXPORT_BASIC table go into the written program
+        If UXBPkgDecorateJsFile(gLastPreprocessResult, outResult.context.jsOutPath, ctxErr) = 0 Then
+            outResult.errorsText = ctxErr
+            UXBBackendResultFail outResult.result, UXB_BACKEND_E_EMIT, ctxErr
             UXBWebWriteResultReport outResult.context, outResult.result, ctxErr
             Return 0
         End If
@@ -187,6 +247,13 @@ Function UXBBackendRunWebPipeline( _
         If UXBAdim14JsBackendEmitStrict(mirModule, outResult.context, jsResult) = 0 Then
             outResult.result = jsResult
             outResult.errorsText = jsResult.errorText
+            UXBWebWriteResultReport outResult.context, outResult.result, ctxErr
+            Return 0
+        End If
+        If UXBPkgDecorateJsFile(gLastPreprocessResult, outResult.context.jsOutPath, ctxErr) = 0 Then
+            UXBBackendResultFail jsResult, UXB_BACKEND_E_EMIT, ctxErr
+            outResult.result = jsResult
+            outResult.errorsText = ctxErr
             UXBWebWriteResultReport outResult.context, outResult.result, ctxErr
             Return 0
         End If

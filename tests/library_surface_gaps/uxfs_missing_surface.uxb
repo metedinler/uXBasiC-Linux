@@ -1,0 +1,29 @@
+INCLUDE "include/modules/uxfs.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxfs.AppendText("", "")
+        PRINT uxfs.CopyFile("", "", 0)
+        PRINT uxfs.CreateDirectories("")
+        PRINT uxfs.CreateDirectory("")
+        PRINT uxfs.DeleteFile("")
+        PRINT uxfs.DirectoryExists("")
+        uxfs.EnumClose(0)
+        PRINT uxfs.EnumIsDirectory(0)
+        PRINT uxfs.EnumName(0)
+        PRINT uxfs.EnumNext(0)
+        PRINT uxfs.EnumOpen("")
+        PRINT uxfs.EnumSize(0)
+        PRINT uxfs.ErrorText()
+        PRINT uxfs.Exists("")
+        PRINT uxfs.FileExists("")
+        PRINT uxfs.FileSize("")
+        PRINT uxfs.GetAttributes("")
+        PRINT uxfs.Move("", "", 0)
+        PRINT uxfs.ReadAllText("")
+        PRINT uxfs.RemoveDirectory("")
+        PRINT uxfs.SetAttributes("", 0)
+        PRINT uxfs.WriteAllText("", "")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXFS"
+END MAIN

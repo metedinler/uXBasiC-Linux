@@ -172,7 +172,12 @@ Function MIRX64TryEmitCollectionCall(ByRef ins As MIRIRInstruction, ByRef cg As 
         Dim lsKind As Integer
         If MIRX64EmitCollectionValueOperand(cg, ins.operands(3), "r13", lsKind, errText) = 0 Then Return 0
         If MIRX64EmitCollectionCallChecked(cg, "__uxb_rt_list_set", "0", "TR: LIST dizin siniri disi veya gecersiz handle | EN: LIST index out of range or handle invalid", errText, 4, "r10", "r11", LTrim(Str(lsKind)), "r13") = 0 Then Return 0
-        If Trim(ins.result) <> "" Then Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        ' S-652: degistirici koleksiyon islevlerinin sonucu dilin DOGRU degeri -1'dir (calisma anı durumu 1'dir; yukaridaki
+        ' denetim 0'i hata sayar). AST, MIR ve JS ile ayni deger.
+        If Trim(ins.result) <> "" Then
+            MIRX64Emit cg, "    mov rax, -1"
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End If
         Return 1
 
     Case "LISTADD"
@@ -182,7 +187,12 @@ Function MIRX64TryEmitCollectionCall(ByRef ins As MIRIRInstruction, ByRef cg As 
         Dim laKind As Integer
         If MIRX64EmitCollectionValueOperand(cg, ins.operands(2), "r11", laKind, errText) = 0 Then Return 0
         If MIRX64EmitCollectionCallChecked(cg, "__uxb_rt_list_add", "0", "TR: LIST'e ekleme basarisiz (gecersiz handle) | EN: LIST add failed (invalid handle)", errText, 3, "r10", LTrim(Str(laKind)), "r11") = 0 Then Return 0
-        If Trim(ins.result) <> "" Then Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        ' S-652: degistirici koleksiyon islevlerinin sonucu dilin DOGRU degeri -1'dir (calisma anı durumu 1'dir; yukaridaki
+        ' denetim 0'i hata sayar). AST, MIR ve JS ile ayni deger.
+        If Trim(ins.result) <> "" Then
+            MIRX64Emit cg, "    mov rax, -1"
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End If
         Return 1
 
     Case "LISTREMOVE"
@@ -191,7 +201,12 @@ Function MIRX64TryEmitCollectionCall(ByRef ins As MIRIRInstruction, ByRef cg As 
         If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
         If MIRX64LoadOperandToReg(cg, ins.operands(2), "r11", errText) = 0 Then Return 0
         If MIRX64EmitCollectionCallChecked(cg, "__uxb_rt_list_remove", "0", "TR: LIST dizin siniri disi | EN: LIST index out of range", errText, 2, "r10", "r11") = 0 Then Return 0
-        If Trim(ins.result) <> "" Then Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        ' S-652: degistirici koleksiyon islevlerinin sonucu dilin DOGRU degeri -1'dir (calisma anı durumu 1'dir; yukaridaki
+        ' denetim 0'i hata sayar). AST, MIR ve JS ile ayni deger.
+        If Trim(ins.result) <> "" Then
+            MIRX64Emit cg, "    mov rax, -1"
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End If
         Return 1
 
     Case "LISTCLEAR", "DICTCLEAR", "SETCLEAR"
@@ -203,7 +218,12 @@ Function MIRX64TryEmitCollectionCall(ByRef ins As MIRIRInstruction, ByRef cg As 
         If target = "DICTCLEAR" Then clearSymbol = "__uxb_rt_dict_clear"
         If target = "SETCLEAR" Then clearSymbol = "__uxb_rt_set_clear"
         If MIRX64EmitCollectionCallChecked(cg, clearSymbol, "0", "TR: " & target & " basarisiz (gecersiz handle) | EN: " & target & " failed (invalid handle)", errText, 1, "r10") = 0 Then Return 0
-        If Trim(ins.result) <> "" Then Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        ' S-652: degistirici koleksiyon islevlerinin sonucu dilin DOGRU degeri -1'dir (calisma anı durumu 1'dir; yukaridaki
+        ' denetim 0'i hata sayar). AST, MIR ve JS ile ayni deger.
+        If Trim(ins.result) <> "" Then
+            MIRX64Emit cg, "    mov rax, -1"
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End If
         Return 1
 
     Case "DICTHAS", "SETHAS"
@@ -247,7 +267,12 @@ Function MIRX64TryEmitCollectionCall(ByRef ins As MIRIRInstruction, ByRef cg As 
         If MIRX64EmitCollectionValueOperand(cg, ins.operands(3), "r13", dsKind, errText) = 0 Then Return 0
         If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
         If MIRX64EmitCollectionCallChecked(cg, "__uxb_rt_dict_set", "0", "TR: DICT'e yazma basarisiz (gecersiz handle) | EN: DICT set failed (invalid handle)", errText, 4, "r10", "r11", LTrim(Str(dsKind)), "r13") = 0 Then Return 0
-        If Trim(ins.result) <> "" Then Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        ' S-652: degistirici koleksiyon islevlerinin sonucu dilin DOGRU degeri -1'dir (calisma anı durumu 1'dir; yukaridaki
+        ' denetim 0'i hata sayar). AST, MIR ve JS ile ayni deger.
+        If Trim(ins.result) <> "" Then
+            MIRX64Emit cg, "    mov rax, -1"
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End If
         Return 1
 
     Case "DICTKEYAT"
@@ -291,7 +316,12 @@ Function MIRX64TryEmitCollectionCall(ByRef ins As MIRIRInstruction, ByRef cg As 
         If MIRX64EmitCollectionKeyOperand(cg, ins.operands(2), "r11", errText) = 0 Then Return 0
         If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
         If MIRX64EmitCollectionCallChecked(cg, "__uxb_rt_set_add", "0", "TR: SET'e ekleme basarisiz (gecersiz handle) | EN: SET add failed (invalid handle)", errText, 2, "r10", "r11") = 0 Then Return 0
-        If Trim(ins.result) <> "" Then Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        ' S-652: degistirici koleksiyon islevlerinin sonucu dilin DOGRU degeri -1'dir (calisma anı durumu 1'dir; yukaridaki
+        ' denetim 0'i hata sayar). AST, MIR ve JS ile ayni deger.
+        If Trim(ins.result) <> "" Then
+            MIRX64Emit cg, "    mov rax, -1"
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End If
         Return 1
 
     Case "SETREMOVE"
@@ -301,7 +331,12 @@ Function MIRX64TryEmitCollectionCall(ByRef ins As MIRIRInstruction, ByRef cg As 
         If MIRX64EmitCollectionKeyOperand(cg, ins.operands(2), "r11", errText) = 0 Then Return 0
         If MIRX64LoadOperandToReg(cg, ins.operands(1), "r10", errText) = 0 Then Return 0
         If MIRX64EmitCollectionCallChecked(cg, "__uxb_rt_set_remove", "0", "TR: SET'ten cikarma basarisiz (gecersiz handle) | EN: SET remove failed (invalid handle)", errText, 2, "r10", "r11") = 0 Then Return 0
-        If Trim(ins.result) <> "" Then Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        ' S-652: degistirici koleksiyon islevlerinin sonucu dilin DOGRU degeri -1'dir (calisma anı durumu 1'dir; yukaridaki
+        ' denetim 0'i hata sayar). AST, MIR ve JS ile ayni deger.
+        If Trim(ins.result) <> "" Then
+            MIRX64Emit cg, "    mov rax, -1"
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End If
         Return 1
 
     Case "SETMEMBERAT"

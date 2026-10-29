@@ -1,0 +1,16 @@
+DIM x AS I32 = 0
+DIM i AS I32
+FOR i = 1 TO 4
+    GOSUB AddCurrent
+    IF i MOD 2 = 0 THEN
+        GOSUB AddTen
+    END IF
+NEXT
+PRINT x
+END
+AddCurrent:
+x = x + i
+RETURN
+AddTen:
+x = x + 10
+RETURN

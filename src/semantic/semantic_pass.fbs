@@ -43,6 +43,9 @@ Declare Function SemCanAssignClassType(ByRef ps As ParseState, ByRef declTypeRaw
 Declare Function SemFindDimDeclTypeByName(ByRef ps As ParseState, ByRef varNameRaw As String, ByRef declTypeOut As String) As Integer
 Declare Function SemFindInterfaceNode(ByRef ps As ParseState, ByRef interfaceNameRaw As String) As Integer
 Declare Function SemClassMethodNode(ByRef ps As ParseState, ByVal classNode As Integer, ByRef methodNameRaw As String) As Integer
+Declare Function SemBaseCtorOf(ByRef ps As ParseState, ByVal classNode As Integer) As Integer
+Declare Function SemBaseCtorParamCount(ByRef ps As ParseState, ByVal ctorNode As Integer) As Integer
+Declare Function SemHasRoutineByName(ByRef ps As ParseState, ByRef routineNameRaw As String) As Integer
 
 Private Function SemSplitMethodCallName(ByRef callNameRaw As String, ByRef ownerOut As String, ByRef methodOut As String) As Integer
     ownerOut = ""
@@ -1021,6 +1024,28 @@ Private Function SemValidateNewExprNodes(ByRef ps As ParseState, ByRef errText A
                 errText = "semantic: NEW target class is ABSTRACT " & classType
                 Return 0
             End If
+
+            ' S-619 (P0.2, 2026-10-17): NEW passes exactly the constructor's parameters. Too few arguments stopped AST and MIR at run time and the native
+            ' build at code generation; TOO MANY were an error only in AST - MIR and native x64 silently dropped the extra ones. Now one compile error for all.
+            Dim newCtorNode As Integer
+            newCtorNode = SemBaseCtorOf(ps, classNode)
+            Dim newWantArgs As Integer
+            newWantArgs = 0
+            If newCtorNode <> -1 Then newWantArgs = SemBaseCtorParamCount(ps, newCtorNode)
+            Dim newGaveArgs As Integer
+            newGaveArgs = SemChildCount(ps, i)
+            ' the old convention - a plain `SUB <CLASS>_CTOR(self AS I32, ...)` outside the class - still works on the AST path and has no CONSTRUCTOR node: not checked
+            Dim newLegacyCtor As Integer
+            newLegacyCtor = 0
+            If newCtorNode = -1 Then newLegacyCtor = SemHasRoutineByName(ps, classType & "_CTOR")
+            If newGaveArgs <> newWantArgs And newLegacyCtor = 0 Then
+                If newCtorNode = -1 Then
+                    errText = "semantic: NEW " & classType & " passes " & LTrim(Str(newGaveArgs)) & " argument(s) but class " & classType & " declares no CONSTRUCTOR [line " & LTrim(Str(ps.ast.nodes(i).lineNo)) & "]"
+                Else
+                    errText = "semantic: NEW " & classType & " passes " & LTrim(Str(newGaveArgs)) & " argument(s) but the CONSTRUCTOR of " & classType & " takes " & LTrim(Str(newWantArgs)) & " [line " & LTrim(Str(ps.ast.nodes(i).lineNo)) & "]"
+                End If
+                Return 0
+            End If
         End If
     Next i
 
@@ -1054,14 +1079,11 @@ Private Function SemValidateDimClassInitializers(ByRef ps As ParseState, ByRef e
         declType = UCase(Trim(ps.ast.nodes(typeNode).value))
         If declType = "" Then Continue For
         If SemHasClassName(ps, declType) = 0 Then Continue For
-        Dim classNode As Integer
-        classNode = SemFindClassNode(ps, declType)
-        If classNode <> -1 Then
-            If SemClassHasFlag(ps, classNode, "ABSTRACT") <> 0 Then
-                errText = "semantic: DIM cannot instantiate ABSTRACT class " & declType
-                Return 0
-            End If
-        End If
+        ' S-572 (2026-10-16): the DECLARED type of a variable may be an ABSTRACT class -- that is the point of an
+        ' abstract base (`DIM s AS Shape = NEW Square()`). The old check here rejected every `DIM x AS AbstractClass`
+        ' (also without an initializer, and with a concrete subclass), which nobody noticed because `ABSTRACT CLASS`
+        ' could not be parsed (lexer demotion, parser_stmt_registry.fbs). Instantiating an ABSTRACT class is a `NEW`
+        ' of it, and SemValidateNewExprNodes() rejects exactly that ("NEW target class is ABSTRACT").
 
         If initNode = -1 Then Continue For
         If ps.ast.nodes(initNode).left = -1 Then
@@ -1071,10 +1093,10 @@ Private Function SemValidateDimClassInitializers(ByRef ps As ParseState, ByRef e
 
         Dim initExpr As Integer
         initExpr = ps.ast.nodes(initNode).left
-        If UCase(ps.ast.nodes(initExpr).kind) <> "NEW_EXPR" Then
-            errText = "semantic: DIM class initializer must be NEW " & declType
-            Return 0
-        End If
+        ' S-584 (2026-10-16): a class variable may start from ANY class-typed expression (`DIM v3 AS Vektor2D = v1 + v2`,
+        ' `DIM a AS Kutu = Uret(8)`, `DIM b AS Kutu = a`); the nominal, directional type check of the initializer lives in
+        ' Step3ValidateDimInitializers (semantic_step3_gate.fbs), which infers the expression type. This pass only checks `NEW`.
+        If UCase(ps.ast.nodes(initExpr).kind) <> "NEW_EXPR" Then Continue For
 
         Dim newType As String
         newType = UCase(Trim(ps.ast.nodes(initExpr).value))
@@ -1116,6 +1138,29 @@ Private Function SemValidateClassAssignments(ByRef ps As ParseState, ByRef errTe
     Return 1
 End Function
 
+' S-574 (2026-10-17): the declared type of a PARAMETER of that name (DELETE may name a parameter: `SUB Kapat(p AS A) : DELETE p : END SUB`).
+Private Function SemFindParamDeclTypeByName(ByRef ps As ParseState, ByRef varNameRaw As String, ByRef declTypeOut As String) As Integer
+    declTypeOut = ""
+    Dim varName As String
+    varName = UCase(Trim(varNameRaw))
+    If varName = "" Then Return 0
+    Dim i As Integer
+    For i = ps.ast.count - 1 To 0 Step -1
+        If UCase(ps.ast.nodes(i).kind) <> "PARAM_DECL" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> varName Then Continue For
+        Dim ch As Integer
+        ch = ps.ast.nodes(i).firstChild
+        Do While ch <> -1
+            If UCase(ps.ast.nodes(ch).kind) = "TYPE_REF" Then
+                declTypeOut = UCase(Trim(ps.ast.nodes(ch).value))
+                Return IIf(declTypeOut <> "", 1, 0)
+            End If
+            ch = ps.ast.nodes(ch).nextSibling
+        Loop
+    Next i
+    Return 0
+End Function
+
 Private Function SemValidateDeleteNodes(ByRef ps As ParseState, ByRef errText As String) As Integer
     Dim i As Integer
     For i = 0 To ps.ast.count - 1
@@ -1131,18 +1176,23 @@ Private Function SemValidateDeleteNodes(ByRef ps As ParseState, ByRef errText As
         End If
 
         If UCase(ps.ast.nodes(targetNode).kind) <> "IDENT" Then
-            errText = "semantic: DELETE target must be identifier"
+            errText = "semantic: DELETE target must be identifier or an object field (an array element cannot be DELETEd: copy it into a variable first)"
             Return 0
         End If
 
         Dim declType As String
         If SemFindDimDeclTypeByName(ps, ps.ast.nodes(targetNode).value, declType) = 0 Then
-            errText = "semantic: DELETE target must be DIM variable"
-            Return 0
+            ' S-574: a parameter of a class type may be DELETEd too (its destructor chain follows the REAL class of the object)
+            If SemFindParamDeclTypeByName(ps, ps.ast.nodes(targetNode).value, declType) = 0 Then
+                errText = "semantic: DELETE target must be DIM variable"
+                Return 0
+            End If
         End If
 
-        If declType <> "OBJECT" And SemHasClassName(ps, declType) = 0 Then
-            errText = "semantic: DELETE target must be class or OBJECT"
+        ' S-574: a variable declared with an INTERFACE holds an object of some class that implements it - it can be DELETEd like any object
+        ' (the destructor chain follows the REAL class of the object, never the interface).
+        If declType <> "OBJECT" And SemHasClassName(ps, declType) = 0 And SemFindInterfaceNode(ps, declType) = -1 Then
+            errText = "semantic: DELETE target must be class or OBJECT or INTERFACE"
             Return 0
         End If
     Next i
@@ -1404,6 +1454,8 @@ Private Function SemValidateThisMeUsage(ByRef ps As ParseState, ByRef errText As
     Return 1
 End Function
 
+' S-576 (2026-10-17): the constructor / destructor ME rule moved below SemFindBaseMethod (it needs the class helpers defined there).
+
 Private Function SemFindInterfaceNode(ByRef ps As ParseState, ByRef interfaceNameRaw As String) As Integer
     Dim needle As String
     needle = UCase(Trim(interfaceNameRaw))
@@ -1465,6 +1517,180 @@ Private Function SemClassBaseName(ByRef ps As ParseState, ByVal classNode As Int
     Loop
 
     Return 0
+End Function
+
+' S-606 (2026-10-17): looks `methodNameRaw` up in `classNameRaw` and then up the base chain; 1 = found (isStaticOut tells which kind), 0 = no such method.
+Private Function SemFindMethodInClassChain(ByRef ps As ParseState, ByRef classNameRaw As String, ByRef methodNameRaw As String, ByRef isStaticOut As Integer) As Integer
+    isStaticOut = 0
+    Dim curClass As String
+    curClass = UCase(Trim(classNameRaw))
+    Dim wantedMethod As String
+    wantedMethod = UCase(Trim(methodNameRaw))
+    If curClass = "" Or wantedMethod = "" Then Return 0
+    Dim hop As Integer
+    hop = 0
+    Do While curClass <> "" And hop < 64
+        hop += 1
+        Dim chainClassNode As Integer
+        chainClassNode = SemFindClassNode(ps, curClass)
+        If chainClassNode = -1 Then Exit Do
+        Dim chainMember As Integer
+        chainMember = ps.ast.nodes(chainClassNode).firstChild
+        Do While chainMember <> -1
+            If UCase(Trim(ps.ast.nodes(chainMember).kind)) = "CLASS_METHOD_DECL" Then
+                If UCase(Trim(ps.ast.nodes(chainMember).value)) = wantedMethod Then
+                    isStaticOut = IIf(SemClassMethodHasFlag(ps, chainMember, "STATIC") <> 0, 1, 0)
+                    Return 1
+                End If
+            End If
+            chainMember = ps.ast.nodes(chainMember).nextSibling
+        Loop
+        Dim chainBase As String
+        If SemClassBaseName(ps, chainClassNode, chainBase) = 0 Then Exit Do
+        curClass = chainBase
+    Loop
+    Return 0
+End Function
+
+' Is `nameUpper` also declared as a variable, parameter or field somewhere? Then `Name.m()` may mean that object, not the class.
+Private Function SemNameIsAlsoDeclaredAsValue(ByRef ps As ParseState, ByRef nameUpper As String) As Integer
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim vk As String
+        vk = UCase(Trim(ps.ast.nodes(i).kind))
+        If vk = "DIM_DECL" Or vk = "PARAM_DECL" Or vk = "CLASS_FIELD" Or vk = "CONST_DECL" Or vk = "REDIM_DECL" Then
+            If UCase(Trim(ps.ast.nodes(i).value)) = nameUpper Then Return 1
+        End If
+    Next i
+    Return 0
+End Function
+
+' S-606: `Klass.Metot(...)` (a call whose receiver is the NAME OF A CLASS) must name a STATIC method of that class or of a base class.
+' The AST interpreter used to run an instance method called this way (no object, so its fields read as 0), while MIR, native, JS and WASM
+' refused it; a name no class declares was an "unsupported call" at run time. Every engine now stops at compile time with the same message.
+Private Function SemValidateClassNameCalls(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim callKind As String
+        callKind = UCase(Trim(ps.ast.nodes(i).kind))
+        Dim classPart As String
+        Dim methodPart As String
+        classPart = ""
+        methodPart = ""
+        If callKind = "CALL_EXPR" Then
+            Dim recvIdx As Integer
+            recvIdx = ps.ast.nodes(i).left
+            If recvIdx < 0 Or recvIdx >= ps.ast.count Then Continue For
+            Dim recvKind As String
+            recvKind = UCase(Trim(ps.ast.nodes(recvIdx).kind))
+            If recvKind <> "IDENT" And recvKind <> "KEYWORD_REF" Then Continue For
+            classPart = UCase(Trim(ps.ast.nodes(recvIdx).value))
+            Dim callName As String
+            callName = UCase(Trim(ps.ast.nodes(i).value))
+            Dim lastDot As Integer
+            lastDot = InStrRev(callName, ".")
+            If lastDot <= 0 Then Continue For
+            ' only the plain two-part form `Klass.Metot` (a longer chain `a.b.m` has a different receiver)
+            If Left(callName, lastDot - 1) <> classPart Then Continue For
+            methodPart = Mid(callName, lastDot + 1)
+        ElseIf callKind = "CALL_STMT" Then
+            If ps.ast.nodes(i).left <> -1 Then Continue For
+            Dim stmtName As String
+            stmtName = UCase(Trim(ps.ast.nodes(i).value))
+            Dim stmtDot As Integer
+            stmtDot = InStr(stmtName, ".")
+            If stmtDot <= 1 Then Continue For
+            If InStr(stmtDot + 1, stmtName, ".") > 0 Then Continue For
+            classPart = Left(stmtName, stmtDot - 1)
+            methodPart = Mid(stmtName, stmtDot + 1)
+        Else
+            Continue For
+        End If
+        If classPart = "" Or methodPart = "" Then Continue For
+        If classPart = "THIS" Or classPart = "ME" Or classPart = "SUPER" Then Continue For
+        If SemFindClassNode(ps, classPart) = -1 Then Continue For
+        If SemNameIsAlsoDeclaredAsValue(ps, classPart) <> 0 Then Continue For
+
+        Dim methodIsStatic As Integer
+        If SemFindMethodInClassChain(ps, classPart, methodPart, methodIsStatic) = 0 Then
+            errText = "semantic: class " & classPart & " has no STATIC method " & methodPart & " (a call through a class name needs a STATIC method)"
+            Return 0
+        End If
+        If methodIsStatic = 0 Then
+            errText = "semantic: instance method cannot be called through class name " & classPart & "." & methodPart & " (call it on an object, or declare the method STATIC)"
+            Return 0
+        End If
+    Next i
+    Return 1
+End Function
+
+Private Function SemClassHasDirectFieldNamed(ByRef ps As ParseState, ByVal classNode As Integer, ByRef fieldNameRaw As String) As Integer
+    If classNode < 0 Or classNode >= ps.ast.count Then Return 0
+
+    Dim targetName As String
+    targetName = UCase(Trim(fieldNameRaw))
+    If targetName = "" Then Return 0
+
+    Dim ch As Integer
+    ch = ps.ast.nodes(classNode).firstChild
+    Do While ch <> -1
+        Dim kindText As String
+        kindText = UCase(Trim(ps.ast.nodes(ch).kind))
+        If kindText = "CLASS_FIELD" Or kindText = "CLASS_PROPERTY_DECL" Then
+            If UCase(Trim(ps.ast.nodes(ch).value)) = targetName Then Return 1
+        End If
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+
+    Return 0
+End Function
+
+Private Function SemValidateInheritedFieldHiding(ByRef ps As ParseState, ByRef errText As String) As Integer
+    ' OOP contract: a derived class may inherit a field, but may not silently
+    ' redeclare the same member name and make the selected storage engine differ.
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "CLASS_STMT" Then Continue For
+
+        Dim className As String
+        className = UCase(Trim(ps.ast.nodes(i).value))
+        Dim baseName As String
+        If SemClassBaseName(ps, i, baseName) = 0 Then Continue For
+
+        Dim ch As Integer
+        ch = ps.ast.nodes(i).firstChild
+        Do While ch <> -1
+            Dim childKind As String
+            childKind = UCase(Trim(ps.ast.nodes(ch).kind))
+            If childKind = "CLASS_FIELD" Or childKind = "CLASS_PROPERTY_DECL" Then
+                Dim memberName As String
+                memberName = UCase(Trim(ps.ast.nodes(ch).value))
+
+                Dim curBase As String
+                curBase = UCase(Trim(baseName))
+                Dim hop As Integer
+                Do While curBase <> ""
+                    hop += 1
+                    If hop > 64 Then Exit Do
+
+                    Dim baseNode As Integer
+                    baseNode = SemFindClassNode(ps, curBase)
+                    If baseNode = -1 Then Exit Do
+                    If SemClassHasDirectFieldNamed(ps, baseNode, memberName) <> 0 Then
+                        errText = "semantic: CLASS field hides inherited member " & className & "." & memberName & " from " & curBase
+                        Return 0
+                    End If
+
+                    Dim nextBase As String
+                    If SemClassBaseName(ps, baseNode, nextBase) = 0 Then Exit Do
+                    curBase = UCase(Trim(nextBase))
+                Loop
+            End If
+            ch = ps.ast.nodes(ch).nextSibling
+        Loop
+    Next i
+
+    Return 1
 End Function
 
 Private Function SemClassMethodNode(ByRef ps As ParseState, ByVal classNode As Integer, ByRef methodNameRaw As String) As Integer
@@ -1898,6 +2124,89 @@ Private Function SemValidateClassOperatorContracts(ByRef ps As ParseState, ByRef
         Loop
     Next i
 
+    Return 1
+End Function
+
+' S-576 (2026-10-17): is `methodName`, looked up from class `classNode` upwards, a VIRTUAL method? Any declaration along the
+' chain flagged VIRTUAL / OVERRIDE / ABSTRACT makes the name dispatch through the vtable. A plain (non-virtual) method binds
+' statically, so calling it through ME (or by its bare name) from a constructor is as safe as THIS.m().
+Private Function SemMethodIsVirtualFromClass(ByRef ps As ParseState, ByVal classNode As Integer, ByRef methodNameRaw As String) As Integer
+    Dim cur As Integer
+    cur = classNode
+    Dim hop As Integer
+    Do While cur <> -1 And hop < 64
+        hop += 1
+        Dim m As Integer
+        m = SemClassMethodNode(ps, cur, methodNameRaw)
+        If m <> -1 Then
+            If SemClassMethodHasFlag(ps, m, "VIRTUAL") <> 0 Or SemClassMethodHasFlag(ps, m, "OVERRIDE") <> 0 Or SemClassMethodHasFlag(ps, m, "ABSTRACT") <> 0 Then Return 1
+        End If
+        Dim baseNameText As String
+        If SemClassBaseName(ps, cur, baseNameText) = 0 Then Exit Do
+        cur = SemFindClassNode(ps, baseNameText)
+    Loop
+    Return 0
+End Function
+
+' Constructor / destructor bodies run while the object is only partly built (or already being torn down): a call that dispatches
+' through the vtable (ME.m(), and every bare m(), which the front end rewrites to ME.m()) could reach an override whose fields do
+' not exist yet. THIS.m() (direct, this class's own implementation) and non-virtual targets stay legal.
+Private Function SemFindCtorDtorVirtualMeCall(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByVal classNode As Integer, ByRef whereText As String, ByRef errText As String) As Integer
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return 1
+
+    If UCase(Trim(ps.ast.nodes(nodeIdx).kind)) = "CALL_EXPR" Then
+        Dim receiverNode As Integer
+        receiverNode = ps.ast.nodes(nodeIdx).left
+        If receiverNode >= 0 And receiverNode < ps.ast.count Then
+            If UCase(Trim(ps.ast.nodes(receiverNode).kind)) = "IDENT" And UCase(Trim(ps.ast.nodes(receiverNode).value)) = "ME" Then
+                Dim callText As String
+                callText = UCase(Trim(ps.ast.nodes(nodeIdx).value))
+                Dim dotPos As Integer
+                dotPos = InStrRev(callText, ".")
+                Dim leaf As String
+                leaf = IIf(dotPos > 0, Mid(callText, dotPos + 1), callText)
+                If leaf <> "" And SemMethodIsVirtualFromClass(ps, classNode, leaf) <> 0 Then
+                    errText = "semantic: ME virtual method call is not allowed in " & whereText & ": " & leaf & " (an unqualified call means ME." & leaf & "; use THIS." & leaf & "() to call this class's own implementation)"
+                    Return 0
+                End If
+            End If
+        End If
+    End If
+
+    If ps.ast.nodes(nodeIdx).left <> -1 Then
+        If SemFindCtorDtorVirtualMeCall(ps, ps.ast.nodes(nodeIdx).left, classNode, whereText, errText) = 0 Then Return 0
+    End If
+    If ps.ast.nodes(nodeIdx).right <> -1 Then
+        If SemFindCtorDtorVirtualMeCall(ps, ps.ast.nodes(nodeIdx).right, classNode, whereText, errText) = 0 Then Return 0
+    End If
+
+    Dim ch As Integer
+    ch = ps.ast.nodes(nodeIdx).firstChild
+    Do While ch <> -1
+        If SemFindCtorDtorVirtualMeCall(ps, ch, classNode, whereText, errText) = 0 Then Return 0
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+
+    Return 1
+End Function
+
+Private Function SemValidateConstructorMeVirtualCalls(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim ci As Integer
+    For ci = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(ci).kind)) <> "CLASS_STMT" Then Continue For
+        Dim member As Integer
+        member = ps.ast.nodes(ci).firstChild
+        Do While member <> -1
+            Dim memberKind As String
+            memberKind = UCase(Trim(ps.ast.nodes(member).kind))
+            If memberKind = "CLASS_CONSTRUCTOR_DECL" Then
+                If SemFindCtorDtorVirtualMeCall(ps, member, ci, "CONSTRUCTOR", errText) = 0 Then Return 0
+            ElseIf memberKind = "CLASS_DESTRUCTOR_DECL" Then
+                If SemFindCtorDtorVirtualMeCall(ps, member, ci, "DESTRUCTOR", errText) = 0 Then Return 0
+            End If
+            member = ps.ast.nodes(member).nextSibling
+        Loop
+    Next ci
     Return 1
 End Function
 

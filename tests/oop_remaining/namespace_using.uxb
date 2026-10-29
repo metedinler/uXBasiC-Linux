@@ -1,0 +1,7 @@
+NAMESPACE Ng
+    SUB Yaz()
+        PRINT 5
+    END SUB
+END NAMESPACE
+USING Ng
+Yaz()

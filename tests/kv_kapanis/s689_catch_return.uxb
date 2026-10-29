@@ -1,0 +1,31 @@
+' S-689: CATCH icinden RETURN yakalanmis istisnayi cagirana tasimaz; sonraki TRY/CATCH normal calisir.
+FUNCTION F() AS I32
+    TRY
+        THROW "x"
+    CATCH
+        PRINT "yakala"
+        RETURN 5
+    END TRY
+    RETURN 0
+END FUNCTION
+FUNCTION G() AS I32
+    TRY
+        THROW "y"
+    CATCH
+        PRINT "yakala-g"
+        RETURN 6
+    FINALLY
+        PRINT "fin-g"
+    END TRY
+    RETURN 0
+END FUNCTION
+DIM a AS I32
+a = F()
+TRY
+    PRINT "tamam"
+CATCH
+    PRINT "yanlis"
+END TRY
+PRINT a
+PRINT G()
+PRINT "devam"

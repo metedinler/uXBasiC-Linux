@@ -1,0 +1,26 @@
+[
+ {
+  "ad": "g01 CONST adi sinir yalniz indeks",
+  "kod": "CONST N = 6\nDIM a(N) AS I32\na(1) = 4\nPRINT a(1)\n"
+ },
+ {
+  "ad": "g02 CONST adi sinir yalniz UBOUND",
+  "kod": "CONST N = 6\nDIM a(N) AS I32\nPRINT UBOUND(a)\n"
+ },
+ {
+  "ad": "g03 CONST adi sinir yalniz yazdir sabit",
+  "kod": "CONST N = 6\nDIM a(N) AS I32\nPRINT N\n"
+ },
+ {
+  "ad": "g04 sayi sinir ve UBOUND",
+  "kod": "DIM a(6) AS I32\nPRINT UBOUND(a)\n"
+ },
+ {
+  "ad": "g05 CONST ifade sinir yalniz indeks",
+  "kod": "CONST N = 6\nDIM a(N - 1) AS I32\na(1) = 4\nPRINT a(1)\n"
+ },
+ {
+  "ad": "g06 degisken sinir REDIM",
+  "kod": "DIM n AS I32 = 6\nDIM a() AS I32\nREDIM a(n)\na(1) = 4\nPRINT a(1)\n"
+ }
+]

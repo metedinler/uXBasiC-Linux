@@ -1,0 +1,22 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    METHOD Al() AS I32
+        RETURN v
+    END METHOD
+END CLASS
+
+' S-564: an object variable is compared with NOTHING (= and <>); two object variables are equal when they name the same object.
+DIM k AS Kutu = NEW Kutu(3)
+IF k <> NOTHING THEN PRINT 1
+k = NOTHING
+IF k = NOTHING THEN PRINT 2
+DIM j AS Kutu
+IF j = NOTHING THEN PRINT 3
+DIM m AS Kutu = NEW Kutu(4)
+DIM n AS Kutu = m
+IF m = n THEN PRINT 4
+IF m <> k THEN PRINT 5

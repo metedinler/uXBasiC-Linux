@@ -1,0 +1,15 @@
+FUNCTION Sayi() AS I32
+    Sayi = 17
+    TRY
+        RETURN
+    FINALLY
+        Sayi = 99
+    END TRY
+END FUNCTION
+FUNCTION Metin() AS STRING
+    Metin = "A" + CHR(0) + "B"
+    RETURN
+END FUNCTION
+PRINT Sayi()
+PRINT LEN(Metin())
+PRINT ASC(MID(Metin(), 2, 1))

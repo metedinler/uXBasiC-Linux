@@ -1,0 +1,14 @@
+CLASS Box
+    PUBLIC
+    value AS STRING
+    backing AS F64
+    PROPERTY Amount AS F64
+        SET
+            THIS.backing = VALUE + VALUE
+        END SET
+END CLASS
+DIM b AS Box = NEW Box()
+b.value = "abc"
+b.Amount = 0.5
+PRINT b.backing
+PRINT b.value

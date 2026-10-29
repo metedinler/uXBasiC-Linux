@@ -1,0 +1,13 @@
+DIM s AS STRING = "A" + CHR(0) + "B"
+PRINT LEN(s)
+PRINT LEN(LEFT(s, 2))
+PRINT ASC(RIGHT(s, 1))
+PRINT LEN(MID(s, 2))
+PRINT ASC(MID(s, 2, 1))
+PRINT s = "A"
+PRINT s = "A" + CHR(0) + "B"
+PRINT LEN(UCASE(s))
+PRINT LEN(LCASE(s))
+PRINT LEN(LTRIM(" " + s))
+PRINT LEN(RTRIM(s + " "))
+PRINT LEN(TRIM(" " + s + " "))

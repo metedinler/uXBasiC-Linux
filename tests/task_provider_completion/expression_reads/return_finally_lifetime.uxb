@@ -1,0 +1,26 @@
+DIM metin AS STRING = "old"
+THREAD Touch() AS I32
+    RETURN LEN(metin)
+END THREAD
+FUNCTION Change() AS STRING
+    metin = "new"
+    RETURN CHR(0) + "!"
+END FUNCTION
+FUNCTION ReadAfter() AS STRING
+    TRY
+        RETURN metin + Change()
+    FINALLY
+        DIM i AS I32
+        DIM scratch AS STRING
+        FOR i = 1 TO 260
+            scratch = STR(i) + "x"
+        NEXT i
+    END TRY
+END FUNCTION
+DIM t AS TASK OF I32 = SPAWN Touch()
+DIM joined AS I32 = t.JOIN()
+DIM answer AS STRING = ReadAfter()
+PRINT LEN(answer)
+PRINT LEFT(answer, 3)
+PRINT ASC(MID(answer, 4, 1))
+PRINT RIGHT(answer, 1)

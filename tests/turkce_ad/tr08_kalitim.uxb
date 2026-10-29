@@ -1,0 +1,25 @@
+' S-579: Türkçe harfli sınıflarda kalıtım, sanal metot ve devralınan alan
+CLASS Hayvan
+    PUBLIC
+    DIM bacakSayısı AS I32
+    CONSTRUCTOR()
+        bacakSayısı = 4
+    END CONSTRUCTOR
+    VIRTUAL METHOD Ses() AS I32
+        RETURN 0
+    END METHOD
+    METHOD Toplam() AS I32
+        RETURN bacakSayısı * 10 + Ses()
+    END METHOD
+END CLASS
+CLASS Köpek EXTENDS Hayvan
+    PUBLIC
+    OVERRIDE METHOD Ses() AS I32
+        RETURN 7
+    END METHOD
+END CLASS
+DIM k AS Köpek = NEW Köpek()
+DIM h AS Hayvan = NEW Köpek()
+PRINT h.Ses()
+PRINT k.Toplam()
+PRINT k.bacakSayısı

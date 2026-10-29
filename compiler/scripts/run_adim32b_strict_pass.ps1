@@ -25,5 +25,5 @@ if($LASTEXITCODE -ne 0){ exit 1 }
 $py='python'
 $venv=Join-Path (Split-Path $root -Parent) '.venv\Scripts\python.exe'
 if(Test-Path $venv){ $py=$venv }
-& $py "tools/control/uxb_adim32b_strict_runner.py" --root . --plan "tests/adim32b_strict/expected/adim32b_strict_plan.csv" --out "reports/control/current/adim32b_strict" --exe "compiler/wrappers/uxb_main_wrapper_64.exe"
+& $py "tools/control/uxb_adim32b_strict_runner.py" --root . --plan "tests/adim32b_strict/expected/adim32b_strict_plan.csv" --out "reports/control/current/adim32b_strict" --exe "bin/uxb.exe"
 exit $LASTEXITCODE

@@ -1,0 +1,118 @@
+[
+ {
+  "ad": "o01 DELETE sonrasi alan okuma",
+  "kod": "CLASS A\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\n    DESTRUCTOR()\n        PRINT \"dtor\"\n    END DESTRUCTOR\nEND CLASS\n\nDIM o AS A = NEW A(3)\nPRINT o.v\nDELETE o\nPRINT \"sonra\"\nPRINT o.v\n"
+ },
+ {
+  "ad": "o02 cift DELETE",
+  "kod": "CLASS A\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\n    DESTRUCTOR()\n        PRINT \"dtor\"\n    END DESTRUCTOR\nEND CLASS\n\nDIM o AS A = NEW A(1)\nDELETE o\nDELETE o\nPRINT \"bitti\"\n"
+ },
+ {
+  "ad": "o04 taban degiskeniyle DELETE (yikici zinciri)",
+  "kod": "CLASS B1\n    PUBLIC\n    DESTRUCTOR()\n        PRINT \"B1.dtor\"\n    END DESTRUCTOR\nEND CLASS\nCLASS D1 EXTENDS B1\n    PUBLIC\n    DESTRUCTOR()\n        PRINT \"D1.dtor\"\n    END DESTRUCTOR\nEND CLASS\nDIM x AS B1 = NEW D1()\nDELETE x\nPRINT \"bitti\"\n"
+ },
+ {
+  "ad": "o05 THIS ME SUPER niteliksiz (hedef 10 20 20 10 20)",
+  "kod": "CLASS A\n    PUBLIC\n    VIRTUAL METHOD Value() AS I32\n        RETURN 10\n    END METHOD\n    METHOD ViaThis() AS I32\n        RETURN THIS.Value()\n    END METHOD\n    METHOD ViaMe() AS I32\n        RETURN ME.Value()\n    END METHOD\n    METHOD Plain() AS I32\n        RETURN Value()\n    END METHOD\nEND CLASS\nCLASS B EXTENDS A\n    PUBLIC\n    OVERRIDE METHOD Value() AS I32\n        RETURN 20\n    END METHOD\n    METHOD ViaSuper() AS I32\n        RETURN SUPER.Value()\n    END METHOD\nEND CLASS\nDIM o AS B = NEW B()\nPRINT o.ViaThis()\nPRINT o.ViaMe()\nPRINT o.Plain()\nPRINT o.ViaSuper()\nPRINT o.Value()\n"
+ },
+ {
+  "ad": "o06 metot asiri yukleme",
+  "kod": "CLASS K\n    PUBLIC\n    METHOD F(a AS I32) AS I32\n        RETURN a\n    END METHOD\n    METHOD F(a AS I32, b AS I32) AS I32\n        RETURN a + b\n    END METHOD\nEND CLASS\nDIM o AS K = NEW K()\nPRINT o.F(1)\nPRINT o.F(1, 2)\n"
+ },
+ {
+  "ad": "o07 kurucuda ME ile sanal olmayan metot",
+  "kod": "CLASS K\n    PUBLIC\n    METHOD Duz() AS I32\n        RETURN 1\n    END METHOD\n    CONSTRUCTOR()\n        PRINT ME.Duz()\n    END CONSTRUCTOR\nEND CLASS\nDIM o AS K = NEW K()\n"
+ },
+ {
+  "ad": "o08 kurucuda THIS ile sanal olmayan metot",
+  "kod": "CLASS K\n    PUBLIC\n    METHOD Duz() AS I32\n        RETURN 1\n    END METHOD\n    CONSTRUCTOR()\n        PRINT THIS.Duz()\n    END CONSTRUCTOR\nEND CLASS\nDIM o AS K = NEW K()\n"
+ },
+ {
+  "ad": "o09 parametreli taban kurucusu SUPER'siz",
+  "kod": "CLASS B2\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR(a AS I32)\n        x = a\n    END CONSTRUCTOR\nEND CLASS\nCLASS D2 EXTENDS B2\n    PUBLIC\n    CONSTRUCTOR()\n        PRINT \"d\"\n    END CONSTRUCTOR\nEND CLASS\nDIM o AS D2 = NEW D2()\nPRINT o.x\n"
+ },
+ {
+  "ad": "o10 SUPER(5) ile taban kurucusu",
+  "kod": "CLASS B2\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR(a AS I32)\n        x = a\n    END CONSTRUCTOR\nEND CLASS\nCLASS D2 EXTENDS B2\n    PUBLIC\n    CONSTRUCTOR()\n        SUPER(5)\n    END CONSTRUCTOR\nEND CLASS\nDIM o AS D2 = NEW D2()\nPRINT o.x\n"
+ },
+ {
+  "ad": "o11 ABSTRACT CLASS",
+  "kod": "ABSTRACT CLASS S\n    PUBLIC\n    VIRTUAL METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS T EXTENDS S\n    PUBLIC\n    OVERRIDE METHOD F() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nDIM o AS T = NEW T()\nPRINT o.F()\n"
+ },
+ {
+  "ad": "o12 FINAL CLASS ve turetme",
+  "kod": "FINAL CLASS S\n    PUBLIC\n    METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS T EXTENDS S\n    PUBLIC\nEND CLASS\nPRINT 1\n"
+ },
+ {
+  "ad": "o17 MIXIN ... END MIXIN blok bicimi",
+  "kod": "MIXIN Yazdirilabilir\n    METHOD Yazdir()\n        PRINT \"yaz\"\n    END METHOD\nEND MIXIN\nPRINT 1\n"
+ },
+ {
+  "ad": "o18 cok kalitim EXTENDS A, B",
+  "kod": "CLASS A\n    PUBLIC\n    METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS B\n    PUBLIC\n    METHOD G() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nCLASS C EXTENDS A, B\n    PUBLIC\nEND CLASS\nDIM o AS C = NEW C()\nPRINT o.F()\n"
+ },
+ {
+  "ad": "o19 SUPER[Taban] bicimi",
+  "kod": "CLASS A\n    PUBLIC\n    VIRTUAL METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS C EXTENDS A\n    PUBLIC\n    OVERRIDE METHOD F() AS I32\n        RETURN SUPER[A].F() + 1\n    END METHOD\nEND CLASS\nDIM o AS C = NEW C()\nPRINT o.F()\n"
+ },
+ {
+  "ad": "o20 tasarim belgesi: Ogrenci PROPERTY blok bicimi",
+  "kod": "CLASS Ogrenci\n    PRIVATE\n    DIM _not AS I32\n\n    PUBLIC\n    CONSTRUCTOR(n AS I32)\n        THIS._not = n\n    END CONSTRUCTOR\n\n    PROPERTY Puan AS I32\n        GET\n            RETURN _not\n        END GET\n        SET(yeniNot AS I32)\n            IF yeniNot >= 0 ANDALSO yeniNot <= 100 THEN\n                _not = yeniNot\n            END IF\n        END SET\n    END PROPERTY\nEND CLASS\n\nDIM o AS Ogrenci = NEW Ogrenci(80)\no.Puan = 95\nPRINT o.Puan\nDELETE o\n"
+ },
+ {
+  "ad": "o21 ANDALSO islemcisi tek basina",
+  "kod": "DIM a AS I32 = 5\nIF a >= 0 ANDALSO a <= 10 THEN PRINT \"icinde\"\n"
+ },
+ {
+  "ad": "o22 tasarim belgesi: BankaHesabi",
+  "kod": "CLASS BankaHesabi\n    PRIVATE\n    DIM bakiye AS F64\n\n    PUBLIC\n    CONSTRUCTOR(ilkBakiye AS F64)\n        bakiye = ilkBakiye\n    END CONSTRUCTOR\n\n    METHOD ParaYatira(miktar AS F64)\n        IF miktar > 0 THEN\n            bakiye = bakiye + miktar\n        END IF\n    END METHOD\n\n    METHOD BakiyeOku() AS F64\n        RETURN bakiye\n    END METHOD\nEND CLASS\n\nDIM hesap AS BankaHesabi = NEW BankaHesabi(100.0)\nhesap.ParaYatira(50.0)\nPRINT hesap.BakiyeOku()\nDELETE hesap\n"
+ },
+ {
+  "ad": "o23 tasarim belgesi: Nokta + NOTHING",
+  "kod": "CLASS Nokta\n    PUBLIC\n    DIM x AS I32\n    DIM y AS I32\n\n    CONSTRUCTOR(ax AS I32, ay AS I32)\n        x = ax\n        y = ay\n    END CONSTRUCTOR\n\n    DESTRUCTOR()\n        PRINT \"Nokta temizlendi\"\n    END DESTRUCTOR\nEND CLASS\n\nDIM p AS Nokta = NEW Nokta(10, 20)\nPRINT p.x\nDELETE p\n\nIF p = NOTHING THEN\n    PRINT \"Referans bosaltildi\"\nEND IF\n"
+ },
+ {
+  "ad": "o24 tasarim belgesi: Sekil Kare IYazdirilabilir",
+  "kod": "INTERFACE IYazdirilabilir\n    METHOD Yazdir()\nEND INTERFACE\n\nCLASS Sekil\n    PUBLIC\n    VIRTUAL METHOD AlanHesapla() AS F64\n        RETURN 0.0\n    END METHOD\nEND CLASS\n\nCLASS Kare EXTENDS Sekil IMPLEMENTS IYazdirilabilir\n    PRIVATE\n    DIM kenar AS F64\n\n    PUBLIC\n    CONSTRUCTOR(k AS F64)\n        kenar = k\n    END CONSTRUCTOR\n\n    OVERRIDE METHOD AlanHesapla() AS F64\n        RETURN kenar * kenar\n    END METHOD\n\n    METHOD Yazdir()\n        PRINT \"Kare Alani: \"; THIS.AlanHesapla()\n    END METHOD\nEND CLASS\n\nDIM k AS Kare = NEW Kare(5.0)\nk.Yazdir()\nDELETE k\n"
+ },
+ {
+  "ad": "o25 tasarim belgesi: Vektor2D MAGIC ADD ve TOSTRING",
+  "kod": "CLASS Vektor2D\n    PUBLIC\n    DIM x AS F64\n    DIM y AS F64\n\n    CONSTRUCTOR(ax AS F64, ay AS F64)\n        x = ax\n        y = ay\n    END CONSTRUCTOR\n\n    MAGIC ADD(diger AS Vektor2D) AS Vektor2D\n        RETURN NEW Vektor2D(THIS.x + diger.x, THIS.y + diger.y)\n    END MAGIC\n\n    MAGIC TOSTRING() AS STRING\n        RETURN \"(\" + STR(THIS.x) + \", \" + STR(THIS.y) + \")\"\n    END MAGIC\nEND CLASS\n\nDIM v1 AS Vektor2D = NEW Vektor2D(2.0, 3.0)\nDIM v2 AS Vektor2D = NEW Vektor2D(4.0, 1.0)\nDIM v3 AS Vektor2D = v1 + v2\n\nPRINT STR(v3)\nDELETE v1\nDELETE v2\nDELETE v3\n"
+ },
+ {
+  "ad": "o26 Turkce harfli metot adi",
+  "kod": "CLASS Arac\n    PUBLIC\n    METHOD Sür() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nDIM a AS Arac = NEW Arac()\nPRINT a.Sür()\n"
+ },
+ {
+  "ad": "o27 jenerik sinif CLASS Depo<T>",
+  "kod": "CLASS Depo<T>\n    PUBLIC\n    METHOD Ekle(oge AS T)\n        PRINT 1\n    END METHOD\nEND CLASS\nPRINT 1\n"
+ },
+ {
+  "ad": "o28 IS ve AS islecleri",
+  "kod": "CLASS Sekil\n    PUBLIC\n    VIRTUAL METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Kare EXTENDS Sekil\n    PUBLIC\n    OVERRIDE METHOD F() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nDIM s AS Sekil = NEW Kare()\nIF s IS Kare THEN\n    DIM k AS Kare = s AS Kare\n    PRINT k.F()\nEND IF\n"
+ },
+ {
+  "ad": "o29 SELECT CASE IS desen eslemesi",
+  "kod": "CLASS Sekil\n    PUBLIC\n    VIRTUAL METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nDIM s AS Sekil = NEW Sekil()\nSELECT CASE s\n    CASE IS k AS Sekil\n        PRINT 1\n    CASE NOTHING\n        PRINT 2\nEND SELECT\n"
+ },
+ {
+  "ad": "o30 USING ... END USING kaynak kapsami",
+  "kod": "CLASS Akis\n    PUBLIC\n    DESTRUCTOR()\n        PRINT \"kapandi\"\n    END DESTRUCTOR\nEND CLASS\nUSING f AS Akis = NEW Akis()\n    PRINT 1\nEND USING\n"
+ },
+ {
+  "ad": "o31 ACTOR CLASS",
+  "kod": "ACTOR CLASS Sunucu\n    PUBLIC\n    METHOD Artir()\n        PRINT 1\n    END METHOD\nEND CLASS\nPRINT 1\n"
+ },
+ {
+  "ad": "o32 DATA_PARALLEL sinif",
+  "kod": "CLASS DATA_PARALLEL Parcacik\n    PUBLIC\n    DIM x AS F32\nEND CLASS\nPRINT 1\n"
+ },
+ {
+  "ad": "o33 BORROWED parametre",
+  "kod": "CLASS Nokta\n    PUBLIC\n    DIM x AS I32\nEND CLASS\nSUB Isle(BORROWED n AS Nokta)\n    PRINT n.x\nEND SUB\nDIM p AS Nokta = NEW Nokta()\nIsle(p)\n"
+ },
+ {
+  "ad": "o36 taban ve turemis ayni adli alan",
+  "kod": "CLASS Base\n    PUBLIC\n    DIM x AS I32\nEND CLASS\nCLASS Child EXTENDS Base\n    PUBLIC\n    DIM x AS I32\nEND CLASS\nDIM o AS Child = NEW Child()\no.x = 5\nPRINT o.x\n"
+ }
+]

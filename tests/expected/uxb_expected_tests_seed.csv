@@ -1,0 +1,5 @@
+test_id,test_path,feature_family,surface_items,required_layers,expected_status,strictness,duplicate_of,notes
+basic_001,uxb/tests/basicCodeTests/1__dup1.bas,basic,PRINT;DIM,SOURCE_LOAD;LEXER;PARSER;AST_INTERPRETER;MIR_INTERPRETER,PASS_INTERPRETERS_ONLY,normal,,seed
+mir_x64_array,uxb/tests/mir_x64_completion/mir_x64_array_index.bas,array,LOAD_INDEXED;STORE_INDEXED,SOURCE_LOAD;LEXER;PARSER;MIR_BUILD;MIR_X64_CODEGEN,PASS_INTERPRETERS_ONLY,normal,,seed
+step5_f80,uxb/tests/step5/f80_assignment_binary_print.bas,extfp,F80;ADD;PRINT,SOURCE_LOAD;LEXER;PARSER;SEMANTIC;MIR_BUILD;EXTFP_RUNTIME,EXPECTED_DIAGNOSTIC,strict,,runtime may be missing
+step4_type_field,uxb/tests/step4/type_field_direct_backend.bas,type_class,TYPE;LOAD_FIELD;STORE_FIELD,SOURCE_LOAD;LEXER;PARSER;SEMANTIC;TYPE_CLASS_BACKEND,PASS_INTERPRETERS_ONLY,normal,,seed

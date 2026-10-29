@@ -1,0 +1,39 @@
+ad_print | | DIM print AS I32\nprint = 1\nPRINT 5
+ad_loop | | DIM loop AS I32
+ad_end | | DIM end AS I32
+ad_input | | DIM input AS I32\ninput = 3\nPRINT input
+ad_left | | DIM left AS I32\nleft = 3\nPRINT left
+ad_len | | DIM len AS I32\nlen = 3\nPRINT len
+ad_name | | DIM name AS I32\nname = 3\nPRINT name
+ad_result | | DIM result AS I32\nresult = 3\nPRINT result
+ad_value | | DIM value AS I32\nvalue = 3\nPRINT value
+ad_string | | DIM string AS I32
+ad_i32 | | DIM i32 AS I32
+ad_task | | DIM task AS I32
+ad_list | | DIM list AS I32\nlist = 2\nPRINT list
+ad_count | | DIM count AS I32\ncount = 2\nPRINT count
+ad_type | | DIM type AS I32
+ad_class | | DIM class AS I32
+ad_true | | DIM true AS I32
+ad_timer | | DIM timer AS I32\ntimer = 2\nPRINT timer
+ad_on | | DIM on AS I32
+ad_slot | | DIM slot AS I32
+ad_each | | DIM each AS I32
+ad_to | | DIM to AS I32
+ad_step | | DIM step AS I32
+ad_base | | DIM base AS I32\nbase = 3\nPRINT base
+ad_data | | DIM data AS I32\ndata = 3\nPRINT data
+ad_get | | DIM get AS I32
+ad_set | | DIM set AS I32
+ad_set2 | | DIM ayarla AS I32
+ad_mod | | DIM mod AS I32
+ad_str | | DIM str AS I32\nstr = 3\nPRINT str
+ad_asc | | DIM asc AS I32
+ad_abs | | DIM abs AS I32\nabs = 3\nPRINT abs
+ad_x_unicode | | DIM sayı AS I32\nsayı = 3\nPRINT sayı
+ad_cok_uzun | | DIM bu_cok_uzun_bir_degisken_adi_ornegi_ve_uzunlugu_otuz_ikiyi_asiyor AS I32\nbu_cok_uzun_bir_degisken_adi_ornegi_ve_uzunlugu_otuz_ikiyi_asiyor = 4\nPRINT bu_cok_uzun_bir_degisken_adi_ornegi_ve_uzunlugu_otuz_ikiyi_asiyor
+ad_rakamla | | DIM 1x AS I32
+ad_nokta | | DIM a.b AS I32
+fonksiyon_ad_kelime | FUNCTION Print2(x AS I32) AS I32\n    RETURN x\nEND FUNCTION | PRINT Print2(4)
+fonksiyon_ad_ayrilmis | FUNCTION Left(x AS I32) AS I32\n    RETURN x\nEND FUNCTION | PRINT Left(4)
+etiket_ad | | GOTO bitis\nPRINT "gorunmez"\nbitis:\nPRINT "ok"

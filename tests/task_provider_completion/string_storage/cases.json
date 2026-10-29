@@ -1,0 +1,10 @@
+{
+  "redim_defaults": {"engines": ["AST", "MIR", "x64", "AST-x64", "JS", "WASM"], "output": "0\n5\n0\n0\n0\n0\n0\n0"},
+  "default_array_transfer": {"engines": ["AST", "MIR", "x64", "AST-x64", "JS", "WASM"], "output": "0\n0\n42"},
+  "index_once": {"engines": ["AST", "MIR", "x64", "AST-x64", "JS", "WASM"], "output": "6\n0\n1\n21"},
+  "rhs_before_index": {"engines": ["AST", "MIR", "x64", "AST-x64", "JS", "WASM"], "output": "5\n0\n1\n21"},
+  "field_copy_empty": {"engines": ["AST", "MIR", "x64", "AST-x64", "JS", "WASM"], "output": "0\nchanged\n5\n0\n17\n42"},
+  "field_index_once": {"engines": ["AST", "MIR", "x64", "AST-x64", "JS", "WASM"], "output": "6\n0\n1\n21\n42"},
+  "array_rendezvous": {"engines": ["x64", "AST-x64"], "output": "1\n1\n7\n0"},
+  "field_rendezvous": {"engines": ["x64", "AST-x64"], "output": "1\n1\n7\n0\n42"}
+}

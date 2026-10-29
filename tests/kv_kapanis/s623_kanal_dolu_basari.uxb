@@ -1,0 +1,7 @@
+' S-623: 255 dosya kanalinin hepsi acikken program basariyla biter (cikis kodu 0). Yorumlayicinin kendi gunluk ve rapor
+' yazicilari ayni FreeBASIC dosya numarasi havuzundan numara ister; MIR'de basarili bir program bile 22 koduyla bitiyordu.
+DIM i AS I32
+FOR i = 1 TO 255
+    OPEN "dolu.txt" FOR OUTPUT AS #i
+NEXT
+PRINT "tamam"

@@ -1,6 +1,8 @@
 param(
     [ValidateSet('auto','std','libuv','tbb','full')][string]$Variant='auto',
-    [string]$Root=''
+    [string]$Root='',
+    [string]$OutputDirectory='',
+    [switch]$SkipPublish
 )
 $ErrorActionPreference='Stop'
 
@@ -72,7 +74,9 @@ function Resolve-TbbFlags([string]$pkgconf,[string]$mingwRoot) {
 $uxb=Find-UxbRoot $Root
 $src=Join-Path $uxb 'native\uxb_runtime'
 $build=Join-Path $src 'build'
+if ($OutputDirectory) { $build=[IO.Path]::GetFullPath($OutputDirectory) }
 $reports=Join-Path $uxb 'reports\libraries\logs'
+if ($SkipPublish) { $reports=$build }
 New-Item -ItemType Directory -Force $build,$reports | Out-Null
 
 $gxx=First-Command @($env:UXB_GXX,$env:CXX,'C:\msys64\ucrt64\bin\x86_64-w64-mingw32-g++.exe','C:\msys64\ucrt64\bin\g++.exe','g++.exe')
@@ -115,6 +119,16 @@ if ((Pe-Machine $out) -ne 'x64') { throw 'uxb_runtime.dll x64 degil' }
 
 $variantCopy=Join-Path $build ("uxb_runtime_{0}.dll" -f $Variant)
 Copy-Item -Force $out $variantCopy
+if ($SkipPublish) {
+    foreach ($dep in @('libwinpthread-1.dll','libuv-1.dll','libtbb12.dll','libgcc_s_seh-1.dll','libstdc++-6.dll')) {
+        $depSource=Join-Path $gxxBin $dep
+        if (Test-Path -LiteralPath $depSource) { Copy-Item -LiteralPath $depSource -Destination (Join-Path $build $dep) -Force }
+    }
+    @{schema='uxb.runtime_build.v2';status='PASS';variant=$Variant;libuv=$useUv;tbb=$useTbb;dll=$out;machine='x64';published=$false;log=$log} |
+        ConvertTo-Json | Set-Content (Join-Path $build 'build_result.json') -Encoding UTF8
+    Write-Host "OK: isolated runtime=$out"
+    exit 0
+}
 foreach ($dir in @('dist\runtime_ext','dist\libraries\bin','bin')) {
     $d=Join-Path $uxb $dir
     New-Item -ItemType Directory -Force $d | Out-Null

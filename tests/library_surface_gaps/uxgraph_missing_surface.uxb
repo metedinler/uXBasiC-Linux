@@ -1,0 +1,29 @@
+INCLUDE "include/modules/uxgraph.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxgraph.AddVertex(0)
+        PRINT uxgraph.AddVertices(0, 0)
+        PRINT uxgraph.BFSDistances(0, 0)
+        PRINT uxgraph.DegreeVector(0, 0)
+        PRINT uxgraph.Density(0)
+        PRINT uxgraph.HasEdge(0, 0, 0)
+        PRINT uxgraph.InDegree(0, 0)
+        PRINT uxgraph.IsConnected(0)
+        PRINT uxgraph.IsDirected(0)
+        PRINT uxgraph.MakeComplete(0, 0)
+        PRINT uxgraph.MakeCycle(0, 0)
+        PRINT uxgraph.MakePath(0, 0)
+        PRINT uxgraph.OutDegree(0, 0)
+        PRINT uxgraph.PathExists(0, 0, 0)
+        PRINT uxgraph.ReadEdgeListCSV("", 0)
+        PRINT uxgraph.SelfLoops(0)
+        PRINT uxgraph.Transitivity(0)
+        PRINT uxgraph.TriangleCount(0)
+        PRINT uxgraph.VecCount(0)
+        uxgraph.VecFree(0)
+        PRINT uxgraph.VecGet(0, 0)
+        PRINT uxgraph.WriteEdgeListCSV(0, "")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXGRAPH"
+END MAIN

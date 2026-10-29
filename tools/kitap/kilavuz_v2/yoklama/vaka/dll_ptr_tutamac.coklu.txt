@@ -1,0 +1,12 @@
+DLL PTR donusu yazdirma
+DIM h AS PTR
+h = CALL(DLL, "uxstats.dll", "uxstats_vec_create", PTR, CDECL, "I32", 4)
+PRINT h <> 0
+PRINT h
+CALL(DLL, "uxstats.dll", "uxstats_vec_free", VOID, CDECL, "PTR", h)
+=====
+DLL PTR ile PEEKB
+DIM h AS PTR
+h = CALL(DLL, "uxstats.dll", "uxstats_vec_create", PTR, CDECL, "I32", 4)
+PRINT PEEKB(h)
+CALL(DLL, "uxstats.dll", "uxstats_vec_free", VOID, CDECL, "PTR", h)

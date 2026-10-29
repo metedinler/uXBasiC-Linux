@@ -3,6 +3,7 @@
 
 #include once "runtime_value.fbs"
 #include once "runtime_error_codes.fbs"
+#include once "../common/console_cursor.fbs"
 
 Const UXB_RT_OUT_JSON As String = "JSON"
 Const UXB_RT_OUT_BUFFER As String = "BUFFER"
@@ -39,6 +40,8 @@ Type UXBRuntimeContext
     ' correctly with anything that writes to the console directly (FFI/DLL
     ' calls, the error text). 0 = only collected (BOTH-mode compare, tests).
     liveEcho As Integer
+    printColumnPos As Integer
+    cursorRow As Integer
     outputEvents(Any) As UXBRuntimeOutputEvent
     outputEventCount As Integer
     outputEventCap As Integer
@@ -61,6 +64,8 @@ Sub UXBRuntimeContextInit(ByRef rt As UXBRuntimeContext, ByVal targetText As Str
     rt.hostText = ""
     rt.outputMode = UXB_RT_OUT_JSON
     rt.liveEcho = 0
+    rt.printColumnPos = 0
+    rt.cursorRow = 1
     rt.outputEventCount = 0
     rt.outputEventCap = 0
     rt.handleCount = 0
@@ -120,6 +125,7 @@ Sub UXBRuntimeOutputEventAdd(ByRef rt As UXBRuntimeContext, ByVal channelText As
 End Sub
 
 Sub UXBRuntimeWriteOutput(ByRef rt As UXBRuntimeContext, ByVal textValue As String, ByVal serviceText As String = "RT_PRINT")
+    UXBConsoleAdvance textValue, rt.cursorRow, rt.printColumnPos
     UXBRuntimeOutputEventAdd rt, rt.outputMode, textValue, serviceText
     rt.stdoutText &= textValue
     If rt.liveEcho <> 0 Then Print textValue;
@@ -171,6 +177,23 @@ Function UXBRuntimeFindHandle(ByRef rt As UXBRuntimeContext, ByVal id As Integer
     Next i
     Return 0
 End Function
+
+' S-623: program bittiginde (normal bitis ya da hata) hala acik kullanici dosya kanallarini kapatir.
+' Yorumlayicinin kendi gunluk ve rapor yazicilari FreeBASIC'in AYNI dosya numarasi havuzundan (FreeFile)
+' numara ister; 255 kanalin hepsi acikken havuz bos kalir (FreeFile = 0) ve basarili bir MIR programi bile
+' "UXB_DIAGNOSTIC_LOG_WRITE_FAILED" ile 22 koduyla biterdi. Kanallar surec cikisinda zaten kapanir; veriler
+' ayni sekilde yazilir (Close tamponlari bosaltir), yalnizca sirasi rapor yazimindan ONCEYE alinir.
+Sub UXBRuntimeFileCloseAll(ByRef rt As UXBRuntimeContext)
+    Dim closeIdx As Integer
+    Dim closeFileNo As Integer
+    For closeIdx = 0 To rt.handleCount - 1
+        If rt.handles(closeIdx).handleKind = "FILE" And rt.handles(closeIdx).active <> 0 And rt.handles(closeIdx).fileNo > 0 Then
+            closeFileNo = rt.handles(closeIdx).fileNo
+            Close #closeFileNo
+            rt.handles(closeIdx).active = 0
+        End If
+    Next closeIdx
+End Sub
 
 Function UXBRuntimeOutputEventsToJson(ByRef rt As UXBRuntimeContext) As String
     Dim q As String = Chr(34)

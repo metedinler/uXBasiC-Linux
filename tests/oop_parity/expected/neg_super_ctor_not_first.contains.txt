@@ -1,0 +1,6 @@
+AST=only allowed as the first statement of a CONSTRUCTOR
+MIR=only allowed as the first statement of a CONSTRUCTOR
+x64=only allowed as the first statement of a CONSTRUCTOR
+AST-x64=only allowed as the first statement of a CONSTRUCTOR
+JS=only allowed as the first statement of a CONSTRUCTOR
+WASM=only allowed as the first statement of a CONSTRUCTOR

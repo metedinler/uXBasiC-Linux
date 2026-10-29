@@ -1,0 +1,9 @@
+DIM I AS I32
+DIM S AS I32
+FOR I = 1 TO 5
+    S = S + I
+NEXT I
+WHILE S < 20
+    S = S + 1
+WEND
+PRINT S

@@ -1,0 +1,29 @@
+STRUCT Vec2 ABI C
+    x AS F32
+    y AS F32
+END STRUCT
+
+UNION NumberBits ABI C
+    asU64 AS U64
+    asF64 AS F64
+END UNION
+
+STRUCT PackedHeader ABI C PACK 1
+    tag AS U8
+    value AS U32
+END STRUCT
+
+STRUCT AlignedValue ABI C ALIGN 16
+    value AS F64
+END STRUCT
+
+PRINT "VEC2_SIZE="; SIZEOF(Vec2)
+PRINT "VEC2_X="; OFFSETOF(Vec2, "x")
+PRINT "VEC2_Y="; OFFSETOF(Vec2, "y")
+PRINT "UNION_SIZE="; SIZEOF(NumberBits)
+PRINT "UNION_U64="; OFFSETOF(NumberBits, "asU64")
+PRINT "UNION_F64="; OFFSETOF(NumberBits, "asF64")
+PRINT "PACKED_SIZE="; SIZEOF(PackedHeader)
+PRINT "PACKED_TAG="; OFFSETOF(PackedHeader, "tag")
+PRINT "PACKED_VALUE="; OFFSETOF(PackedHeader, "value")
+PRINT "ALIGNED_SIZE="; SIZEOF(AlignedValue)

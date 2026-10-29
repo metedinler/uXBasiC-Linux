@@ -1,0 +1,13 @@
+THREAD ThreadId(started AS I64) AS U32
+    UNSAFE
+        CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", started)
+        RETURN CALL(DLL, "kernel32.dll", "GetCurrentThreadId", U32)
+    END UNSAFE
+END THREAD
+DIM mainId AS U32 = CALL(DLL, "kernel32.dll", "GetCurrentThreadId", U32)
+DIM started AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM t AS TASK OF U32 = SPAWN ThreadId(started)
+PRINT CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", started, 2000)
+PRINT t.JOIN() <> mainId
+PRINT CALL(DLL, "uxb_runtime.dll", "__uxb_rt_task_worker_count", I64)
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", started)

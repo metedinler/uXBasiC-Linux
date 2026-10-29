@@ -1,0 +1,68 @@
+' ============================================================================
+' uXBasic Yama Paketi 1 -- Katman B: QB/FB uyum kutuphanesi (qb_compat.ppc)
+' ----------------------------------------------------------------------------
+' Kullanim:
+'   %%INCLUDE "qb_compat.ppc"
+' Kapsam (hepsi src2710 kaynak taramasina dayanir, hicbir derleyici degisikligi
+' gerektirmez; %%MACRO govdesi tek satirdir -- preprocess_engine.fbs:213-260):
+'   QSWAP(a,b)   iki degiskenin degerini degistirir (S-167 BYREF gerekmez)
+'   QSLEEP(s)    s saniye bekler (TIMER gun-ici saniye: uxb_clock.fbs:28-48)
+'   QDATA(n,v)   n. kova yuvasina v degerini yazar
+'   QREAD(v)     siradaki kova degerini v'ye okur, imleci ilerletir
+'   QRESTORE     kova imlecini 1'e alir
+'   QSEEK(n)     kova imlecini n'e alir
+'   QLOCATE(r,c) LOCATE yapar ve imlec izini gunceller
+'   QCSR, QPOS   izlenen imlec satiri / kolonu (yalniz QLOCATE izler)
+'   TimeText()   "ss:dd:ss" (TIMER gun-ici saniyeden turetilir)
+'   DateText()   "YYYY-AA-GG" (yalniz X64; SHELL OUTVAR/CODEVAR ile)
+'   MidReplace(s,ba,uz,d)  MID atama deyiminin fonksiyon karsiligi
+' SINIRLAR: QSWAP/QSLEEP/QREAD makrolari ':' ayiracli cok deyimli govdeye
+' sahiptir; TEK SATIR IF ... THEN icinde KULLANMAYIN (S-083 tek satir IF
+' yalniz bir deyim alir). Blok IF kullanin. QREAD/QDATA once
+' DIM __uxb_data(QBDATA_MAX) AS STRING : __uxb_data_i = 1 kurulumunu ister.
+' QLOCATE izi PRINT ile ilerlemez; yalnizca QLOCATE cagrilari izi tazeler.
+' ============================================================================
+
+%%MACRO QSWAP(A,B) __uxb_swapt = A : A = B : B = __uxb_swapt
+%%MACRO QSLEEP(S) __uxb_sleept = TIMER() : DO : LOOP WHILE (TIMER() - __uxb_sleept) < S
+%%MACRO QDATA(N,V) __uxb_data(N) = V
+%%MACRO QREAD(V) V = __uxb_data(__uxb_data_i) : __uxb_data_i = __uxb_data_i + 1
+%%MACRO QRESTORE __uxb_data_i = 1
+%%MACRO QSEEK(N) __uxb_data_i = N
+%%MACRO QLOCATE(R,C) LOCATE R, C : __uxb_csr_r = R : __uxb_csr_c = C
+%%DEFINE QBDATA_MAX 512
+
+FUNCTION TimeText() AS STRING
+  DIM tt AS I32
+  DIM hh AS I32
+  DIM mm AS I32
+  DIM ss AS I32
+  tt = TIMER()
+  hh = tt \ 3600
+  mm = (tt MOD 3600) \ 60
+  ss = tt MOD 60
+  RETURN Qpad2(hh) + ":" + Qpad2(mm) + ":" + Qpad2(ss)
+END FUNCTION
+FUNCTION Qpad2(n AS I32) AS STRING
+  IF n < 0 THEN n = 0
+  IF n > 99 THEN n = 99
+  IF n < 10 THEN
+    RETURN "0" + LTRIM(STR(n))
+  END IF
+  RETURN LTRIM(STR(n))
+END FUNCTION
+FUNCTION DateText() AS STRING
+  DIM dt AS STRING
+  DIM dcode AS I32
+  SHELL "cmd /c date /t" OUTVAR dt CODEVAR dcode
+  IF dcode <> 0 THEN
+    SHELL "date +%Y-%m-%d" OUTVAR dt CODEVAR dcode
+  END IF
+  RETURN TRIM(dt)
+END FUNCTION
+FUNCTION MidReplace(s AS STRING, ba AS I32, uz AS I32, d AS STRING) AS STRING
+  IF ba < 1 THEN ba = 1
+  IF uz < 0 THEN uz = 0
+  IF ba > LEN(s) THEN RETURN s
+  RETURN LEFT(s, ba - 1) + d + RIGHT(s, LEN(s) - (ba + uz) + 1)
+END FUNCTION

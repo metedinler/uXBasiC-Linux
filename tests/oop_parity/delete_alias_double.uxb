@@ -1,0 +1,21 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT 7
+    END DESTRUCTOR
+    SUB Say()
+        PRINT v
+    END SUB
+END CLASS
+
+' S-574 / S-473: DELETE empties only the variable it names. Another variable that still holds the same object is a dead alias: deleting
+' through it again does nothing (the destructor already ran once).
+DIM a AS Kutu = NEW Kutu(3)
+DIM b AS Kutu = a
+DELETE a
+DELETE b
+PRINT 9

@@ -1,0 +1,13 @@
+[
+ {"ad": "POKE PEEK 4 bayt", "kod": "POKE 100, 305419896\nPRINT PEEK(100)\nPRINT PEEKD(100)\nPRINT PEEKB(100)", "beklenen": ["305419896", "305419896", "120"]},
+ {"ad": "POKES PEEKS metin", "kod": "POKES 200, \"abc\"\nPRINT PEEKS(200, 3)", "beklenen": "abc", "yoksay": ["JS"]},
+ {"ad": "PEEKW", "kod": "POKEW 300, 4660\nPRINT PEEKW(300)\nPRINT PEEKB(300)", "beklenen": ["4660", "52"]},
+ {"ad": "MEMCOPY adet eleman sayisi", "kod": "POKED 400, 1\nPOKED 404, 2\nPOKED 408, 3\nMEMCOPYD 500, 400, 3\nPRINT PEEKD(500) + PEEKD(504) + PEEKD(508)", "beklenen": "6"},
+ {"ad": "MEMFILLB", "kod": "MEMFILLB 600, 7, 4\nPRINT PEEKB(600) + PEEKB(603)\nPRINT PEEKB(604)", "beklenen": ["14", "0"]},
+ {"ad": "VARPTR SADD", "kod": "DIM s AS STRING = \"hi\"\nDIM p AS PTR\np = SADD(s)\nPRINT PEEKB(p)", "beklenen": "104", "yoksay": ["JS"]},
+ {"ad": "PTR farki I64", "kod": "DIM a(3) AS I32\nDIM p AS PTR\nDIM q AS PTR\np = VARPTR(a(0))\nq = VARPTR(a(2))\nPRINT q - p", "beklenen": "8", "yoksay": ["JS"]},
+ {"ad": "PTR + PTR hata", "kod": "DIM a(3) AS I32\nDIM p AS PTR\nDIM q AS PTR\np = VARPTR(a(0))\nq = VARPTR(a(2))\nDIM r AS PTR\nr = p + q\nPRINT 1", "beklenen": "HATA", "yoksay": ["JS"]},
+ {"ad": "OFFSETOF", "kod": "TYPE T\n    a AS I32\n    b AS I64\nEND TYPE\nPRINT OFFSETOF(T, \"b\")", "beklenen": "8", "yoksay": ["JS"]},
+ {"ad": "SIZEOF tip adi", "kod": "PRINT SIZEOF(I8); SIZEOF(I16); SIZEOF(I32); SIZEOF(I64); SIZEOF(PTR)", "beklenen": "12488"},
+ {"ad": "INC DEC", "kod": "DIM x AS I32 = 5\nINC x\nINC x\nDEC x\nPRINT x", "beklenen": "6"}
+]

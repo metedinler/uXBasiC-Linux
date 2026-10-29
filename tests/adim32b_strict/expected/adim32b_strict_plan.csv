@@ -1,0 +1,12 @@
+test_id,polarity,source,step,expected_exit,note
+TYPE_CLASS_LAYOUT_STRICT,positive,tests/adim32b_strict/positive/01_type_class_layout_strict.bas,SEM,0,class field resolution must pass sem
+BAD_CLASS_FIELD_NEG,negative,tests/adim32b_strict/negative/02_bad_class_field_neg.bas,SEM,1,unknown class field must fail sem
+BAD_ASSIGN_TYPE_NEG,negative,tests/adim32b_strict/negative/03_bad_assign_type_neg.bas,SEM,1,string to i32 field must fail
+EVENT_SLOT_STRICT_POS,positive,tests/adim32b_strict/positive/04_event_slot_strict_pos.bas,SEM,0,event/slot canonical should pass sem
+EVENT_SLOT_STRICT_NEG_UNKNOWN,negative,tests/adim32b_strict/negative/05_event_slot_unknown_neg.bas,SEM,1,unknown worker should fail
+EVENT_SLOT_STRICT_NEG_RANGE,negative,tests/adim32b_strict/negative/06_event_slot_range_neg.bas,SEM,1,slot byte range should fail
+CALL_DLL_AST_STRICT_AST,positive,tests/adim32b_strict/positive/07_call_dll_ast_strict.bas,AST,0,call dll/api ast contract pass
+CALL_DLL_AST_STRICT_JS_NEG,negative,tests/adim32b_strict/positive/07_call_dll_ast_strict.bas,NEG_NATIVE_JS,1,js target must fail native-only
+CALL_DLL_AST_STRICT_WASM_NEG,negative,tests/adim32b_strict/positive/07_call_dll_ast_strict.bas,NEG_NATIVE_WASM,1,wasm target must fail native-only
+FILE_PRINT_STRICT_PARSE,positive,tests/adim32b_strict/positive/08_file_print_strict.bas,PAR,0,print# parse route exists
+FILE_PRINT_STRICT_RUNTIME,positive,tests/adim32b_strict/positive/08_file_print_strict.bas,INTERP_AST,0,print# runtime route must execute

@@ -58,6 +58,7 @@ Function UXBMIRInterpBuiltinOpcodeFromCall(ByRef ins As UXBMIRInstructionRecord)
     Case "SGN": Return "MIR_SGN"
     Case "SIN": Return "MIR_SIN"
     Case "SPACE", "SPACE$": Return "MIR_SPACE"
+    Case "STRING": Return "MIR_STRING_REPEAT"
     Case "SQR", "SQRT": Return "MIR_SQRT"
     Case "STR", "STR$": Return "MIR_STR"
     Case "TAN": Return "MIR_TAN"
@@ -163,6 +164,21 @@ Function UXBMIRInterpExecBuiltin(ByRef ins As UXBMIRInstructionRecord, ByRef ctx
         Dim n As Integer = CInt(UXBMIRBuiltinAsInt(a))
         If n < 0 Then n = 0
         Return UXBInterpValueString(Space(n))
+    Case "MIR_STRING_REPEAT"
+        If ins.operandCount - argShift <> 2 Then Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "STRING expects 2 arguments")
+        Dim repeatCount As LongInt = UXBMIRBuiltinAsInt(a)
+        If repeatCount < 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "STRING count must be >= 0")
+        If repeatCount > 65535 Then Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "STRING count too large")
+        Dim repeatCode As LongInt
+        If b.kind = UXB_VAL_STRING Or b.kind = UXB_VAL_WSTRING Then
+            Dim repeatText As String = UXBInterpValueToString(b)
+            If Len(repeatText) = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "STRING char arg empty")
+            repeatCode = Asc(Left(repeatText, 1))
+        Else
+            repeatCode = UXBMIRBuiltinAsInt(b)
+        End If
+        If repeatCode < 0 Or repeatCode > 255 Then Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "STRING char code range error")
+        Return UXBInterpValueString(String(CInt(repeatCount), CInt(repeatCode)))
     Case "MIR_INSTR"
         Dim startPos As Integer = 1
         Dim hay As String

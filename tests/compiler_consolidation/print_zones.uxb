@@ -1,0 +1,5 @@
+PRINT 1, 2, 3
+PRINT "abcdefghijklmn", "x"
+PRINT "a";
+PRINT "b", "c"
+PRINT "d"

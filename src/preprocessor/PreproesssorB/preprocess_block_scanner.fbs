@@ -34,7 +34,6 @@ Private Function UXBPreBlockTarget(ByRef beginHead As String) As String
     Case "JSON_ARRAY_BEGIN": Return "JSON_ARRAY"
     Case "MD_BEGIN": Return "MD"
     Case "TEMPLATE_BEGIN": Return "TEMPLATE"
-    Case "SECTION": Return "SECTION"
     Case "GEN_BLOCK": Return "GEN"
     Case Else: Return ""
     End Select
@@ -52,10 +51,22 @@ Private Function UXBPreBlockEndHead(ByRef beginHead As String) As String
     Case "JSON_ARRAY_BEGIN": Return "JSON_ARRAY_END"
     Case "MD_BEGIN": Return "MD_END"
     Case "TEMPLATE_BEGIN": Return "TEMPLATE_END"
-    Case "SECTION": Return "ENDSECTION"
     Case "GEN_BLOCK": Return "GEN_END"
     Case Else: Return ""
     End Select
+End Function
+
+Function UXBPreIsBlockEndDirective(ByRef headText As String) As Integer
+    Dim h As String = UCase(Trim(headText))
+    Dim beginHead As String
+    Select Case h
+    Case "GEN_END": beginHead = "GEN_BLOCK"
+    Case Else
+        If Right(h, 4) <> "_END" Then Return 0
+        beginHead = Left(h, Len(h) - 4) & "_BEGIN"
+    End Select
+    ' Derive recognition from the same begin/end table used by the scanner.
+    Return IIf(UXBPreBlockEndHead(beginHead) = h, 1, 0)
 End Function
 
 Private Function UXBPreDefaultSection(ByRef targetText As String) As String
@@ -68,7 +79,6 @@ Private Function UXBPreDefaultSection(ByRef targetText As String) As String
     Case "JSON", "JSON_ARRAY": Return "RAW"
     Case "MD": Return "RAW"
     Case "TEMPLATE": Return "RAW"
-    Case "SECTION": Return "RAW"
     Case Else: Return "DEFAULT"
     End Select
 End Function
@@ -78,10 +88,9 @@ Private Function UXBPreLooksLikeSection(ByRef targetText As String, ByRef argTex
     u = UCase(Trim(UXBPreStripQuotes(argText)))
     If u = "" Then Return 0
     Select Case u
-    Case "HEAD", "BODY", "RUNTIME", "IMPORTS", "MAIN_PRE", "RAW", "DEFAULT", "MODULE", "BOOT", "AFTER_LOAD"
+    Case "HEAD", "BODY", "RUNTIME", "IMPORTS", "MAIN_PRE", "RAW", "DEFAULT", "MODULE", "BOOT", "AFTER_LOAD", "GATED"
         Return 1
     End Select
-    If UCase(Trim(targetText)) = "SECTION" Then Return 1
     Return 0
 End Function
 
@@ -108,17 +117,23 @@ Private Function UXBPreTakeArg(ByRef textIn As String, ByRef argOut As String, B
     Return IIf(argOut <> "", 1, 0)
 End Function
 
-Private Sub UXBPreParseBlockArgs(ByRef targetText As String, ByRef restText As String, ByRef sectionOut As String, ByRef outFileRawOut As String)
+Private Sub UXBPreParseBlockArgs(ByRef targetText As String, ByRef restText As String, ByRef sectionOut As String, ByRef outFileRawOut As String, ByRef sectionExplicitOut As Integer)
     Dim arg As String
     arg = Trim(restText)
     sectionOut = UXBPreDefaultSection(targetText)
     outFileRawOut = ""
+    sectionExplicitOut = 0
     If arg = "" Then Exit Sub
 
     Dim firstArg As String, tail As String, secondArg As String, tail2 As String, thirdArg As String, tail3 As String
     If UXBPreTakeArg(arg, firstArg, tail) = 0 Then Exit Sub
     If tail = "" Then
-        If UXBPreLooksLikeSection(targetText, firstArg) <> 0 Then sectionOut = UCase(firstArg) Else outFileRawOut = firstArg
+        If UXBPreLooksLikeSection(targetText, firstArg) <> 0 Then
+            sectionOut = UCase(firstArg)
+            sectionExplicitOut = 1
+        Else
+            outFileRawOut = firstArg
+        End If
         Exit Sub
     End If
     If UXBPreTakeArg(tail, secondArg, tail2) = 0 Then Exit Sub
@@ -126,9 +141,9 @@ Private Sub UXBPreParseBlockArgs(ByRef targetText As String, ByRef restText As S
         If UXBPreTakeArg(tail2, thirdArg, tail3) = 0 Or tail3 <> "" Then Exit Sub
         ' Explicit marker form: file SECTION name, or SECTION name file.
         If UCase(firstArg) = "SECTION" Then
-            sectionOut = UCase(secondArg): outFileRawOut = thirdArg
+            sectionOut = UCase(secondArg): outFileRawOut = thirdArg: sectionExplicitOut = 1
         ElseIf UCase(secondArg) = "SECTION" Then
-            outFileRawOut = firstArg: sectionOut = UCase(thirdArg)
+            outFileRawOut = firstArg: sectionOut = UCase(thirdArg): sectionExplicitOut = 1
         Else
             Exit Sub
         End If
@@ -136,6 +151,7 @@ Private Sub UXBPreParseBlockArgs(ByRef targetText As String, ByRef restText As S
     End If
     ' Canonical two-argument form: %%GEN_BLOCK "file" SECTION.
     ' Also accept SECTION "file" for compatibility with early B examples.
+    sectionExplicitOut = 1
     If UXBPreLooksLikeSection(targetText, firstArg) <> 0 Or InStr(secondArg, "/") > 0 Or InStr(secondArg, "\\") > 0 Or InStr(secondArg, ".") > 0 Then
         ' SECTION "file" and arbitrary section "file" compatibility forms.
         If InStr(firstArg, "/") > 0 Or InStr(firstArg, "\\") > 0 Or InStr(firstArg, ".") > 0 Then
@@ -148,11 +164,17 @@ Private Sub UXBPreParseBlockArgs(ByRef targetText As String, ByRef restText As S
     End If
 End Sub
 
-Private Function UXBPreBlockRawAllowed(ByRef targetText As String, ByRef r As PreprocessResult, ByRef errOut As String) As Integer
+Private Function UXBPreBlockRawAllowed(ByRef targetText As String, ByRef sectionText As String, ByRef r As PreprocessResult, ByRef errOut As String) As Integer
     errOut = ""
     Select Case UCase(Trim(targetText))
     Case "JS", "WASM_HOST_JS"
         If r.allowRawJs = 0 Then
+            ' Preserve the old engine's controlled JS runtime/target policy.
+            If UCase(targetText) = "JS" And (sectionText = "RUNTIME" Or sectionText = "GATED") Then
+                Select Case UCase(Trim(r.targetText))
+                Case "WEB", "BROWSER", "JS", "JAVASCRIPT": Return 1
+                End Select
+            End If
             errOut = "RAW_JS_PAYLOAD_NOT_ALLOWED_FOR_TARGET"
             Return 0
         End If
@@ -165,37 +187,12 @@ Private Function UXBPreBlockRawAllowed(ByRef targetText As String, ByRef r As Pr
     Return 1
 End Function
 
-Function UXBPreTryScanKnownBlock(ByRef src As String, ByRef cursor As Integer, ByRef lineNo As Integer, ByRef head As String, ByRef restText As String, ByRef sourcePath As String, ByRef result As PreprocessResult) As Integer
-    Dim targetText As String
-    targetText = UXBPreBlockTarget(head)
-    If targetText = "" Then Return 0
-
-    Dim rawErr As String
-    If UXBPreBlockRawAllowed(targetText, result, rawErr) = 0 Then
-        PreprocessResultAddDiagnostic result, rawErr & " at " & sourcePath & ":" & LTrim(Str(lineNo))
-        Return -1
-    End If
-
-    Dim endHead As String
-    endHead = UXBPreBlockEndHead(head)
-    If endHead = "" Then Return 0
-
-    Dim sectionText As String
-    Dim outFileRaw As String
-    UXBPreParseBlockArgs targetText, restText, sectionText, outFileRaw
-
-    Dim outFile As String
-    If UXBPreNormalizeBlockOutFile(targetText, outFileRaw, sourcePath, lineNo, result, outFile) = 0 Then Return -1
-
-    Dim payload As String
-    payload = ""
-    Dim startLine As Integer
-    startLine = lineNo
-    Dim endLine As Integer
-    endLine = lineNo
-    Dim foundEnd As Integer
+' Reads the raw lines of a block up to its end directive. cursor/lineNo end after the end line.
+' payloadOut is the text between the begin and end lines; foundEnd = 0 when the end directive is missing.
+Private Sub UXBPreCaptureBlockPayload(ByRef src As String, ByRef cursor As Integer, ByRef lineNo As Integer, ByRef endHead As String, ByRef payloadOut As String, ByRef endLineOut As Integer, ByRef foundEnd As Integer)
+    payloadOut = ""
+    endLineOut = lineNo
     foundEnd = 0
-
     Do While cursor <= Len(src)
         Dim lfPos As Integer
         lfPos = InStr(cursor, src, Chr(10))
@@ -209,7 +206,7 @@ Function UXBPreTryScanKnownBlock(ByRef src As String, ByRef cursor As Integer, B
         End If
         If Right(rawLine, 1) = Chr(13) Then rawLine = Left(rawLine, Len(rawLine) - 1)
         lineNo += 1
-        endLine = lineNo
+        endLineOut = lineNo
 
         Dim trimLine As String
         trimLine = LTrim(rawLine)
@@ -224,14 +221,83 @@ Function UXBPreTryScanKnownBlock(ByRef src As String, ByRef cursor As Integer, B
                 Exit Do
             End If
         End If
-        payload &= rawLine & Chr(10)
+        payloadOut &= rawLine & Chr(10)
     Loop
+End Sub
+
+' %%TEMPLATE_BEGIN name ... %%TEMPLATE_END: the body is stored as a named template (it never reaches the program text).
+Private Function UXBPreScanTemplate(ByRef src As String, ByRef cursor As Integer, ByRef lineNo As Integer, ByRef restText As String, ByRef sourcePath As String, ByRef result As PreprocessResult, ByVal active As Integer) As Integer
+    Dim nameText As String = UXBPreStripQuotes(Trim(restText))
+    Dim startLine As Integer = lineNo
+    Dim ci As Integer
+    Dim nameOk As Integer = IIf(nameText <> "", 1, 0)
+    For ci = 1 To Len(nameText)
+        Dim ch As String = Mid(nameText, ci, 1)
+        If Not ((ch >= "A" And ch <= "Z") Or (ch >= "a" And ch <= "z") Or (ch >= "0" And ch <= "9") Or ch = "_") Then nameOk = 0
+    Next ci
+    If nameOk = 0 Then
+        PreprocessResultAddDiagnostic result, "PREPROCESSOR_TEMPLATE_NAME_INVALID: %%TEMPLATE_BEGIN expects a name (letters, digits, _) at " & sourcePath & ":" & LTrim(Str(lineNo))
+        Return -1
+    End If
+    Dim payload As String, endLine As Integer, foundEnd As Integer
+    UXBPreCaptureBlockPayload src, cursor, lineNo, "TEMPLATE_END", payload, endLine, foundEnd
+    If foundEnd = 0 Then
+        PreprocessResultAddDiagnostic result, "META_BLOCK_END_MISSING: %%TEMPLATE_BEGIN expects %%TEMPLATE_END at " & sourcePath & ":" & LTrim(Str(startLine))
+        Return -1
+    End If
+    If active = 0 Then Return 1
+    If PreprocessResultAddTemplate(result, nameText, payload) = 0 Then
+        PreprocessResultAddDiagnostic result, "PREPROCESSOR_TEMPLATE_LIMIT: too many templates at " & sourcePath & ":" & LTrim(Str(startLine))
+        Return -1
+    End If
+    Return 1
+End Function
+
+Function UXBPreTryScanKnownBlock(ByRef src As String, ByRef cursor As Integer, ByRef lineNo As Integer, ByRef head As String, ByRef restText As String, ByRef sourcePath As String, ByRef result As PreprocessResult, ByVal active As Integer = 1) As Integer
+    Dim targetText As String
+    targetText = UXBPreBlockTarget(head)
+    If targetText = "" Then Return 0
+
+    Dim endHead As String
+    endHead = UXBPreBlockEndHead(head)
+    If endHead = "" Then Return 0
+
+    If targetText = "TEMPLATE" Then Return UXBPreScanTemplate(src, cursor, lineNo, restText, sourcePath, result, active)
+
+    Dim sectionText As String
+    Dim outFileRaw As String
+    Dim sectionExplicit As Integer
+    UXBPreParseBlockArgs targetText, restText, sectionText, outFileRaw, sectionExplicit
+    ' %%SECTION name ... %%ENDSECTION: a block without an explicit section takes the current one.
+    If active <> 0 And sectionExplicit = 0 Then
+        Dim currentSection As String = PreprocessResultCurrentSection(result)
+        If currentSection <> "" Then sectionText = currentSection
+    End If
+
+    Dim rawErr As String
+    If active <> 0 AndAlso UXBPreBlockRawAllowed(targetText, sectionText, result, rawErr) = 0 Then
+        PreprocessResultAddDiagnostic result, rawErr & " at " & sourcePath & ":" & LTrim(Str(lineNo))
+        Return -1
+    End If
+
+    Dim outFile As String
+    If active <> 0 Then
+        If UXBPreNormalizeBlockOutFile(targetText, outFileRaw, sourcePath, lineNo, result, outFile) = 0 Then Return -1
+    End If
+
+    Dim payload As String
+    Dim startLine As Integer
+    startLine = lineNo
+    Dim endLine As Integer
+    Dim foundEnd As Integer
+    UXBPreCaptureBlockPayload src, cursor, lineNo, endHead, payload, endLine, foundEnd
 
     If foundEnd = 0 Then
         PreprocessResultAddDiagnostic result, "META_BLOCK_END_MISSING: %%" & UCase(head) & " expects %%" & endHead & " at " & sourcePath & ":" & LTrim(Str(startLine))
         Return -1
     End If
 
+    If active = 0 Then Return 1
     PreprocessResultAddBlock result, targetText, sectionText, outFile, payload, sourcePath, startLine, endLine
     PreprocessResultAddManifest result, "files." & LCase(targetText) & ".out", outFile
     Return 1

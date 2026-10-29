@@ -1,0 +1,17 @@
+' S-651: birim ozellikli TIMER bicimleri altı yolda ayni sade F64 aritmetigidir:
+'   TIMER("birim") = TIMER * olcek        TIMER(baslangic, bitis, "birim") = (bitis - baslangic) * olcek
+' Birimler: ns us ms s min h day year. Program deterministiktir: TIMER'in kendisini degil iliskilerini yazdirir (-1 = dogru).
+DIM a AS F64 = 120.0
+DIM b AS F64 = 0.0
+PRINT TIMER(b, a, "s") = 120
+PRINT TIMER(b, a, "ms") = 120000
+PRINT TIMER(b, a, "us") = 120000000
+PRINT TIMER(b, a, "ns") = 120000000000.0
+PRINT TIMER(b, a, "min") = 2
+PRINT TIMER(0, 7200, "h") = 2
+PRINT TIMER(0, 172800, "day") = 2
+PRINT TIMER(0, 63072000, "year") = 2
+PRINT TIMER(3, 1, "ms") = -2000
+DIM t AS F64 = TIMER("ms")
+PRINT (t >= 0) AND (t < 86400000)
+PRINT TIMER("S") >= 0

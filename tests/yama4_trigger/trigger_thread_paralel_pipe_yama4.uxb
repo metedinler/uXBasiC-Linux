@@ -1,0 +1,23 @@
+THREAD SensorOku
+    PRINT "THREAD_RUN"
+END THREAD
+
+PARALEL SahaIzleme
+    PRINT "PARALEL_RUN"
+END PARALEL
+
+PIPE Donustur deger AS I32
+    PRINT "PIPE_RUN"
+    PRINT INPUT
+    RETURN deger
+END PIPE
+
+SLOT
+    Isci 6 ON THREAD SensorOku
+    Grup 7 ON PARALEL SahaIzleme
+    Hat  8 ON PIPE Donustur
+END SLOT
+
+TRIGGER SensorOku
+TRIGGER SahaIzleme
+TRIGGER Donustur, 7

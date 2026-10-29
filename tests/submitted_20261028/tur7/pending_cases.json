@@ -1,0 +1,7 @@
+{
+  "s097_param_dynamic": {
+    "original_preserved": true,
+    "adapted_source": "s097_param_dynamic_v2.uxb",
+    "reason": "Provided REDIM lacks required AS I32. V2 syntax preserved; expected runtime value remains 33. Raw26 parse failures retained."
+  }
+}

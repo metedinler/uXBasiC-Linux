@@ -1,0 +1,14 @@
+' S-570 / S-431: after DELETE the variable is NULL; reading it is a clean error on every engine, also when
+' it is not the first object of the program (MIR used to hand back the stale value / another object's field).
+CLASS Box
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM first AS Box = NEW Box()
+first.v = 1
+DIM x AS Box = NEW Box()
+x.v = 3
+DELETE x
+PRINT first.v
+PRINT x.v
+PRINT "unreachable"

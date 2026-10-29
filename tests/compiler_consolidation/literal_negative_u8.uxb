@@ -1,0 +1,2 @@
+DIM value AS U8 = -1
+PRINT value

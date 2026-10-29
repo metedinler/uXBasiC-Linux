@@ -11,7 +11,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-set "EXE=uxb\compiler\wrappers\uxb_main_wrapper_64.exe"
+set "EXE=uxb\bin\uxb.exe"
 if not exist "%EXE%" set "EXE=uxb\build\uxb_main_64.exe"
 if not exist "%EXE%" (
   echo ERROR: compiler executable not found.

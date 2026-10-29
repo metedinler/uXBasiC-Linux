@@ -1,0 +1,10 @@
+{
+  "uxgsl_basic_callback_smoke": {"engines":["AST","MIR","x64","AST-x64"],"output":"UXGSL_BASIC_CALLBACK_SMOKE_PASS","errors":{"AST":"requires native x64","MIR":"requires native x64"}},
+  "uxgsl_basic_root_bisection_smoke": {"engines":["AST","MIR","x64","AST-x64"],"output":"UXGSL_BASIC_ROOT_BISECTION_SMOKE_PASS","errors":{"AST":"requires native x64","MIR":"requires native x64"}},
+  "uxgsl_complex_smoke": {"engines":["AST","MIR","x64","AST-x64"],"output":"UXGSL_COMPLEX_SMOKE_PASS"},
+  "uxgsl_full_abi_smoke": {"engines":["AST","MIR","x64","AST-x64"],"output":"UXGSL_FULL_ABI_SMOKE_PASS"},
+  "uxgsl_generated_scalar_smoke": {"engines":["AST","MIR","x64","AST-x64"],"output":"UXGSL_GENERATED_SCALAR_SMOKE_PASS"},
+  "uxgsl_matrix_smoke": {"engines":["AST","MIR","x64","AST-x64"],"output":"UXGSL_MATRIX_SMOKE_PASS"},
+  "uxgsl_safety_smoke": {"engines":["AST","MIR","x64","AST-x64"],"output":"UXGSL_SAFETY_SMOKE_PASS"},
+  "uxgsl_smoke": {"engines":["AST","MIR","x64","AST-x64"],"output":"UXGSL_UXBASIC_SMOKE_PASS"}
+}

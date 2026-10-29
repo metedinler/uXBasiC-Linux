@@ -1,0 +1,6 @@
+' Türkçe harfler, aynı kodu içeren ASCII adlar ve kaçışın kendisi ayrı kalır.
+DIM bşa AS I32 = 1
+DIM bu015fxa AS I32 = 2
+DIM bu0075x015fxa AS I32 = 3
+DIM bu0075x0075x015fxa AS I32 = 4
+PRINT bşa * 1000 + bu015fxa * 100 + bu0075x015fxa * 10 + bu0075x0075x015fxa

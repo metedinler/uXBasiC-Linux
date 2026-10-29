@@ -1,0 +1,8 @@
+' S-329 koruma: SLOT/TRIGGER adlari yordam cagrisi degildir. (JS/WASM SLOT_DEF eksigi S-339.)
+THREAD Isci
+    PRINT "THREAD_RUN"
+END THREAD
+SLOT
+    Is 8 ON THREAD Isci
+END SLOT
+TRIGGER Isci

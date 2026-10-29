@@ -1,0 +1,12 @@
+DIM text(1 TO 2) AS STRING
+text(1) = "AB" + CHR(0) + "CD"
+REDIM PRESERVE text(0 TO 3) AS STRING
+PRINT LEN(text(0))
+PRINT LEN(text(1))
+PRINT ASC(MID(text(1), 3, 1))
+PRINT LEN(text(2))
+PRINT LEN(text(3))
+REDIM text(0 TO 2) AS STRING
+PRINT LEN(text(0))
+PRINT LEN(text(1))
+PRINT LEN(text(2))

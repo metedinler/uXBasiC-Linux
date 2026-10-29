@@ -1,0 +1,47 @@
+{
+  "program": "uxbasic2pdsxS",
+  "version": "0.2.0",
+  "project": {
+    "out_dir": "/mnt/data/uxbasic2pdsxS_v0_2_work/examples/out_pdsx",
+    "project": "/mnt/data/uxbasic2pdsxS_v0_2_work/examples/out_pdsx/demo.prj",
+    "basx": "/mnt/data/uxbasic2pdsxS_v0_2_work/examples/out_pdsx/basx/main.basx",
+    "build": "/mnt/data/uxbasic2pdsxS_v0_2_work/examples/out_pdsx/build",
+    "reports": "/mnt/data/uxbasic2pdsxS_v0_2_work/examples/out_pdsx/reports",
+    "profiles_dir": "/mnt/data/uxbasic2pdsxS_v0_2_work/examples/out_pdsx/profiles",
+    "headers_dir": "/mnt/data/uxbasic2pdsxS_v0_2_work/examples/out_pdsx/hx"
+  },
+  "summary": {
+    "node_kinds_seen": 7,
+    "nodes_seen_total": 7,
+    "node_kinds_handled": 7,
+    "nodes_handled_total": 7,
+    "unhandled_total": 0,
+    "source_lines_used": 4,
+    "structural_lines_used": 0,
+    "call_dll_api_count": 1,
+    "source_map_entries": 4,
+    "diagnostic_count": 0,
+    "error_count": 0,
+    "warn_count": 0
+  },
+  "node_counts": {
+    "PROGRAM": 1,
+    "DIM_STMT": 1,
+    "ASSIGN_STMT": 1,
+    "IDENT": 1,
+    "NUMBER": 1,
+    "CALL_STMT": 1,
+    "PRINT_STMT": 1
+  },
+  "handled_counts": {
+    "DIM_STMT": 1,
+    "IDENT": 1,
+    "NUMBER": 1,
+    "ASSIGN_STMT": 1,
+    "CALL_STMT": 1,
+    "PRINT_STMT": 1,
+    "PROGRAM": 1
+  },
+  "unhandled_counts": {},
+  "diagnostics": []
+}

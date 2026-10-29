@@ -1,0 +1,20 @@
+CLASS Cocuk
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 5
+    END DESTRUCTOR
+END CLASS
+CLASS Ebeveyn
+    PUBLIC
+    DIM c AS Cocuk
+    DESTRUCTOR()
+        PRINT 7
+        DELETE c
+        PRINT 8
+    END DESTRUCTOR
+END CLASS
+' S-616: DELETE of a DIFFERENT object inside a destructor is ordinary (a parent that releases its child): both destructors run.
+DIM e AS Ebeveyn = NEW Ebeveyn()
+e.c = NEW Cocuk()
+DELETE e
+PRINT 9

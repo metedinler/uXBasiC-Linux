@@ -1,0 +1,2 @@
+%%INCLUDE "92_include_cycle_a.uxb"
+PRINT "B"

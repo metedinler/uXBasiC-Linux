@@ -1,0 +1,12 @@
+DIM n AS I8 = I8(127)
+n++
+PRINT n
+DIM b AS U8 = U8(250)
+DIM i AS I64
+FOR i = 1 TO 10
+ b++
+NEXT
+PRINT b
+DIM u AS U32 = U32(0)
+u--
+PRINT u

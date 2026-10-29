@@ -1,0 +1,10 @@
+{
+  "text_roundtrip":{"engines":["WASM"],"output":"0\n10\n0\n!\nnext\n-1\n1","files":{"ALL":{"roundtrip.txt":{"hex":"c59ec3bc6b72c3bc00210d0a6e6578740d0a"}}}},
+  "append_numeric":{"engines":["WASM"],"output":"12:1.25\ntail\n13\n1","files":{"ALL":{"numbers.txt":{"text":"12:1.25\r\ntail"}}}},
+  "binary_seek":{"engines":["AST","MIR","WASM"],"output":"7\n255\n4660\n-123456\n-1","files":{"ALL":{"bytes.bin":{"hex":"ff3412c01dfeff"}}}},
+  "random_records":{"engines":["AST","MIR","WASM"],"output":"6\n1000\n2000","files":{"ALL":{"records.bin":{"hex":"e8030000d007"}}}},
+  "open_missing":{"engines":["WASM"],"error":"ENOENT","files":{"ALL":{"does_not_exist.txt":{"absent":true}}}},
+  "bad_channel":{"engines":["WASM"],"error":"UXB_WASM_FILE_CHANNEL_RANGE","files":{"ALL":{"bad.txt":{"absent":true}}}},
+  "read_wrong_mode":{"engines":["WASM"],"error":"UXB_WASM_FILE_NOT_READABLE"},
+  "read_past_end":{"engines":["WASM"],"error":"UXB_WASM_FILE_READ_PAST_END"}
+}

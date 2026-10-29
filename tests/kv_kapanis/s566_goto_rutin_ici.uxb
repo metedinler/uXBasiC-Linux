@@ -1,0 +1,16 @@
+' S-566: bir SUB icinde tanimli etikete ayni SUB'dan GOTO (ileri ve geri atlama) altı yolda aynı sonucu verir.
+SUB S()
+    GOTO Son
+    PRINT 1
+Son:
+    PRINT 2
+END SUB
+SUB D()
+    DIM i AS I32 = 0
+Bas:
+    i += 1
+    IF i < 3 THEN GOTO Bas
+    PRINT i
+END SUB
+S()
+D()

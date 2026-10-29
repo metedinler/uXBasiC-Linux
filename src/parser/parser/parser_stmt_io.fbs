@@ -32,8 +32,11 @@ Function ParseOpenStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Integ
         Return -1
     End If
 
+    Dim openHash As Integer
+    openHash = 0
     If MatchOp(ps, "#") Then
-        ' Optional BASIC file-handle marker.
+        ' BASIC file-handle marker: kept as a flag on the channel operand (S-548 / S-549: `AS #n` is an explicit number, `AS handle` lets FILE_HANDLE pick a channel).
+        openHash = 1
     End If
 
     Dim handleExpr As Integer
@@ -42,6 +45,7 @@ Function ParseOpenStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Integ
         ps.lastError = "OPEN: file handle expected"
         Return -1
     End If
+    If openHash <> 0 Then ps.ast.nodes(handleExpr).flags = ps.ast.nodes(handleExpr).flags Or AST_FLAG_FILE_HASH
     ASTAddChild ps.ast, openNode, handleExpr
 
     If MatchKeyword(ps, "LEN") Then
@@ -167,8 +171,11 @@ Function ParseCloseStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Inte
     End If
 
     Do
+        Dim closeHash As Integer
+        closeHash = 0
         If MatchOp(ps, "#") Then
-            ' Optional BASIC file-handle marker.
+            ' BASIC file-handle marker: kept as a flag on the channel operand (S-548 / S-549), see OPEN.
+            closeHash = 1
         End If
 
         Dim handleExpr As Integer
@@ -177,6 +184,7 @@ Function ParseCloseStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Inte
             ps.lastError = "CLOSE: file handle expected"
             Return -1
         End If
+        If closeHash <> 0 Then ps.ast.nodes(handleExpr).flags = ps.ast.nodes(handleExpr).flags Or AST_FLAG_FILE_HASH
 
         ASTAddChild ps.ast, closeNode, handleExpr
 

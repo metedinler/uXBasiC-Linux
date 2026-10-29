@@ -84,7 +84,10 @@ Private Function ExecClassBaseName(ByRef ps As ParseState, ByVal classNode As In
     Dim ch As Integer
     ch = ps.ast.nodes(classNode).firstChild
     Do While ch <> -1
-        If UCase(ps.ast.nodes(ch).kind) = "CLASS_EXTENDS" Then
+        ' The parser and semantic pass store EXTENDS as CLASS_BASE_REF.
+        ' Using CLASS_EXTENDS cut the runtime vtable chain at the leaf and
+        ' lost inherited slots and intermediate overrides (S-336).
+        If UCase(ps.ast.nodes(ch).kind) = "CLASS_BASE_REF" Then
             baseNameOut = UCase(Trim(ps.ast.nodes(ch).value))
             Return IIf(baseNameOut <> "", 1, 0)
         End If
@@ -359,12 +362,12 @@ Private Sub ExecSetVarDeclMeta(ByRef es As ExecState, ByRef nameText As String, 
     idx = ExecEnsureVar(es, nameText)
     If idx = -1 Then Exit Sub
 
-    es.vars(idx).declType = ExecNormalizeTypeName(declType)
-    es.vars(idx).isArray = isArray
-    es.vars(idx).arrayDims = arrayDims
-    es.vars(idx).arrayLower = arrayLower
-    es.vars(idx).arrayUpper = arrayUpper
-    es.vars(idx).arrayBytes = arrayBytes
+    ExecVarAt(es, idx).declType = ExecNormalizeTypeName(declType)
+    ExecVarAt(es, idx).isArray = isArray
+    ExecVarAt(es, idx).arrayDims = arrayDims
+    ExecVarAt(es, idx).arrayLower = arrayLower
+    ExecVarAt(es, idx).arrayUpper = arrayUpper
+    ExecVarAt(es, idx).arrayBytes = arrayBytes
 End Sub
 
 Private Function ExecLabelIndexOf(labelNames() As String, ByVal labelCount As Integer, ByRef needle As String) As Integer
@@ -372,6 +375,20 @@ Private Function ExecLabelIndexOf(labelNames() As String, ByVal labelCount As In
     For i = 0 To labelCount - 1
         If labelNames(i) = needle Then Return i
     Next i
+    Return -1
+End Function
+
+' S-566: bir rutin govdesinin (ayni kardes listesinin) icindeki etiketi bulur; etiket dugumu ya da -1. AST yorumlayicisi
+' yalniz program duzeyi etiketleri biliyordu; bir SUB/FUNCTION icindeki etikete ayni rutinden GOTO "GOTO target not found"
+' ile dusuyordu (MIR, native x64, eski AST-x64, JS ve WASM dogru calisir).
+Private Function ExecFindBodyLabel(ByRef ps As ParseState, ByVal firstBodyNode As Integer, ByRef wantUpper As String) As Integer
+    Dim labelScanNode As Integer = firstBodyNode
+    Do While labelScanNode <> -1
+        If UCase(ps.ast.nodes(labelScanNode).kind) = "LABEL_STMT" Then
+            If UCase(Trim(ps.ast.nodes(labelScanNode).value)) = wantUpper Then Return labelScanNode
+        End If
+        labelScanNode = ps.ast.nodes(labelScanNode).nextSibling
+    Loop
     Return -1
 End Function
 
@@ -693,7 +710,7 @@ Private Function ExecMagicNaturalAliasName(ByRef classNameRaw As String, ByRef m
     For i = 1 To Len(natural)
         Dim ch As String
         ch = Mid(natural, i, 1)
-        If (ch >= "A" And ch <= "Z") Or (ch >= "0" And ch <= "9") Or ch = "_" Then
+        If (ch >= "A" And ch <= "Z") Or (ch >= "0" And ch <= "9") Or ch = "_" Or Asc(ch) >= 128 Then ' S-579: UTF-8 Turkish letters
             Continue For
         End If
         Return 0
@@ -726,13 +743,13 @@ Private Function ExecRegisterRoutineDef(ByRef ps As ParseState, ByRef es As Exec
 
         ' CLASS METHOD declaration and top-level implementation can legally share
         ' the same canonical symbol (e.g. BOX_SETBYTHIS). Prefer implementation.
-        If (existingKind = "CLASS_METHOD_DECL" Or existingKind = "CLASS_OPERATOR_DECL") And newIsImpl <> 0 Then
+        If (existingKind = "CLASS_METHOD_DECL" Or existingKind = "CLASS_OPERATOR_DECL" Or existingKind = "DECLARE_SUB_STMT" Or existingKind = "DECLARE_FUNCTION_STMT") And newIsImpl <> 0 Then
             es.runtime.routineDefs(existingIdx).nodeIdx = nodeIdx
             es.runtime.routineDefs(existingIdx).routineKind = routineKind
             Return 1
         End If
 
-        If existingIsImpl <> 0 And (routineKind = "CLASS_METHOD_DECL" Or routineKind = "CLASS_OPERATOR_DECL") Then
+        If existingIsImpl <> 0 And (routineKind = "CLASS_METHOD_DECL" Or routineKind = "CLASS_OPERATOR_DECL" Or routineKind = "DECLARE_SUB_STMT" Or routineKind = "DECLARE_FUNCTION_STMT") Then
             Return 1
         End If
 

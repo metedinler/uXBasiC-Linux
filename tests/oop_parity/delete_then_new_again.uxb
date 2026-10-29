@@ -1,0 +1,17 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT 7
+    END DESTRUCTOR
+END CLASS
+
+' S-574: the variable can take a new object after DELETE.
+DIM k AS Kutu = NEW Kutu(3)
+DELETE k
+k = NEW Kutu(4)
+PRINT k.v
+DELETE k

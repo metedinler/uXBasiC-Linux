@@ -165,6 +165,14 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
                         errText = "mir: array field layout resolve failed " & arrFieldStoreErr
                         Return 0
                     End If
+                    ' S-617: CLASS elements are references, unlike inline TYPE values.
+                    ' Capture the indexed reference once and use ordinary object field ops.
+                    Dim afClassReceiver As String = ""
+                    If MIRFindClassDeclNode(ps, arrFieldElemType) <> -1 Then
+                        afClassReceiver = MIRNextTemp(tempSeed)
+                        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_INDEXED, afClassReceiver, 2, arrFieldArrName, arrFieldIdxName
+                        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, arrFieldElemType
+                    End If
                     Dim afStoreValue As String
                     afStoreValue = rhsName
                     ' S-134 B6: apply managed COPY to an existing value stored
@@ -176,7 +184,13 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
                         If (afRhsKindCopy = "IDENT" Or afRhsKindCopy = "IDENTIFIER" Or afRhsKindCopy = "FIELD_EXPR") And UXBLibraryTypeNeedsManagedCopy(arrFieldStoreType) <> 0 Then
                             Dim afCopyTmp As String
                             afCopyTmp = MIRNextTemp(tempSeed)
-                            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, afCopyTmp, 2, UCase(Trim(arrFieldStoreType)) & ".COPY", rhsName
+                            Dim afTransferMember As String
+                            afTransferMember = UXBLibraryTypeManagedTransferMember(arrFieldStoreType)
+                            If afTransferMember = "" Then
+                                errText = "mir: managed library type has no transfer member: " & arrFieldStoreType
+                                Return 0
+                            End If
+                            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, afCopyTmp, 2, UCase(Trim(arrFieldStoreType)) & "." & afTransferMember, rhsName
                             MIRSetLastInstructionMetadata module, fnIdx, blkIdx, arrFieldStoreType
                             afStoreValue = afCopyTmp
                         End If
@@ -191,7 +205,11 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
                         ' ONCE above, so pts(i++).X += 1 evaluates i++ a single time.
                         Dim afCurTmp As String
                         afCurTmp = MIRNextTemp(tempSeed)
+                        If afClassReceiver <> "" Then
+                            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_FIELD_LOAD, afCurTmp, 3, afClassReceiver, arrFieldMemberName, LTrim(Str(arrFieldStoreOffset))
+                        Else
                         MIRAppendInstruction module, fnIdx, blkIdx, "MIR_ARRAY_FIELD_LOAD", afCurTmp, 6, arrFieldArrName, arrFieldIdxName, arrFieldMemberName, arrFieldElemType, LTrim(Str(arrFieldStoreOffset)), LTrim(Str(arrFieldStoreSize))
+                        End If
                         MIRSetLastInstructionMetadata module, fnIdx, blkIdx, arrFieldStoreType
                         Dim afRhsKind As Integer
                         afRhsKind = MIRInferExprFloatKind(ps, st.right)
@@ -208,7 +226,12 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
                         MIRAppendInstruction module, fnIdx, blkIdx, afOpcode, afStoreValue, 2, afCurTmp, rhsName
                         MIRSetLastInstructionMetadata module, fnIdx, blkIdx, arrFieldStoreType
                     End If
+                    If afClassReceiver <> "" Then
+                        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_FIELD_STORE, "", 4, afClassReceiver, arrFieldMemberName, afStoreValue, LTrim(Str(arrFieldStoreOffset))
+                        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, arrFieldStoreType
+                    Else
                     MIRAppendInstruction module, fnIdx, blkIdx, "MIR_ARRAY_FIELD_STORE", "", 7, arrFieldArrName, arrFieldIdxName, arrFieldMemberName, afStoreValue, arrFieldElemType, LTrim(Str(arrFieldStoreOffset)), LTrim(Str(arrFieldStoreSize))
+                    End If
                     Return 1
                 End If
             End If
@@ -228,10 +251,25 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
             Return 0
         End If
 
+        If lhsKind = "FIELD_EXPR" Then
+            Dim unionStoreCore As Integer
+            unionStoreCore = MIRTryEmitUnionFieldStore(ps, st.left, assignTarget, rhsName, opText, module, fnIdx, blkIdx, tempSeed, errText)
+            If unionStoreCore = 0 Then Return 0
+            If unionStoreCore > 0 Then Return 1
+        End If
+
         Select Case opText
         Case "="
             If indexedAssign <> 0 Then
-                MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_INDEXED, "", 3, assignTarget, assignIndexName, rhsName
+                Dim indexedStoreName As String
+                indexedStoreName = rhsName
+                Dim indexedElemType As String
+                indexedElemType = MIRArrayElementTypeOf(module, assignTarget)
+                If UCase(Trim(indexedElemType)) <> "" And UXBLibraryTypeNeedsManagedCopy(indexedElemType) <> 0 Then
+                    If MIRPrepareManagedByValArgument(ps, st.right, indexedElemType, module, fnIdx, blkIdx, tempSeed, indexedStoreName, errText) = 0 Then Return 0
+                End If
+                MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_INDEXED, "", 3, assignTarget, assignIndexName, indexedStoreName
+                If UCase(Trim(indexedElemType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, indexedElemType
             Else
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, assignTarget, 1, rhsName
                 ' S-134 B2: assigning an existing managed library value must
@@ -264,6 +302,9 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
         Case "=+"
             If indexedAssign <> 0 Then
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_INDEXED, "", 3, assignTarget, assignIndexName, rhsName
+                Dim indexedEqPlusType As String
+                indexedEqPlusType = MIRArrayElementTypeOf(module, assignTarget)
+                If UCase(Trim(indexedEqPlusType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, indexedEqPlusType
             Else
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, assignTarget, 1, rhsName
             End If
@@ -280,6 +321,9 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
             MIRAppendInstruction module, fnIdx, blkIdx, IIf(rkindNeg <> MIR_UXF_UNKNOWN, MIR_OP_FNEG, MIR_OP_NEG), negTmp, 1, rhsName
             If indexedAssign <> 0 Then
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_INDEXED, "", 3, assignTarget, assignIndexName, negTmp
+                Dim indexedNegType As String
+                indexedNegType = MIRArrayElementTypeOf(module, assignTarget)
+                If UCase(Trim(indexedNegType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, indexedNegType
             Else
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, assignTarget, 1, negTmp
             End If
@@ -330,6 +374,9 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
             If indexedAssign <> 0 Then
                 compoundLhs = MIRNextTemp(tempSeed)
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_INDEXED, compoundLhs, 2, assignTarget, assignIndexName
+                Dim compoundElemType As String
+                compoundElemType = MIRArrayElementTypeOf(module, assignTarget)
+                If UCase(Trim(compoundElemType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, compoundElemType
             End If
 
             compoundTmp = MIRNextTemp(tempSeed)
@@ -342,6 +389,9 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
             End If
             If indexedAssign <> 0 Then
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_INDEXED, "", 3, assignTarget, assignIndexName, compoundTmp
+                Dim compoundStoreElemType As String
+                compoundStoreElemType = MIRArrayElementTypeOf(module, assignTarget)
+                If UCase(Trim(compoundStoreElemType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, compoundStoreElemType
             Else
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, assignTarget, 1, compoundTmp
             End If
@@ -415,8 +465,19 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
                             If MIRLowerExprNode(ps, boundExpr, module, fnIdx, blkIdx, tempSeed, upperName, errText) = 0 Then Return 0
                         End Select
                     End If
-                    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_DIM, "", 5, varName, lowerName, upperName, LTrim(Str(dimElemBytes)), typeName
+                    Dim liveArray As Integer = IIf(MIRFindChildByKind(ps, ch, "CLASS_ARRAY_RUNTIME") >= 0, 1, 0)
+                    If liveArray <> 0 Then
+                        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_DIM, "", 6, varName, lowerName, upperName, LTrim(Str(dimElemBytes)), typeName, "LIVE_DESCRIPTOR"
+                    Else
+                        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_DIM, "", 5, varName, lowerName, upperName, LTrim(Str(dimElemBytes)), typeName
+                    End If
                     MIRRegisterArrayGlobal module, varName, typeName
+                    ' S-711: the array registry carries element-type facts, not
+                    ' storage ownership. Every routine-local DIM array belongs
+                    ' to its invocation, including ordinary scalar/TYPE arrays.
+                    If fnIdx <> 0 Then
+                        MIRAppendFunctionLocal module, fnIdx, varName, "ARRAY"
+                    End If
                 ElseIf boundsNode <> -1 And MIRChildCount(ps, boundsNode) > 1 Then
                     ' Multi-dimensional DIM: flattened to a single 0-based MIR array
                     ' (see mir_lower_array_dim.fbs). Bounds must be compile-time
@@ -429,6 +490,7 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
                     End If
                     MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_DIM, "", 5, varName, "0", LTrim(Str(multiDimTotal - 1)), LTrim(Str(dimElemBytes)), typeName
                     MIRRegisterArrayGlobal module, varName, typeName
+                    If fnIdx <> 0 Then MIRAppendFunctionLocal module, fnIdx, varName, "ARRAY"
                 Else
                     If fnIdx = 0 Then
                         If MIRRegisterGlobal(module, varName, typeName, 0) = 0 Then
@@ -480,6 +542,14 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
                     Else
                         Dim scalarInitTmp As String
                         scalarInitTmp = MIRNextTemp(tempSeed)
+                        ' %%NOZEROVARS ON: the zero start of a declared plain numeric LOCAL gets a marked temp name (MIR_NZV_PREFIX).
+                        ' Every engine still runs it; only the native x64 emitters leave the pair out.
+                        If gLastPreprocessResult.noZeroVars <> 0 And fnIdx <> 0 And typeNode <> -1 Then
+                            Select Case typeName
+                            Case "I8", "I16", "I32", "I64", "U8", "U16", "U32", "U64", "F32", "F64", "BOOLEAN", "BOOL"
+                                scalarInitTmp = "__nzv_" & scalarInitTmp
+                            End Select
+                        End If
                         If typeName = "STRING" Then
                             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_CONST, scalarInitTmp, 1, Chr(34) & Chr(34)
                         Else
@@ -1216,6 +1286,7 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
         Dim incSource As String
         Dim incIndexName As String
         Dim incIndexed As Integer
+        Dim incElemType As String
         incIndexed = 0
 
         If UCase(ps.ast.nodes(st.left).kind) = "IDENT" Then
@@ -1224,12 +1295,14 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
         ElseIf UCase(ps.ast.nodes(st.left).kind) = "FIELD_EXPR" Then
             If MIRBuildFieldPath(ps, st.left, incTarget, errText) = 0 Then Return 0
             If MIRNormalizeFieldPathForAccess(ps, st.left, incTarget, 1, errText) = 0 Then Return 0
-            incSource = incTarget
+            If MIRLowerExprNode(ps, st.left, module, fnIdx, blkIdx, tempSeed, incSource, errText) = 0 Then Return 0
         ElseIf UCase(ps.ast.nodes(st.left).kind) = "CALL_EXPR" And InStr(ps.ast.nodes(st.left).value, ".") = 0 And MIRIsKnownArray(module, ps.ast.nodes(st.left).value) <> 0 And MIRChildCount(ps, st.left) >= 1 Then
             incTarget = ps.ast.nodes(st.left).value
             If MIRLowerFlatArrayIndex(ps, st.left, incTarget, module, fnIdx, blkIdx, tempSeed, incIndexName, errText) = 0 Then Return 0
             incSource = MIRNextTemp(tempSeed)
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_INDEXED, incSource, 2, incTarget, incIndexName
+            incElemType = MIRArrayElementTypeOf(module, incTarget)
+            If UCase(Trim(incElemType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, incElemType
             incIndexed = 1
         Else
             errText = "mir: INCDEC target must be ident, field, or indexed array"
@@ -1257,8 +1330,16 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
             If UCase(Trim(incTargetType)) = "U32" Or UCase(Trim(incTargetType)) = "TYPE_U32" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, "U32"
         End If
 
+        If UCase(ps.ast.nodes(st.left).kind) = "FIELD_EXPR" Then
+            Dim unionIncStore As Integer
+            unionIncStore = MIRTryEmitUnionFieldStore(ps, st.left, incTarget, incTmp, "=", module, fnIdx, blkIdx, tempSeed, errText)
+            If unionIncStore = 0 Then Return 0
+            If unionIncStore > 0 Then Return 1
+        End If
+
         If incIndexed <> 0 Then
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_INDEXED, "", 3, incTarget, incIndexName, incTmp
+            If UCase(Trim(incElemType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, incElemType
         Else
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, incTarget, 1, incTmp
         End If
@@ -1277,26 +1358,11 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
         Dim deleteVarName As String
         If MIRLowerExprNode(ps, deleteTargetNode, module, fnIdx, blkIdx, tempSeed, deleteVarName, errText) = 0 Then Return 0
 
-        Dim deleteClassType As String
-        If MIRFindNearestDimDeclType(ps, stmtIdx, deleteVarName, deleteClassType) <> 0 Then
-            ' Destruction is derived-to-base. Emit every declared destructor
-            ' in the inheritance chain so MIR/JS/native agree with AST.
-            Dim deleteCurType As String
-            deleteCurType = UCase(Trim(deleteClassType))
-            Dim deleteHop As Integer
-            deleteHop = 0
-            Do While deleteCurType <> "" And deleteHop < 64
-                Dim deleteDtorName As String
-                deleteDtorName = deleteCurType & "_DTOR"
-                If MIRClassHasDestructorDecl(ps, deleteCurType) <> 0 Or MIRHasRoutineNamed(ps, deleteDtorName) <> 0 Then
-                    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, "", 2, deleteDtorName, deleteVarName
-                End If
-                Dim deleteBaseType As String
-                If MIRGetClassBaseTypeName(ps, deleteCurType, deleteBaseType) = 0 Then Exit Do
-                deleteCurType = UCase(Trim(deleteBaseType))
-                deleteHop += 1
-            Loop
-        End If
+        ' S-574 (2026-10-17): the destructor chain no longer comes from the DECLARED type of the variable (a base-typed variable holding a
+        ' derived object skipped the derived destructor on five engines, S-486). One MIR_DELETE_OBJECT asks the engine to destroy the
+        ' object by its REAL class, derived to base, exactly once; an empty or already destroyed reference is left alone. The variable
+        ' is emptied right after (it holds NOTHING).
+        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_DELETE_OBJECT, "", 1, deleteVarName
 
         Dim deleteZeroName As String
         deleteZeroName = MIRNextTemp(tempSeed)
@@ -1312,10 +1378,14 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
             retValueName = "__result__"
         Else
             If MIRLowerExprNode(ps, retExprNode, module, fnIdx, blkIdx, tempSeed, retValueName, errText) = 0 Then Return 0
+            If fnIdx >= 0 AndAlso fnIdx < module.functionCount Then
+                If MIRPrepareManagedReturnValue(ps, retExprNode, module.functions(fnIdx).returnType, module, fnIdx, blkIdx, tempSeed, retValueName, errText) = 0 Then Return 0
+            End If
         End If
 
         MIRLockEmitLeavesForReturn module, fnIdx, blkIdx
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_RET, "", 1, retValueName
+        module.functions(fnIdx).blocks(blkIdx).instructions(module.functions(fnIdx).blocks(blkIdx).instructionCount - 1).bareReturn = IIf(retExprNode = -1, 1, 0)
         Return 1
 
     Case "END_STMT"
@@ -1323,7 +1393,7 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
         Return 1
 
 
-    Case "EXIT_STMT"
+    Case "EXIT_STMT", "CONTINUE_STMT"
         Dim exitBreakBlock As Integer
         Dim exitContBlock As Integer
         Dim exitWantType As String
@@ -1339,15 +1409,19 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(exitIfEndBlock))
             Return 1
         End If
-        If exitWantType <> "FOR" And exitWantType <> "DO" Then exitWantType = ""
+        If exitWantType <> "FOR" And exitWantType <> "DO" And exitWantType <> "WHILE" Then exitWantType = ""
 
         If MIRFindLoopContext(exitWantType, exitBreakBlock, exitContBlock) = 0 Then
             errText = "mir: EXIT icin uygun loop context yok"
             Return 0
         End If
 
-        MIRLockEmitLeavesForLoopExit module, fnIdx, blkIdx, MIRLockLoopIndexFor(exitWantType)
-        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(exitBreakBlock))
+        If UCase(st.kind) = "CONTINUE_STMT" Then
+            If MIRLowerContinueUnwind(ps, stmtIdx, MIRLockLoopIndexFor(exitWantType), module, fnIdx, blkIdx, tempSeed, errText) = 0 Then Return 0
+        Else
+            MIRLockEmitLeavesForLoopExit module, fnIdx, blkIdx, MIRLockLoopIndexFor(exitWantType)
+        End If
+        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(IIf(UCase(st.kind) = "CONTINUE_STMT", exitContBlock, exitBreakBlock)))
         Return 1
 
     Case "DO_STMT"
@@ -1403,7 +1477,7 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
             MIRAppendInstruction module, fnIdx, doCondBlock, MIR_OP_JMP, "", 1, LTrim(Str(doBodyBlock))
         End If
 
-        MIRPushLoopContext "DO", doEndBlock, IIf(doHasPost <> 0, doPostBlock, doCondBlock)
+        MIRPushLoopContext IIf(doModeText = "WHILE_WEND", "WHILE", "DO"), doEndBlock, IIf(doHasPost <> 0, doPostBlock, doCondBlock)
 
         Dim doBodyCur As Integer
         doBodyCur = doBodyBlock
@@ -1544,6 +1618,8 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
             Next eachItemPos
 
             For eachItemPos = 0 To eachItemsCount - 1
+                eachAfterBodyBlock = MIRAllocBlock(module, fnIdx)
+                gMirLowerLoopContinue(gMirLowerLoopDepth - 1) = eachAfterBodyBlock
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, st.value, 1, eachSnapshotNames(eachItemPos)
                 If Trim(st.op) <> "" Then
                     Dim eachIdxNameSnap As String
@@ -1566,7 +1642,6 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
                     End If
                 Next eachBodyPos
 
-                eachAfterBodyBlock = MIRAllocBlock(module, fnIdx)
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(eachAfterBodyBlock))
                 blkIdx = eachAfterBodyBlock
             Next eachItemPos
@@ -1576,6 +1651,8 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
             ' visible to later item expressions (matches ExecRunDoEachStmt /
             ' X64EmitDoEachStmt).
             For eachItemPos = 0 To eachItemsCount - 1
+                eachAfterBodyBlock = MIRAllocBlock(module, fnIdx)
+                gMirLowerLoopContinue(gMirLowerLoopDepth - 1) = eachAfterBodyBlock
                 Dim eachExprNode As Integer
                 Dim eachExprName As String
                 eachExprNode = MIRChildAt(ps, eachItemsNode, eachItemPos)
@@ -1612,7 +1689,6 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
                     End If
                 Next eachBodyPos
 
-                eachAfterBodyBlock = MIRAllocBlock(module, fnIdx)
                 MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(eachAfterBodyBlock))
                 blkIdx = eachAfterBodyBlock
             Next eachItemPos
@@ -1700,7 +1776,17 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
             Dim tryCatchCur As Integer
             tryCatchCur = tryCatchBlock
             If tryLockMark <> "" Then MIRAppendInstruction module, fnIdx, tryCatchCur, MIR_OP_CALL, "", 2, "LOCK_RELEASE_TO", tryLockMark
-            If MIRLowerStmtRange(ps, tryCatchNode, 0, MIRChildCount(ps, tryCatchNode) - 1, module, fnIdx, tryCatchCur, tempSeed, errText) = 0 Then Return 0
+            ' S-689: istisna CATCH'e girince yakalanmistir. Bayrak govde sonuna kadar acik kalirsa govdedeki bir kullanici cagrisi
+            ' (cagri sonrasi istisna denetimi) ya da RETURN (RET oncesi denetim) yakalanmis istisnayi yakalanmamis gibi cagirana tasirdi.
+            MIRClearExceptionActive module, fnIdx, tryCatchCur, tempSeed
+            ' S-302: CATCH govdesinde atilan istisna (yeniden THROW ya da cagri) bu TRY'nin FINALLY blogundan gecer; FINALLY'den sonra
+            ' tryEnd denetimi istisnayi dis TRY'a/cagirana iletir. FINALLY yoksa hedef dis TRY'dir (hedef yigina bir sey eklenmez).
+            If tryFinallyBlock <> -1 Then MIRPushTryTarget tryFinallyBlock
+            If MIRLowerStmtRange(ps, tryCatchNode, 0, MIRChildCount(ps, tryCatchNode) - 1, module, fnIdx, tryCatchCur, tempSeed, errText) = 0 Then
+                If tryFinallyBlock <> -1 Then MIRPopTryTarget
+                Return 0
+            End If
+            If tryFinallyBlock <> -1 Then MIRPopTryTarget
             MIRClearExceptionActive module, fnIdx, tryCatchCur, tempSeed
             MIRAppendInstruction module, fnIdx, tryCatchCur, MIR_OP_JMP, "", 1, LTrim(Str(IIf(tryFinallyBlock <> -1, tryFinallyBlock, tryEndBlock)))
         End If
@@ -1713,7 +1799,15 @@ Private Function MIRLowerTopLevelStmtCoreB(ByRef ps As ParseState, ByVal stmtIdx
             Dim tryFinCur As Integer
             tryFinCur = tryFinallyBlock
             If tryLockMark <> "" Then MIRAppendInstruction module, fnIdx, tryFinCur, MIR_OP_CALL, "", 2, "LOCK_RELEASE_TO", tryLockMark
+            ' S-690: FINALLY bekleyen bir istisnayla (catch yok, ya da CATCH yeniden atti) calisabilir. Bayrak acik kalirsa FINALLY'deki
+            ' ilk kullanici cagrisinin sonunda (ve cagrilan rutinin kendi cagrilarinda) istisna denetimi FINALLY'nin kalanini atlar.
+            ' Bekleyen durum FINALLY girisinde saklanip bayrak temizlenir; FINALLY normal biterse geri yuklenir, tryEnd iletir.
+            Dim tryFinPending As String
+            tryFinPending = MIRNextTemp(tempSeed)
+            MIRAppendInstruction module, fnIdx, tryFinCur, MIR_OP_LOAD_VAR, tryFinPending, 1, "__mir_exc_active"
+            MIRClearExceptionActive module, fnIdx, tryFinCur, tempSeed
             If MIRLowerStmtRange(ps, tryFinallyNode, 0, MIRChildCount(ps, tryFinallyNode) - 1, module, fnIdx, tryFinCur, tempSeed, errText) = 0 Then Return 0
+            MIRAppendInstruction module, fnIdx, tryFinCur, MIR_OP_STORE_VAR, "__mir_exc_active", 1, tryFinPending
             MIRAppendInstruction module, fnIdx, tryFinCur, MIR_OP_JMP, "", 1, LTrim(Str(tryEndBlock))
         End If
 

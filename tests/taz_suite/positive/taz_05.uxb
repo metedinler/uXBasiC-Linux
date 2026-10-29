@@ -1,0 +1,17 @@
+%%DEFINE CASE_ID 5
+%%JS_BEGIN dist/web/taz_embed.js
+console.log("taz");
+%%JS_END
+DIM a AS I32
+DIM b AS I64
+DIM c AS F64
+DIM s AS STRING
+a = CASE_ID
+b = 100
+c = 3.14
+s = "taz"
+PRINT ABS(-5)
+PRINT LEN(s)
+PRINT UCASE(s)
+PRINT STR(a)
+PRINT VAL("12")

@@ -1,0 +1,8 @@
+' S-579: BYREF parametresi ve çağrıda büyük/küçük harf farklı yazılmış Türkçe adlar
+SUB Artır(BYREF sayaç AS I32, adım AS I32)
+    sayaç = sayaç + adım
+END SUB
+DIM toplam AS I32 = 10
+Artır(toplam, 5)
+ARTıR(TOPLAM, 7)
+PRINT toplam

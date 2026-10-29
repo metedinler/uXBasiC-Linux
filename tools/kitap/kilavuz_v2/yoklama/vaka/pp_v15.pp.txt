@@ -1,0 +1,88 @@
+=== rat_ctor_fonksiyon
+DIM a AS RATIONAL
+a = RATIONAL(1, 3)
+PRINT a
+=== rat_construct
+DIM a AS RATIONAL
+a = RATIONAL.CONSTRUCT(1, 3)
+PRINT a
+=== rat_bolme_tamsayi
+DIM a AS RATIONAL
+a = 1 / 3
+PRINT a
+=== rat_from_i64
+DIM a AS RATIONAL
+a = RATIONAL.FROM_I64(5)
+PRINT a
+=== rat_normalize
+DIM a AS RATIONAL
+DIM b AS RATIONAL
+DIM c AS RATIONAL
+a = 6
+b = 4
+c = a / b
+PRINT c
+PRINT RATIONAL.TOSTRING(c)
+=== rat_islem_zinciri
+DIM a AS RATIONAL
+DIM b AS RATIONAL
+DIM s AS RATIONAL
+a = 1
+b = 3
+s = a / b
+s = s + s + s
+PRINT s
+=== rat_karsilastirma_ayni
+DIM a AS RATIONAL
+DIM b AS RATIONAL
+a = 6
+b = 3
+b = b + b
+IF a = b THEN PRINT "esit"
+=== rat_i32_donusum
+DIM a AS RATIONAL
+DIM i AS I32
+a = 7
+i = a
+PRINT i
+=== rat_sifira_bolme
+DIM a AS RATIONAL
+DIM b AS RATIONAL
+DIM c AS RATIONAL
+a = 1
+c = a / b
+PRINT c
+=== rat_dizi
+DIM v(2) AS RATIONAL
+DIM i AS I32
+FOR i = 0 TO 2
+    v(i) = i + 1
+NEXT
+PRINT v(0); " "; v(1); " "; v(2)
+=== rat_f64_atama
+DIM a AS RATIONAL
+a = 2.5
+PRINT a
+=== rat_type_alani
+TYPE Olcu
+    deger AS RATIONAL
+    ad AS STRING
+END TYPE
+DIM o AS Olcu
+o.deger = 5
+o.ad = "x"
+PRINT o.deger
+=== rat_sinif_alani
+CLASS K
+    PUBLIC
+    DIM r AS RATIONAL
+END CLASS
+DIM k AS K = NEW K()
+k.r = 4
+PRINT k.r
+=== rat_yok_tip
+DIM a AS YOKTIP
+PRINT 1
+=== rat_libtype_yok
+LIBTYPE "yok.library_type.json"
+PRINT 1

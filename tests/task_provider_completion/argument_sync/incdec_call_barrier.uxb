@@ -1,0 +1,18 @@
+DIM g AS I64 = 1
+DIM calls AS I32 = 0
+FUNCTION Change() AS I64
+    calls += 1
+    g = 100
+    RETURN 0
+END FUNCTION
+FUNCTION Pick(first AS I64, second AS I64) AS I64
+    RETURN first + second
+END FUNCTION
+THREAD Touch() AS I32
+    RETURN CINT(g + calls)
+END THREAD
+DIM t AS TASK OF I32 = SPAWN Touch()
+DIM ignored AS I32 = t.JOIN()
+PRINT Pick(g++, Change())
+PRINT g
+PRINT calls

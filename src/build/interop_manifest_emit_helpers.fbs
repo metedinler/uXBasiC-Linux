@@ -91,6 +91,10 @@ Private Sub InteropWriteToolchainEnv(ByVal tf As Integer, ByRef toolchain As Int
     Print #tf, "if /I ""%UXB_CXX%""==""g++"" if exist ""C:\Program Files\CodeBlocks\MinGW\bin\g++.exe"" set UXB_CXX_CMD=C:\Program Files\CodeBlocks\MinGW\bin\g++.exe"
     Print #tf, "if /I ""%UXB_ASM%""==""nasm"" if exist ""C:\Program Files\CodeBlocks\MinGW\bin\nasm.exe"" set UXB_ASM_CMD=C:\Program Files\CodeBlocks\MinGW\bin\nasm.exe"
     Print #tf, "if /I ""%UXB_LINK%""==""gcc"" if exist ""C:\Program Files\CodeBlocks\MinGW\bin\gcc.exe"" set UXB_LINK_CMD=C:\Program Files\CodeBlocks\MinGW\bin\gcc.exe"
+    ' The selected compiler's DLLs must precede bundled FreeBASIC DLLs.
+    Print #tf, "if not ""%UXB_LINK_PATH%""=="""" set ""PATH=%UXB_LINK_PATH%;%PATH%"""
+    Print #tf, "if not ""%UXB_CXX_PATH%""=="""" set ""PATH=%UXB_CXX_PATH%;%PATH%"""
+    Print #tf, "if not ""%UXB_CC_PATH%""=="""" set ""PATH=%UXB_CC_PATH%;%PATH%"""
     Print #tf, "exit /b 0"
 End Sub
 

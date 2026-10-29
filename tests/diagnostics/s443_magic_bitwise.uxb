@@ -1,0 +1,30 @@
+CLASS BitBox
+    PUBLIC:
+    DIM value AS I32
+
+    MAGIC AND(other AS BitBox) AS I32
+        RETURN 4
+    END MAGIC
+
+    MAGIC OR(other AS BitBox) AS I32
+        RETURN 14
+    END MAGIC
+
+    MAGIC XOR(other AS BitBox) AS I32
+        RETURN 6
+    END MAGIC
+END CLASS
+
+DIM leftBox AS BitBox = NEW BitBox()
+DIM rightBox AS BitBox = NEW BitBox()
+leftBox.value = 12
+rightBox.value = 10
+DIM andValue AS I32
+DIM orValue AS I32
+DIM xorValue AS I32
+andValue = leftBox AND rightBox
+orValue = leftBox OR rightBox
+xorValue = leftBox XOR rightBox
+PRINT andValue
+PRINT orValue
+PRINT xorValue

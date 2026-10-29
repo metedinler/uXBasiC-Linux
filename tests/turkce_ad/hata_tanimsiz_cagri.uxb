@@ -1,0 +1,3 @@
+' SAYILAR, sayılar ile aynı ad değildir; WASM bunu sessizce 0 yapamaz.
+DIM sayılar(4) AS I32
+PRINT SAYILAR(3)

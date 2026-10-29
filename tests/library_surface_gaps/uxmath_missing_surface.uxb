@@ -1,0 +1,39 @@
+INCLUDE "include/modules/uxmath.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT UXMATH_DReLU(0.0)
+        PRINT UXMATH_DSigmoidFromOutput(0.0)
+        PRINT UXMATH_DTanhFromOutput(0.0)
+        PRINT UXMATH_IntegratePolySimpson(0, 0.0, 0.0, 0)
+        PRINT UXMATH_MatAdd(0, 0, 0)
+        PRINT UXMATH_MatApplyReLU(0, 0)
+        PRINT UXMATH_MatApplySigmoid(0, 0)
+        PRINT UXMATH_MatCols(0)
+        PRINT UXMATH_MatCreate(0, 0)
+        PRINT UXMATH_MatFill(0, 0.0)
+        PRINT UXMATH_MatFree(0)
+        PRINT UXMATH_MatGet(0, 0, 0)
+        PRINT UXMATH_MatMul(0, 0, 0)
+        PRINT UXMATH_MatRandomUniform(0, 0.0, 0.0, 0)
+        PRINT UXMATH_MatRows(0)
+        PRINT UXMATH_MatSet(0, 0, 0, 0.0)
+        PRINT UXMATH_MatSub(0, 0, 0)
+        PRINT UXMATH_MatTranspose(0, 0)
+        PRINT UXMATH_MatVecMul(0, 0, 0)
+        PRINT UXMATH_NumericDerivativePoly(0, 0.0, 0.0)
+        PRINT UXMATH_ODE_Euler_Logistic(0.0, 0.0, 0.0, 0.0, 0.0, 0)
+        PRINT UXMATH_PolyBisection(0, 0.0, 0.0, 0, 0.0)
+        PRINT UXMATH_PolyDerivativeCoeff(0, 0)
+        PRINT UXMATH_PolyIntegralCoeff(0, 0, 0.0)
+        PRINT UXMATH_PolyNewton(0, 0.0, 0, 0.0)
+        PRINT UXMATH_ReLU(0.0)
+        PRINT UXMATH_Tanh(0.0)
+        PRINT UXMATH_VecClear(0)
+        PRINT UXMATH_VecDataPtr(0)
+        PRINT UXMATH_VecGet(0, 0)
+        PRINT UXMATH_VecSet(0, 0, 0.0)
+        PRINT UXMATH_VecSoftmax(0, 0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXMATH"
+END MAIN

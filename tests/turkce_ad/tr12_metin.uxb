@@ -1,0 +1,7 @@
+' S-579: Türkçe harfli metin değişkenleri; metin içindeki harfler (adlardan farklı olarak) hiç değişmez
+DIM adı AS STRING = "Şükrü"
+DIM soyadı AS STRING = "Çağlayan"
+PRINT adı + " " + soyadı
+IF adı = "Şükrü" THEN PRINT "doğru"
+DIM mesaj AS STRING = "merhaba"
+PRINT LEN(mesaj)

@@ -1,0 +1,6 @@
+' S-544: a routine calling itself needs no DECLARE (its own header already precedes the call).
+FUNCTION Fakt(n AS I32) AS I32
+    IF n <= 1 THEN RETURN 1
+    RETURN n * Fakt(n - 1)
+END FUNCTION
+PRINT Fakt(5)

@@ -1,0 +1,108 @@
+Q1 taban tipli degiskene dogrudan atama, sanal cagri (beklenen 9)
+CLASS Sekil
+    PUBLIC
+    VIRTUAL METHOD Alan() AS I32
+        RETURN 0
+    END METHOD
+END CLASS
+CLASS KareS EXTENDS Sekil
+    PUBLIC
+    DIM k AS I32
+    CONSTRUCTOR(ak AS I32)
+        k = ak
+    END CONSTRUCTOR
+    OVERRIDE METHOD Alan() AS I32
+        RETURN k * k
+    END METHOD
+END CLASS
+DIM a AS KareS = NEW KareS(3)
+DIM s AS Sekil
+s = a
+PRINT s.Alan()
+=====
+Q2 LIST + FOR EACH, degisken alt sinif tipli (beklenen 9)
+CLASS Sekil
+    PUBLIC
+    VIRTUAL METHOD Alan() AS I32
+        RETURN 0
+    END METHOD
+END CLASS
+CLASS KareS EXTENDS Sekil
+    PUBLIC
+    DIM k AS I32
+    CONSTRUCTOR(ak AS I32)
+        k = ak
+    END CONSTRUCTOR
+    OVERRIDE METHOD Alan() AS I32
+        RETURN k * k
+    END METHOD
+END CLASS
+DIM a AS KareS = NEW KareS(3)
+DIM l AS LIST
+LISTADD(l, a)
+DIM s AS KareS
+FOR EACH s IN l
+    PRINT s.Alan()
+    PRINT s.k
+NEXT
+=====
+Q3 LIST + FOR EACH, taban tipli degisken, alan okuma (beklenen 3)
+CLASS Sekil
+    PUBLIC
+    DIM k AS I32
+    VIRTUAL METHOD Alan() AS I32
+        RETURN 0
+    END METHOD
+END CLASS
+CLASS KareS EXTENDS Sekil
+    PUBLIC
+    CONSTRUCTOR(ak AS I32)
+        k = ak
+    END CONSTRUCTOR
+    OVERRIDE METHOD Alan() AS I32
+        RETURN k * k
+    END METHOD
+END CLASS
+DIM a AS KareS = NEW KareS(3)
+DIM l AS LIST
+LISTADD(l, a)
+DIM s AS Sekil
+FOR EACH s IN l
+    PRINT s.k
+    PRINT s.Alan()
+NEXT
+=====
+Q4 dizi + taban tipli degisken (beklenen 9 / 12)
+CLASS Sekil
+    PUBLIC
+    VIRTUAL METHOD Alan() AS I32
+        RETURN 0
+    END METHOD
+END CLASS
+CLASS KareS EXTENDS Sekil
+    PUBLIC
+    DIM k AS I32
+    CONSTRUCTOR(ak AS I32)
+        k = ak
+    END CONSTRUCTOR
+    OVERRIDE METHOD Alan() AS I32
+        RETURN k * k
+    END METHOD
+END CLASS
+CLASS DikS EXTENDS Sekil
+    PUBLIC
+    DIM en AS I32
+    CONSTRUCTOR(a AS I32)
+        en = a
+    END CONSTRUCTOR
+    OVERRIDE METHOD Alan() AS I32
+        RETURN en * 4
+    END METHOD
+END CLASS
+DIM a AS KareS = NEW KareS(3)
+DIM b AS DikS = NEW DikS(3)
+DIM s AS Sekil
+s = a
+PRINT s.Alan()
+s = b
+PRINT s.Alan()

@@ -1,0 +1,34 @@
+[
+ {
+  "ad": "b01 PRINT NULL",
+  "kod": "PRINT NULL"
+ },
+ {
+  "ad": "b02 PRINT NOTHING",
+  "kod": "PRINT NOTHING"
+ },
+ {
+  "ad": "b03 PRINT NIL",
+  "kod": "PRINT NIL"
+ },
+ {
+  "ad": "b04 PTR = NULL",
+  "kod": "DIM p AS PTR\np = NULL\nPRINT p"
+ },
+ {
+  "ad": "b05 PTR = NOTHING",
+  "kod": "DIM p AS PTR\np = NOTHING\nPRINT p"
+ },
+ {
+  "ad": "b06 sinif = NOTHING karsilastirma",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM x AS I32\nEND CLASS\nDIM k AS Kutu\nIF k = NOTHING THEN PRINT \"bos\" ELSE PRINT \"dolu\""
+ },
+ {
+  "ad": "b07 sinif = NULL karsilastirma",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM x AS I32\nEND CLASS\nDIM k AS Kutu\nIF k = NULL THEN PRINT \"bos\" ELSE PRINT \"dolu\""
+ },
+ {
+  "ad": "b08 sinif ataması NOTHING",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM x AS I32\nEND CLASS\nDIM k AS Kutu = NEW Kutu()\nk = NOTHING\nIF k = NOTHING THEN PRINT \"bos\" ELSE PRINT \"dolu\""
+ }
+]

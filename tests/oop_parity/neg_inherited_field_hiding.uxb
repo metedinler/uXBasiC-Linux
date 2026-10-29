@@ -1,0 +1,12 @@
+CLASS Base
+    PUBLIC
+    X AS I32
+END CLASS
+
+CLASS Child EXTENDS Base
+    PUBLIC
+    X AS I32
+END CLASS
+
+DIM obj AS Child = NEW Child()
+PRINT obj.X

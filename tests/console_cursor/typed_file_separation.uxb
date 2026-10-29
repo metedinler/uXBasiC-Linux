@@ -1,0 +1,16 @@
+INCLUDE "assert_cursor.uxb"
+PRINT 1.25;
+CheckCursor(1, 5)
+PRINT -2;
+CheckCursor(1, 7)
+PRINT "!"
+CheckCursor(2, 1)
+OPEN "cursor_output.txt" FOR OUTPUT AS #1
+PRINT #1, "FILE ONLY"
+CLOSE #1
+CheckCursor(2, 1)
+LOCATE 9, 14
+PRINT "X",
+CheckCursor(9, 29)
+PRINT "PASS"
+CheckCursor(10, 1)

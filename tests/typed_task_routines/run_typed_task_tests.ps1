@@ -3,7 +3,7 @@ param(
     [string]$Uxb = ".\bin\uxb.exe",
     [string]$TestRoot = ".\tests\typed_task_routines",
     [string]$ExpectedRoot = "",
-    [string]$ReportRoot = ".\reports\typed_task_routines",
+    [string]$ReportRoot = "",
     [switch]$SkipAst,
     [switch]$SkipMir,
     [switch]$EmitMirX64,
@@ -13,6 +13,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($ExpectedRoot -eq "") { $ExpectedRoot = Join-Path $TestRoot "expected" }
+if ($ReportRoot -eq '') { $ReportRoot = Join-Path '.\reports\typed_task_routines' ((Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0, 8)) }
 
 $script:Results = @()
 
@@ -77,7 +78,7 @@ function Test-PositiveBackend {
         [Parameter(Mandatory = $true)][string]$ExpectedPath
     )
 
-    if (Test-Path -LiteralPath $OutputPath -PathType Leaf) { Remove-Item -LiteralPath $OutputPath -Force }
+    if (Test-Path -LiteralPath $OutputPath -PathType Leaf) { throw "Use a fresh report directory; existing evidence is preserved: $OutputPath" }
 
     $run = Invoke-Uxb -Arguments $Arguments
     if ($run.ExitCode -ne 0) {
@@ -145,7 +146,7 @@ foreach ($test in $positive) {
 
     if ($EmitMirX64) {
         $asmPath = Join-Path $ReportRoot "${base}_mir.asm"
-        if (Test-Path -LiteralPath $asmPath -PathType Leaf) { Remove-Item -LiteralPath $asmPath -Force }
+        if (Test-Path -LiteralPath $asmPath -PathType Leaf) { throw "Use a fresh report directory; existing evidence is preserved: $asmPath" }
         $run = Invoke-Uxb -Arguments @(
             "x64", $test.FullName, "--codegen-source", "MIR", "--x64-mode", "MIR", "--emit-x64-nasm-out", $asmPath
         )

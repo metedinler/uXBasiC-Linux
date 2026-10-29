@@ -1,0 +1,6 @@
+DECLARE FUNCTION MessageBoxA LIB "user32.dll" ALIAS "MessageBoxA" (
+    BYVAL hwnd AS PTR,
+    BYVAL text AS STRING,
+    BYVAL caption AS STRING,
+    BYVAL flags AS I32
+) AS I32

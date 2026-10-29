@@ -1,0 +1,29 @@
+fn_once_kullan | | PRINT Iki(4)\nFUNCTION Iki(x AS I32) AS I32\n    RETURN x * 2\nEND FUNCTION
+karsilikli_bildirimsiz | | PRINT CiftMi(10)\nFUNCTION CiftMi(n AS I32) AS I32\n    IF n = 0 THEN RETURN 1\n    RETURN TekMi(n - 1)\nEND FUNCTION\nFUNCTION TekMi(n AS I32) AS I32\n    IF n = 0 THEN RETURN 0\n    RETURN CiftMi(n - 1)\nEND FUNCTION
+sub_deger_kullan | SUB S()\n    PRINT "x"\nEND SUB | DIM a AS I32 = S()
+fn_deger_atma | FUNCTION F() AS I32\n    RETURN 3\nEND FUNCTION | F()\nPRINT "ok"
+fn_donus_yok | FUNCTION F() AS I32\n    PRINT "icerde"\nEND FUNCTION | PRINT F()
+fn_donus_tipi_uyumsuz | FUNCTION F() AS I32\n    RETURN 2.5\nEND FUNCTION | PRINT F()
+fn_string_donus | FUNCTION Selam(ad AS STRING) AS STRING\n    RETURN "Merhaba " + ad\nEND FUNCTION | PRINT Selam("Ayse")
+fn_f64 | FUNCTION Yarim(x AS F64) AS F64\n    RETURN x / 2\nEND FUNCTION | PRINT Yarim(5)
+fn_ic_ice_cagri | FUNCTION K(x AS I32) AS I32\n    RETURN x * x\nEND FUNCTION\nFUNCTION T(a AS I32, b AS I32) AS I32\n    RETURN a + b\nEND FUNCTION | PRINT T(K(3), K(K(2)))
+byval_acik | SUB A(BYVAL x AS I32)\n    x = 99\nEND SUB | DIM v AS I32 = 1\nA(v)\nPRINT v
+varsayilan_byval | SUB A(x AS I32)\n    x = 99\nEND SUB | DIM v AS I32 = 1\nA(v)\nPRINT v
+byref_dizi | SUB D(a AS I32[])\n    a(0) = 42\nEND SUB | DIM a(1) AS I32\nD(a)\nPRINT a(0)
+byref_ifade | SUB A(BYREF x AS I32)\n    x = 5\nEND SUB | A(3)\nPRINT "ok"
+byref_metin | SUB E(BYREF s AS STRING)\n    s = s + "!"\nEND SUB | DIM m AS STRING = "a"\nE(m)\nPRINT m
+opsiyonel_parametre | SUB P(x AS I32, y AS I32 = 7)\n    PRINT x + y\nEND SUB | P(1)\nP(1, 2)
+param_sayisi_az | SUB P(x AS I32, y AS I32)\n    PRINT x + y\nEND SUB | P(1)
+param_sayisi_cok | SUB P(x AS I32)\n    PRINT x\nEND SUB | P(1, 2)
+param_tur_uyumsuz | SUB P(x AS I32)\n    PRINT x\nEND SUB | P("a")
+param_f64_i32 | SUB P(x AS F64)\n    PRINT x\nEND SUB | P(3)
+param_i32_f64 | SUB P(x AS I32)\n    PRINT x\nEND SUB | P(2.5)
+ozyine_derin | FUNCTION T(n AS I64) AS I64\n    IF n = 0 THEN RETURN 0\n    RETURN n + T(n - 1)\nEND FUNCTION | PRINT T(5000)
+static_dizi | SUB S()\n    STATIC a(1) AS I32\n    a(0) += 1\n    PRINT a(0)\nEND SUB | S()\nS()
+local_dizi | SUB S()\n    DIM a(1) AS I32\n    a(0) += 1\n    PRINT a(0)\nEND SUB | S()\nS()
+call_ifade | FUNCTION F(x AS I32) AS I32\n    RETURN x + 1\nEND FUNCTION | CALL F(1)\nPRINT "ok"
+call_parantezsiz | SUB S(x AS I32)\n    PRINT x\nEND SUB | CALL S 5
+sub_parantezsiz | SUB S(x AS I32)\n    PRINT x\nEND SUB | S 5
+sub_cagri_parantezli | SUB S()\n    PRINT "p"\nEND SUB | S
+fn_sonuc_degiskeni | FUNCTION F(x AS I32) AS I32\n    F = x * 2\nEND FUNCTION | PRINT F(4)
+fn_ad_ata_return | FUNCTION F(x AS I32) AS I32\n    DIM r AS I32 = x * 3\n    RETURN r\nEND FUNCTION | PRINT F(2)

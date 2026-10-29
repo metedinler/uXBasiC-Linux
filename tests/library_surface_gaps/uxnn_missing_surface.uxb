@@ -1,0 +1,32 @@
+INCLUDE "include/modules/uxnn.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxnn.ActivationLayerCreate(0, 0)
+        PRINT uxnn.Backend()
+        uxnn.LayerForwardPtr(0, 0, 0)
+        uxnn.LayerFree(0)
+        PRINT uxnn.LayerGetBias(0, 0)
+        PRINT uxnn.LayerGetWeight(0, 0, 0)
+        PRINT uxnn.LayerInputDim(0)
+        PRINT uxnn.LayerOutputDim(0)
+        uxnn.LayerSetBias(0, 0, 0.0)
+        uxnn.LayerSetWeight(0, 0, 0, 0.0)
+        uxnn.NetworkForwardPtr(0, 0, 0)
+        uxnn.NetworkForwardTensor(0, 0, 0)
+        PRINT uxnn.NetworkInputDim(0)
+        PRINT uxnn.NetworkMSEPtr(0, 0, 0, 0, 0, 0)
+        PRINT uxnn.NetworkOutputDim(0)
+        PRINT uxnn.NetworkPredictArgmaxPtr(0, 0)
+        PRINT uxnn.NetworkPredictArgmaxTensor(0, 0)
+        PRINT uxnn.NetworkTrainMSESGDPtr(0, 0, 0, 0, 0, 0, 0, 0.0)
+        PRINT uxnn.NeuronCreate(0, 0)
+        PRINT uxnn.NeuronForwardPtr(0, 0)
+        uxnn.NeuronFree(0)
+        PRINT uxnn.NeuronGetBias(0)
+        PRINT uxnn.NeuronGetWeight(0, 0)
+        uxnn.NeuronSetBias(0, 0.0)
+        uxnn.NeuronSetWeight(0, 0, 0.0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXNN"
+END MAIN

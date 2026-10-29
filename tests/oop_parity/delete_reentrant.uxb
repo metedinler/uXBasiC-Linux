@@ -1,0 +1,18 @@
+CLASS K
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT v
+        DELETE g
+        PRINT v + 10
+    END DESTRUCTOR
+END CLASS
+' S-616 (2026-10-17): a destructor that DELETEs the very object it is destroying (through a global that names the same object) does nothing the
+' second time - the destructor ran once and the object stays readable until it finishes. Every engine used to start the destructor again
+' without end (stack overflow / endless output).
+DIM g AS K = NEW K(3)
+DELETE g
+PRINT 9

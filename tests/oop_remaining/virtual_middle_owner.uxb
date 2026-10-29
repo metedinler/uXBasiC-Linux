@@ -1,0 +1,20 @@
+CLASS Temel_Sinif
+    PUBLIC
+    VIRTUAL METHOD Deger() AS I32
+        RETURN 10
+    END METHOD
+    METHOD Kiyas() AS I32
+        RETURN THIS.Deger() * 100 + ME.Deger()
+    END METHOD
+END CLASS
+CLASS Orta_Sinif EXTENDS Temel_Sinif
+    PUBLIC
+    OVERRIDE METHOD Deger() AS I32
+        RETURN 20
+    END METHOD
+END CLASS
+CLASS Son_Sinif EXTENDS Orta_Sinif
+END CLASS
+DIM a AS Temel_Sinif = NEW Son_Sinif()
+PRINT a.Deger()
+PRINT a.Kiyas()

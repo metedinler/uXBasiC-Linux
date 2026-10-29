@@ -1,0 +1,6 @@
+AST=DELETE target must be class or OBJECT or INTERFACE
+MIR=DELETE target must be class or OBJECT or INTERFACE
+x64=DELETE target must be class or OBJECT or INTERFACE
+AST-x64=DELETE target must be class or OBJECT or INTERFACE
+JS=DELETE target must be class or OBJECT or INTERFACE
+WASM=DELETE target must be class or OBJECT or INTERFACE

@@ -1,0 +1,11 @@
+DIM total AS I64 = 0
+THREAD Work() AS I64
+ UNSAFE
+  total++
+  total++
+  total++
+ END UNSAFE
+ RETURN total
+END THREAD
+DIM a AS TASK OF I64 = SPAWN Work()
+PRINT a.JOIN()

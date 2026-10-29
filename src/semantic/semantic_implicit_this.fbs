@@ -12,12 +12,34 @@
 ' The single root-cause fix is a front-end rewrite, done once for every engine before any other
 ' semantic pass looks at the tree:
 '   bare IDENT that names a field of the class (or of a base class)  -> FIELD_EXPR(THIS, field)
-'   bare CALL_EXPR that names a method of the class (or a base class) -> CALL_EXPR THIS.method(...)
+'   bare CALL_EXPR that names a method of the class (or a base class) -> CALL_EXPR ME.method(...)
+' S-484 / S-576 (2026-10-17): a bare method call is a VIRTUAL call (ME), exactly like an explicit ME.method();
+' only an explicit THIS.method() binds directly to the implementation visible from the class whose body
+' contains the call (design: docs/tasarim/UXB OPP SISTEMI TASARIM VE TARTISMALARI.md, THIS vs ME). The
+' constructor / destructor rule (SemValidateConstructorMeVirtualCalls) therefore sees the bare form as ME too.
 ' Resolution order inside a member body is (FreeBASIC): local / parameter -> field or method of the
 ' class hierarchy -> global. A name declared by DIM/REDIM/CONST anywhere in the body, or a
-' parameter, therefore always wins over a field of the same name. STATIC members are left alone
-' (no THIS in a static method; a static field is not per-object storage) and array fields are left
-' alone (`arr(i)` is an index expression, not a bare name).
+' parameter, therefore always wins over a field of the same name. STATIC fields are left alone
+' (a static field is not per-object storage) and array fields are left alone (`arr(i)` is an
+' index expression, not a bare name).
+' S-605 / S-607 (2026-10-17): STATIC methods.
+'   * a bare call of a STATIC method of the class (or of a base class), from any member body including another static
+'     method, becomes the class-qualified call `Class.method(...)` (there is no receiver to dispatch on); it used to be an
+'     unknown routine on every engine ("unsupported call KAT", host binding missing, ...) and WASM silently ran something else;
+'   * inside a STATIC method a bare name of an INSTANCE field or an INSTANCE method is an error: a static method has no object
+'     (the name used to read 0, garbage, `undefined` or fail, depending on the engine). A program-level VARIABLE of the same name as
+'     an instance field is not an error: it is simply the one the name means there. A bare call of an instance method is always an
+'     error, even when a global routine has the same name (the later type pass resolves a bare call inside a class to the class member,
+'     so the program would otherwise fail with an unrelated type message).
+
+Dim Shared gSemImplicitThisErr As String
+' context of the member body being rewritten (set by SemImplicitThisRewriteMember, read by the walk)
+Dim Shared gSemImplicitThisStaticCtx As Integer      ' 1 inside a STATIC method
+Dim Shared gSemImplicitThisClassName As String       ' declared spelling of the class whose body is walked
+Dim Shared gSemImplicitThisLabel As String           ' CLASS.METHOD for messages
+Dim Shared gSemImplicitThisStaticSet As String       ' STATIC method names of the class hierarchy
+Dim Shared gSemImplicitThisGlobalVars As String      ' top-level DIM / CONST names
+Dim Shared gSemImplicitThisSkipNode As Integer       ' receiver node just created for a class-qualified call: must not be rewritten again
 
 Private Function SemImplicitThisHasName(ByRef setText As String, ByRef nameText As String) As Integer
     Return IIf(InStr(setText, "|" & UCase(Trim(nameText)) & "|") > 0, 1, 0)
@@ -57,9 +79,10 @@ End Function
 
 ' Collects the per-object field names and the instance method names of `classNode` and of every
 ' base class above it (a derived class's own declaration comes first; a name is added once).
-Private Sub SemImplicitThisCollectMembers(ByRef ps As ParseState, ByVal classNode As Integer, ByRef fieldSet As String, ByRef methodSet As String)
+Private Sub SemImplicitThisCollectMembers(ByRef ps As ParseState, ByVal classNode As Integer, ByRef fieldSet As String, ByRef methodSet As String, ByRef staticSet As String)
     fieldSet = "|"
     methodSet = "|"
+    staticSet = "|"
     Dim cur As Integer
     cur = classNode
     Dim hop As Integer
@@ -85,7 +108,11 @@ Private Sub SemImplicitThisCollectMembers(ByRef ps As ParseState, ByVal classNod
                 Loop
                 If isStatic = 0 And isArray = 0 Then SemImplicitThisAddName fieldSet, ps.ast.nodes(ch).value
             ElseIf ck = "CLASS_METHOD_DECL" Then
-                If SemImplicitThisChildHasFlag(ps, ch, "CLASS_METHOD_FLAG", "STATIC") = 0 Then SemImplicitThisAddName methodSet, ps.ast.nodes(ch).value
+                If SemImplicitThisChildHasFlag(ps, ch, "CLASS_METHOD_FLAG", "STATIC") = 0 Then
+                    SemImplicitThisAddName methodSet, ps.ast.nodes(ch).value
+                Else
+                    SemImplicitThisAddName staticSet, ps.ast.nodes(ch).value
+                End If
             ElseIf ck = "CLASS_BASE_REF" Then
                 baseName = ps.ast.nodes(ch).value
             End If
@@ -112,6 +139,19 @@ Private Sub SemImplicitThisCollectLocals(ByRef ps As ParseState, ByVal nodeIdx A
     Loop
 End Sub
 
+' `name(args)` -> `receiver.name(args)` on the same CALL_EXPR node (receiver = ME for an instance method, the class name for a STATIC one).
+Private Sub SemImplicitThisQualifyCall(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef receiverName As String)
+    Dim qln As Integer, qcn As Integer
+    qln = ps.ast.nodes(nodeIdx).lineNo
+    qcn = ps.ast.nodes(nodeIdx).colNo
+    Dim recvNode As Integer
+    recvNode = ASTNewNode(ps.ast, "IDENT", receiverName, "", qln, qcn)
+    ps.ast.nodes(nodeIdx).value = receiverName & "." & Trim(ps.ast.nodes(nodeIdx).value)
+    ps.ast.nodes(nodeIdx).op = "."
+    ASTSetLeft ps.ast, nodeIdx, recvNode
+    If UCase(receiverName) <> "ME" Then gSemImplicitThisSkipNode = recvNode
+End Sub
+
 Private Sub SemImplicitThisWalk(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef fieldSet As String, ByRef methodSet As String, ByRef localSet As String, ByRef rewrites As Integer)
     If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Exit Sub
     Dim k As String
@@ -120,31 +160,84 @@ Private Sub SemImplicitThisWalk(ByRef ps As ParseState, ByVal nodeIdx As Integer
     key = UCase(Trim(ps.ast.nodes(nodeIdx).value))
 
     If k = "IDENT" Then
-        If key <> "THIS" And key <> "ME" And key <> "SUPER" And key <> "" Then
+        If key <> "THIS" And key <> "ME" And key <> "SUPER" And key <> "" And nodeIdx <> gSemImplicitThisSkipNode Then
             If SemImplicitThisHasName(fieldSet, key) <> 0 And SemImplicitThisHasName(localSet, key) = 0 Then
-                Dim ln As Integer, cn As Integer
-                ln = ps.ast.nodes(nodeIdx).lineNo
-                cn = ps.ast.nodes(nodeIdx).colNo
-                Dim thisNode As Integer
-                thisNode = ASTNewNode(ps.ast, "IDENT", "THIS", "", ln, cn)
-                ps.ast.nodes(nodeIdx).kind = "FIELD_EXPR"
-                ps.ast.nodes(nodeIdx).op = "."
-                ASTSetLeft ps.ast, nodeIdx, thisNode
-                rewrites += 1
-                Exit Sub
+                If gSemImplicitThisStaticCtx <> 0 Then
+                    ' S-605: a static method has no object, so an instance field name means nothing here (unless a global of that name exists)
+                    If SemImplicitThisHasName(gSemImplicitThisGlobalVars, key) = 0 And gSemImplicitThisErr = "" Then
+                        gSemImplicitThisErr = "semantic: STATIC METHOD " & gSemImplicitThisLabel & " cannot use instance field " & key & " (a static method has no object: pass the value as a parameter or make the method an instance method)"
+                    End If
+                Else
+                    Dim ln As Integer, cn As Integer
+                    ln = ps.ast.nodes(nodeIdx).lineNo
+                    cn = ps.ast.nodes(nodeIdx).colNo
+                    Dim thisNode As Integer
+                    thisNode = ASTNewNode(ps.ast, "IDENT", "THIS", "", ln, cn)
+                    ps.ast.nodes(nodeIdx).kind = "FIELD_EXPR"
+                    ps.ast.nodes(nodeIdx).op = "."
+                    ASTSetLeft ps.ast, nodeIdx, thisNode
+                    rewrites += 1
+                    Exit Sub
+                End If
             End If
         End If
     ElseIf k = "CALL_EXPR" Then
-        If InStr(key, ".") = 0 And key <> "" And ps.ast.nodes(nodeIdx).left = -1 Then
-            If SemImplicitThisHasName(methodSet, key) <> 0 And SemImplicitThisHasName(localSet, key) = 0 Then
-                Dim cln As Integer, ccn As Integer
-                cln = ps.ast.nodes(nodeIdx).lineNo
-                ccn = ps.ast.nodes(nodeIdx).colNo
-                Dim callThis As Integer
-                callThis = ASTNewNode(ps.ast, "IDENT", "THIS", "", cln, ccn)
-                ps.ast.nodes(nodeIdx).value = "THIS." & Trim(ps.ast.nodes(nodeIdx).value)
-                ps.ast.nodes(nodeIdx).op = "."
-                ASTSetLeft ps.ast, nodeIdx, callThis
+        If InStr(key, ".") = 0 And key <> "" And ps.ast.nodes(nodeIdx).left = -1 And SemImplicitThisHasName(localSet, key) = 0 Then
+            If SemImplicitThisHasName(gSemImplicitThisStaticSet, key) <> 0 Then
+                ' S-607: a bare call of a STATIC method is the class-qualified call (no receiver)
+                SemImplicitThisQualifyCall ps, nodeIdx, gSemImplicitThisClassName
+                rewrites += 1
+            ElseIf SemImplicitThisHasName(methodSet, key) <> 0 Then
+                If gSemImplicitThisStaticCtx = 0 Then
+                    SemImplicitThisQualifyCall ps, nodeIdx, "ME"
+                    rewrites += 1
+                ElseIf gSemImplicitThisErr = "" Then
+                    gSemImplicitThisErr = "semantic: STATIC METHOD " & gSemImplicitThisLabel & " cannot call instance method " & key & " (a static method has no object: call it on an object or make it STATIC)"
+                End If
+            End If
+        End If
+    ElseIf k = "CALL_STMT" Then
+        ' S-601 (2026-10-17): `CALL Yaz()` inside a member body names a method of the class exactly like the expression statement `Yaz()`.
+        ' The CALL keyword form carries the bare name in the statement node itself (no receiver), so no engine could resolve it
+        ' (AST "unsupported call", MIR / native x64 / JS unknown routine). It becomes the expression statement ME.Yaz(...)
+        ' (or Class.Yaz(...) for a STATIC method, S-607).
+        If InStr(key, ".") = 0 And key <> "" And ps.ast.nodes(nodeIdx).left = -1 And SemImplicitThisHasName(localSet, key) = 0 Then
+            Dim stmtReceiver As String
+            stmtReceiver = ""
+            If SemImplicitThisHasName(gSemImplicitThisStaticSet, key) <> 0 Then
+                stmtReceiver = gSemImplicitThisClassName
+            ElseIf SemImplicitThisHasName(methodSet, key) <> 0 Then
+                If gSemImplicitThisStaticCtx = 0 Then
+                    stmtReceiver = "ME"
+                ElseIf gSemImplicitThisErr = "" Then
+                    gSemImplicitThisErr = "semantic: STATIC METHOD " & gSemImplicitThisLabel & " cannot call instance method " & key & " (a static method has no object: call it on an object or make it STATIC)"
+                End If
+            End If
+            If stmtReceiver <> "" Then
+                Dim sln As Integer, scn As Integer
+                sln = ps.ast.nodes(nodeIdx).lineNo
+                scn = ps.ast.nodes(nodeIdx).colNo
+                ' the statement becomes EXPR_STMT(CALL_EXPR receiver.name(args)): the arguments move from the CALL_STMT to the new CALL_EXPR
+                Dim stmtMe As Integer
+                stmtMe = ASTNewNode(ps.ast, "IDENT", stmtReceiver, "", sln, scn)
+                Dim stmtCall As Integer
+                stmtCall = ASTNewNode(ps.ast, "CALL_EXPR", stmtReceiver & "." & Trim(ps.ast.nodes(nodeIdx).value), ".", sln, scn)
+                Dim argCh As Integer
+                argCh = ps.ast.nodes(nodeIdx).firstChild
+                ps.ast.nodes(nodeIdx).firstChild = -1
+                Do While argCh <> -1
+                    Dim nextArg As Integer
+                    nextArg = ps.ast.nodes(argCh).nextSibling
+                    ps.ast.nodes(argCh).nextSibling = -1
+                    ASTAddChild ps.ast, stmtCall, argCh
+                    argCh = nextArg
+                Loop
+                ASTSetLeft ps.ast, stmtCall, stmtMe
+                If UCase(stmtReceiver) <> "ME" Then gSemImplicitThisSkipNode = stmtMe
+                ps.ast.nodes(nodeIdx).kind = "EXPR_STMT"
+                ps.ast.nodes(nodeIdx).value = ""
+                ps.ast.nodes(nodeIdx).op = ""
+                ASTSetLeft ps.ast, nodeIdx, stmtCall
                 rewrites += 1
             End If
         End If
@@ -163,7 +256,8 @@ End Sub
 ' Rewrites one member body (a method / constructor / destructor / operator / property accessor).
 Private Sub SemImplicitThisRewriteMember(ByRef ps As ParseState, ByVal memberNode As Integer, ByRef fieldSet As String, ByRef methodSet As String, ByRef rewrites As Integer)
     Dim localSet As String
-    localSet = "|VALUE|"
+    localSet = "|"
+    If UCase(Trim(ps.ast.nodes(memberNode).kind)) = "CLASS_PROPERTY_SET_STMT" Then localSet = "|VALUE|"
     SemImplicitThisCollectLocals ps, memberNode, localSet
     ' walk the statements only: the member header (PARAM_DECL / TYPE_REF / flags) holds no expressions
     Dim ch As Integer
@@ -178,17 +272,48 @@ Private Sub SemImplicitThisRewriteMember(ByRef ps As ParseState, ByVal memberNod
     Loop
 End Sub
 
+' Is this node outside every class, SUB and FUNCTION (a program-level declaration)?
+Private Function SemImplicitThisIsProgramLevel(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    Dim p As Integer
+    p = ps.ast.nodes(nodeIdx).parent
+    Dim guard As Integer
+    guard = 0
+    Do While p >= 0 And p < ps.ast.count And guard < 4096
+        guard += 1
+        Select Case UCase(Trim(ps.ast.nodes(p).kind))
+        Case "CLASS_STMT", "SUB_STMT", "FUNCTION_STMT", "INTERFACE_STMT", "TYPE_STMT", "UNION_STMT"
+            Return 0
+        End Select
+        p = ps.ast.nodes(p).parent
+    Loop
+    Return 1
+End Function
+
 Private Function SemRewriteImplicitThis(ByRef ps As ParseState, ByRef errText As String) As Integer
     Dim originalCount As Integer
     originalCount = ps.ast.count
     Dim i As Integer
+
+    ' program-level variable names: a STATIC method body that mentions one of them means that global, never an instance field
+    gSemImplicitThisGlobalVars = "|"
+    gSemImplicitThisErr = ""
+    gSemImplicitThisSkipNode = -1
+    For i = 0 To originalCount - 1
+        Dim gk As String
+        gk = UCase(Trim(ps.ast.nodes(i).kind))
+        If gk = "DIM_DECL" Or gk = "CONST_DECL" Then
+            If SemImplicitThisIsProgramLevel(ps, i) <> 0 Then SemImplicitThisAddName gSemImplicitThisGlobalVars, ps.ast.nodes(i).value
+        End If
+    Next i
+
     For i = 0 To originalCount - 1
         If UCase(Trim(ps.ast.nodes(i).kind)) <> "CLASS_STMT" Then Continue For
 
         Dim fieldSet As String
         Dim methodSet As String
-        SemImplicitThisCollectMembers ps, i, fieldSet, methodSet
-        If fieldSet = "|" And methodSet = "|" Then Continue For
+        SemImplicitThisCollectMembers ps, i, fieldSet, methodSet, gSemImplicitThisStaticSet
+        If fieldSet = "|" And methodSet = "|" And gSemImplicitThisStaticSet = "|" Then Continue For
+        gSemImplicitThisClassName = Trim(ps.ast.nodes(i).value)
 
         Dim rewrites As Integer
         rewrites = 0
@@ -197,9 +322,13 @@ Private Function SemRewriteImplicitThis(ByRef ps As ParseState, ByRef errText As
         Do While m <> -1
             Dim mk As String
             mk = UCase(Trim(ps.ast.nodes(m).kind))
+            gSemImplicitThisStaticCtx = 0
             If mk = "CLASS_METHOD_DECL" Then
-                If SemImplicitThisChildHasFlag(ps, m, "CLASS_METHOD_FLAG", "STATIC") = 0 Then SemImplicitThisRewriteMember ps, m, fieldSet, methodSet, rewrites
+                If SemImplicitThisChildHasFlag(ps, m, "CLASS_METHOD_FLAG", "STATIC") <> 0 Then gSemImplicitThisStaticCtx = 1
+                gSemImplicitThisLabel = UCase(gSemImplicitThisClassName) & "." & UCase(Trim(ps.ast.nodes(m).value))
+                SemImplicitThisRewriteMember ps, m, fieldSet, methodSet, rewrites
             ElseIf mk = "CLASS_CONSTRUCTOR_DECL" Or mk = "CLASS_DESTRUCTOR_DECL" Or mk = "CLASS_OPERATOR_DECL" Then
+                gSemImplicitThisLabel = UCase(gSemImplicitThisClassName)
                 SemImplicitThisRewriteMember ps, m, fieldSet, methodSet, rewrites
             ElseIf mk = "CLASS_PROPERTY_DECL" Then
                 Dim acc As Integer
@@ -207,13 +336,22 @@ Private Function SemRewriteImplicitThis(ByRef ps As ParseState, ByRef errText As
                 Do While acc <> -1
                     Dim ak As String
                     ak = UCase(Trim(ps.ast.nodes(acc).kind))
-                    If ak = "CLASS_PROPERTY_GET_STMT" Or ak = "CLASS_PROPERTY_SET_STMT" Then SemImplicitThisRewriteMember ps, acc, fieldSet, methodSet, rewrites
+                    If ak = "CLASS_PROPERTY_GET_STMT" Or ak = "CLASS_PROPERTY_SET_STMT" Then
+                        gSemImplicitThisLabel = UCase(gSemImplicitThisClassName) & "." & UCase(Trim(ps.ast.nodes(m).value))
+                        SemImplicitThisRewriteMember ps, acc, fieldSet, methodSet, rewrites
+                    End If
                     acc = ps.ast.nodes(acc).nextSibling
                 Loop
+            End If
+            If gSemImplicitThisErr <> "" Then
+                errText = gSemImplicitThisErr
+                gSemImplicitThisStaticCtx = 0
+                Return 0
             End If
             m = ps.ast.nodes(m).nextSibling
         Loop
     Next i
+    gSemImplicitThisStaticCtx = 0
     Return 1
 End Function
 

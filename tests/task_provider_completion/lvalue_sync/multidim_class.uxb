@@ -1,0 +1,20 @@
+CLASS Box
+    PUBLIC
+    n AS I32
+END CLASS
+DIM a(-1 TO 0, 2 TO 3) AS Box
+a(-1,3) = NEW Box()
+a(-1,3).n = 4
+DIM orderCode AS I32 = 0
+FUNCTION FirstIndex() AS I32
+    orderCode = orderCode * 10 + 1
+    RETURN -1
+END FUNCTION
+FUNCTION SecondIndex() AS I32
+    orderCode = orderCode * 10 + 2
+    RETURN 3
+END FUNCTION
+DIM old AS I32 = a(FirstIndex(),SecondIndex()).n++
+PRINT old
+PRINT a(-1,3).n
+PRINT orderCode

@@ -1,0 +1,7 @@
+' Regression: a normal FUNCTION formal parameter is a valid PRINT expression.
+FUNCTION Echo(value AS I32) AS I32
+    PRINT value
+    RETURN value
+END FUNCTION
+
+PRINT Echo(42)

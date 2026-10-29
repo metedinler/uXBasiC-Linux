@@ -1,0 +1,13 @@
+' S-624: TIMER sonucu genel degiskene, dizi elemanina ve TYPE alanina F64 olarak yazilir.
+TYPE Olcum
+    an AS F64
+END TYPE
+DIM g AS F64
+DIM d(2) AS F64
+DIM o AS Olcum
+g = TIMER
+d(1) = TIMER
+o.an = TIMER
+PRINT (g >= 0) AND (g < 86400)
+PRINT (d(1) >= 0) AND (d(1) < 86400)
+PRINT (o.an >= 0) AND (o.an < 86400)

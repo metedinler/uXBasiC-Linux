@@ -1,0 +1,16 @@
+TYPE Cell
+    n AS I32
+END TYPE
+DIM cells(0 TO 1) AS Cell
+DIM trace AS I32 = 0
+FUNCTION Idx() AS I32
+    trace = trace * 10 + 1
+    RETURN 0
+END FUNCTION
+FUNCTION Rhs() AS I32
+    trace = trace * 10 + 2
+    RETURN 7
+END FUNCTION
+cells(Idx()).n = Rhs()
+PRINT cells(0).n
+PRINT trace

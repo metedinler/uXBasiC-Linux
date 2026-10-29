@@ -1,0 +1,7 @@
+' S-329 koruma (gorunurluk): ust duzey DIM dizisi bir SUB icinde g(i) olarak okunur.
+DIM g(3) AS I32
+g(1) = 7
+SUB Yaz()
+    PRINT g(1)
+END SUB
+Yaz()

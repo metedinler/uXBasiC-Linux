@@ -1,0 +1,3 @@
+FUNCTION SupportAdd(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION

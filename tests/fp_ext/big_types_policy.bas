@@ -1,0 +1,6 @@
+DIM bf AS BIGF(256)
+DIM bd AS BIGD(80)
+DIM ba AS BALL(256)
+PRINT bf
+PRINT bd
+PRINT ba

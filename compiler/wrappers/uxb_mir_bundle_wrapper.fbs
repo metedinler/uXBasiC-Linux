@@ -1,2 +1,0 @@
-#include once "../hooks/uxb_mir_hook.fbs"
-#include once "../../src/semantic/mir.fbs"

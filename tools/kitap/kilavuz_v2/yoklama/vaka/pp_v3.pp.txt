@@ -1,0 +1,117 @@
+=== b_paket
+%%PP B
+%%BUNDLE_NAME "demo-uygulama"
+%%BUNDLE_VERSION "1.2.0"
+%%BUNDLE_ID "tr.demo.uygulama"
+%%AUTHOR "Mete"
+%%LICENSE "MIT"
+%%BUILD_ID "b-001"
+PRINT 1
+=== b_giris_guvenlik
+%%PP B
+%%SANDBOX_ROOT "assets"
+%%BROWSER_ENTRY "index.html"
+%%SCRIPT_ENTRY "app.js"
+%%STYLE_ENTRY "app.css"
+%%DATA_JSON "data.json"
+%%CSP "default-src 'self'"
+%%SECURITY_NOTE "yalniz yerel dosyalar"
+%%CAPABILITY console ON
+PRINT 1
+=== b_api
+%%PP B
+%%EXPORT_BASIC AddTwo AS "I32(I32,I32)"
+%%API_ENDPOINT Urunler GET /api/urunler
+%%ROUTE ana /index
+%%HOST_IMPORT env.print_i32 AS host_print SIG "I32(I32)"
+PRINT 1
+=== b_diger
+%%PP B
+%%FEATURE offline
+%%TEST_EXPECT 1 == 1
+%%DOC ozet "Demo uygulama"
+%%GEN_FILE "generated/api.c" C
+%%REQUIRE_ASSET "assets/logo.txt"
+PRINT 1
+=== b_gen_block
+%%PP B
+%%GEN_FILE "generated/api.c" C
+%%GEN_BLOCK "generated/api.c" DECLARATIONS
+int x;
+%%GEN_END
+PRINT 1
+=== b_hata_export
+%%PP B
+%%EXPORT_BASIC AddTwo
+PRINT 1
+=== b_yol_kacisi
+%%PP B
+%%SANDBOX_ROOT "../disari"
+PRINT 1
+=== asset_ayri
+%%ASSET_ROOT "assets"
+%%ASSET_COPY "logo.txt" "kopya.txt"
+%%ASSET_FILE "a.txt"
+%%ASSET_REQUIRE "logo.txt"
+%%ASSET_IMAGE "p.png" AS RESIM
+%%ASSET_AUDIO "m.ogg" AS SES
+PRINT 1
+=== meta_manifest
+%%MANIFEST_SET app.name = "Demo"
+%%MANIFEST_SET app.versiyon = "2"
+%%MANIFEST_REQUIRE MATH
+%%TARGET WEB
+%%OUTDIR "dist/demo"
+PRINT 1
+=== copy_dir_hash
+%%COPY_DIR "assets" TO "kopya"
+%%HASHFILE "assets/a.txt" AS HASH_A
+%%EMBEDTEXT "assets/logo.txt" AS LOGO_METNI
+PRINT HASH_A
+=== config_file
+%%CONFIG_FILE "config.cfg"
+PRINT SURUM
+PRINT ADI
+=== dump_meta
+%%DEFINE X 1
+%%DUMP_META "dump.json"
+PRINT 1
+=== env_makro
+%%ENV "PATH" AS HOST_PATH
+%%IF HOST_PATH
+PRINT "yol var"
+%%ENDIF
+=== profile_kilit
+%%PROFILE release
+%%LOCK_META PROFILE
+%%SET PROFILE = "debug"
+PRINT PROFILE
+=== path_alias
+%%PATH_ALIAS "@assets" AS "assets"
+PRINT 1
+=== source_map_emitnote
+%%SOURCE_MAP "p.uxb:head"
+%%EMITNOTE "bu bir not"
+PRINT 1
+=== deprecated
+%%DEPRECATED "ESKI", "YENI"
+PRINT 1
+=== minify_fingerprint
+%%MINIFY JS ON
+%%FINGERPRINT_ASSETS ON
+PRINT 1
+=== lisans_md
+%%LICENSEFILE "assets/logo.txt"
+%%MD_SAFE ON
+%%MD_CSS "doc.css"
+PRINT 1
+=== html_css_satir
+%%HTMLIMAGE "oyuncu", "player.png"
+%%HTMLAUDIO "muzik", "music.ogg"
+%%CSS_RULE "#app", "color:red;"
+%%CSS_IMPORT "reset.css"
+%%JS_LINE console.log("selam");
+%%HTML_LINE <p>merhaba</p>
+%%CSS_LINE body { margin:0 }
+%%JSON_SET app.name "ADIM"
+PRINT 1

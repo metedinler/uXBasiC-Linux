@@ -1,0 +1,29 @@
+' S-690: bekleyen bir istisna varken FINALLY icinde kullanici rutini cagirmak FINALLY'nin kalanini atlamaz;
+' FINALLY bitince istisna dis TRY'a iletilir.
+SUB Yardim()
+    PRINT "yardim"
+END SUB
+SUB Temizle()
+    Yardim()
+    PRINT "temizle"
+END SUB
+TRY
+    TRY
+        THROW "x"
+    FINALLY
+        Temizle()
+        PRINT "sonra"
+    END TRY
+    PRINT "yanlis"
+CATCH
+    PRINT "dis"
+END TRY
+TRY
+    THROW "y"
+CATCH
+    PRINT "yakala"
+FINALLY
+    Temizle()
+    PRINT "sonra2"
+END TRY
+PRINT "son"

@@ -1,0 +1,34 @@
+SUB MAIN kullanici yordami
+SUB Main()
+    PRINT "yordam"
+END SUB
+PRINT "program"
+=====
+SUB MAIN cagrisi
+SUB MAIN()
+    PRINT "yordam"
+END SUB
+CALL MAIN()
+=====
+MAIN blogu ve yordam
+MAIN
+    PRINT "blok"
+END MAIN
+=====
+PRINT hata oncesi
+DIM a AS I32 = 5
+DIM z AS I32 = 0
+PRINT "once"
+PRINT a \ z
+PRINT "sonra"
+=====
+PRINT hata oncesi dizi
+DIM d(2) AS I32
+PRINT "once"
+PRINT d(7)
+PRINT "sonra"
+=====
+PRINT satir ici hata
+DIM a AS I32 = 5
+DIM z AS I32 = 0
+PRINT "deger: "; a \ z

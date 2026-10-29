@@ -1,4 +1,5 @@
 #include once "../common/uxb_rng.fbs"
+#include once "../common/uxb_clock.fbs"
 #ifndef UXB_RUNTIME_SERVICE_DISPATCH_FBS
 #define UXB_RUNTIME_SERVICE_DISPATCH_FBS
 
@@ -40,7 +41,7 @@ Private Function UXBRuntimeMathDispatch(ByRef rt As UXBRuntimeContext, ByVal ser
     Case RT_RND
         Return UXBInterpValueFloat(UXBRngRnd(0, 0, 0))
     Case RT_TIMER
-        Return UXBInterpValueFloat(Timer)
+        Return UXBInterpValueFloat(UXBClockTimerSeconds())   ' S-624: ortak tanim (src/common/uxb_clock.fbs)
     End Select
     Return UXBRuntimeSetError(rt, UXB_RT_ERR_SERVICE_NOT_FOUND, "math service not found: " & serviceId)
 End Function

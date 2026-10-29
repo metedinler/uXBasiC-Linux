@@ -1,0 +1,11 @@
+DIM x AS I32 = 0
+DIM i AS I32
+FOR i = 1 TO 3
+    LOCK x
+        x += 1
+        CONTINUE FOR
+    END LOCK
+NEXT i
+LOCK x
+    PRINT x
+END LOCK

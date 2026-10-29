@@ -1,0 +1,3 @@
+OPEN "cleanup_fault.txt" FOR OUTPUT AS #1
+PRINT #1, "saved"
+THROW "CLEANUP_MARKER"

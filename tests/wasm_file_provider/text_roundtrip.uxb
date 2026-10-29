@@ -1,0 +1,17 @@
+DIM f AS FILE_HANDLE
+DIM lineText AS STRING
+OPEN "roundtrip.txt" FOR OUTPUT AS f
+PRINT #f, "Şükrü"; CHR(0); "!"
+PRINT #f, "next"
+CLOSE f
+PRINT f
+OPEN "roundtrip.txt" FOR INPUT AS f
+INPUT #f, lineText
+PRINT LEN(lineText)
+PRINT ASC(MID(lineText, 9, 1))
+PRINT RIGHT(lineText, 1)
+INPUT #f, lineText
+PRINT lineText
+PRINT EOF(f)
+CLOSE f
+PRINT FREEFILE

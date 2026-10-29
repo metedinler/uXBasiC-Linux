@@ -1,0 +1,15 @@
+CLASS Kutu
+    PUBLIC
+    n AS I32
+END CLASS
+FUNCTION Topla(depth AS I32) AS I32
+    DIM a(0 TO 1, 0 TO 1) AS Kutu
+    a(1, 1) = NEW Kutu()
+    a(1, 1).n = depth * 10
+    DIM childValue AS I32 = 0
+    IF depth > 0 THEN
+        childValue = Topla(depth - 1)
+    END IF
+    RETURN a(1, 1).n + childValue
+END FUNCTION
+PRINT Topla(3)

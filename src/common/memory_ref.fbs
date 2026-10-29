@@ -1,6 +1,8 @@
 #ifndef UXB_MEMORY_REF_FBS
 #define UXB_MEMORY_REF_FBS
 
+#include once "memory_ref_limits.fbs"
+
 ' MemoryRef region registry -- the ONE place that knows which NATIVE address
 ' ranges are uXBasic-owned (S-056).
 '
@@ -23,7 +25,10 @@
 ' VIRTUAL memory is a separate memory class with its own bounds (VMem*); it never
 ' consults this registry.
 Const UXB_MEMREF_KIND_ARRAY As Integer = 1
-Const UXB_MEMREF_MAX As Integer = 4096
+' S-582 (2026-10-16): the table started with 4096 regions and then REFUSED further registrations while every caller
+' ignored the result -- the 4097th live array was silently unprotected (a stale pointer into it read freed memory without
+' any error). It now starts at UXB_MEMREF_MAX, doubles up to UXB_MEMREF_HARD_MAX, and if even that is exhausted a NATIVE
+' access to an address no region knows is REFUSED (never silently allowed).
 
 Type UXBMemRegion
     baseAddr As ULongInt
@@ -34,8 +39,10 @@ Type UXBMemRegion
     state As Integer   ' 0 free slot, 1 live, 2 released (tombstone)
 End Type
 
-Dim Shared gUxbMemRegions(0 To UXB_MEMREF_MAX - 1) As UXBMemRegion
+Dim Shared gUxbMemRegions() As UXBMemRegion
+Dim Shared gUxbMemRegionCap As Integer
 Dim Shared gUxbMemRegionCount As Integer
+Dim Shared gUxbMemRefOverflow As Integer
 Dim Shared gUxbMemRefGeneration As Integer
 ' Why the last refused access was refused (empty when the last check passed).
 Dim Shared gUxbMemRefLastError As String
@@ -47,6 +54,7 @@ Private Sub UXBMemRefReset()
         gUxbMemRegions(i).ownerName = ""
     Next i
     gUxbMemRegionCount = 0
+    gUxbMemRefOverflow = 0
     gUxbMemRefGeneration = 0
     gUxbMemRefLastError = ""
 End Sub
@@ -55,6 +63,11 @@ End Sub
 ' region overlapping it is retired (the allocator handed the address out again).
 Private Function UXBMemRefRegister(ByVal kindId As Integer, ByVal baseAddr As ULongInt, ByVal byteLength As ULongInt, ByRef ownerText As String) As Integer
     If baseAddr = 0 Or byteLength = 0 Then Return -1
+    If byteLength > (Not CULngInt(0)) - baseAddr Then
+        gUxbMemRefOverflow = 1
+        gUxbMemRefLastError = "MemoryRef: region address/length overflows U64"
+        Return -1
+    End If
 
     Dim i As Integer
     Dim slot As Integer
@@ -70,7 +83,21 @@ Private Function UXBMemRefRegister(ByVal kindId As Integer, ByVal baseAddr As UL
         If slot = -1 And gUxbMemRegions(i).state = 0 Then slot = i
     Next i
     If slot = -1 Then
-        If gUxbMemRegionCount >= UXB_MEMREF_MAX Then Return -1
+        If gUxbMemRegionCap = 0 Then
+            ReDim gUxbMemRegions(0 To UXB_MEMREF_MAX - 1)
+            gUxbMemRegionCap = UXB_MEMREF_MAX
+        End If
+        If gUxbMemRegionCount >= gUxbMemRegionCap Then
+            If gUxbMemRegionCap >= UXB_MEMREF_HARD_MAX Then
+                gUxbMemRefOverflow = 1
+                Return -1
+            End If
+            Dim newRegionCap As Integer
+            newRegionCap = gUxbMemRegionCap * 2
+            If newRegionCap > UXB_MEMREF_HARD_MAX Then newRegionCap = UXB_MEMREF_HARD_MAX
+            ReDim Preserve gUxbMemRegions(0 To newRegionCap - 1)
+            gUxbMemRegionCap = newRegionCap
+        End If
         slot = gUxbMemRegionCount
         gUxbMemRegionCount += 1
     End If
@@ -104,26 +131,46 @@ Private Function UXBMemRefCheck(ByVal addr As ULongInt, ByVal accessBytes As ULo
     gUxbMemRefLastError = ""
     If accessBytes = 0 Then accessBytes = 1
 
+    If accessBytes > (Not CULngInt(0)) - addr Then
+        gUxbMemRefLastError = "MemoryRef: NATIVE access address/length overflows U64"
+        Return 0
+    End If
+    Dim accessEnd As ULongInt = addr + accessBytes
+
     Dim i As Integer
     Dim staleIdx As Integer
     staleIdx = -1
     For i = 0 To gUxbMemRegionCount - 1
+        Dim regionBase As ULongInt = gUxbMemRegions(i).baseAddr
+        Dim regionEnd As ULongInt = regionBase + gUxbMemRegions(i).byteLength
         Select Case gUxbMemRegions(i).state
         Case 1
-            If addr >= gUxbMemRegions(i).baseAddr And addr <= gUxbMemRegions(i).baseAddr + gUxbMemRegions(i).byteLength Then
-                If addr + accessBytes > gUxbMemRegions(i).baseAddr + gUxbMemRegions(i).byteLength Then
-                    gUxbMemRefLastError = "MemoryRef: " & LTrim(Str(accessBytes)) & "-byte access at offset " & LTrim(Str(addr - gUxbMemRegions(i).baseAddr)) & " runs past the end of " & gUxbMemRegions(i).ownerName & " (" & LTrim(Str(gUxbMemRegions(i).byteLength)) & " bytes)"
+            ' A span entering owned storage from below is not external.
+            ' Preserve the existing one-past-end check as well.
+            If addr <= regionEnd And accessEnd > regionBase Then
+                If addr < regionBase Then
+                    gUxbMemRefLastError = "MemoryRef: " & LTrim(Str(accessBytes)) & "-byte access starts before " & gUxbMemRegions(i).ownerName & " and overlaps its owned storage"
+                    Return 0
+                End If
+                If accessEnd > regionEnd Then
+                    gUxbMemRefLastError = "MemoryRef: " & LTrim(Str(accessBytes)) & "-byte access at offset " & LTrim(Str(addr - regionBase)) & " runs past the end of " & gUxbMemRegions(i).ownerName & " (" & LTrim(Str(gUxbMemRegions(i).byteLength)) & " bytes)"
                     Return 0
                 End If
                 Return 1
             End If
         Case 2
-            If addr >= gUxbMemRegions(i).baseAddr And addr < gUxbMemRegions(i).baseAddr + gUxbMemRegions(i).byteLength Then staleIdx = i
+            If addr < regionEnd And accessEnd > regionBase Then staleIdx = i
         End Select
     Next i
 
     If staleIdx >= 0 Then
         gUxbMemRefLastError = "MemoryRef: stale pointer -- " & gUxbMemRegions(staleIdx).ownerName & " was released (REDIM/ERASE) after this address was taken"
+        Return 0
+    End If
+    ' S-582: an address no region knows MAY be an array that could not be registered (table full) -- refuse instead of
+    ' silently allowing an unprotected access.
+    If gUxbMemRefOverflow <> 0 Then
+        gUxbMemRefLastError = "MemoryRef: the region table is full (" & LTrim(Str(UXB_MEMREF_HARD_MAX)) & " live arrays); an address outside every registered region cannot be checked"
         Return 0
     End If
     Return 1

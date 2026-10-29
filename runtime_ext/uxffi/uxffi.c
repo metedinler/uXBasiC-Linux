@@ -155,23 +155,42 @@ static uint32_t store_handle(void *ptr, int owned) {
     return token;
 }
 
-static int is_handle_token(uint64_t value) {
-    return decode_token(value, NULL, NULL);
+/* S-653: A handle token is a 32-bit value (so it fits an interpreter I32/U32 variable), which makes it
+   numerically indistinguishable from a real user-mode address in 0x40000000..0x7FFFFFFF.  The old rule
+   ("every value with the tag bits is a token") rejected genuine pointers (VARPTR, heap addresses) as
+   "stale or invalid pointer handle token" whenever the process happened to place memory in that band.
+   A PTR argument is therefore classified by looking at the handle table:
+     - the value names a LIVE handle (slot in use, same generation)         -> TOKEN: use the registered pointer
+     - not live, but the address is committed memory in this process         -> RAW:   pass the value through
+     - not live, not committed memory, and the slot was handed out before     -> STALE: the token was released
+     - anything else                                                          -> RAW:   pass the value through
+   The only remaining ambiguity is a real address numerically equal to a currently LIVE token, which resolves
+   in favour of the token. */
+enum { UXFFI_CLASS_RAW = 0, UXFFI_CLASS_TOKEN = 1, UXFFI_CLASS_STALE = 2 };
+
+static int address_is_committed(uint64_t value) {
+    MEMORY_BASIC_INFORMATION info;
+    if (VirtualQuery((LPCVOID)(uintptr_t)value, &info, sizeof(info)) != sizeof(info)) return 0;
+    return info.State == MEM_COMMIT;
 }
 
-static void *resolve_handle(uint64_t value) {
+static int classify_pointer_arg(uint64_t value, void **resolved) {
     uint32_t index;
     uint32_t generation;
-    void *result = NULL;
-    if (!decode_token(value, &index, &generation)) {
-        return (void *)(uintptr_t)value;
-    }
+    int live = 0;
+    int used_before = 0;
+    *resolved = (void *)(uintptr_t)value;
+    if (!decode_token(value, &index, &generation)) return UXFFI_CLASS_RAW;
     AcquireSRWLockShared(&g_lock);
     if (g_handles[index].ptr && g_handles[index].generation == generation) {
-        result = g_handles[index].ptr;
+        *resolved = g_handles[index].ptr;
+        live = 1;
     }
+    used_before = g_handles[index].generation != 0;
     ReleaseSRWLockShared(&g_lock);
-    return result;
+    if (live) return UXFFI_CLASS_TOKEN;
+    if (address_is_committed(value)) return UXFFI_CLASS_RAW;
+    return used_before ? UXFFI_CLASS_STALE : UXFFI_CLASS_RAW;
 }
 
 static int memory_region_is_readable(const MEMORY_BASIC_INFORMATION *info) {
@@ -442,8 +461,7 @@ int uxffi_invoke10(
             case UXFFI_U64: values_u64[i] = arg_u64[i]; arg_values[i] = &values_u64[i]; break;
             case UXFFI_F64: values_f64[i] = arg_f64[i]; arg_values[i] = &values_f64[i]; break;
             case UXFFI_PTR:
-                values_ptr[i] = resolve_handle(arg_u64[i]);
-                if (is_handle_token(arg_u64[i]) && values_ptr[i] == NULL) {
+                if (classify_pointer_arg(arg_u64[i], &values_ptr[i]) == UXFFI_CLASS_STALE) {
                     set_error(error_text, error_capacity, "stale or invalid pointer handle token");
                     return 0;
                 }
@@ -507,7 +525,8 @@ int uxffi_invoke10(
         /* Destructors in the standard library consume their first PTR handle.
            Do not invalidate unrelated/buffer pointer arguments. */
         for (int i = 0; i < arg_count; ++i) {
-            if (arg_kinds[i] == UXFFI_PTR && is_handle_token(arg_u64[i])) {
+            void *ignored_ptr;
+            if (arg_kinds[i] == UXFFI_PTR && classify_pointer_arg(arg_u64[i], &ignored_ptr) == UXFFI_CLASS_TOKEN) {
                 uxffi_release_handle((uint32_t)arg_u64[i]);
                 break;
             }

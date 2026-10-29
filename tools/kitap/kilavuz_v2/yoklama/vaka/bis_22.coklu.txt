@@ -1,0 +1,177 @@
+E1 ifade zinciri (beklenen 18 / [5] / [16]XY / tek:7 / 81 / [49])
+FUNCTION Kare(x AS I32) AS I32
+    RETURN x * x
+END FUNCTION
+FUNCTION Topla(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+FUNCTION Etiket(n AS I32) AS STRING
+    RETURN "[" + STR(n) + "]"
+END FUNCTION
+MAIN
+    DIM n AS I32 = 7
+    PRINT Topla(Kare(3), Kare(Topla(1, 2)))
+    PRINT Etiket(Topla(Kare(2), 1))
+    PRINT UCASE(LEFT(Etiket(Kare(4)) + "xyz", 6))
+    PRINT IFF(n MOD 2 = 0, "cift", "tek") + ":" + STR(n)
+    PRINT 3 |> Kare |> Kare
+    PRINT Etiket(n > 5 ? Kare(n) : Topla(n, n))
+END MAIN
+=====
+E2 sinif icinde DICT icinde LIST (beklenen 15 / 7 / 2)
+CLASS Depo
+    PUBLIC
+    DIM kategoriler AS DICT
+    CONSTRUCTOR()
+        kategoriler = DICT_NEW()
+    END CONSTRUCTOR
+    METHOD Ekle(k AS STRING, adet AS I32)
+        IF DICTHAS(kategoriler, k) = 0 THEN DICTSET(kategoriler, k, LIST_NEW())
+        LISTADD(DICTGET(kategoriler, k), adet)
+    END METHOD
+    METHOD Toplam(k AS STRING) AS I32
+        DIM t AS I32 = 0
+        DIM i AS I32
+        FOR i = 0 TO LISTLEN(DICTGET(kategoriler, k)) - 1
+            t = t + CINT(LISTGET(DICTGET(kategoriler, k), i))
+        NEXT
+        RETURN t
+    END METHOD
+    METHOD KategoriSayisi() AS I32
+        RETURN DICTLEN(kategoriler)
+    END METHOD
+END CLASS
+MAIN
+    DIM d AS Depo = NEW Depo()
+    d.Ekle("kalem", 10)
+    d.Ekle("kalem", 5)
+    d.Ekle("defter", 7)
+    PRINT d.Toplam("kalem")
+    PRINT d.Toplam("defter")
+    PRINT d.KategoriSayisi()
+END MAIN
+=====
+E3 nesne listesi, taban tipli degisken, sanal cagri (beklenen 9 / 12 / 21)
+CLASS Sekil
+    PUBLIC
+    VIRTUAL METHOD Alan() AS I32
+        RETURN 0
+    END METHOD
+END CLASS
+CLASS KareS EXTENDS Sekil
+    PUBLIC
+    DIM k AS I32
+    CONSTRUCTOR(ak AS I32)
+        k = ak
+    END CONSTRUCTOR
+    OVERRIDE METHOD Alan() AS I32
+        RETURN k * k
+    END METHOD
+END CLASS
+CLASS DikS EXTENDS Sekil
+    PUBLIC
+    DIM en AS I32
+    DIM boy AS I32
+    CONSTRUCTOR(a AS I32, b AS I32)
+        en = a
+        boy = b
+    END CONSTRUCTOR
+    OVERRIDE METHOD Alan() AS I32
+        RETURN en * boy
+    END METHOD
+END CLASS
+MAIN
+    DIM l AS LIST
+    DIM a AS KareS = NEW KareS(3)
+    DIM b AS DikS = NEW DikS(3, 4)
+    LISTADD(l, a)
+    LISTADD(l, b)
+    DIM s AS Sekil
+    DIM toplam AS I32 = 0
+    FOR EACH s IN l
+        PRINT s.Alan()
+        toplam = toplam + s.Alan()
+    NEXT
+    PRINT toplam
+END MAIN
+=====
+E4 onislemci THREAD uretir, TASK OF I64 (beklenen 76)
+FUNCTION KareHesap(x AS I64) AS I64
+    RETURN x * x
+END FUNCTION
+FUNCTION KupHesap(x AS I64) AS I64
+    RETURN x * x * x
+END FUNCTION
+%%FOREACH AD IN (Kare, Kup)
+THREAD {{AD}}Isci(n AS I64) AS I64
+    RETURN {{AD}}Hesap(n)
+END THREAD
+%%ENDFOREACH
+MAIN
+    DIM a AS TASK OF I64 = SPAWN KareIsci(7)
+    DIM b AS TASK OF I64 = SPAWN KupIsci(3)
+    PRINT a.JOIN() + b.JOIN()
+END MAIN
+=====
+E5 THREAD RATIONAL dondurur (yalniz MIR: beklenen 11/6)
+THREAD Harmonik3() AS RATIONAL
+    DIM toplam AS RATIONAL
+    DIM bir AS RATIONAL
+    DIM payda AS RATIONAL
+    DIM i AS I32
+    bir = 1
+    FOR i = 1 TO 3
+        payda = i
+        toplam = toplam + bir / payda
+    NEXT
+    RETURN toplam
+END THREAD
+MAIN
+    DIM t AS TASK OF RATIONAL = SPAWN Harmonik3()
+    DIM sonuc AS RATIONAL
+    sonuc = t.JOIN()
+    PRINT sonuc
+END MAIN
+=====
+E6 butunlesik program: sinif+ozyineleme+PIPE+EVENT+THREAD+PARALEL+ATOMIC (beklenen olay satiri + toplam + islenen: 4)
+CLASS Analiz
+    PUBLIC
+    METHOD Duzelt(x AS F64, derinlik AS I32) AS F64
+        IF derinlik <= 0 THEN RETURN x
+        RETURN Duzelt((x + x / 100.0) / 2.0, derinlik - 1)
+    END METHOD
+END CLASS
+PIPE Normalle(deger AS F64) AS F64
+    RETURN deger / 100.0
+END PIPE
+DIM ATOMIC islenen AS I64 = 0
+THREAD Denetle(kimlik AS I32) AS F64
+    DIM a AS Analiz = NEW Analiz()
+    DIM v AS F64
+    v = a.Duzelt(kimlik * 10.0, 4)
+    islenen.ADD(1)
+    DELETE a
+    RETURN v
+END THREAD
+PARALEL Toplu(ilk AS I32) AS F64
+    DIM ts(3) AS TASK OF F64
+    DIM i AS I32
+    DIM toplam AS F64 = 0.0
+    FOR i = 0 TO 3
+        ts(i) = SPAWN Denetle(ilk + i)
+    NEXT
+    FOR i = 0 TO 3
+        toplam = toplam + ts(i).JOIN()
+    NEXT
+    RETURN toplam
+END PARALEL
+EVENT Geldi(kimlik AS I32, ham AS F64)
+    TRIGGER PIPE Normalle, ham
+    PRINT "olay "; kimlik; ": "; CDBL(TASKOUT)
+END EVENT
+MAIN
+    TRIGGER EVENT Geldi, 1, 72.5
+    DIM b AS TASK OF F64 = SPAWN Toplu(1)
+    PRINT b.JOIN()
+    PRINT "islenen: "; islenen.LOAD()
+END MAIN

@@ -1,0 +1,48 @@
+tekli ! sabit
+PRINT !5
+PRINT !0
+=====
+tekli + sabit
+PRINT +5
+=====
+tekli ! degisken
+DIM a AS I32 = 5
+PRINT !a
+=====
+tekli + degisken
+DIM a AS I32 = 5
+PRINT +a
+=====
+tekli + atama
+DIM a AS I32 = 5
+DIM b AS I32
+b = +a
+PRINT b
+=====
+tekli ! kosul
+DIM a AS I32 = 0
+IF !a THEN
+    PRINT "yok"
+ELSE
+    PRINT "var"
+END IF
+=====
+tekli - degisken
+DIM a AS I32 = 5
+PRINT -a
+=====
+NOT kosul
+DIM a AS I32 = 0
+IF NOT a THEN
+    PRINT "yok"
+ELSE
+    PRINT "var"
+END IF
+=====
+CINT yuvarlama JS
+DIM a AS F64 = 2.7
+PRINT CINT(a)
+PRINT CINT(2.5)
+PRINT CINT(3.5)
+PRINT CINT(-2.7)
+PRINT INT(-2.5)

@@ -1,0 +1,54 @@
+{
+  "callee_global_with_shadow": {
+    "output": "local\n2\n7\n5\n0\n9",
+    "engines": ["AST", "MIR", "x64", "AST-x64", "JS", "WASM"]
+  },
+  "rmw_rendezvous": {
+    "output": "1\n1\n7\n0",
+    "engines": ["x64", "AST-x64"]
+  },
+  "recursive_scope": {
+    "output": "5\n0\n5\n0\n5\n0\n7\n1",
+    "engines": ["AST", "MIR", "x64", "AST-x64"]
+  },
+  "local_shadow": {
+    "output": "local\n7\n5",
+    "engines": ["AST", "MIR", "x64", "AST-x64"]
+  },
+  "shared_expression_order": {
+    "output": "6\n0\n5\n7\n1",
+    "engines": ["AST", "MIR", "x64", "AST-x64"]
+  },
+  "nested_builtin_once": {
+    "output": "new\n5\n7\n1",
+    "engines": ["AST", "MIR", "x64", "AST-x64"]
+  },
+  "shared_append": {
+    "output": "200\n200\n405\n0",
+    "engines": ["AST", "MIR", "x64", "AST-x64"]
+  },
+  "shared_call_order": {
+    "output": "5\n0\n7",
+    "engines": ["AST", "MIR", "x64", "AST-x64"]
+  },
+  "hoisted_ring": {
+    "output": "5\n0\n128\n9",
+    "engines": ["AST", "MIR", "x64", "AST-x64"]
+  },
+  "argument_ring": {
+    "output": "5\n65\n0\n68\n128",
+    "engines": ["AST", "MIR", "x64", "AST-x64"]
+  },
+  "return_alias": {
+    "output": "3\n0\n90\n0",
+    "engines": ["AST", "MIR", "x64", "AST-x64", "JS", "WASM"]
+  },
+  "mixed_six": {
+    "output": "3\n3\n0\n0\n12.75",
+    "engines": ["AST", "MIR", "x64", "AST-x64", "JS", "WASM"]
+  },
+  "wait_owned": {
+    "output": "5\n65\n0\n68\n1\n1",
+    "engines": ["x64", "AST-x64"]
+  }
+}

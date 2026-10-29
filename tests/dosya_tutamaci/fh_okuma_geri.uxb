@@ -1,0 +1,16 @@
+' S-549: write with one handle, read back with another OPEN of the same variable (it was set to 0 by CLOSE, so it picks a channel again).
+DIM f AS FILE_HANDLE
+DIM s AS STRING
+OPEN "fh_rw.txt" FOR OUTPUT AS f
+PRINT #f, "bir"
+PRINT #f, "iki"
+CLOSE f
+OPEN "fh_rw.txt" FOR INPUT AS f
+INPUT #f, s
+PRINT s
+INPUT #f, s
+PRINT s
+PRINT EOF(f)
+PRINT LOF(f) > 0
+CLOSE f
+PRINT f

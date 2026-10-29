@@ -1,0 +1,22 @@
+CLASS Box
+PUBLIC
+value AS I32
+METHOD SetByThis(v AS I32)
+THIS.value = v
+END METHOD
+METHOD SetByMe(v AS I32)
+ME.value = v
+END METHOD
+METHOD GetValue() AS I32
+RETURN THIS.value
+END METHOD
+END CLASS
+
+DIM b AS Box
+b = NEW Box()
+CALL b.SetByThis(111)
+PRINT b.GetValue()
+CALL b.SetByMe(222)
+PRINT b.GetValue()
+DELETE b
+END

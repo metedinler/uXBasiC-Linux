@@ -1,0 +1,18 @@
+IFF araya yazilan islec
+DIM a AS I32 = 5
+DIM b AS I32 = 3
+PRINT a IFF b
+PRINT a IFF a
+PRINT a XNOR b
+PRINT a EQV b
+=====
+IFF islev biçimi
+DIM n AS I32 = 7
+PRINT IFF(n > 5, 100, 200)
+PRINT IFF(n > 9, "buyuk", "kucuk")
+=====
+IFF islev ve islec bir arada
+DIM a AS I32 = 6
+DIM b AS I32 = 6
+PRINT IFF(a IFF b, "es", "farkli")
+PRINT IFF((a IFF b) = -1, 1, 0)

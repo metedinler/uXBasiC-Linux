@@ -1,0 +1,21 @@
+DIM f AS F64 = -3.0
+SELECT CASE f
+    CASE -4.5 TO -2.5
+        PRINT "float"
+    CASE ELSE
+        PRINT "bad"
+END SELECT
+DIM u AS U64 = U64(0) - U64(2)
+SELECT CASE u
+    CASE U64(0) TO U64(5)
+        PRINT "bad"
+    CASE U64(0) - U64(3) TO U64(0) - U64(1)
+        PRINT "unsigned"
+    CASE ELSE
+        PRINT "bad"
+END SELECT
+DIM big AS I64 = 4294967296
+SELECT CASE big
+    CASE 4294967295 TO 4294967297
+        PRINT "wide"
+END SELECT

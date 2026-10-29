@@ -8,6 +8,9 @@
 Type UXBLibraryTypeContract
     typeName As String
     packageName As String
+    packageVersion As String
+    dependenciesCsv As String
+    capabilitiesCsv As String
     layoutKind As String
     sizeBytes As Integer
     alignBytes As Integer
@@ -34,9 +37,13 @@ End Type
 
 Dim Shared gUXBLibraryTypes() As UXBLibraryTypeContract
 Dim Shared gUXBLibraryTypeCount As Integer
+Dim Shared gUXBLibraryTypeUsedNames() As String
+Dim Shared gUXBLibraryTypeUsedCount As Integer
 
 Declare Function UXBLibraryTypeRegistryFind(ByVal typeName As String) As Integer
 Declare Function UXBLibraryTypeEnsureReferenceSet(ByRef errText As String) As Integer
+Declare Sub UXBLibraryTypeMarkUsed(ByVal typeName As String)
+Declare Sub UXBLibraryTypeUsageReset()
 
 Private Function UXBLibraryTypeNorm(ByVal textValue As String) As String
     Return UCase(Trim(textValue))
@@ -193,6 +200,9 @@ End Function
 Sub UXBLibraryTypeContractInit(ByRef c As UXBLibraryTypeContract)
     c.typeName = ""
     c.packageName = ""
+    c.packageVersion = ""
+    c.dependenciesCsv = ""
+    c.capabilitiesCsv = ""
     c.layoutKind = "opaque"
     c.sizeBytes = 0
     c.alignBytes = 1
@@ -296,6 +306,7 @@ Function UXBLibraryTypeFindCallOwner(ByVal callNameRaw As String, ByRef contract
 
     contractIdxOut = UXBLibraryTypeRegistryFind(typeNameOut)
     If contractIdxOut = -1 Then Return 0
+    UXBLibraryTypeMarkUsed typeNameOut
     Return 1
 End Function
 
@@ -357,6 +368,7 @@ Function UXBLibraryTypeResolveBinaryOperator(ByVal leftType As String, ByVal opT
     Dim idx As Integer
     idx = UXBLibraryTypeRegistryFind(l)
     If idx = -1 Then Return 0
+    UXBLibraryTypeMarkUsed l
     If UXBLibraryTypeHasToken(gUXBLibraryTypes(idx).operatorsCsv, opName) = 0 Then Return 0
 
     resultTypeOut = UXBLibraryTypeResultTypeForOperator(gUXBLibraryTypes(idx).typeName, opName)
@@ -375,6 +387,7 @@ Function UXBLibraryTypeLayoutInfo(ByVal typeName As String, ByRef sizeOut As Int
     Dim idx As Integer
     idx = UXBLibraryTypeRegistryFind(typeName)
     If idx = -1 Then Return 0
+    UXBLibraryTypeMarkUsed typeName
     sizeOut = gUXBLibraryTypes(idx).sizeBytes
     alignOut = gUXBLibraryTypes(idx).alignBytes
     If alignOut < 1 Then alignOut = 1
@@ -408,7 +421,10 @@ Function UXBLibraryTypeCanConvertTo(ByVal fromType As String, ByVal toType As St
     idx = UXBLibraryTypeRegistryFind(toType)
     If idx = -1 Then Return 0
 
-    If UXBLibraryTypeNorm(fromType) = UXBLibraryTypeNorm(gUXBLibraryTypes(idx).typeName) Then Return 1
+    If UXBLibraryTypeNorm(fromType) = UXBLibraryTypeNorm(gUXBLibraryTypes(idx).typeName) Then
+        UXBLibraryTypeMarkUsed toType
+        Return 1
+    End If
 
     Dim convName As String
     convName = UXBLibraryTypeConversionName(fromType)
@@ -420,7 +436,10 @@ Function UXBLibraryTypeCanConvertTo(ByVal fromType As String, ByVal toType As St
             Return 0
         End Select
     End If
-    Return UXBLibraryTypeHasToken(gUXBLibraryTypes(idx).conversionsCsv, convName)
+    If UXBLibraryTypeHasToken(gUXBLibraryTypes(idx).conversionsCsv, convName) = 0 Then Return 0
+    UXBLibraryTypeMarkUsed toType
+    If UXBLibraryTypeRegistryFind(fromType) >= 0 Then UXBLibraryTypeMarkUsed fromType
+    Return 1
 End Function
 
 Function UXBLibraryTypeValidateLifecycle(ByRef c As UXBLibraryTypeContract, ByRef errText As String) As Integer
@@ -496,15 +515,170 @@ Function UXBLibraryTypeNeedsManagedCopy(ByVal typeName As String) As Integer
     Return IIf(LCase(Trim(gUXBLibraryTypes(idx).copyModel)) = "clone" Or LCase(Trim(gUXBLibraryTypes(idx).copyModel)) = "retain", 1, 0)
 End Function
 
+' Return the canonical MIR member used for an implicit value transfer.  The
+' source-level COPY member remains available as an explicit library hook, but
+' an assignment/BYVAL/RETURN boundary must expose the contract's actual
+' ownership action so later MIR consumers do not have to rediscover it.
+Function UXBLibraryTypeManagedTransferMember(ByVal typeName As String) As String
+    Dim idx As Integer = UXBLibraryTypeRegistryFind(typeName)
+    If idx < 0 Then Return ""
+    Select Case LCase(Trim(gUXBLibraryTypes(idx).copyModel))
+    Case "clone": Return "CLONE"
+    Case "retain": Return "RETAIN"
+    End Select
+    Return ""
+End Function
+
+' A provider DROP is required at a function lifetime boundary.  Arrays keep
+' their element contract in the heap and are released by the heap scope path;
+' this helper is for scalar managed locals and BYVAL parameters represented in
+' the MIR function record.
+Function UXBLibraryTypeNeedsManagedDrop(ByVal typeName As String) As Integer
+    Dim idx As Integer = UXBLibraryTypeRegistryFind(typeName)
+    If idx < 0 Then Return 0
+    If LCase(Trim(gUXBLibraryTypes(idx).dropModel)) <> "provider" Then Return 0
+    Return UXBLibraryTypeHasToken(gUXBLibraryTypes(idx).lifecycleCsv, "DROP")
+End Function
+
+' Provider ABI registry. A manifest name is only an ABI claim until a target
+' registers the provider implementation. Keep the registry target-specific so
+' an available MIR provider cannot accidentally imply JS/WASM/native support.
+Function UXBLibraryTypeProviderIsRegistered(ByVal targetName As String, ByVal providerName As String) As Integer
+    Dim target As String = UCase(Trim(targetName))
+    Dim provider As String = UCase(Trim(providerName))
+    If target <> "MIR" Or provider = "" Then Return 0
+
+    Select Case provider
+    Case "OWNED_TEXT_REFERENCE", "RATIONAL_REFERENCE"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' A registered provider name is not by itself a type-safe ABI binding. Keep
+' the supported type set beside the target/provider gate until providers gain
+' a manifest-declared capability table.
+Function UXBLibraryTypeProviderSupportsType(ByVal targetName As String, ByVal providerName As String, ByVal typeName As String) As Integer
+    If UXBLibraryTypeProviderIsRegistered(targetName, providerName) = 0 Then Return 0
+
+    Dim provider As String = UCase(Trim(providerName))
+    Dim typeKey As String = UCase(Trim(typeName))
+    Select Case provider
+    Case "OWNED_TEXT_REFERENCE"
+        Return IIf(typeKey = "TEXT_VALUE" Or typeKey = "TEXT_REF", 1, 0)
+    Case "RATIONAL_REFERENCE"
+        Return IIf(typeKey = "RATIONAL", 1, 0)
+    End Select
+    Return 0
+End Function
+
+' A provider may be registered for a type without implementing every member
+' declared by that type's manifest. Keep this second ABI gate explicit so a
+' valid manifest call cannot fall through into an incomplete provider.
+Function UXBLibraryTypeProviderSupportsOperation(ByVal targetName As String, ByVal providerName As String, ByVal typeName As String, ByVal memberName As String) As Integer
+    If UXBLibraryTypeProviderSupportsType(targetName, providerName, typeName) = 0 Then Return 0
+
+    Dim provider As String = UCase(Trim(providerName))
+    Dim typeKey As String = UCase(Trim(typeName))
+    Dim memberKey As String = UCase(Trim(memberName))
+    Select Case provider
+    Case "OWNED_TEXT_REFERENCE"
+        If typeKey <> "TEXT_VALUE" And typeKey <> "TEXT_REF" Then Return 0
+        Select Case memberKey
+        Case "CONSTRUCT", "COPY", "RETAIN", "CLONE", "DROP", "NORMALIZE", "TOSTRING"
+            Return 1
+        End Select
+    Case "RATIONAL_REFERENCE"
+        If typeKey <> "RATIONAL" Then Return 0
+        Select Case memberKey
+        Case "COPY", "CLONE", "RETAIN", "DROP", "TOSTRING", _
+             "ADD", "SUB", "MUL", "DIV", "EQ", "NE", "LT", "LE", "GT", "GE"
+            Return 1
+        End Select
+    End Select
+    Return 0
+End Function
+
+' Target capability claims are checked only when a manifest supplies the
+' capability field. Older manifests remain compatible, while an explicit
+' target claim cannot omit the provider capability required by that target.
+Function UXBLibraryTypeProviderSupportsCapability(ByVal targetName As String, ByVal providerName As String, ByVal capabilityName As String) As Integer
+    If UXBLibraryTypeProviderIsRegistered(targetName, providerName) = 0 Then Return 0
+
+    Dim target As String = UCase(Trim(targetName))
+    Dim capability As String = UCase(Trim(capabilityName))
+    Select Case target
+    Case "MIR"
+        Return IIf(capability = "MIR_PROVIDER", 1, 0)
+    Case "JS"
+        Return IIf(capability = "JS_PROVIDER", 1, 0)
+    Case "WAT", "WASM"
+        Return IIf(capability = "LINEAR_MEMORY" Or capability = "WASM_PROVIDER", 1, 0)
+    Case "NATIVE"
+        Return IIf(capability = "NATIVE_X64", 1, 0)
+    End Select
+    Return 0
+End Function
+
+' Return the provider claimed by a contract for one concrete execution target.
+' The manifest claim is intentionally kept separate from registration: a name
+' in native_provider/js_provider/wasm_provider is not an implementation.
+Private Function UXBLibraryTypeProviderForTarget(ByRef c As UXBLibraryTypeContract, ByVal targetName As String) As String
+    Dim target As String = UCase(Trim(targetName))
+    Select Case target
+    Case "NATIVE"
+        Return c.nativeProvider
+    Case "JS"
+        Return c.jsProvider
+    Case "WAT", "WASM"
+        Return c.wasmProvider
+    Case "MIR"
+        Return c.mirProvider
+    End Select
+    Return ""
+End Function
+
 Function UXBLibraryTypeValidateExecutionTarget(ByVal targetName As String, ByRef errText As String) As Integer
     errText = ""
-    If targetName = "MIR" Then Return 1
-    For i As Integer = 0 To gUXBLibraryTypeCount - 1
+    Dim target As String = UCase(Trim(targetName))
+    If target = "MIR" Then
+        For usedIndex As Integer = 0 To gUXBLibraryTypeUsedCount - 1
+            Dim mirIndex As Integer = UXBLibraryTypeRegistryFind(gUXBLibraryTypeUsedNames(usedIndex))
+            If mirIndex < 0 Then Continue For
+            If Trim(gUXBLibraryTypes(mirIndex).capabilitiesCsv) <> "" Then
+                Dim mirProvider As String = UXBLibraryTypeProviderForTarget(gUXBLibraryTypes(mirIndex), target)
+                If UXBLibraryTypeProviderSupportsCapability(target, mirProvider, "MIR_PROVIDER") = 0 Or _
+                   UXBLibraryTypeHasToken(gUXBLibraryTypes(mirIndex).capabilitiesCsv, "MIR_PROVIDER") = 0 Then
+                    errText = "UXB_LIBTYPE_PROVIDER_UNAVAILABLE: library type provider unavailable for " & target & ": " & gUXBLibraryTypes(mirIndex).typeName & " (missing capability MIR_PROVIDER)"
+                    Return 0
+                End If
+            End If
+        Next usedIndex
+        Return 1
+    End If
+    ' The reference registry is initialized for every compilation so that
+    ' type lookup is deterministic. Validate only types the current source
+    ' actually uses; an unused package must not block an otherwise primitive
+    ' program on a missing target provider.
+    For usedIndex As Integer = 0 To gUXBLibraryTypeUsedCount - 1
+        Dim i As Integer = UXBLibraryTypeRegistryFind(gUXBLibraryTypeUsedNames(usedIndex))
+        If i < 0 Then Continue For
         If UXBLibraryTypeNeedsManagedCopy(gUXBLibraryTypes(i).typeName) <> 0 Then
-            errText = "library type lifecycle provider unavailable for " & targetName & ": " & gUXBLibraryTypes(i).typeName
+            errText = "UXB_LIBTYPE_PROVIDER_UNAVAILABLE: library type lifecycle provider unavailable for " & target & ": " & gUXBLibraryTypes(i).typeName
             Return 0
         End If
-    Next i
+
+        ' Value/BITCOPY types still need a target provider for operator or
+        ' conversion lowering. Previously only managed lifecycle types were
+        ' checked, so RATIONAL silently fell through to scalar placeholder
+        ' code on AST-x64 and WAT/WASM.
+        Dim providerName As String
+        providerName = UXBLibraryTypeProviderForTarget(gUXBLibraryTypes(i), target)
+        If UXBLibraryTypeProviderSupportsType(target, providerName, gUXBLibraryTypes(i).typeName) = 0 Then
+            errText = "UXB_LIBTYPE_PROVIDER_UNAVAILABLE: library type provider unavailable for " & target & ": " & gUXBLibraryTypes(i).typeName
+            Return 0
+        End If
+    Next usedIndex
     Return 1
 End Function
 
@@ -524,6 +698,7 @@ End Function
 
 Sub UXBLibraryTypeRegistryInit()
     gUXBLibraryTypeCount = 0
+    UXBLibraryTypeUsageReset
 End Sub
 
 Function UXBLibraryTypeRegistryFind(ByVal typeName As String) As Integer
@@ -534,6 +709,38 @@ Function UXBLibraryTypeRegistryFind(ByVal typeName As String) As Integer
         If UXBLibraryTypeNorm(gUXBLibraryTypes(i).typeName) = key Then Return i
     Next i
     Return -1
+End Function
+
+Sub UXBLibraryTypeUsageReset()
+    gUXBLibraryTypeUsedCount = 0
+    Erase gUXBLibraryTypeUsedNames
+End Sub
+
+Sub UXBLibraryTypeMarkUsed(ByVal typeName As String)
+    Dim key As String = UXBLibraryTypeNorm(typeName)
+    If key = "" Then Exit Sub
+    Dim idx As Integer = UXBLibraryTypeRegistryFind(key)
+    If idx < 0 Then Exit Sub
+    Dim i As Integer
+    For i = 0 To gUXBLibraryTypeUsedCount - 1
+        If gUXBLibraryTypeUsedNames(i) = key Then Exit Sub
+    Next i
+    If gUXBLibraryTypeUsedCount = 0 Then
+        ReDim gUXBLibraryTypeUsedNames(0)
+    Else
+        ReDim Preserve gUXBLibraryTypeUsedNames(gUXBLibraryTypeUsedCount)
+    End If
+    gUXBLibraryTypeUsedNames(gUXBLibraryTypeUsedCount) = key
+    gUXBLibraryTypeUsedCount += 1
+End Sub
+
+Function UXBLibraryTypeWasUsed(ByVal typeName As String) As Integer
+    Dim key As String = UXBLibraryTypeNorm(typeName)
+    Dim i As Integer
+    For i = 0 To gUXBLibraryTypeUsedCount - 1
+        If gUXBLibraryTypeUsedNames(i) = key Then Return 1
+    Next i
+    Return 0
 End Function
 
 Function UXBLibraryTypeRegistryRegister(ByRef c As UXBLibraryTypeContract, ByRef errText As String) As Integer
@@ -572,6 +779,15 @@ Function UXBLibraryTypeContractFromJson(ByRef jsonText As String, ByRef c As UXB
 
     If UXBLibraryTypeJsonGetString(jsonText, "type", c.typeName) = 0 Then errText = "library type manifest: type missing": Return 0
     If UXBLibraryTypeJsonGetString(jsonText, "package", c.packageName) = 0 Then errText = "library type manifest: package missing": Return 0
+    If UXBLibraryTypeJsonFindValueStart(jsonText, "version") > 0 Then
+        If UXBLibraryTypeJsonGetString(jsonText, "version", c.packageVersion) = 0 Then errText = "library type manifest: version must be a string": Return 0
+    End If
+    If UXBLibraryTypeJsonFindValueStart(jsonText, "dependencies") > 0 Then
+        If UXBLibraryTypeJsonGetString(jsonText, "dependencies", c.dependenciesCsv) = 0 Then errText = "library type manifest: dependencies must be a string": Return 0
+    End If
+    If UXBLibraryTypeJsonFindValueStart(jsonText, "capabilities") > 0 Then
+        If UXBLibraryTypeJsonGetString(jsonText, "capabilities", c.capabilitiesCsv) = 0 Then errText = "library type manifest: capabilities must be a string": Return 0
+    End If
     If UXBLibraryTypeJsonGetString(jsonText, "layout", c.layoutKind) = 0 Then c.layoutKind = "opaque"
     If UXBLibraryTypeJsonGetInteger(jsonText, "size_bytes", c.sizeBytes) = 0 Then c.sizeBytes = 0
     If UXBLibraryTypeJsonGetInteger(jsonText, "align_bytes", c.alignBytes) = 0 Then c.alignBytes = 1
@@ -664,6 +880,9 @@ Function UXBLibraryTypeContractToJson(ByRef c As UXBLibraryTypeContract) As Stri
     j &= "  " & q & "schema" & q & ": " & q & "uxb.library_type.contract.v1" & q & "," & Chr(10)
     j &= "  " & q & "type" & q & ": " & q & UXBLibraryTypeJsonEscape(c.typeName) & q & "," & Chr(10)
     j &= "  " & q & "package" & q & ": " & q & UXBLibraryTypeJsonEscape(c.packageName) & q & "," & Chr(10)
+    j &= "  " & q & "version" & q & ": " & q & UXBLibraryTypeJsonEscape(c.packageVersion) & q & "," & Chr(10)
+    j &= "  " & q & "dependencies" & q & ": " & q & UXBLibraryTypeJsonEscape(c.dependenciesCsv) & q & "," & Chr(10)
+    j &= "  " & q & "capabilities" & q & ": " & q & UXBLibraryTypeJsonEscape(c.capabilitiesCsv) & q & "," & Chr(10)
     j &= "  " & q & "layout" & q & ": " & q & UXBLibraryTypeJsonEscape(c.layoutKind) & q & "," & Chr(10)
     j &= "  " & q & "size_bytes" & q & ": " & LTrim(Str(c.sizeBytes)) & "," & Chr(10)
     j &= "  " & q & "align_bytes" & q & ": " & LTrim(Str(c.alignBytes)) & "," & Chr(10)

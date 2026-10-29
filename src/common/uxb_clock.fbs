@@ -1,0 +1,50 @@
+#ifndef UXB_CLOCK_FBS
+#define UXB_CLOCK_FBS
+
+' ===========================================================================
+' S-624: TIMER -- tum motorlarda AYNI tanim.
+'   TIMER (argumansiz) -> F64: YEREL saatle gece yarisindan beri gecen saniye, kesirli (QBasic anlami),
+'                         her zaman 0 <= TIMER < 86400.
+' Eskiden AST sistem acilisindan beri TAMSAYI saniye, MIR acilistan beri kesirli, JS/WASM 1970'ten beri,
+' native tamsayi (F64 degiskende cop sayi), eski AST-x64 sifir/cop veriyordu.
+' Karsiliklari: native/uxb_runtime/uxb_runtime_mir.cpp (__uxb_rt_timer_f64),
+' runtime/js/common/ux_runtime_core.js (uxb.time.timer), WASM ana bilgisayar kopruleri (host cagri 3).
+' Proje genelindeki C/Windows bildirimleriyle cakismasin diye ozel adlarla bildirilir.
+' ===========================================================================
+#ifdef __FB_WIN32__
+Type UxbClockSystemTime
+    wYear As UShort
+    wMonth As UShort
+    wDayOfWeek As UShort
+    wDay As UShort
+    wHour As UShort
+    wMinute As UShort
+    wSecond As UShort
+    wMilliseconds As UShort
+End Type
+Declare Sub UxbClockGetLocalTime StdCall Lib "kernel32" Alias "GetLocalTime" (ByVal st As UxbClockSystemTime Ptr)
+#endif
+
+Function UXBClockTimerSeconds() As Double
+#ifdef __FB_WIN32__
+    Dim st As UxbClockSystemTime
+    UxbClockGetLocalTime @st
+    Return CDbl(st.wHour) * 3600.0 + CDbl(st.wMinute) * 60.0 + CDbl(st.wSecond) + CDbl(st.wMilliseconds) / 1000.0
+#else
+    ' Windows disi: Time ("hh:mm:ss") ilk cagrida gece yarisi kaymasini verir (saniye duzeyinde),
+    ' sonrasi Timer (monoton, yuksek cozunurluk) ile kesirli ilerler.
+    Static baseOffset As Double
+    Static haveBase As Integer
+    Dim nowTick As Double = Timer
+    If haveBase = 0 Then
+        Dim clockText As String = Time
+        baseOffset = CDbl(ValInt(Mid(clockText, 1, 2))) * 3600.0 + CDbl(ValInt(Mid(clockText, 4, 2))) * 60.0 + CDbl(ValInt(Mid(clockText, 7, 2))) - nowTick
+        haveBase = 1
+    End If
+    Dim v As Double = nowTick + baseOffset
+    v -= Int(v / 86400.0) * 86400.0
+    Return v
+#endif
+End Function
+
+#endif

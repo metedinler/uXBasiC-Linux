@@ -1,0 +1,20 @@
+FUNCTION Echo(value AS STRING) AS STRING
+    RETURN value
+END FUNCTION
+FUNCTION Churn() AS I32
+    DIM scratch AS STRING
+    DIM i AS I32
+    FOR i = 1 TO 128
+        scratch = STR(i) + "-temporary"
+    NEXT
+    RETURN 7
+END FUNCTION
+FUNCTION KeepText(value AS STRING, noise AS I32) AS STRING
+    IF noise = 7 THEN RETURN value
+    RETURN "wrong"
+END FUNCTION
+DIM result AS STRING = KeepText(Echo("A" + CHR(0) + "Z"), Churn())
+PRINT LEN(result)
+PRINT ASC(MID(result, 2, 1))
+PRINT ASC(MID(result, 3, 1))
+PRINT LEN(KeepText(Echo(""), Churn()))

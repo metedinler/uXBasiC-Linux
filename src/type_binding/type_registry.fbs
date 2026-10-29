@@ -4,6 +4,34 @@
 #include once "type_rules.fbs"
 #include once "../semantic/type_binding.fbs"
 
+Function UXBStep3EnumBaseType(ByVal typeName As String) As String
+    Dim key As String = UCase(Trim(typeName))
+    If gTypeBindingCount = 0 Then Return ""
+    Select Case key
+    Case "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "F32", "F64", "F80", "BOOLEAN", "BOOL", "STRING", "WSTRING", "PTR", _
+         "TYPE_I8", "TYPE_U8", "TYPE_I16", "TYPE_U16", "TYPE_I32", "TYPE_U32", "TYPE_I64", "TYPE_U64", "TYPE_F32", "TYPE_F64", "TYPE_F80", "TYPE_BOOL", "TYPE_STRING", "TYPE_WSTRING", "TYPE_PTR", "TYPE_OBJECT", "TYPE_VOID", "TYPE_ANY", "TYPE_VARIANT"
+        Return ""
+    End Select
+    For i As Integer = 0 To gTypeBindingCount - 1
+        If gTypeBindings(i).typeKind = "ENUM" And gTypeBindings(i).typeName = key Then
+            Return UXBStep3TypeCanonical(gTypeBindings(i).elemTypeName)
+        End If
+    Next i
+    Return ""
+End Function
+
+' S-564: is this the name of a user CLASS or INTERFACE (the types a NULL / NOTHING reference may be assigned to)?
+Function UXBStep3TypeIsClassOrInterfaceName(ByVal typeName As String) As Integer
+    Dim key As String = UCase(Trim(typeName))
+    If key = "" Or gTypeBindingCount = 0 Then Return 0
+    For i As Integer = 0 To gTypeBindingCount - 1
+        If gTypeBindings(i).typeName = key Then
+            If gTypeBindings(i).typeKind = "CLASS" Or gTypeBindings(i).typeKind = "INTERFACE" Then Return 1
+        End If
+    Next i
+    Return 0
+End Function
+
 Function UXBStep3TypeRegistryResolve(ByVal typeName As String, ByRef canonicalOut As String, ByRef errText As String) As Integer
     canonicalOut = UXBStep3TypeCanonical(typeName)
     If UXBStep3TypeIsBlocked(canonicalOut) <> 0 Then errText = "type: blocked " & canonicalOut: Return 0

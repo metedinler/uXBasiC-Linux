@@ -1,0 +1,15 @@
+{
+  "node_count": 7,
+  "root": {
+    "index": 0, "kind": "PROGRAM", "value": "", "op": "", "line": 1, "column": 1,
+    "children": [
+      {"index": 1, "kind": "DIM_STMT", "value": "", "op": "", "line": 2, "column": 1, "children": []},
+      {"index": 2, "kind": "ASSIGN_STMT", "value": "", "op": "=", "line": 3, "column": 1,
+       "left": {"index": 3, "kind": "IDENT", "value": "A", "op": "", "line": 3, "column": 1, "children": []},
+       "right": {"index": 4, "kind": "NUMBER", "value": "10", "op": "", "line": 3, "column": 5, "children": []},
+       "children": []},
+      {"index": 5, "kind": "CALL_STMT", "value": "", "op": "", "line": 4, "column": 1, "children": []},
+      {"index": 6, "kind": "PRINT_STMT", "value": "", "op": "", "line": 5, "column": 1, "children": []}
+    ]
+  }
+}

@@ -1,3 +1,14 @@
+Private Function ExecEvalCondition(ByRef ps As ParseState, ByRef es As ExecState, ByVal expression As Integer, ByRef truthOut As Integer, ByRef errText As String) As Integer
+    Dim value As ExecValue
+    If ExecEvalExpression(ps, expression, es, value, errText) = 0 Then Return 0
+    If value.valueType = "FLOAT" Then
+        truthOut = IIf(value.floatValue <> 0.0, 1, 0)
+    Else
+        truthOut = IIf(ExecValueToU64(value) <> 0, 1, 0)
+    End If
+    Return 1
+End Function
+
 Private Function ExecHandleIfExitRequest(ByRef es As ExecState) As Integer
     If es.runtime.exitRequest = "" Then Return 0
 
@@ -92,7 +103,43 @@ Private Sub ExecExceptionPublishCatchVars(ByRef es As ExecState, ByRef catchVarN
     ExecSetVarValue es, "__ERR_VALUE_TEXT", valueTextValue
 End Sub
 
-Private Function ExecCaseExprMatches(ByRef ps As ParseState, ByRef es As ExecState, ByVal caseExpr As Integer, ByVal selectorValue As Integer, ByRef errText As String) As Integer
+Private Function ExecSelectRelation(ByRef lhs As ExecValue, ByRef rhs As ExecValue, ByVal rel As String) As Integer
+    Dim cmp As Integer = 0
+    If lhs.valueType = "STRING" Or rhs.valueType = "STRING" Then
+        Dim l As String = ExecValueToString(lhs), r As String = ExecValueToString(rhs)
+        If l < r Then cmp = -1
+        If l > r Then cmp = 1
+    ElseIf lhs.valueType = "FLOAT" Or rhs.valueType = "FLOAT" Then
+        Dim l As Double = ExecValueToFloat(lhs), r As Double = ExecValueToFloat(rhs)
+        Select Case rel
+        Case "=": Return IIf(l = r, 1, 0)
+        Case "<>": Return IIf(l <> r, 1, 0)
+        Case "<": Return IIf(l < r, 1, 0)
+        Case ">": Return IIf(l > r, 1, 0)
+        Case "<=": Return IIf(l <= r, 1, 0)
+        Case ">=": Return IIf(l >= r, 1, 0)
+        End Select
+    ElseIf lhs.valueType = "U64_PTR" Or rhs.valueType = "U64_PTR" Then
+        Dim l As ULongInt = ExecValueToU64(lhs), r As ULongInt = ExecValueToU64(rhs)
+        If l < r Then cmp = -1
+        If l > r Then cmp = 1
+    Else
+        Dim l As LongInt = ExecValueToInteger(lhs), r As LongInt = ExecValueToInteger(rhs)
+        If l < r Then cmp = -1
+        If l > r Then cmp = 1
+    End If
+    Select Case rel
+    Case "=": Return IIf(cmp = 0, 1, 0)
+    Case "<>": Return IIf(cmp <> 0, 1, 0)
+    Case "<": Return IIf(cmp < 0, 1, 0)
+    Case ">": Return IIf(cmp > 0, 1, 0)
+    Case "<=": Return IIf(cmp <= 0, 1, 0)
+    Case ">=": Return IIf(cmp >= 0, 1, 0)
+    End Select
+    Return 0
+End Function
+
+Private Function ExecCaseExprMatches(ByRef ps As ParseState, ByRef es As ExecState, ByVal caseExpr As Integer, ByRef selectorValue As ExecValue, ByRef errText As String) As Integer
     Dim caseExprNode As ASTNode
     caseExprNode = ps.ast.nodes(caseExpr)
 
@@ -102,34 +149,37 @@ Private Function ExecCaseExprMatches(ByRef ps As ParseState, ByRef es As ExecSta
             Return -1
         End If
 
-        Dim caseIsValue As Integer
-        caseIsValue = ExecEvalNode(ps, es, caseExprNode.left, errText)
-        If errText <> "" Then Return -1
+        Dim caseIsValue As ExecValue
+        If ExecEvalExpression(ps, caseExprNode.left, es, caseIsValue, errText) = 0 Then Return -1
 
         Select Case caseExprNode.op
         Case "="
-            Return IIf(selectorValue = caseIsValue, 1, 0)
+            Return ExecSelectRelation(selectorValue, caseIsValue, "=")
         Case "<>"
-            Return IIf(selectorValue <> caseIsValue, 1, 0)
+            Return ExecSelectRelation(selectorValue, caseIsValue, "<>")
         Case "<"
-            Return IIf(selectorValue < caseIsValue, 1, 0)
+            Return ExecSelectRelation(selectorValue, caseIsValue, "<")
         Case ">"
-            Return IIf(selectorValue > caseIsValue, 1, 0)
+            Return ExecSelectRelation(selectorValue, caseIsValue, ">")
         Case "<="
-            Return IIf(selectorValue <= caseIsValue, 1, 0)
+            Return ExecSelectRelation(selectorValue, caseIsValue, "<=")
         Case ">="
-            Return IIf(selectorValue >= caseIsValue, 1, 0)
+            Return ExecSelectRelation(selectorValue, caseIsValue, ">=")
         Case Else
             errText = "exec: CASE IS invalid operator " & caseExprNode.op
             Return -1
         End Select
     End If
 
-    Dim caseValue As Integer
-    caseValue = ExecEvalNode(ps, es, caseExpr, errText)
-    If errText <> "" Then Return -1
-
-    Return IIf(caseValue = selectorValue, 1, 0)
+    If UCase(caseExprNode.kind) = "CASE_RANGE_VALUE" Then
+        Dim rangeLo As ExecValue, rangeHi As ExecValue
+        If ExecEvalExpression(ps, caseExprNode.left, es, rangeLo, errText) = 0 Then Return -1
+        If ExecEvalExpression(ps, caseExprNode.right, es, rangeHi, errText) = 0 Then Return -1
+        Return IIf(ExecSelectRelation(selectorValue, rangeLo, ">=") <> 0 And ExecSelectRelation(selectorValue, rangeHi, "<=") <> 0, 1, 0)
+    End If
+    Dim caseValue As ExecValue
+    If ExecEvalExpression(ps, caseExpr, es, caseValue, errText) = 0 Then Return -1
+    Return ExecSelectRelation(selectorValue, caseValue, "=")
 End Function
 
 Private Function ExecRunSelectCaseBody(ByRef ps As ParseState, ByRef es As ExecState, ByVal caseNode As Integer, ByVal bodyStart As Integer, ByVal caseChildCount As Integer, ByRef errText As String) As Integer
@@ -185,7 +235,7 @@ Private Function ExecRunIfStmt(ByRef ps As ParseState, ByRef es As ExecState, By
     End If
 
     Dim ifCondValue As Integer
-    ifCondValue = ExecEvalNode(ps, es, ifCondExpr, errText)
+    If ExecEvalCondition(ps, es, ifCondExpr, ifCondValue, errText) = 0 Then Return 0
     If errText <> "" Then Return 0
 
     If ifCondValue <> 0 Then
@@ -237,7 +287,7 @@ Private Function ExecRunIfStmt(ByRef ps As ParseState, ByRef es As ExecState, By
             End If
 
             Dim elseifCondValue As Integer
-            elseifCondValue = ExecEvalNode(ps, es, elseifCondExpr, errText)
+            If ExecEvalCondition(ps, es, elseifCondExpr, elseifCondValue, errText) = 0 Then Return 0
             If errText <> "" Then Return 0
 
             If elseifCondValue <> 0 Then
@@ -386,11 +436,19 @@ Private Function ExecRunTryStmt(ByRef ps As ParseState, ByRef es As ExecState, B
     End If
 
     If finallyNode <> -1 Then
+        ' FINALLY runs all its statements even when a loop transfer is pending.
+        ' A new transfer from FINALLY replaces the pending one.
+        Dim pendingTransfer As String = es.runtime.exitRequest
+        es.runtime.exitRequest = ""
         If ExecRunTryPart(ps, es, finallyNode, errText) = 0 Then
             hasError = 1
             capturedErr = errText
             errText = ""
+            ' S-300: an exception thrown by the FINALLY replaces the pending RETURN/CONTINUE (the other engines drop it too);
+            ' restoring it let the enclosing CATCH handle the error and then still return from the routine.
+            pendingTransfer = ""
         End If
+        If es.runtime.exitRequest = "" Then es.runtime.exitRequest = pendingTransfer
     End If
 
     If hasError <> 0 Then
@@ -423,9 +481,8 @@ Private Function ExecRunSelectStmt(ByRef ps As ParseState, ByRef es As ExecState
         Return 0
     End If
 
-    Dim selectorValue As Integer
-    selectorValue = ExecEvalNode(ps, es, selectorExpr, errText)
-    If errText <> "" Then Return 0
+    Dim selectorValue As ExecValue
+    If ExecEvalExpression(ps, selectorExpr, es, selectorValue, errText) = 0 Then Return 0
 
     Dim elseCaseNode As Integer
     elseCaseNode = -1
@@ -539,29 +596,67 @@ Private Function ExecRunForStmt(ByRef ps As ParseState, ByRef es As ExecState, B
     Dim forStartValue As Integer
     Dim forEndValue As Integer
     Dim forStepValue As Integer
-    forStartValue = ExecEvalNode(ps, es, forStartExpr, errText)
-    If errText <> "" Then Return 0
-    forEndValue = ExecEvalNode(ps, es, forEndExpr, errText)
-    If errText <> "" Then Return 0
-    forStepValue = ExecEvalNode(ps, es, forStepExpr, errText)
-    If errText <> "" Then Return 0
-
-    If forStepValue = 0 Then
-        errText = "exec: FOR step cannot be zero"
-        Return 0
+    ' S-294: a counter declared F64/F32 runs on floating point values. The integer evaluator truncated STEP 0.25 to 0 ("FOR step
+    ' cannot be zero") and a float bound to an integer; MIR, x64, JS and WASM already count in floating point.
+    Dim forIsFloat As Integer = 0
+    Dim forStartF As Double
+    Dim forEndF As Double
+    Dim forStepF As Double
+    Dim forVarIdx As Integer = ExecFindVar(es, st.value)
+    If forVarIdx >= 0 Then
+        Dim forVarType As String = UCase(Trim(es.vars(forVarIdx).declType))
+        If forVarType = "F64" Or forVarType = "F32" Or forVarType = "DOUBLE" Or forVarType = "SINGLE" Or forVarType = "FLOAT" Then forIsFloat = 1
     End If
+    If forIsFloat <> 0 Then
+        Dim forEv As ExecValue
+        If ExecEvalExpression(ps, forStartExpr, es, forEv, errText) = 0 Then Return 0
+        forStartF = ExecValueToFloat(forEv)
+        If ExecEvalExpression(ps, forEndExpr, es, forEv, errText) = 0 Then Return 0
+        forEndF = ExecValueToFloat(forEv)
+        If ExecEvalExpression(ps, forStepExpr, es, forEv, errText) = 0 Then Return 0
+        forStepF = ExecValueToFloat(forEv)
+        If forStepF = 0 Then
+            errText = "exec: FOR step cannot be zero"
+            Return 0
+        End If
+        ExecValueSetFloat forEv, forStartF
+        ExecSetVarValue es, st.value, forEv
+    Else
+        forStartValue = ExecEvalNode(ps, es, forStartExpr, errText)
+        If errText <> "" Then Return 0
+        forEndValue = ExecEvalNode(ps, es, forEndExpr, errText)
+        If errText <> "" Then Return 0
+        forStepValue = ExecEvalNode(ps, es, forStepExpr, errText)
+        If errText <> "" Then Return 0
 
-    ExecSetVar es, st.value, forStartValue
+        If forStepValue = 0 Then
+            errText = "exec: FOR step cannot be zero"
+            Return 0
+        End If
+
+        ExecSetVar es, st.value, forStartValue
+    End If
 
     Dim forIterGuard As Integer
     Do
         Dim forCur As Integer
-        forCur = ExecGetVar(es, st.value)
-
-        If forStepValue > 0 Then
-            If forCur > forEndValue Then Exit Do
+        If forIsFloat <> 0 Then
+            Dim forCurEv As ExecValue
+            ExecGetVarValue es, st.value, forCurEv
+            Dim forCurF As Double = ExecValueToFloat(forCurEv)
+            If forStepF > 0 Then
+                If forCurF > forEndF Then Exit Do
+            Else
+                If forCurF < forEndF Then Exit Do
+            End If
         Else
-            If forCur < forEndValue Then Exit Do
+            forCur = ExecGetVar(es, st.value)
+
+            If forStepValue > 0 Then
+                If forCur > forEndValue Then Exit Do
+            Else
+                If forCur < forEndValue Then Exit Do
+            End If
         End If
 
         Dim forBreak As Integer
@@ -583,12 +678,21 @@ Private Function ExecRunForStmt(ByRef ps As ParseState, ByRef es As ExecState, B
                 Exit For
             ElseIf forExitStatus = 2 Then
                 Return 1
+            ElseIf forExitStatus = 3 Then
+                Exit For
             End If
         Next forBodyPos
 
         If forBreak <> 0 Then Exit Do
 
-        ExecSetVar es, st.value, ExecGetVar(es, st.value) + forStepValue
+        If forIsFloat <> 0 Then
+            Dim forNextEv As ExecValue
+            ExecGetVarValue es, st.value, forNextEv
+            ExecValueSetFloat forNextEv, ExecValueToFloat(forNextEv) + forStepF
+            ExecSetVarValue es, st.value, forNextEv
+        Else
+            ExecSetVar es, st.value, ExecGetVar(es, st.value) + forStepValue
+        End If
         ' S-110: no fixed 1,000,000-iteration cap (a valid longer loop failed here but ran on
         ' every other engine); the optional run budget (--max-steps) is the only limit.
         forIterGuard += 1
@@ -630,7 +734,7 @@ Private Function ExecRunDoStmt(ByRef ps As ParseState, ByRef es As ExecState, By
             End If
 
             Dim preValue As Integer
-            preValue = ExecEvalNode(ps, es, preExpr, errText)
+            If ExecEvalCondition(ps, es, preExpr, preValue, errText) = 0 Then Return 0
             If errText <> "" Then Return 0
 
             If doMode = "DO_WHILE" Or doMode = "WHILE_WEND" Then
@@ -655,12 +759,14 @@ Private Function ExecRunDoStmt(ByRef ps As ParseState, ByRef es As ExecState, By
             If ExecRunStmt(ps, es, doBodyStmt, errText) = 0 Then Return 0
 
             Dim doExitStatus As Integer
-            doExitStatus = ExecConsumeLoopExit(es, "DO")
+            doExitStatus = ExecConsumeLoopExit(es, IIf(doMode = "WHILE_WEND", "WHILE", "DO"))
             If doExitStatus = 1 Then
                 doBreak = 1
                 Exit For
             ElseIf doExitStatus = 2 Then
                 Return 1
+            ElseIf doExitStatus = 3 Then
+                Exit For
             End If
         Next doBodyPos
 
@@ -675,7 +781,7 @@ Private Function ExecRunDoStmt(ByRef ps As ParseState, ByRef es As ExecState, By
             End If
 
             Dim postValue As Integer
-            postValue = ExecEvalNode(ps, es, postExpr, errText)
+            If ExecEvalCondition(ps, es, postExpr, postValue, errText) = 0 Then Return 0
             If errText <> "" Then Return 0
 
             If doMode = "LOOP_WHILE" Then
@@ -714,7 +820,7 @@ Private Function ExecEachSingleArrayVarIdx(ByRef ps As ParseState, ByRef es As E
     Dim varIdx As Integer
     varIdx = ExecFindVar(es, ps.ast.nodes(firstChild).value)
     If varIdx < 0 Or varIdx >= es.count Then Return -1
-    If es.vars(varIdx).isArray = 0 Then Return -1
+    If ExecVarAt(es, varIdx).isArray = 0 Then Return -1
     Return varIdx
 End Function
 
@@ -725,7 +831,7 @@ End Function
 ' interpreter's arrays are already fully dynamic, so there is no need to reject
 ' dynamic bounds the way iterator_lowering.fbs's MIR path must.
 Private Function ExecRunSingleArrayEachLoop(ByRef ps As ParseState, ByRef es As ExecState, ByVal varIdx As Integer, ByVal bodyNode As Integer, ByRef st As ASTNode, ByVal loopKind As String, ByRef errText As String) As Integer
-    If es.vars(varIdx).arrayDims <> 1 Then
+    If ExecVarAt(es, varIdx).arrayDims <> 1 Then
         errText = "exec: FOR EACH/DO EACH multi-dimensional array target not yet supported: " & UCase(Trim(st.value))
         Return 0
     End If
@@ -734,9 +840,9 @@ Private Function ExecRunSingleArrayEachLoop(ByRef ps As ParseState, ByRef es As 
     bodyCount = ExecChildCount(ps, bodyNode)
 
     Dim rawIndex As Integer
-    For rawIndex = es.vars(varIdx).arrayLower To es.vars(varIdx).arrayUpper
+    For rawIndex = ExecVarAt(es, varIdx).arrayLower To ExecVarAt(es, varIdx).arrayUpper
         Dim elemValue As ExecValue
-        If ExecGetArrayElement(es, varIdx, rawIndex - es.vars(varIdx).arrayLower, elemValue) = 0 Then
+        If ExecGetArrayElement(es, varIdx, rawIndex - ExecVarAt(es, varIdx).arrayLower, elemValue) = 0 Then
             errText = "exec: array element read failed for " & UCase(Trim(st.value))
             Return 0
         End If
@@ -768,6 +874,8 @@ Private Function ExecRunSingleArrayEachLoop(ByRef ps As ParseState, ByRef es As 
                 Exit For
             ElseIf exitStatus = 2 Then
                 Return 1
+            ElseIf exitStatus = 3 Then
+                Exit For
             End If
         Next bodyPos
 
@@ -838,6 +946,8 @@ Private Function ExecRunSingleStringEachLoop(ByRef ps As ParseState, ByRef es As
                 Exit For
             ElseIf exitStatus = 2 Then
                 Return 1
+            ElseIf exitStatus = 3 Then
+                Exit For
             End If
         Next bodyPos
 
@@ -869,9 +979,9 @@ Private Function ExecEachSingleStringValue(ByRef ps As ParseState, ByRef es As E
     ' An array OF STRING elements (`DIM a(1) AS STRING`) shares its element type "STRING" with declType
     ' here too -- excluded so it falls through to ExecEachSingleArrayVarIdx (its real handler) instead
     ' of being walked by code point as if it were one scalar string value.
-    If es.vars(varIdx).isArray <> 0 Then Return -1
+    If ExecVarAt(es, varIdx).isArray <> 0 Then Return -1
     Dim declType As String
-    declType = UCase(Trim(es.vars(varIdx).declType))
+    declType = UCase(Trim(ExecVarAt(es, varIdx).declType))
     If declType <> "STRING" And declType <> "WSTRING" Then Return -1
     Dim srcValue As ExecValue
     If ExecGetVarValue(es, ps.ast.nodes(firstChild).value, srcValue) = 0 Then Return -1
@@ -903,7 +1013,7 @@ Private Function ExecEachSingleCollectionVarIdx(ByRef ps As ParseState, ByRef es
     varIdx = ExecFindVar(es, ps.ast.nodes(firstChild).value)
     If varIdx < 0 Or varIdx >= es.count Then Return -1
     Dim declType As String
-    declType = UCase(Trim(es.vars(varIdx).declType))
+    declType = UCase(Trim(ExecVarAt(es, varIdx).declType))
     If declType <> "LIST" And declType <> "DICT" And declType <> "SET" Then Return -1
     collectionKindOut = declType
     Return varIdx
@@ -921,7 +1031,7 @@ End Function
 ' A single loop variable binds the LIST/SET item, or the DICT key.
 Private Function ExecRunSingleCollectionEachLoop(ByRef ps As ParseState, ByRef es As ExecState, ByVal varIdx As Integer, ByRef collectionKind As String, ByVal bodyNode As Integer, ByRef st As ASTNode, ByVal loopKind As String, ByRef errText As String) As Integer
     Dim handleValue As Integer
-    handleValue = es.vars(varIdx).value.intValue
+    handleValue = ExecVarAt(es, varIdx).value.intValue
 
     Dim itemCount As Integer
     Dim lenOk As Integer
@@ -998,7 +1108,7 @@ Private Function ExecRunSingleCollectionEachLoop(ByRef ps As ParseState, ByRef e
             Dim setLoopVarIdx As Integer
             setLoopVarIdx = ExecFindVar(es, st.value)
             If setLoopVarIdx >= 0 Then
-                Select Case UCase(Trim(es.vars(setLoopVarIdx).declType))
+                Select Case UCase(Trim(ExecVarAt(es, setLoopVarIdx).declType))
                 Case "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "INTEGER", "LONG", "LONGINT", "SHORT", "BYTE", "UBYTE", "USHORT", "UINTEGER", "ULONG", "ULONGINT", "SBYTE", "INT", "UINT"
                     setMemberValue.valueType = "INTEGER"
                     setMemberValue.intValue = ValInt(keyText)
@@ -1041,6 +1151,8 @@ Private Function ExecRunSingleCollectionEachLoop(ByRef ps As ParseState, ByRef e
                 Exit For
             ElseIf exitStatus = 2 Then
                 Return 1
+            ElseIf exitStatus = 3 Then
+                Exit For
             End If
         Next bodyPos
 
@@ -1127,6 +1239,8 @@ Private Function ExecRunForEachStmt(ByRef ps As ParseState, ByRef es As ExecStat
                 Exit For
             ElseIf feExitStatus = 2 Then
                 Return 1
+            ElseIf feExitStatus = 3 Then
+                Exit For
             End If
         Next feBodyPos
 
@@ -1208,6 +1322,8 @@ Private Function ExecRunDoEachStmt(ByRef ps As ParseState, ByRef es As ExecState
                 Exit For
             ElseIf deExitStatus = 2 Then
                 Return 1
+            ElseIf deExitStatus = 3 Then
+                Exit For
             End If
         Next deBodyPos
 

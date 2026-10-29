@@ -1,0 +1,122 @@
+[
+ {
+  "ad": "p01 tek seviye THIS ME niteliksiz SUPER",
+  "kod": "CLASS Taban\n    PUBLIC\n    VIRTUAL METHOD Deger() AS I32\n        RETURN 10\n    END METHOD\n    METHOD ViaThis() AS I32\n        RETURN THIS.Deger()\n    END METHOD\n    METHOD ViaMe() AS I32\n        RETURN ME.Deger()\n    END METHOD\n    METHOD Plain() AS I32\n        RETURN Deger()\n    END METHOD\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    OVERRIDE METHOD Deger() AS I32\n        RETURN 20\n    END METHOD\n    METHOD ViaSuper() AS I32\n        RETURN SUPER.Deger()\n    END METHOD\nEND CLASS\nDIM o AS Alt = NEW Alt()\nPRINT o.ViaThis()\nPRINT o.ViaMe()\nPRINT o.Plain()\nPRINT o.ViaSuper()\nPRINT o.Deger()\n"
+ },
+ {
+  "ad": "p02 uc seviye sablon",
+  "kod": "CLASS Taban\n    PUBLIC\n    VIRTUAL METHOD Goster() AS I32\n        RETURN 100\n    END METHOD\n    METHOD Rapor() AS I32\n        RETURN THIS.Goster()\n    END METHOD\n    METHOD RaporMe() AS I32\n        RETURN ME.Goster()\n    END METHOD\n    METHOD RaporPlain() AS I32\n        RETURN Goster()\n    END METHOD\nEND CLASS\nCLASS Orta EXTENDS Taban\n    PUBLIC\n    OVERRIDE METHOD Goster() AS I32\n        RETURN 200\n    END METHOD\nEND CLASS\nCLASS Alt EXTENDS Orta\n    PUBLIC\n    OVERRIDE METHOD Goster() AS I32\n        RETURN 300\n    END METHOD\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.Rapor()\nPRINT x.RaporMe()\nPRINT x.RaporPlain()\nDIM y AS Orta = NEW Orta()\nPRINT y.Rapor()\nPRINT y.RaporMe()\nPRINT y.RaporPlain()\nDIM z AS Taban = NEW Taban()\nPRINT z.Rapor()\nPRINT z.RaporMe()\nPRINT z.RaporPlain()\n"
+ },
+ {
+  "ad": "p04 kurucuda duz yardimci niteliksiz",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Duz() AS I32\n        RETURN 7\n    END METHOD\n    CONSTRUCTOR()\n        v = Duz()\n    END CONSTRUCTOR\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nPRINT x.v\n"
+ },
+ {
+  "ad": "p05 kurucuda duz yardimci ME",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Duz() AS I32\n        RETURN 7\n    END METHOD\n    CONSTRUCTOR()\n        v = ME.Duz()\n    END CONSTRUCTOR\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nPRINT x.v\n"
+ },
+ {
+  "ad": "p06 kurucuda duz yardimci THIS",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Duz() AS I32\n        RETURN 7\n    END METHOD\n    CONSTRUCTOR()\n        v = THIS.Duz()\n    END CONSTRUCTOR\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nPRINT x.v\n"
+ },
+ {
+  "ad": "p07 kurucuda sanal niteliksiz",
+  "kod": "CLASS Taban\n    PUBLIC\n    DIM v AS I32\n    VIRTUAL METHOD Deger() AS I32\n        RETURN 1\n    END METHOD\n    CONSTRUCTOR()\n        v = Deger()\n    END CONSTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    OVERRIDE METHOD Deger() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.v\n"
+ },
+ {
+  "ad": "p08 kurucuda sanal THIS",
+  "kod": "CLASS Taban\n    PUBLIC\n    DIM v AS I32\n    VIRTUAL METHOD Deger() AS I32\n        RETURN 1\n    END METHOD\n    CONSTRUCTOR()\n        v = THIS.Deger()\n    END CONSTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    OVERRIDE METHOD Deger() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.v\n"
+ },
+ {
+  "ad": "p09 niteliksiz sanal cagri sablon",
+  "kod": "CLASS Taban\n    PUBLIC\n    VIRTUAL METHOD Adim() AS I32\n        RETURN 1\n    END METHOD\n    METHOD Toplam() AS I32\n        RETURN Adim() + Adim()\n    END METHOD\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    OVERRIDE METHOD Adim() AS I32\n        RETURN 5\n    END METHOD\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.Toplam()\nDIM y AS Taban = NEW Taban()\nPRINT y.Toplam()\n"
+ },
+ {
+  "ad": "p10 sanal olmayan yardimci ve THIS ME niteliksiz uc yol",
+  "kod": "CLASS Taban\n    PUBLIC\n    METHOD Duz() AS I32\n        RETURN 1\n    END METHOD\n    METHOD Hepsi() AS I32\n        RETURN THIS.Duz() * 100 + ME.Duz() * 10 + Duz()\n    END METHOD\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.Hepsi()\n"
+ },
+ {
+  "ad": "p11 yikicida sanal niteliksiz",
+  "kod": "CLASS Taban\n    PUBLIC\n    VIRTUAL METHOD Ad() AS I32\n        RETURN 1\n    END METHOD\n    DESTRUCTOR()\n        PRINT Ad()\n    END DESTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    OVERRIDE METHOD Ad() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nDIM x AS Alt = NEW Alt()\nDELETE x\n"
+ },
+ {
+  "ad": "c01 taban kurucusu, turemis kurucusuz",
+  "kod": "CLASS Taban\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR()\n        v = 5\n    END CONSTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.v\n"
+ },
+ {
+  "ad": "c02 taban kurucusu, turemis bos kurucu",
+  "kod": "CLASS Taban\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR()\n        v = 5\n    END CONSTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    CONSTRUCTOR()\n    END CONSTRUCTOR\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.v\n"
+ },
+ {
+  "ad": "c03 taban kurucusu sanal olmayan yardimci cagirir, turemis kurucusuz",
+  "kod": "CLASS Taban\n    PUBLIC\n    DIM v AS I32\n    METHOD Duz() AS I32\n        RETURN 7\n    END METHOD\n    CONSTRUCTOR()\n        v = THIS.Duz()\n    END CONSTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.v\n"
+ },
+ {
+  "ad": "c04 taban kurucusu tabanin kendisi icin",
+  "kod": "CLASS Taban\n    PUBLIC\n    DIM v AS I32\n    VIRTUAL METHOD Deger() AS I32\n        RETURN 1\n    END METHOD\n    CONSTRUCTOR()\n        v = THIS.Deger()\n    END CONSTRUCTOR\nEND CLASS\nDIM x AS Taban = NEW Taban()\nPRINT x.v\n"
+ },
+ {
+  "ad": "c05 turemis kurucusu var, taban kurucusu THIS.Deger",
+  "kod": "CLASS Taban\n    PUBLIC\n    DIM v AS I32\n    VIRTUAL METHOD Deger() AS I32\n        RETURN 1\n    END METHOD\n    CONSTRUCTOR()\n        v = THIS.Deger()\n    END CONSTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    DIM w AS I32\n    OVERRIDE METHOD Deger() AS I32\n        RETURN 2\n    END METHOD\n    CONSTRUCTOR()\n        w = 9\n    END CONSTRUCTOR\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.v\nPRINT x.w\n"
+ },
+ {
+  "ad": "e01 bos SUB",
+  "kod": "SUB Bos()\nEND SUB\nBos()\nPRINT 1\n"
+ },
+ {
+  "ad": "e02 bos METHOD",
+  "kod": "CLASS Kutu\n    PUBLIC\n    METHOD Bos()\n    END METHOD\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nx.Bos()\nPRINT 2\n"
+ },
+ {
+  "ad": "e03 bos CONSTRUCTOR tek sinif",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR()\n    END CONSTRUCTOR\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nPRINT x.v\n"
+ },
+ {
+  "ad": "e04 bos DESTRUCTOR",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    DESTRUCTOR()\n    END DESTRUCTOR\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nDELETE x\nPRINT 4\n"
+ },
+ {
+  "ad": "e05 turemis bos kurucu, taban kurucusu dolu",
+  "kod": "CLASS Taban\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR()\n        v = 5\n    END CONSTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    CONSTRUCTOR()\n    END CONSTRUCTOR\nEND CLASS\nDIM x AS Alt = NEW Alt()\nPRINT x.v\n"
+ },
+ {
+  "ad": "e06 bos FUNCTION",
+  "kod": "FUNCTION Bos() AS I32\nEND FUNCTION\nPRINT Bos()\n"
+ },
+ {
+  "ad": "f01 bos FUNCTION I32",
+  "kod": "FUNCTION Bos() AS I32\nEND FUNCTION\nPRINT Bos()\n"
+ },
+ {
+  "ad": "f02 FUNCTION sonuc atanmaz, govdede deyim var",
+  "kod": "FUNCTION F(x AS I32) AS I32\n    DIM y AS I32\n    y = x + 1\nEND FUNCTION\nPRINT F(3)\n"
+ },
+ {
+  "ad": "f03 FUNCTION yalniz bir dalda atanir",
+  "kod": "FUNCTION F(x AS I32) AS I32\n    IF x > 0 THEN\n        F = 5\n    END IF\nEND FUNCTION\nPRINT F(1)\nPRINT F(0)\n"
+ },
+ {
+  "ad": "f04 FUNCTION sonuc atanmaz I64",
+  "kod": "FUNCTION F(x AS I32) AS I64\n    DIM y AS I32\n    y = x\nEND FUNCTION\nPRINT F(3)\n"
+ },
+ {
+  "ad": "f05 METHOD sonuc atanmaz",
+  "kod": "CLASS Kutu\n    PUBLIC\n    METHOD F(x AS I32) AS I32\n        DIM y AS I32\n        y = x\n    END METHOD\nEND CLASS\nDIM k AS Kutu = NEW Kutu()\nPRINT k.F(3)\n"
+ },
+ {
+  "ad": "g01 F atanir sonra baska deyimler",
+  "kod": "FUNCTION F(x AS I32) AS I32\n    F = 5\n    DIM y AS I32\n    y = 7\n    y = y + x\nEND FUNCTION\nPRINT F(1)\n"
+ },
+ {
+  "ad": "g02 F atanir, dongu sonrasi",
+  "kod": "FUNCTION F(x AS I32) AS I32\n    DIM i AS I32\n    DIM s AS I32\n    F = x * 2\n    FOR i = 1 TO 3\n        s = s + i\n    NEXT\nEND FUNCTION\nPRINT F(4)\n"
+ },
+ {
+  "ad": "g03 RETURN ifadesi + son deger",
+  "kod": "FUNCTION F(x AS I32) AS I32\n    IF x > 0 THEN\n        RETURN 9\n    END IF\n    F = 3\nEND FUNCTION\nPRINT F(1)\nPRINT F(0)\n"
+ },
+ {
+  "ad": "g04 FUNCTION F64 atanir sonra deyim",
+  "kod": "FUNCTION F(x AS I32) AS F64\n    F = 1.5\n    DIM y AS I32\n    y = x + 10\nEND FUNCTION\nPRINT F(1)\n"
+ }
+]

@@ -1,0 +1,65 @@
+V1 ASSERT + kullanici FUNCTION cagrisi + sonra DIM dizi
+FUNCTION Iki(x AS I32) AS I32
+    RETURN x * 2
+END FUNCTION
+MAIN
+    DIM a AS I32 = Iki(3)
+    ASSERT a > 0, "a pozitif olmali"
+    DIM n AS I32 = Iki(2)
+    DIM k(3) AS I32
+    DIM j AS I32
+    FOR j = 0 TO 3
+        k(j) = 0
+    NEXT
+    FOR j = 0 TO 3
+        IF k(j) = 0 THEN PRINT "bos "; j
+    NEXT
+END MAIN
+=====
+V2 ASSERT yok, ayni yapi
+FUNCTION Iki(x AS I32) AS I32
+    RETURN x * 2
+END FUNCTION
+MAIN
+    DIM a AS I32 = Iki(3)
+    DIM n AS I32 = Iki(2)
+    DIM k(3) AS I32
+    DIM j AS I32
+    FOR j = 0 TO 3
+        k(j) = 0
+    NEXT
+    FOR j = 0 TO 3
+        IF k(j) = 0 THEN PRINT "bos "; j
+    NEXT
+END MAIN
+=====
+V3 ASSERT var, kullanici cagrisi yok
+MAIN
+    DIM a AS I32 = 3
+    ASSERT a > 0, "a pozitif olmali"
+    DIM k(3) AS I32
+    DIM j AS I32
+    FOR j = 0 TO 3
+        k(j) = 0
+    NEXT
+    FOR j = 0 TO 3
+        IF k(j) = 0 THEN PRINT "bos "; j
+    NEXT
+END MAIN
+=====
+V4 M1 yapisi + yalniz ASSERT
+INCLUDE "include/modules/uxcollections.uxmh"
+MAIN
+    DIM sureler AS U64 = uxcollections.DictNew()
+    ASSERT sureler <> 0, "sozluk yok"
+    uxcollections.DictSetI64(sureler, "ali", 210)
+    DIM n AS I64 = uxcollections.ListCount(uxcollections.DictKeysAsList(sureler))
+    DIM bayrak(7) AS I32
+    DIM j AS I64
+    FOR j = 0 TO n - 1
+        bayrak(j) = 0
+    NEXT
+    FOR j = 0 TO n - 1
+        IF bayrak(j) = 0 THEN PRINT "x"
+    NEXT
+END MAIN

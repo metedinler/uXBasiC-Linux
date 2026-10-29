@@ -1,0 +1,4 @@
+' S-548: a variable that is itself called freefile keeps its meaning (the name is only the built-in when nothing declares it).
+DIM freefile AS I32
+freefile = 7
+PRINT freefile

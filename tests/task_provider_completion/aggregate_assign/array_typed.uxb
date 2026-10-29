@@ -1,0 +1,18 @@
+DIM f(0 TO 1) AS F32
+DIM d(0 TO 1) AS F64
+DIM n(0 TO 1) AS I8
+DIM calls AS I32 = 0
+FUNCTION NextIndex() AS I32
+    calls += 1
+    RETURN 0
+END FUNCTION
+f(0) = 0.25
+d(0) = 0.5
+n(0) = 127
+f(NextIndex()) += 0.5
+d(NextIndex()) *= 2.0
+n(NextIndex()) += I8(1)
+PRINT f(0)
+PRINT d(0)
+PRINT n(0)
+PRINT calls

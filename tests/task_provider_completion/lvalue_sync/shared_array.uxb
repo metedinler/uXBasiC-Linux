@@ -1,0 +1,19 @@
+DIM a(0 TO 1) AS I64
+DIM f(0 TO 1) AS F64
+f(0) = 0.5
+THREAD Increment() AS I32
+    DIM i AS I32
+    DIM old AS I64
+    DIM oldFloat AS F64
+    FOR i = 1 TO 5000
+        old = a(0)++
+        oldFloat = f(0)++
+    NEXT
+    RETURN 1
+END THREAD
+DIM first AS TASK OF I32 = SPAWN Increment()
+DIM second AS TASK OF I32 = SPAWN Increment()
+PRINT first.JOIN()
+PRINT second.JOIN()
+PRINT a(0)
+PRINT f(0)

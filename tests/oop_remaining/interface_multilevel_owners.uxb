@@ -1,0 +1,36 @@
+DIM sayac AS I32 = 0
+INTERFACE IIlk
+    METHOD Deger() AS I32
+END INTERFACE
+INTERFACE IIkinci
+    METHOD Iki() AS I32
+END INTERFACE
+CLASS Kok_Tip IMPLEMENTS IIlk, IIkinci
+    PUBLIC
+    VIRTUAL METHOD Deger() AS I32
+        sayac = sayac + 1
+        RETURN 10
+    END METHOD
+    METHOD Iki() AS I32
+        RETURN ME.Deger() * 2
+    END METHOD
+END CLASS
+CLASS Ara_Tip EXTENDS Kok_Tip
+    PUBLIC
+    OVERRIDE METHOD Deger() AS I32
+        sayac = sayac + 1
+        RETURN 21
+    END METHOD
+END CLASS
+CLASS Yaprak_Tip EXTENDS Ara_Tip
+END CLASS
+SUB Ilk(k AS IIlk)
+    PRINT k.Deger()
+END SUB
+SUB Ikinci(k AS IIkinci)
+    PRINT k.Iki()
+END SUB
+DIM a AS Yaprak_Tip = NEW Yaprak_Tip()
+Ilk(a)
+Ikinci(a)
+PRINT sayac

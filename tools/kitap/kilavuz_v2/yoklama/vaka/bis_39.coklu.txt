@@ -1,0 +1,57 @@
+Q1 Counter sinifi uxoop deseni normal programda (beklenen 42)
+CLASS Counter
+PRIVATE
+    PROPERTY value AS I32
+
+PUBLIC
+    CONSTRUCTOR(startValue AS I32)
+        value = startValue
+    END CONSTRUCTOR
+
+    METHOD Add(delta AS I32) AS I32
+        value = value + delta
+        RETURN value
+    END METHOD
+
+    METHOD Get() AS I32
+        RETURN value
+    END METHOD
+END CLASS
+
+FUNCTION Yarat(startValue AS I32) AS Counter
+    DIM counterResult AS Counter
+    counterResult = NEW Counter(startValue)
+    RETURN counterResult
+END FUNCTION
+
+FUNCTION Ekle(ctr AS Counter, delta AS I32) AS I32
+    RETURN ctr.Add(delta)
+END FUNCTION
+
+DIM c AS Counter
+c = Yarat(10)
+DIM r AS I32
+r = Ekle(c, 32)
+PRINT r
+PRINT c.Get()
+=====
+Q2 PROPERTY yerine duz alan (beklenen 42)
+CLASS Counter2
+PUBLIC
+    DIM value AS I32
+    CONSTRUCTOR(startValue AS I32)
+        value = startValue
+    END CONSTRUCTOR
+    METHOD Add(delta AS I32) AS I32
+        value = value + delta
+        RETURN value
+    END METHOD
+    METHOD Get() AS I32
+        RETURN value
+    END METHOD
+END CLASS
+DIM c AS Counter2 = NEW Counter2(10)
+DIM r AS I32
+r = c.Add(32)
+PRINT r
+PRINT c.Get()

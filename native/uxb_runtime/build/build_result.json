@@ -1,12 +1,12 @@
 {
-  "libuv": true,
-  "generated_at": "2026-09-26T23:35:56.0784541+03:00",
-  "dll": "C:\\Users\\mete\\Downloads\\BasicOyunSource\\UXBc_Clean\\UXBc\\uxb\\native\\uxb_runtime\\build\\uxb_runtime.dll",
-  "machine": "x64",
-  "variant": "auto",
-  "tbb": true,
-  "schema": "uxb.runtime_build.v2",
   "status": "PASS",
   "log": "C:\\Users\\mete\\Downloads\\BasicOyunSource\\UXBc_Clean\\UXBc\\uxb\\reports\\libraries\\logs\\uxb_runtime_auto_gxx.log",
-  "variant_copy": "C:\\Users\\mete\\Downloads\\BasicOyunSource\\UXBc_Clean\\UXBc\\uxb\\native\\uxb_runtime\\build\\uxb_runtime_auto.dll"
+  "generated_at": "2026-09-29T21:43:40.8925510+03:00",
+  "schema": "uxb.runtime_build.v2",
+  "machine": "x64",
+  "tbb": true,
+  "dll": "C:\\Users\\mete\\Downloads\\BasicOyunSource\\UXBc_Clean\\UXBc\\uxb\\native\\uxb_runtime\\build\\uxb_runtime.dll",
+  "variant": "auto",
+  "variant_copy": "C:\\Users\\mete\\Downloads\\BasicOyunSource\\UXBc_Clean\\UXBc\\uxb\\native\\uxb_runtime\\build\\uxb_runtime_auto.dll",
+  "libuv": true
 }

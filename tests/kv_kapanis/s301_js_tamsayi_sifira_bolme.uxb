@@ -1,0 +1,6 @@
+' S-301: JS'te tamsayi sifira bolme acik calisma ani hatasidir (eskiden Infinity ile sessizce surer, "yanlis" yazardi).
+DIM z AS I32 = 0
+DIM r AS I32
+PRINT "once"
+r = 10 \ z
+PRINT "yanlis"

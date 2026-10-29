@@ -1,13 +1,19 @@
 #ifndef UXB_MIR_X64_CONTEXT_FBS
 #define UXB_MIR_X64_CONTEXT_FBS
 
+#include once "../../common/memory_ref_limits.fbs"
+
 Type MIRX64LocalSlot
     nameText As String
     offset As Integer
     sizeBytes As Integer
     typeName As String
+    hasDeclaredType As Integer
     isByRef As Integer  ' 1 = this slot holds a POINTER (a BYREF parameter); every
                          ' load/store of it must go through one extra indirection
+    ' S-503: an indexed F32 value is widened to the canonical 8-byte XMM slot
+    ' while retaining F32 formatting/type semantics for later consumers.
+    isFloatWide As Integer
 End Type
 
 Type MIRX64StringLiteral
@@ -36,6 +42,7 @@ Type MIRX64GlobalSlot
     labelText As String
     sizeBytes As Integer
     typeName As String
+    hasDeclaredType As Integer
 End Type
 
 Type MIRX64Context
@@ -263,6 +270,7 @@ Function MIRX64EnsureGlobalSlot(ByRef cg As MIRX64Context, ByRef nameText As Str
     cg.globals(idxOut).labelText = MIRX64GlobalLabel(n)
     cg.globals(idxOut).sizeBytes = 8
     cg.globals(idxOut).typeName = "I64"
+    cg.globals(idxOut).hasDeclaredType = 0
     MIRX64EmitData cg, cg.globals(idxOut).labelText & ": dq 0"
     Return 1
 End Function
@@ -275,7 +283,10 @@ Sub MIRX64PrepareModuleGlobals(ByRef cg As MIRX64Context)
         If Trim(cg.modulePtr->globalVars(i)) <> "" Then
             MIRX64EnsureGlobalSlot cg, cg.modulePtr->globalVars(i), idx
             If i <= UBound(cg.modulePtr->globalVarTypes) Then
-                If Trim(cg.modulePtr->globalVarTypes(i)) <> "" Then cg.globals(idx).typeName = UCase(Trim(cg.modulePtr->globalVarTypes(i)))
+                Dim declaredType As String = UCase(Trim(UXBStep3StorageType(cg.modulePtr->globalVarTypes(i))))
+                If Left(declaredType, 5) = "TYPE_" Then declaredType = Mid(declaredType, 6)
+                If declaredType <> "" Then cg.globals(idx).typeName = declaredType
+                If declaredType <> "" And declaredType <> "VARIANT" And declaredType <> "ANY" Then cg.globals(idx).hasDeclaredType = 1
             End If
         End If
     Next i
@@ -516,17 +527,23 @@ Sub MIRX64EnsureMemoryModeHelpers(ByRef cg As MIRX64Context)
     MIRX64EmitHelperLine cg, ""
 
     ' ---- S-056 MemoryRef region registry (native x64) ----------------------------
-    ' Table of up to 256 regions, 24 bytes each: [+0] base, [+8] length,
+    ' The native table uses the same hard limit as the common registry. BSS
+    ' reserves address space without duplicating initialized bytes in the EXE.
+    ' Each region occupies 24 bytes: [+0] base, [+8] length,
     ' [+16] state (0 free, 1 live, 2 released/tombstone). Same rules as
     ' src/common/memory_ref.fbs: the end address belongs to a live region, a
     ' released region refuses access, a new allocation retires overlapping tombstones,
     ' addresses outside every region are EXTERNAL and unchecked here.
-    MIRX64EmitBss cg, "__uxb_memref_tab: resb 6144"
+    MIRX64EmitBss cg, "__uxb_memref_tab: resb " & LTrim(Str(UXB_MEMREF_HARD_MAX * 24))
     MIRX64EmitData cg, "__uxb_memref_count: dq 0"
+    MIRX64EmitData cg, "__uxb_memref_overflow: dq 0"
     MIRX64EmitData cg, "__uxb_memref_width: dq 1"
 
     ' rcx = base, rdx = length. Clobbers rax, r8-r11 (callers are compiled code, not helpers).
     MIRX64EmitHelperLine cg, "__uxb_memref_register:"
+    MIRX64EmitHelperLine cg, "    mov rax, rcx"
+    MIRX64EmitHelperLine cg, "    add rax, rdx"
+    MIRX64EmitHelperLine cg, "    jc .memref_reg_fail"
     MIRX64EmitHelperLine cg, "    lea r8, [rel __uxb_memref_tab]"
     MIRX64EmitHelperLine cg, "    mov r9, [rel __uxb_memref_count]"
     MIRX64EmitHelperLine cg, "    xor r10, r10"
@@ -562,8 +579,8 @@ Sub MIRX64EnsureMemoryModeHelpers(ByRef cg As MIRX64Context)
     MIRX64EmitHelperLine cg, ".memref_reg_place:"
     MIRX64EmitHelperLine cg, "    cmp r11, -1"
     MIRX64EmitHelperLine cg, "    jne .memref_reg_store"
-    MIRX64EmitHelperLine cg, "    cmp r9, 256"
-    MIRX64EmitHelperLine cg, "    jae .memref_reg_done"
+    MIRX64EmitHelperLine cg, "    cmp r9, " & LTrim(Str(UXB_MEMREF_HARD_MAX))
+    MIRX64EmitHelperLine cg, "    jae .memref_reg_fail"
     MIRX64EmitHelperLine cg, "    mov r11, r9"
     MIRX64EmitHelperLine cg, "    inc r9"
     MIRX64EmitHelperLine cg, "    mov [rel __uxb_memref_count], r9"
@@ -574,6 +591,10 @@ Sub MIRX64EnsureMemoryModeHelpers(ByRef cg As MIRX64Context)
     MIRX64EmitHelperLine cg, "    mov [r8+rax+8], rdx"
     MIRX64EmitHelperLine cg, "    mov qword [r8+rax+16], 1"
     MIRX64EmitHelperLine cg, ".memref_reg_done:"
+    MIRX64EmitHelperLine cg, "    ret"
+    MIRX64EmitHelperLine cg, ".memref_reg_fail:"
+    MIRX64EmitHelperLine cg, "    mov qword [rel __uxb_memref_overflow], 1"
+    MIRX64EmitHelperLine cg, "    mov rax, -1"
     MIRX64EmitHelperLine cg, "    ret"
     MIRX64EmitHelperLine cg, ""
 
@@ -606,8 +627,12 @@ Sub MIRX64EnsureMemoryModeHelpers(ByRef cg As MIRX64Context)
     MIRX64EmitHelperLine cg, "    push rsi"
     MIRX64EmitHelperLine cg, "    push rdi"
     MIRX64EmitHelperLine cg, "    push r8"
+    MIRX64EmitHelperLine cg, "    push r9"
     MIRX64EmitHelperLine cg, "    push r10"
     MIRX64EmitHelperLine cg, "    push r11"
+    MIRX64EmitHelperLine cg, "    mov r9, rcx"
+    MIRX64EmitHelperLine cg, "    add r9, [rel __uxb_memref_width]"
+    MIRX64EmitHelperLine cg, "    jc .memref_chk_fail"
     MIRX64EmitHelperLine cg, "    lea r8, [rel __uxb_memref_tab]"
     MIRX64EmitHelperLine cg, "    mov r10, [rel __uxb_memref_count]"
     MIRX64EmitHelperLine cg, "    xor r11, r11"
@@ -623,8 +648,8 @@ Sub MIRX64EnsureMemoryModeHelpers(ByRef cg As MIRX64Context)
     MIRX64EmitHelperLine cg, "    cmp rsi, 2"
     MIRX64EmitHelperLine cg, "    jne .memref_chk_next"
     MIRX64EmitHelperLine cg, "    mov rsi, [r8+rax]"
-    MIRX64EmitHelperLine cg, "    cmp rcx, rsi"
-    MIRX64EmitHelperLine cg, "    jb .memref_chk_next"
+    MIRX64EmitHelperLine cg, "    cmp r9, rsi"
+    MIRX64EmitHelperLine cg, "    jbe .memref_chk_next"
     MIRX64EmitHelperLine cg, "    add rsi, [r8+rax+8]"
     MIRX64EmitHelperLine cg, "    cmp rcx, rsi"
     MIRX64EmitHelperLine cg, "    jae .memref_chk_next"
@@ -632,14 +657,14 @@ Sub MIRX64EnsureMemoryModeHelpers(ByRef cg As MIRX64Context)
     MIRX64EmitHelperLine cg, "    jmp .memref_chk_next"
     MIRX64EmitHelperLine cg, ".memref_chk_live:"
     MIRX64EmitHelperLine cg, "    mov rsi, [r8+rax]"
+    MIRX64EmitHelperLine cg, "    cmp r9, rsi"
+    MIRX64EmitHelperLine cg, "    jbe .memref_chk_next"
     MIRX64EmitHelperLine cg, "    cmp rcx, rsi"
-    MIRX64EmitHelperLine cg, "    jb .memref_chk_next"
+    MIRX64EmitHelperLine cg, "    jb .memref_chk_fail"
     MIRX64EmitHelperLine cg, "    add rsi, [r8+rax+8]"
     MIRX64EmitHelperLine cg, "    cmp rcx, rsi"
     MIRX64EmitHelperLine cg, "    ja .memref_chk_next"
-    MIRX64EmitHelperLine cg, "    mov rax, rcx"
-    MIRX64EmitHelperLine cg, "    add rax, [rel __uxb_memref_width]"
-    MIRX64EmitHelperLine cg, "    cmp rax, rsi"
+    MIRX64EmitHelperLine cg, "    cmp r9, rsi"
     MIRX64EmitHelperLine cg, "    ja .memref_chk_fail"
     MIRX64EmitHelperLine cg, "    jmp .memref_chk_ok"
     MIRX64EmitHelperLine cg, ".memref_chk_next:"
@@ -648,6 +673,8 @@ Sub MIRX64EnsureMemoryModeHelpers(ByRef cg As MIRX64Context)
     MIRX64EmitHelperLine cg, ".memref_chk_end:"
     MIRX64EmitHelperLine cg, "    test edi, edi"
     MIRX64EmitHelperLine cg, "    jnz .memref_chk_fail"
+    MIRX64EmitHelperLine cg, "    cmp qword [rel __uxb_memref_overflow], 0"
+    MIRX64EmitHelperLine cg, "    jne .memref_chk_fail"
     MIRX64EmitHelperLine cg, ".memref_chk_ok:"
     MIRX64EmitHelperLine cg, "    mov eax, 1"
     MIRX64EmitHelperLine cg, "    jmp .memref_chk_ret"
@@ -656,6 +683,7 @@ Sub MIRX64EnsureMemoryModeHelpers(ByRef cg As MIRX64Context)
     MIRX64EmitHelperLine cg, ".memref_chk_ret:"
     MIRX64EmitHelperLine cg, "    pop r11"
     MIRX64EmitHelperLine cg, "    pop r10"
+    MIRX64EmitHelperLine cg, "    pop r9"
     MIRX64EmitHelperLine cg, "    pop r8"
     MIRX64EmitHelperLine cg, "    pop rdi"
     MIRX64EmitHelperLine cg, "    pop rsi"

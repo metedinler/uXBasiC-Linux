@@ -1,0 +1,77 @@
+V1 iki alan ayni eleman
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+d(0).a = 1
+d(0).b = 2
+PRINT d(0).a
+=====
+V2 ayni alan iki farkli eleman
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+d(0).a = 1
+d(1).a = 3
+PRINT d(0).a
+=====
+V3 tek atama, iki okuma
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+d(0).a = 1
+PRINT d(0).a + d(0).a
+=====
+V4 degisken indeks
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+DIM i AS I32
+i = 0
+d(i).a = 1
+d(i).b = 2
+PRINT d(i).a + d(i).b
+=====
+V5 sabit indeks, okuma baska eleman
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+d(0).a = 1
+d(0).b = 2
+d(1).a = 3
+d(1).b = 4
+PRINT d(1).b
+=====
+V6 sabit indeks atama sonra dongu ile okuma
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+DIM i AS I32
+d(0).a = 1
+d(0).b = 2
+d(1).a = 3
+d(1).b = 4
+FOR i = 0 TO 1
+    PRINT d(i).a + d(i).b
+NEXT
+=====
+V7 iki atama, okuma toplam
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+d(0).a = 1
+d(0).b = 2
+PRINT d(0).a + d(0).b

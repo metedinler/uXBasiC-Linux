@@ -1,0 +1,51 @@
+UNION I32 ve U8 ust uste
+UNION U
+    i AS I32
+    b AS U8
+END UNION
+DIM u AS U
+u.i = 258
+PRINT u.b
+=====
+UNION I64 ve I32
+UNION U
+    q AS I64
+    d AS I32
+END UNION
+DIM u AS U
+u.q = 4294967297
+PRINT u.d
+=====
+UNION F32 ve I32
+UNION U
+    i AS I32
+    f AS F32
+END UNION
+DIM u AS U
+u.i = 1065353216
+PRINT u.f
+=====
+UNION F64 ve I64
+UNION U
+    q AS I64
+    f AS F64
+END UNION
+DIM u AS U
+u.f = 1.0
+PRINT u.q
+=====
+UNION boyut
+UNION U
+    q AS I64
+    d AS I32
+END UNION
+PRINT SIZEOF(U)
+=====
+UNION yazilan alan okunur
+UNION U
+    i AS I32
+    f AS F32
+END UNION
+DIM u AS U
+u.i = 7
+PRINT u.i

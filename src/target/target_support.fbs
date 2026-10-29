@@ -7,7 +7,7 @@ Function UXBStep3TargetStatus(ByVal astNodeKind As String, ByVal targetName As S
     If t = "" Then t = "X64"
     If UXBAstContractIsCompileTimeNode(n) <> 0 Then Return "COMPILE_TIME_ONLY"
     If UXBAstContractIsNativeOnlyNode(n) <> 0 Then
-        If t = "X64" Or t = "X86" Or t = "NATIVE" Then Return "IMPLEMENTED"
+        If t = "X64" Or t = "NATIVE" Then Return "IMPLEMENTED"
         Return "NATIVE_ONLY"
     End If
     If UXBAstContractIsFileNode(n) <> 0 Then

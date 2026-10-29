@@ -1,0 +1,21 @@
+%%DEFINE CASE_ID 40
+%%MACRO TWICE(X) X + X
+%%JS_BEGIN dist/web/taz_embed.js
+console.log("taz");
+%%JS_END
+INCLUDE "tests/taz_suite/support/inc_math.bas"
+DIM a AS I32
+DIM b AS I64
+DIM c AS F64
+DIM s AS STRING
+a = CASE_ID
+b = 100
+c = 3.14
+s = "taz"
+a = TWICE(a)
+CALL(DLL, "msvcrt.dll", "puts", "STRPTR->I32", "TAZ_DLL_OK")
+PRINT ABS(-5)
+PRINT LEN(s)
+PRINT UCASE(s)
+PRINT STR(a)
+PRINT VAL("12")

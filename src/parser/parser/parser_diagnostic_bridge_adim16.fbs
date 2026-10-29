@@ -50,13 +50,19 @@ Function UXBParserDiagnosticBridgePushAll(ByRef outList As UXBDiagnosticList, By
         Dim lineNo As Integer
         Dim colNo As Integer
         UXBParserDiagnosticLocationFromMessage msgText, lineNo, colNo
-        UXBParserDiagnosticBridgePush outList, "PARSER_DIAGNOSTIC", msgText, filePathText, lineNo, colNo, ""
+        Dim codeText As String
+        codeText = UXBParserDiagnosticCodeFromMessage(msgText)
+        If codeText = "" Then codeText = "PARSER_DIAGNOSTIC"
+        UXBParserDiagnosticBridgePush outList, codeText, msgText, filePathText, lineNo, colNo, ""
     Next i
     If ps.parseErrorCount = 0 And Trim(ps.lastError) <> "" Then
         Dim lastLineNo As Integer
         Dim lastColNo As Integer
         UXBParserDiagnosticLocationFromMessage ps.lastError, lastLineNo, lastColNo
-        UXBParserDiagnosticBridgePush outList, "PARSER_DIAGNOSTIC", ps.lastError, filePathText, lastLineNo, lastColNo, ""
+        Dim lastCodeText As String
+        lastCodeText = UXBParserDiagnosticCodeFromMessage(ps.lastError)
+        If lastCodeText = "" Then lastCodeText = "PARSER_DIAGNOSTIC"
+        UXBParserDiagnosticBridgePush outList, lastCodeText, ps.lastError, filePathText, lastLineNo, lastColNo, ""
         Return 1
     End If
     Return ps.parseErrorCount

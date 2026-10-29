@@ -1,0 +1,11 @@
+' S-329 (gorunurluk): v dizisi baska yordamda bildirilmis; bu yordamda ayni ad bildirilmeden kullaniliyor = derleme hatasi.
+SUB Bir()
+    DIM v(3) AS I32
+    v(1) = 4
+END SUB
+SUB Iki()
+    PRINT "once"
+    PRINT v(1)
+END SUB
+Bir()
+Iki()

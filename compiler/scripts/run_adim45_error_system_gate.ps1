@@ -23,7 +23,7 @@ $gateJson=Join-Path $outDir 'adim45_error_system_gate.json'
 cmd /c build_64.bat *> $compileLog
 $buildExit=$LASTEXITCODE
 
-$exe='uxb\compiler\wrappers\uxb_main_wrapper_64.exe'
+$exe='uxb\bin\uxb.exe'
 if(-not (Test-Path $exe)){
   $exe='uxb\build\uxb_main_64.exe'
 }

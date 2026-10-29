@@ -1,0 +1,3 @@
+DIM n AS I32 = 5
+PRINT -(n > 1)
+PRINT -(1 = 1)

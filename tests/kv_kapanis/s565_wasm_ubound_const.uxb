@@ -1,0 +1,5 @@
+' S-565: CONST ile sinirlanan dizinin UBOUND / LBOUND degeri (dizi baska yerde kullanilmasa da) altı yolda aynidir (WASM eskiden 0 yazdi).
+CONST N = 6
+DIM a(N) AS I32
+PRINT UBOUND(a)
+PRINT LBOUND(a)

@@ -1,0 +1,123 @@
+F1_arguman_tipi_string_i8
+' STRING argumani I8 parametreye vermek: semantic ret beklenir (B3 ciktilarinin kok nedeni olabilir).
+FUNCTION F(a AS I8) AS I8
+    RETURN a
+END FUNCTION
+PRINT F("abc")
+=====
+F2_arguman_tipi_string_i32
+FUNCTION F(a AS I32) AS I32
+    RETURN a
+END FUNCTION
+PRINT F("abc")
+=====
+F3_ns_nitelikli_string_i8
+NAMESPACE S
+    FUNCTION F(a AS I8) AS I8
+        RETURN a
+    END FUNCTION
+END NAMESPACE
+PRINT S.F("abc")
+=====
+G1_using_golge_i32_parametre
+' B3 benzeri ama parametreler I32; string argumani I32'ye gider mi?
+NAMESPACE S
+    FUNCTION Left(a AS I32, b AS I32) AS I32
+        RETURN a + b
+    END FUNCTION
+END NAMESPACE
+USING S
+PRINT Left("Merhaba", 3)
+=====
+G2_using_golge_sadece_tamsayi
+' USING S ve yalniz tamsayi argumanlarla Left(3,4): kullanici islevi mi, yerlesik mi?
+NAMESPACE S
+    FUNCTION Left(a AS I32, b AS I32) AS I32
+        RETURN a + b
+    END FUNCTION
+END NAMESPACE
+USING S
+PRINT Left(3, 4)
+=====
+G3_using_golge_sadece_metin
+' USING S varken yalniz yerlesik biciminde Left("Merhaba", 3) cagrisi.
+NAMESPACE S
+    FUNCTION Left(a AS I32, b AS I32) AS I32
+        RETURN a + b
+    END FUNCTION
+END NAMESPACE
+USING S
+DIM m AS STRING = Left("Merhaba", 3)
+PRINT m
+=====
+W1_sarmalayici_ic_cagri_yalin
+' Mete: "Left sonucuna [ ] ekleyen" yerlesik yetenek ornegi. NAMESPACE icinde yalin Left(...) cagrisi
+' kendini mi (sonsuz ozyineleme), yerlesigi mi cagirir? Beklenen: [Mer] / Mer
+NAMESPACE S
+    FUNCTION Left(s AS STRING, n AS I32) AS STRING
+        RETURN "[" + Left(s, n) + "]"
+    END FUNCTION
+END NAMESPACE
+PRINT S.Left("Merhaba", 3)
+PRINT Left("Merhaba", 3)
+=====
+W2_sarmalayici_builtin_nitelikli
+' BUILTIN.Left gibi acik yerlesik erisimi bugun var mi? Beklenen: acik ret (ozellik yok).
+NAMESPACE S
+    FUNCTION Left(s AS STRING, n AS I32) AS STRING
+        RETURN "[" + BUILTIN.Left(s, n) + "]"
+    END FUNCTION
+END NAMESPACE
+PRINT S.Left("Merhaba", 3)
+=====
+W3_sarmalayici_baska_ad
+' Ayni is farkli adla: sorunsuz calismali. Beklenen: [Mer]
+NAMESPACE S
+    FUNCTION Sarmala(s AS STRING, n AS I32) AS STRING
+        RETURN "[" + Left(s, n) + "]"
+    END FUNCTION
+END NAMESPACE
+PRINT S.Sarmala("Merhaba", 3)
+=====
+W4_sarmalayici_global_ad_kok
+' Kok duzeyde FUNCTION Left (S-288 A karari: ret). Sarmalayici ihtiyacinin dogal yeri burasi olurdu.
+FUNCTION Left(s AS STRING, n AS I32) AS STRING
+    RETURN "[" + MID(s, 1, n) + "]"
+END FUNCTION
+PRINT Left("Merhaba", 3)
+=====
+T1_thread_slot_tanimdan_sonra
+THREAD Isci
+    PRINT "THREAD_RUN"
+END THREAD
+SLOT
+    Is 8 ON THREAD Isci
+END SLOT
+TRIGGER Isci
+=====
+T2_thread_slot_tanimdan_once
+SLOT
+    Is 8 ON THREAD Isci
+END SLOT
+TRIGGER Isci
+THREAD Isci
+    PRINT "THREAD_RUN"
+END THREAD
+=====
+T3_event_slot_tanimdan_sonra
+EVENT VeriGeldi
+    PRINT "EVENT_RUN"
+END EVENT
+SLOT
+    Kaydet 5 ON EVENT VeriGeldi
+END SLOT
+TRIGGER VeriGeldi, 42
+=====
+T4_event_slot_tanimdan_once
+SLOT
+    Kaydet 5 ON EVENT VeriGeldi
+END SLOT
+TRIGGER VeriGeldi, 42
+EVENT VeriGeldi
+    PRINT "EVENT_RUN"
+END EVENT

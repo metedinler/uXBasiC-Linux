@@ -1,0 +1,2 @@
+INCLUDE "nested.uxbh"
+PRINT "etiket="; VALUE

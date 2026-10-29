@@ -1,0 +1,4 @@
+' Step 2 AST contract smoke
+CLASS A
+ PUBLIC x AS INTEGER
+END CLASS

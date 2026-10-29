@@ -1,0 +1,11 @@
+FUNCTION Hesapla() AS I32
+    RETURN 5
+END FUNCTION
+NAMESPACE Baska
+    FUNCTION Hesapla() AS I32
+        RETURN 50
+    END FUNCTION
+END NAMESPACE
+USING Baska
+PRINT Hesapla()
+PRINT Baska.Hesapla()

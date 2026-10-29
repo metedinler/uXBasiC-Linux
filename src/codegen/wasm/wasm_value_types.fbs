@@ -1,0 +1,178 @@
+#ifndef UXB_WASM_VALUE_TYPES_FBS
+#define UXB_WASM_VALUE_TYPES_FBS
+
+' Source types remain distinct even when their WAT carrier is the same.
+Dim Shared gWasmValueModule As MIRModule Ptr
+Dim Shared gWasmValueFunction As MIRFunction Ptr
+Dim Shared gWasmValueTypes As String
+Dim Shared gWasmStringData As String
+Dim Shared gWasmStringCursor As Integer
+
+Public Function UXBWasmSourceType(ByVal t As String) As String
+    t = UCase(Trim(t))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    Select Case t
+    Case "SINGLE": Return "F32"
+    Case "DOUBLE": Return "F64"
+    Case "BYTE", "SBYTE": Return "I8"
+    Case "UBYTE": Return "U8"
+    Case "SHORT": Return "I16"
+    Case "USHORT": Return "U16"
+    Case "LONG", "INTEGER", "INT": Return "I32"
+    Case "ULONG", "UINT", "UINTEGER": Return "U32"
+    Case "BOOL": Return "BOOLEAN"
+    End Select
+    Return t
+End Function
+
+Public Function UXBWasmCarrier(ByVal t As String) As String
+    t = UXBWasmSourceType(t)
+    If t = "F32" Then Return "f32"
+    If t = "F64" Then Return "f64"
+    Return "i32"
+End Function
+
+Public Function UXBWasmIsText(ByVal t As String) As Integer
+    t = UXBWasmSourceType(t)
+    Return IIf(t = "STRING" Or t = "ZSTRING" Or t = "WSTRING", 1, 0)
+End Function
+
+Private Sub UXBWasmRememberType(ByRef rawName As String, ByRef rawType As String)
+    Dim n As String = UXBWasmSafeName(rawName)
+    If Trim(rawName) = "" Or Trim(rawType) = "" Then Exit Sub
+    If InStr(gWasmValueTypes, "|" & n & ":") = 0 Then gWasmValueTypes &= "|" & n & ":" & UXBWasmSourceType(rawType) & "|"
+End Sub
+
+Public Sub UXBWasmPrepareValueTypes(ByRef m As MIRModule, ByRef fn As MIRFunction)
+    gWasmValueModule = @m
+    gWasmValueFunction = @fn
+    gWasmValueTypes = ""
+    Dim i As Integer, b As Integer, j As Integer
+    For i = 0 To fn.paramVarCount - 1
+        UXBWasmRememberType fn.paramVars(i), fn.paramVarTypes(i)
+    Next i
+    For i = 0 To fn.localVarCount - 1
+        UXBWasmRememberType fn.localVars(i), fn.localVarTypes(i)
+    Next i
+    For i = 0 To m.globalVarCount - 1
+        If m.globalVarIsArray(i) <> 0 Then
+            UXBWasmRememberType m.globalVars(i), "ARRAY"
+        Else
+            UXBWasmRememberType m.globalVars(i), m.globalVarTypes(i)
+        End If
+    Next i
+    For b = 0 To fn.blockCount - 1
+        For j = 0 To fn.blocks(b).instructionCount - 1
+            With fn.blocks(b).instructions(j)
+                UXBWasmRememberType .result, .resultType
+            End With
+        Next j
+    Next b
+End Sub
+
+' S-563: &H / &O / &B tamsayi sabitleri MIR'e kaynak metni olarak gecer (S-078); WASM bunlari yerel degisken sanip
+' `local.get $_H44` uretiyor ve wat2wasm ham hatasiyla dusuyordu (sabit bir islemin parcasi olunca on-isleme katlandigi
+' icin yalniz tek basina duran sabit bozuktu). Gecerli degilse bos metin doner.
+Public Function UXBWasmRadixLiteralDecimal(ByRef s As String) As String
+    Dim radixText As String = Trim(s)
+    If Len(radixText) < 3 Or Left(radixText, 1) <> "&" Then Return ""
+    Dim radixKind As String = UCase(Mid(radixText, 2, 1))
+    Dim radixDigitPos As Integer
+    Dim radixDigit As String
+    For radixDigitPos = 3 To Len(radixText)
+        radixDigit = UCase(Mid(radixText, radixDigitPos, 1))
+        Select Case radixKind
+        Case "H": If InStr("0123456789ABCDEF", radixDigit) = 0 Then Return ""
+        Case "O": If InStr("01234567", radixDigit) = 0 Then Return ""
+        Case "B": If InStr("01", radixDigit) = 0 Then Return ""
+        Case Else: Return ""
+        End Select
+    Next radixDigitPos
+    Return LTrim(Str(ValULng(radixText)))
+End Function
+
+Public Function UXBWasmValueType(ByVal rawValue As String) As String
+    Dim t As String = Trim(rawValue)
+    Dim radixDecimal As String = UXBWasmRadixLiteralDecimal(t)
+    If radixDecimal <> "" Then t = radixDecimal
+    If gUxbWasmExceptionState <> 0 Then
+        If UCase(t) = "__MIR_EXC_ACTIVE" Then Return "I32"
+        If UCase(t) = "__MIR_EXC_VALUE" Then Return "STRING"
+    End If
+    If Left(t, 1) = Chr(34) Then Return "STRING"
+    Dim c As String = Left(t, 1)
+    If (c >= "0" And c <= "9") Or c = "-" Or c = "+" Or c = "." Then
+        If UXBNumberLiteralIsFloat(t) <> 0 Then Return "F64"
+        Return "I32"
+    End If
+    Dim n As String = UXBWasmSafeName(t)
+    Dim p As Integer = InStr(gWasmValueTypes, "|" & n & ":")
+    If p > 0 Then
+        p += Len(n) + 2
+        Return Mid(gWasmValueTypes, p, InStr(p, gWasmValueTypes, "|") - p)
+    End If
+    Return "I32"
+End Function
+
+Public Function UXBWasmNarrowI32(ByVal rawType As String) As String
+    Dim t As String = UXBWasmSourceType(rawType)
+    Dim s As String
+    Select Case t
+    Case "I8": s = "      i32.const 24" & Chr(10) & "      i32.shl" & Chr(10) & "      i32.const 24" & Chr(10) & "      i32.shr_s" & Chr(10)
+    Case "I16": s = "      i32.const 16" & Chr(10) & "      i32.shl" & Chr(10) & "      i32.const 16" & Chr(10) & "      i32.shr_s" & Chr(10)
+    Case "U8": s = "      i32.const 255" & Chr(10) & "      i32.and" & Chr(10)
+    Case "U16": s = "      i32.const 65535" & Chr(10) & "      i32.and" & Chr(10)
+    Case "BOOLEAN": s = "      i32.const 0" & Chr(10) & "      i32.ne" & Chr(10) & "      i32.const -1" & Chr(10) & "      i32.mul" & Chr(10)
+    End Select
+    Return s
+End Function
+
+Public Function UXBWasmConvert(ByVal sourceType As String, ByVal targetType As String) As String
+    Dim a As String = UXBWasmCarrier(sourceType), b As String = UXBWasmCarrier(targetType)
+    Dim s As String, suffix As String = "s"
+    If Left(UXBWasmSourceType(sourceType), 1) = "U" Then suffix = "u"
+    If a <> b Then
+        If a = "i32" Then
+            s = "      " & b & ".convert_i32_" & suffix & Chr(10)
+        ElseIf b = "i32" Then
+            suffix = "s"
+            If Left(UXBWasmSourceType(targetType), 1) = "U" Then suffix = "u"
+            s = "      i32.trunc_" & a & "_" & suffix & Chr(10)
+        ElseIf b = "f32" Then
+            s = "      f32.demote_f64" & Chr(10)
+        Else
+            s = "      f64.promote_f32" & Chr(10)
+        End If
+    End If
+    If b = "i32" Then s &= UXBWasmNarrowI32(targetType)
+    Return s
+End Function
+
+Public Function UXBWasmStringLiteral(ByRef rawText As String) As String
+    ' MIR text is already lexer-decoded; preserve its UTF-8 bytes including NUL.
+    Dim textValue As String = Mid(rawText, 2, Len(rawText) - 2)
+    If Len(textValue) = 0 Then Return "      i32.const 0" & Chr(10)
+    Dim encoded As String, i As Integer, literalBase As Integer = (gWasmStringCursor + 7) And -8
+    Dim descriptor(0 To 3) As UInteger = {CUInt(literalBase + 16), CUInt(Len(textValue)), CUInt(Len(textValue)), 1}
+    Dim lane As Integer, octet As Integer
+    For lane = 0 To 3
+        For octet = 0 To 3
+            encoded &= "\" & LCase(Hex((descriptor(lane) Shr (octet * 8)) And 255, 2))
+        Next octet
+    Next lane
+    For i = 1 To Len(textValue)
+        encoded &= "\" & LCase(Hex(Asc(textValue, i), 2))
+    Next i
+    gWasmStringData &= "  (data (i32.const " & LTrim(Str(literalBase)) & ") " & Chr(34) & encoded & Chr(34) & ")" & Chr(10)
+    gWasmStringCursor = literalBase + 16 + Len(textValue)
+    Return "      i32.const " & LTrim(Str(literalBase)) & Chr(10)
+
+End Function
+
+Declare Function UXBWasmEmitValue(ByRef valueText As String) As String
+
+Public Function UXBWasmTypedValue(ByVal rawValue As String, ByVal targetType As String) As String
+    Return UXBWasmEmitValue(rawValue) & UXBWasmConvert(UXBWasmValueType(rawValue), targetType)
+End Function
+
+#endif

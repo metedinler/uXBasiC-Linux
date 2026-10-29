@@ -1,0 +1,11 @@
+FUNCTION Add2(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+
+DIM x AS I32
+x = Add2(1, 2)
+IF x THEN
+    PRINT x
+ELSE
+    PRINT 0
+END IF

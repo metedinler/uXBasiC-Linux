@@ -1,0 +1,6 @@
+{
+  "s097_s103_type_array_abi_probe": {
+    "target_output": "7",
+    "reason": "TYPE[] stride, descriptor and forwarding ABI repair belongs to S-097/S-103; not proved by the dimension literal repair."
+  }
+}

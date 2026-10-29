@@ -1237,6 +1237,7 @@ Function ParseEnumStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Integ
 
     Dim enumNode As Integer
     enumNode = MakeNodeFromToken(ps, ASTK_ENUM_STMT, nameTok.lexeme, "", firstTok)
+    RegisterDeclaredTypeName nameTok.lexeme
 
     ' Optional base type: ENUM Name AS I32
     If UXBClassDeclMatchKeywordLike(ps, "AS") Then
@@ -1520,6 +1521,9 @@ Function ParseDefTypeStmt(ByRef ps As ParseState, ByRef firstTok As Token) As In
             Return -1
         End If
         ASTAddChild ps.ast, defNode, rangeExpr
+        ps.ast.nodes(rangeExpr).role = "DEFTYPE_RANGE_METADATA"
+        If ps.ast.nodes(rangeExpr).left <> -1 Then ps.ast.nodes(ps.ast.nodes(rangeExpr).left).role = "DEFTYPE_RANGE_METADATA"
+        If ps.ast.nodes(rangeExpr).right <> -1 Then ps.ast.nodes(ps.ast.nodes(rangeExpr).right).role = "DEFTYPE_RANGE_METADATA"
 
         If MatchOp(ps, ",") = 0 Then Exit Do
     Loop

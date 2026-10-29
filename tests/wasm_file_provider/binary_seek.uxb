@@ -1,0 +1,15 @@
+DIM value AS I32
+OPEN "bytes.bin" FOR BINARY AS #4
+PUT #4, 1, 1, 255
+PUT #4, 2, 2, 4660
+PUT #4, 4, 4, -123456
+PRINT LOF(4)
+GET #4, 1, 1, value
+PRINT value
+GET #4, 2, 2, value
+PRINT value
+SEEK #4, 4
+GET #4, value
+PRINT value
+PRINT EOF(4)
+CLOSE #4

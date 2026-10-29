@@ -1,0 +1,95 @@
+' uXBasic OOP Magic Yama-2 contract test
+' Amaç: MAGIC komutunun tum kanonik yuzeyinin parser/semantic tarafinda gorunmesi.
+
+CLASS MagicBox
+    MAGIC GET(name AS I32) AS I32
+        RETURN 101
+    END METHOD
+
+    MAGIC SET(name AS I32, value AS I32)
+    END METHOD
+
+    MAGIC CALL(x AS I32) AS I32
+        RETURN x + 1
+    END METHOD
+
+    MAGIC TOSTRING() AS I32
+        RETURN 2026
+    END METHOD
+
+    MAGIC ADD(other AS I32) AS I32
+        RETURN other + 10
+    END METHOD
+
+    MAGIC SUB(other AS I32) AS I32
+        RETURN other - 10
+    END METHOD
+
+    MAGIC MUL(other AS I32) AS I32
+        RETURN other * 2
+    END METHOD
+
+    MAGIC DIV(other AS I32) AS I32
+        RETURN other / 2
+    END METHOD
+
+    MAGIC IDIV(other AS I32) AS I32
+        RETURN other \ 2
+    END METHOD
+
+    MAGIC MOD(other AS I32) AS I32
+        RETURN other MOD 2
+    END METHOD
+
+    MAGIC AND(other AS I32) AS I32
+        RETURN other AND 255
+    END METHOD
+
+    MAGIC OR(other AS I32) AS I32
+        RETURN other OR 1
+    END METHOD
+
+    MAGIC XOR(other AS I32) AS I32
+        RETURN other XOR 1
+    END METHOD
+
+    MAGIC SHL(other AS I32) AS I32
+        RETURN other << 1
+    END METHOD
+
+    MAGIC SHR(other AS I32) AS I32
+        RETURN other >> 1
+    END METHOD
+
+    MAGIC ROL(other AS I32) AS I32
+        RETURN other
+    END METHOD
+
+    MAGIC ROR(other AS I32) AS I32
+        RETURN other
+    END METHOD
+
+    MAGIC EQ(other AS I32) AS I32
+        RETURN other = 0
+    END METHOD
+
+    MAGIC NE(other AS I32) AS I32
+        RETURN other <> 0
+    END METHOD
+
+    MAGIC LT(other AS I32) AS I32
+        RETURN other < 0
+    END METHOD
+
+    MAGIC LE(other AS I32) AS I32
+        RETURN other <= 0
+    END METHOD
+
+    MAGIC GT(other AS I32) AS I32
+        RETURN other > 0
+    END METHOD
+
+    MAGIC GE(other AS I32) AS I32
+        RETURN other >= 0
+    END METHOD
+END CLASS

@@ -1,0 +1,15 @@
+' S-300: RETURN sirasinda FINALLY istisna atarsa bekleyen RETURN iptal olur, dis TRY istisnayi yakalar ve rutin kaldigi yerden surer.
+SUB T()
+    TRY
+        TRY
+            RETURN
+        FINALLY
+            THROW "boom"
+        END TRY
+    CATCH
+        PRINT "yakalandi"
+    END TRY
+    PRINT "sub-sonu"
+END SUB
+T()
+PRINT "son"

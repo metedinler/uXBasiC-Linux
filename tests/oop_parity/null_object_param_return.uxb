@@ -1,0 +1,33 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    METHOD Al() AS I32
+        RETURN v
+    END METHOD
+END CLASS
+
+' S-564: NOTHING as a function result, as an argument, and an unassigned variable as an argument (the MIR interpreter compared the empty
+' parameter with NOTHING as unequal).
+FUNCTION Ver(f AS I32) AS Kutu
+    IF f = 0 THEN
+        RETURN NOTHING
+    END IF
+    RETURN NEW Kutu(f)
+END FUNCTION
+SUB Yaz(k AS Kutu)
+    IF k = NOTHING THEN
+        PRINT 1
+    ELSE
+        PRINT k.Al()
+    END IF
+END SUB
+DIM a AS Kutu = Ver(0)
+DIM b AS Kutu = Ver(5)
+DIM c AS Kutu
+Yaz(a)
+Yaz(b)
+Yaz(c)
+Yaz(NOTHING)

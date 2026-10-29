@@ -1,0 +1,150 @@
+=== hashfile
+%%HASHFILE "assets/a.txt" AS HASH_A
+PRINT "%%HASH_A"
+PRINT HASH_A
+=== embedtext
+%%EMBEDTEXT "assets/logo.txt" AS LOGO_METNI
+PRINT LOGO_METNI
+=== embedtext_disari
+%%EMBEDTEXT "../disari.txt" AS X
+PRINT X
+=== embedbase64
+%%EMBEDBASE64 "assets/logo.txt" AS LOGO_B64
+PRINT LOGO_B64
+=== config_makro
+%%CONFIG_FILE "config.cfg"
+PRINT SURUM + 1
+=== config_yok
+%%CONFIG_FILE "yok.cfg"
+PRINT 1
+=== env_makro
+%%ENV "PATH" AS HOST_PATH
+%%IF HOST_PATH
+PRINT "yol var"
+%%ENDIF
+=== lock_ihlal
+%%DEFINE SABIT 1
+%%LOCK_META SABIT
+%%SET SABIT = 2
+PRINT SABIT
+=== lock_ihlal_define
+%%DEFINE SABIT 1
+%%LOCK_META SABIT
+%%DEFINE SABIT 2
+PRINT SABIT
+=== profile_makro
+%%PROFILE release
+%%IFC PROFILE, RELEASE
+PRINT "surum"
+%%ELSE
+PRINT "gelistirme"
+%%ENDIF
+=== path_alias
+%%PATH_ALIAS "@assets" AS "assets"
+%%INCLUDE "@assets/yok.uxb"
+PRINT 1
+=== dump_meta_icerik
+%%DEFINE X 1
+%%SET TITLE = "Deneme"
+%%DUMP_META "dump.json"
+PRINT 1
+=== deprecated
+%%DEPRECATED "ESKI", "YENI"
+PRINT 1
+=== template_kullan
+%%TEMPLATE_BEGIN sayac
+PRINT "sablon"
+%%TEMPLATE_END
+%%TEMPLATE_USE sayac
+PRINT 1
+=== template_tek
+%%TEMPLATE sayac
+PRINT 1
+=== section_blok
+%%SECTION baslik
+PRINT 1
+%%ENDSECTION
+=== wat_func_blok
+%%ALLOW_RAW_WAT ON
+%%WAT_FUNC_BEGIN yardimci
+(func $yardimci (result i32) i32.const 7)
+%%WAT_FUNC_END
+PRINT 1
+=== json_array
+%%JSON_ARRAY_BEGIN liste
+1
+%%JSON_ARRAY_END
+PRINT 1
+=== md_blok
+%%MD_BEGIN not.md
+# Baslik
+%%MD_END
+PRINT 1
+=== wat_import
+%%WAT_IMPORT env, print_i32, yaz, "(param i32)"
+PRINT 1
+=== wat_import_eksik_baglama
+%%WAT_IMPORT "env", "bilinmeyen", "x", "(param i32)"
+PRINT 1
+=== require_host_binding_kapali
+%%REQUIRE_HOST_BINDING OFF
+%%WAT_IMPORT "env", "bilinmeyen", "x", "(param i32)"
+PRINT 1
+=== wat_export
+%%WAT_EXPORT main
+PRINT 1
+=== safe_paths_kapat
+%%SAFE_PATHS OFF
+%%ASSET_COPY "../x.txt", "x.txt"
+PRINT 1
+=== safe_paths_acik
+%%ASSET_COPY "../x.txt", "x.txt"
+PRINT 1
+=== mdcss
+%%MD_SAFE OFF
+PRINT 1
+=== kosul_dengesiz_if
+%%IF 1
+PRINT 1
+=== kosul_dengesiz_endif
+PRINT 1
+%%ENDIF
+=== kosul_dengesiz_else
+PRINT 1
+%%ELSE
+PRINT 2
+=== elif_oncesiz
+%%ELIF 1
+PRINT 1
+=== kosul_ic_ice
+%%DEFINE A 1
+%%DEFINE B 0
+%%IF A
+%%IF B
+PRINT "ab"
+%%ELSE
+PRINT "a-b"
+%%ENDIF
+%%ELSE
+PRINT "yok"
+%%ENDIF
+=== macro_ic_ice
+%%DEFINE UC 3
+%%MACRO IKI(X) X + X
+%%MACRO DORT(X) IKI(IKI(X))
+PRINT DORT(UC)
+=== macro_yinelemeli
+%%MACRO YIN(X) YIN(X)
+PRINT YIN(1)
+=== macro_ad_cakisma
+%%DEFINE PRINT YAZDIR
+PRINT 1
+=== macro_metin_icinde
+%%DEFINE ADI Ece
+PRINT "merhaba ADI"
+PRINT ADI
+=== macro_kucuk_buyuk
+%%DEFINE ToplaM 5
+PRINT toplam
+PRINT TOPLAM
+PRINT ToplaM

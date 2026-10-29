@@ -1,0 +1,8 @@
+OPEN "tmp_adim43_input.txt" FOR OUTPUT AS #1
+PRINT #1, "MERHABA"
+CLOSE #1
+OPEN "tmp_adim43_input.txt" FOR INPUT AS #2
+DIM A AS STRING
+INPUT #2, A
+CLOSE #2
+PRINT A

@@ -1,0 +1,91 @@
+Y1 bilinmeyen MAGIC adi (hata mi, sessiz mi)
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+    MAGIC BU_YOK()
+        RETURN n
+    END MAGIC
+END CLASS
+PRINT "tamam"
+=====
+Y2 FOR EACH nesne uzerinde, MAGIC ITER var (beklenen hata ya da 5)
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+    MAGIC ITER()
+        RETURN n
+    END MAGIC
+END CLASS
+DIM s AS Sayac = NEW Sayac()
+s.n = 5
+DIM v AS I32
+FOR EACH v IN s
+    PRINT v
+NEXT
+PRINT "bitti"
+=====
+Y3 PTR TO I32 aritmetigi: eleman mi bayt mi (tipli ise 4)
+DIM a(3) AS I32
+DIM p AS PTR TO I32
+DIM q AS PTR TO I32
+p = VARPTR(a(0))
+q = p + 1
+PRINT q - p
+=====
+Y4 ham PTR aritmetigi (bayt: 1)
+DIM a(3) AS I32
+DIM p AS PTR
+DIM q AS PTR
+p = VARPTR(a(0))
+q = p + 1
+PRINT q - p
+=====
+Y5 DIM x AS I32 = "metin" (S-148: ilk deger tipi denetimi)
+DIM bad AS I32 = "text"
+PRINT bad
+=====
+Y6 EXIT SUB / EXIT FUNCTION (V1 yok der; deneyelim)
+SUB S()
+    PRINT "a"
+    EXIT SUB
+    PRINT "b"
+END SUB
+S()
+=====
+Y7 KILL (dosya silme) / MKDIR / NAME / DIR
+KILL "bu_dosya_yok.txt"
+PRINT "tamam"
+=====
+Y8 WITH blogu
+TYPE P
+    x AS I32
+END TYPE
+DIM a AS P
+WITH a
+    .x = 5
+END WITH
+PRINT a.x
+=====
+Y9 SELECT CASE aralik ve IS
+DIM n AS I32 = 5
+SELECT CASE n
+    CASE 1 TO 3
+        PRINT "kucuk"
+    CASE 4 TO 6
+        PRINT "orta"
+    CASE ELSE
+        PRINT "buyuk"
+END SELECT
+=====
+Y10 ENUM tipi degisken, CONTINUE
+ENUM Renk
+    Kirmizi
+    Mavi
+END ENUM
+DIM r AS Renk = Renk.Mavi
+PRINT r
+DIM i AS I32
+FOR i = 1 TO 3
+    IF i = 2 THEN CONTINUE FOR
+    PRINT i
+NEXT

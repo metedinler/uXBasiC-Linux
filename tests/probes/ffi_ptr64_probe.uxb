@@ -1,0 +1,17 @@
+PRINT "UXB_FFI_PTR64_PROBE_START"
+
+DECLARE FUNCTION uxconfig_open LIB "bin\uxconfig.dll" ALIAS "uxconfig_open" (BYVAL path AS ZSTRING PTR) AS U64
+DECLARE FUNCTION uxconfig_close LIB "bin\uxconfig.dll" ALIAS "uxconfig_close" (BYVAL handle AS U64)
+DECLARE FUNCTION uxconfig_get_string LIB "bin\uxconfig.dll" ALIAS "uxconfig_get_string" (BYVAL handle AS U64, BYVAL section AS ZSTRING PTR, BYVAL key AS ZSTRING PTR, BYVAL defv AS ZSTRING PTR) AS ZSTRING PTR
+
+DIM path AS STRING
+path = "C:\\temp\\uxconfig_probe.ini"
+DIM h AS U64
+h = uxconfig_open(STRPTR(path))
+PRINT "HANDLE="; HEX(h)
+DIM value AS STRING
+value = *uxconfig_get_string(h, STRPTR("section"), STRPTR("key"), STRPTR("default"))
+PRINT "VALUE="; value
+uxconfig_close(h)
+
+PRINT "UXB_FFI_PTR64_PROBE_PASS"

@@ -1,0 +1,15 @@
+TYPE Triple32
+    x AS I32
+    y AS I32
+    z AS I32
+END TYPE
+DECLARE FUNCTION GetZ(a AS Triple32[]) AS I32
+FUNCTION GetZ(a AS Triple32[]) AS I32
+    RETURN a(3).z
+END FUNCTION
+DIM data(2 TO 4) AS Triple32
+data(2).z = 40
+data(3).z = 55
+data(4).z = 70
+PRINT GetZ(data)
+' EXPECT: 55

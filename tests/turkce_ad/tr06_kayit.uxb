@@ -1,0 +1,19 @@
+' S-579: Türkçe harfli TYPE adı ve alan adları (iç içe kayıt dahil); büyük harfler ç/ş/Ğ gibi harflerde, ı ise küçük yazılır
+TYPE Nokta
+    x AS I32
+    y AS I32
+END TYPE
+TYPE Çizgi
+    başlangıç AS Nokta
+    bitiş AS Nokta
+    kalınlık AS I32
+END TYPE
+DIM ç AS Çizgi
+ç.başlangıç.x = 1
+ç.başlangıç.y = 2
+ç.bitiş.x = 30
+ç.bitiş.y = 40
+ç.kalınlık = 5
+PRINT Ç.bAŞLANGıÇ.X + ç.başlangıç.y
+PRINT ç.BİTİŞ.x + ç.bitiş.y
+PRINT ç.KALıNLıK

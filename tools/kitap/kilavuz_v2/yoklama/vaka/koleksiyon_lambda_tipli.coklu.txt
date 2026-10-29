@@ -1,0 +1,59 @@
+LIST OF I32 bildirimi
+DIM l AS LIST OF I32
+LISTADD(l, 5)
+LISTADD(l, 7)
+DIM n AS I32
+n = LISTGET(l, 1)
+PRINT n
+=====
+LIST tipsiz LISTGET I32 degiskene
+DIM l AS LIST
+LISTADD(l, 5)
+DIM n AS I32
+n = LISTGET(l, 0)
+PRINT n
+=====
+LIST degeri dogrudan ifadede
+DIM l AS LIST
+LISTADD(l, 5)
+PRINT LISTGET(l, 0) + 1
+=====
+LIST I32 toplam FOR EACH
+DIM l AS LIST
+LISTADD(l, 5)
+LISTADD(l, 7)
+DIM t AS I32
+DIM v AS I32
+FOR EACH v IN l
+    t = t + v
+NEXT v
+PRINT t
+=====
+LIST F64 degeri
+DIM l AS LIST
+LISTADD(l, 2.5)
+DIM d AS F64
+d = LISTGET(l, 0)
+PRINT d
+=====
+BYREF ayni degisken iki parametre (kod denetimi: AST 11, MIR 11, JS 2, MIR-x64 2)
+SUB Degis(BYREF x AS I32, BYREF y AS I32)
+    x = 1
+    y = x + 10
+END SUB
+DIM v AS I32 = 0
+Degis(v, v)
+PRINT v
+=====
+lambda benzeri yazim (FN)
+DIM f AS I32
+f = FN(x) => x * 2
+PRINT f
+=====
+fonksiyon gostericisi CODEPTR ile dolayli cagri
+FUNCTION Kare(x AS I32) AS I32
+    RETURN x * x
+END FUNCTION
+DIM p AS PTR
+p = CODEPTR(Kare)
+PRINT p <> 0

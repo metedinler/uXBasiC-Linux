@@ -1,0 +1,3 @@
+' S-544: the same program with the INCLUDE written after the call: the call comes before the included definition.
+IncSelam()
+INCLUDE "declare_inc_yardimci.uxbh"

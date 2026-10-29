@@ -1,0 +1,5 @@
+' S-329: Topla var, Topl yok (yazim hatasi) = derleme hatasi.
+FUNCTION Topla(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+PRINT Topl(1, 2)

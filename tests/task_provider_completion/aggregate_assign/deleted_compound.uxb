@@ -1,0 +1,8 @@
+CLASS Box
+    PUBLIC
+    n AS I32
+END CLASS
+DIM b AS Box = NEW Box()
+DIM a AS Box = b
+DELETE b
+a.n += 1

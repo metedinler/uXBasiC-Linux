@@ -1,0 +1,22 @@
+CLASS Counter
+    METHOD Tick() AS I32
+        STATIC n AS I32
+        n += 1
+        RETURN n
+    END METHOD
+END CLASS
+DIM a AS Counter = NEW Counter()
+DIM b AS Counter = NEW Counter()
+PRINT a.Tick()
+PRINT b.Tick()
+THREAD Worker() AS I32
+    STATIC n AS I32 = 10
+    n += 1
+    RETURN n
+END THREAD
+DIM first AS TASK OF I32 = SPAWN Worker()
+DIM second AS TASK OF I32 = SPAWN Worker()
+first.JOIN()
+second.JOIN()
+DIM third AS TASK OF I32 = SPAWN Worker()
+PRINT third.JOIN()

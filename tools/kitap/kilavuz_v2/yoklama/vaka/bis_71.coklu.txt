@@ -1,0 +1,26 @@
+FOR baslangic buyuk adim pozitif
+DIM i AS I32
+FOR i = 5 TO 1
+    PRINT i
+NEXT
+PRINT "bitti"
+=====
+FOR EACH SET
+DIM s AS SET
+s = SET_NEW()
+SETADD(s, 3)
+SETADD(s, 4)
+DIM v AS I32
+FOR EACH v IN s
+    PRINT v
+NEXT
+=====
+FOR EACH LIST
+DIM l AS LIST
+l = LIST_NEW()
+LISTADD(l, 3)
+LISTADD(l, 4)
+DIM v AS I32
+FOR EACH v IN l
+    PRINT v
+NEXT

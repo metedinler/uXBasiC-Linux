@@ -1,0 +1,9 @@
+CLASS Kutu
+    PUBLIC
+    PROPERTY Deger AS I32 GET SET
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.Deger = 3
+PRINT k.Deger
+k.Deger = k.Deger + 4
+PRINT k.Deger

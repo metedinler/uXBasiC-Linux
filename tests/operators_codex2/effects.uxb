@@ -1,0 +1,18 @@
+FUNCTION Twice(value AS I32) AS I32
+    RETURN value * 2
+END FUNCTION
+MAIN
+    DIM x AS I32
+    x = 5
+    PRINT x++
+    PRINT x
+    PRINT ++x
+    PRINT x--
+    PRINT --x
+    PRINT 3 |> Twice
+    PRINT 3 |> Twice |> Twice
+    PRINT FALSE ? 1 : TRUE ? 2 : 3
+    IF x = 5 THEN
+        PRINT 55
+    END IF
+END MAIN

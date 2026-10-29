@@ -1,0 +1,11 @@
+' S-549: a handle and an explicit channel number side by side; the explicit one (`#n`) is a plain number and CLOSE #n does not touch the handle.
+DIM f AS FILE_HANDLE
+DIM n AS I32
+n = 3
+OPEN "fh_k1.txt" FOR OUTPUT AS #n
+OPEN "fh_k2.txt" FOR OUTPUT AS f
+PRINT f
+PRINT FREEFILE
+CLOSE #n
+CLOSE f
+PRINT f

@@ -1,0 +1,6 @@
+AST=ME virtual method call is not allowed in DESTRUCTOR
+MIR=ME virtual method call is not allowed in DESTRUCTOR
+x64=ME virtual method call is not allowed in DESTRUCTOR
+AST-x64=ME virtual method call is not allowed in DESTRUCTOR
+JS=ME virtual method call is not allowed in DESTRUCTOR
+WASM=ME virtual method call is not allowed in DESTRUCTOR

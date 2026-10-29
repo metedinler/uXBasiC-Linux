@@ -1,0 +1,24 @@
+' Occupy the only pool worker. JOIN must run Child on the waiting main thread.
+' Its PRINT and column belong to Child, not to MAIN's suspended partial line.
+THREAD Occupy(ready AS I64, release AS I64) AS I32
+    UNSAFE
+        CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", ready)
+        CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", release, 5000)
+    END UNSAFE
+    RETURN 0
+END THREAD
+THREAD Child() AS I32
+    PRINT "child"
+    RETURN 42
+END THREAD
+DIM ready AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM release AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM blocker AS TASK OF I32 = SPAWN Occupy(ready, release)
+CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", ready, 5000)
+PRINT "parent";
+DIM childTask AS TASK OF I32 = SPAWN Child()
+PRINT childTask.JOIN()
+CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", release)
+blocker.JOIN()
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", ready)
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", release)

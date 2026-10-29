@@ -1,0 +1,9 @@
+run tests/options/response_source.uxb
+--strict --strict --strict --strict --strict --strict --strict --strict --strict --strict
+--strict --strict --strict --strict --strict --strict --strict --strict --strict --strict
+--strict --strict --strict --strict --strict --strict --strict --strict --strict --strict
+--strict --strict --strict --strict --strict --strict --strict --strict --strict --strict
+--strict --strict --strict --strict --strict --strict --strict --strict --strict --strict
+--strict --strict --strict --strict --strict --strict --strict --strict --strict --strict
+--strict --strict --strict --strict --strict --strict --strict --strict --strict --strict
+--message-lang unsupported_language

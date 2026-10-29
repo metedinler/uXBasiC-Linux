@@ -1,0 +1,20 @@
+F32 yuvarlama
+DIM f AS F32 = 16777217
+PRINT f
+DIM g AS F32 = 0.1
+PRINT g
+PRINT g + g
+DIM h AS F32 = 1.0 / 3.0
+PRINT h
+PRINT h * 3
+=====
+F32 donusum
+DIM d AS F64 = 0.1
+DIM f AS F32
+f = F32(d)
+PRINT f
+PRINT F64(f) = d
+=====
+SIZEOF F32 F64
+PRINT SIZEOF(F32)
+PRINT SIZEOF(F64)

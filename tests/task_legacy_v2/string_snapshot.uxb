@@ -1,0 +1,16 @@
+' S-030 Faz 2A: STRING argumani SPAWN aninda kopyalanir, STRING sonucu gorev kaydina kopyalanir.
+THREAD Greet(name AS STRING, n AS I32) AS STRING
+    DIM s AS STRING = ""
+    DIM i AS I32
+    FOR i = 1 TO n
+        s = s + name
+    NEXT
+    RETURN s
+END THREAD
+DIM who AS STRING = "ab"
+DIM t AS TASK OF STRING = SPAWN Greet(who, 3)
+who = "BOZULDU"
+PRINT t.JOIN()
+PRINT who
+
+

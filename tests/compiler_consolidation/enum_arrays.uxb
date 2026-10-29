@@ -1,0 +1,24 @@
+ENUM Small AS I8
+    Low = -128
+    High = 127
+END ENUM
+ENUM Largest AS U64
+    Maximum = 18446744073709551615
+END ENUM
+DIM a(0 TO 1) AS Small
+a(0) = Small.Low
+a(1) = Small.High
+PRINT a(0)
+PRINT a(1)
+SUB Show(values AS Small[])
+    PRINT values(0)
+    PRINT values(1)
+END SUB
+Show(a)
+DIM b(0 TO 0) AS Largest
+b(0) = Largest.Maximum
+PRINT b(0)
+SUB ShowLarge(values AS Largest[])
+    PRINT values(0)
+END SUB
+ShowLarge(b)

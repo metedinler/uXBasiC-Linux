@@ -1,0 +1,8 @@
+THREAD SensorOku
+    PRINT "THREAD_BODY"
+END THREAD
+
+PARALEL SahaIzleme
+    CALL SensorOku()
+    PRINT "PARALEL_BODY"
+END PARALEL

@@ -1,0 +1,141 @@
+=== define_temel
+%%DEFINE MAX 9
+PRINT MAX
+=== define_degil_uzun
+%%DEFINE ADI "Ece"
+PRINT ADI
+=== undef
+%%DEFINE X 5
+PRINT X
+%%UNDEF X
+PRINT X
+=== ifc_esit
+%%DEFINE A 3
+%%DEFINE B 3
+%%IFC A, B
+PRINT "esit"
+%%ELSE
+PRINT "farkli"
+%%ENDIF
+=== ifc_farkli
+%%DEFINE A 3
+%%DEFINE B 4
+%%IFC A, B
+PRINT "esit"
+%%ELSE
+PRINT "farkli"
+%%ENDIF
+=== ifc_hata
+%%IFC A
+PRINT "x"
+%%ENDIF
+=== if_karsilastirma
+%%DEFINE W 800
+%%IF W >= 640
+PRINT "genis"
+%%ELSE
+PRINT "dar"
+%%ENDIF
+=== ifn
+%%DEFINE W 800
+%%IFN W >= 1000
+PRINT "ifn dogru"
+%%ELSE
+PRINT "ifn yanlis"
+%%ENDIF
+=== elif_zinciri
+%%DEFINE W 700
+%%IF W >= 1000
+PRINT "buyuk"
+%%ELIF W >= 640
+PRINT "orta"
+%%ELIF W >= 320
+PRINT "kucuk"
+%%ELSE
+PRINT "cok kucuk"
+%%ENDIF
+=== macro_parametreli
+%%MACRO IKI(X) X + X
+PRINT IKI(4)
+=== macro_iki_param
+%%MACRO TOPLA(A, B) (A) + (B)
+PRINT TOPLA(2, 3) * 2
+=== alias
+%%ALIAS {YAZ} AS {PRINT}
+YAZ "selam"
+=== alias_dongu
+%%ALIAS {A} AS {B}
+%%ALIAS {B} AS {A}
+PRINT 1
+=== set
+%%SET BASLIK = "Demo"
+PRINT BASLIK
+=== eval_sayi
+%%DEFINE BASE 4
+%%EVAL IKI_KAT = BASE * 2
+PRINT IKI_KAT
+=== eval_sabit
+%%EVAL N = 3
+PRINT N
+=== expandlimit
+%%EXPANDLIMIT 5
+%%DEFINE A A A
+PRINT A
+=== include_eksik
+%%INCLUDE "yok.uxb"
+PRINT 1
+=== pp_a
+%%PP A
+%%DEFINE X 1
+PRINT X
+=== pp_b_bundle
+%%PP B
+%%BUNDLE_NAME "demo"
+PRINT 1
+=== bundle_ppsiz
+%%BUNDLE_NAME "demo"
+PRINT 1
+=== endcomp
+PRINT 1
+%%ENDCOMP
+PRINT 2
+=== errorendcomp
+PRINT 1
+%%ERRORENDCOMP "durdu"
+PRINT 2
+=== platform_win
+%%PLATFORM WINDOWS
+PRINT PLATFORM
+=== platform_linux
+%%PLATFORM LINUX
+PRINT 1
+=== destos
+%%DESTOS LINUX
+PRINT DESTOS
+=== nozerovars
+%%NOZEROVARS ON
+PRINT NOZEROVARS
+=== secstack
+%%SECSTACK OFF
+PRINT SECSTACK
+=== secstack_hata
+%%SECSTACK belki
+PRINT 1
+=== warn_meta
+%%WARN_META "dikkat"
+PRINT 1
+=== infometa
+%%INFOMETA "bilgi"
+PRINT 1
+=== assert_meta_ok
+%%ASSERT_META 1 == 1, "tamam"
+PRINT 1
+=== assert_meta_fail
+%%ASSERT_META 1 == 2, "olmaz"
+PRINT 1
+=== unknown
+%%NO_SUCH_DIRECTIVE
+PRINT 1
+=== yasak_alias
+%%WARNING "x"
+PRINT 1

@@ -1,0 +1,24 @@
+MAGIC GET bilinmeyen alan
+CLASS K
+    PUBLIC
+    DIM v AS I32
+    MAGIC GET(n AS STRING) AS I32
+        RETURN 42
+    END MAGIC
+END CLASS
+DIM a AS K = NEW K()
+a.v = 5
+PRINT a.v
+PRINT a.bilinmeyen
+=====
+MAGIC SET bilinmeyen alan
+CLASS K
+    PUBLIC
+    DIM v AS I32
+    MAGIC SET(n AS STRING, x AS I32)
+        v = x
+    END MAGIC
+END CLASS
+DIM a AS K = NEW K()
+a.bilinmeyen = 9
+PRINT a.v

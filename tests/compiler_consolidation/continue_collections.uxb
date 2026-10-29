@@ -1,0 +1,33 @@
+DIM a(0 TO 2) AS I32
+a(0) = 1
+a(1) = 2
+a(2) = 3
+DIM v AS I32
+FOR EACH v IN a
+    IF v = 2 THEN CONTINUE
+    PRINT v
+NEXT
+DIM values AS LIST
+LISTADD(values,1)
+LISTADD(values,2)
+LISTADD(values,3)
+FOR EACH v IN values
+    IF v = 2 THEN CONTINUE FOR
+    PRINT v + 10
+NEXT
+DIM s AS STRING = "abç"
+DIM c AS STRING
+FOR EACH c IN s
+    IF c = "b" THEN CONTINUE
+    PRINT c
+NEXT
+DIM i AS I32 = 0
+DO WHILE i < 2
+    i += 1
+    FOR EACH v IN values
+        CONTINUE DO
+        PRINT 999
+    NEXT
+    PRINT 998
+LOOP
+PRINT i

@@ -1,0 +1,6 @@
+AST=declaration signature mismatch TOPLA
+MIR=declaration signature mismatch TOPLA
+x64=declaration signature mismatch TOPLA
+AST-x64=declaration signature mismatch TOPLA
+JS=declaration signature mismatch TOPLA
+WASM=declaration signature mismatch TOPLA

@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>uXBasic WASM: kareler</title>
+</head>
+<body>
+<h1>WASM kareler</h1>
+<pre id="cikti"></pre>
+<script src="ux_wasm_runtime.js"></script>
+<script>
+  // ux_wasm_runtime.js sayıyı globalThis.ux.print ile, satır sonunu globalThis.ux.println ile yazar
+  var satir = "";
+  globalThis.ux = {
+    print: function (metin) { satir += metin; },
+    println: function () {
+      document.getElementById("cikti").textContent += satir + "\n";
+      satir = "";
+    }
+  };
+  fetch("kare_tam.wasm")
+    .then(function (r) { return r.arrayBuffer(); })
+    .then(function (b) { return WebAssembly.instantiate(b, globalThis.uxbWasmImports); })
+    .then(function (sonuc) {
+      globalThis.uxbWasmInstance = sonuc.instance;
+      sonuc.instance.exports.MAIN();
+    })
+    .catch(function (hata) { document.getElementById("cikti").textContent = "HATA: " + hata; });
+</script>
+</body></html>

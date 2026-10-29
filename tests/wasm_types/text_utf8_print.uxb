@@ -1,0 +1,2 @@
+PRINT "Türkçe çığ"
+PRINT "İzmir" + " İstanbul"

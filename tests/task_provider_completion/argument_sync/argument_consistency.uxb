@@ -1,0 +1,25 @@
+DIM total AS I64 = 0
+FUNCTION Identity(value AS I64) AS I64
+    RETURN value
+END FUNCTION
+THREAD Writer() AS I32
+    DIM i AS I32
+    FOR i = 1 TO 10000
+        total += 1
+    NEXT
+    RETURN 1
+END THREAD
+THREAD Reader() AS I32
+    DIM i AS I32
+    DIM bad AS I32 = 0
+    FOR i = 1 TO 10000
+        DIM value AS I64 = Identity(total - total)
+        IF value <> 0 THEN bad += 1
+    NEXT
+    RETURN bad
+END THREAD
+DIM a AS TASK OF I32 = SPAWN Writer()
+DIM b AS TASK OF I32 = SPAWN Reader()
+PRINT a.JOIN()
+PRINT b.JOIN()
+PRINT total

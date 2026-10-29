@@ -1,0 +1,4 @@
+DIM values(0 TO 3) AS I32
+DIM destination(0 TO 3) AS I32
+MEMCOPYD NATIVE, VARPTR(destination(0)), VARPTR(values(0)) - 1, 1
+PRINT "wrongly copied"

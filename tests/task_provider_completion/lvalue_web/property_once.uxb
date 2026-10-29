@@ -1,0 +1,27 @@
+CLASS Box
+    PUBLIC
+    backing AS F64
+    readCount AS I32
+    writeCount AS I32
+    PROPERTY Amount AS F64
+        GET
+            THIS.readCount += 1
+            RETURN THIS.backing
+        END GET
+        SET
+            THIS.writeCount += 1
+            THIS.backing = VALUE
+        END SET
+END CLASS
+DIM b AS Box = NEW Box()
+b.backing = 0.5
+DIM old AS F64 = b.Amount++
+PRINT old
+PRINT b.backing
+PRINT b.readCount
+PRINT b.writeCount
+DIM newer AS F64 = --b.Amount
+PRINT newer
+PRINT b.backing
+PRINT b.readCount
+PRINT b.writeCount

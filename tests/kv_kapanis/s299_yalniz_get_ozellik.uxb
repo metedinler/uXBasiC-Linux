@@ -1,0 +1,8 @@
+' S-299: yalniz GET'li PROPERTY'ye yazma acik hatadir (AST calisma aninda, MIR ailesi MIR indirgemesinde ayni iletiyle); eskiden MIR ailesi sessizce yaziyordu.
+CLASS Kutu
+    PUBLIC
+    PROPERTY Deger AS I32 GET
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.Deger = 5
+PRINT k.Deger

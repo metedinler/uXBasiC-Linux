@@ -1,0 +1,30 @@
+DIM x AS I32 = 1
+DIM calls AS I32 = 0
+GOTO BeginRun
+Unused:
+x = 999
+BeginRun:
+GOSUB Outer
+GOSUB Outer
+PRINT x
+PRINT calls
+END
+Outer:
+x = x + 2
+GOSUB Inner
+x = x + 1
+RETURN
+Inner:
+calls = calls + 1
+GOTO Multiply
+x = 999
+Multiply:
+x = x * 3
+IF calls = 1 THEN
+    GOSUB Third
+END IF
+RETURN
+Third:
+calls = calls + 1
+x = x + 4
+RETURN

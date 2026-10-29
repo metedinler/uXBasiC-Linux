@@ -1,0 +1,15 @@
+' S-544: class methods are exempt: a method may call a sibling method that is written later in the class body.
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    METHOD Artir()
+        n = n + 1
+        Yaz()
+    END METHOD
+    METHOD Yaz()
+        PRINT n
+    END METHOD
+END CLASS
+DIM s AS Sayac = NEW Sayac()
+s.Artir()
+s.Artir()

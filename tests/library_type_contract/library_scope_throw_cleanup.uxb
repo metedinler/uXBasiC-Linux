@@ -1,0 +1,22 @@
+LIBTYPE "owned_text.library_type.json"
+
+FUNCTION ReturnWithLocal() AS I64
+    DIM localValue AS TEXT_VALUE
+    localValue = TEXT_VALUE.CONSTRUCT("return")
+    RETURN 7
+END FUNCTION
+
+SUB ThrowWithLocal()
+    DIM localValue AS TEXT_VALUE
+    localValue = TEXT_VALUE.CONSTRUCT("throw")
+    THROW 9
+END SUB
+
+MAIN
+    PRINT ReturnWithLocal()
+    TRY
+        ThrowWithLocal()
+    CATCH
+        PRINT "caught"
+    END TRY
+END MAIN

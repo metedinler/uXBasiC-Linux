@@ -1,0 +1,9 @@
+EVENT Ana
+    THREAD Isci
+        PRINT "INNER_THREAD"
+    END THREAD
+
+    PIPE Donustur deger AS I32
+        RETURN deger
+    END PIPE
+END EVENT

@@ -1,5 +1,6 @@
 ' Extracted tail for semantic_pass modular split
 #include once "semantic_implicit_this.fbs"
+#include once "semantic_null_literal.fbs"
 Private Function SemScopedRoutineName(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef routineNameRaw As String) As String
     Dim routineName As String
     routineName = UCase(Trim(routineNameRaw))
@@ -20,10 +21,68 @@ Private Function SemScopedRoutineName(ByRef ps As ParseState, ByVal nodeIdx As I
     Return routineName
 End Function
 
+Private Function SemRoutineTypeSpec(ByRef ps As ParseState, ByVal nodeIdx As Integer) As String
+    Dim specText As String = UCase(Trim(ps.ast.nodes(nodeIdx).value))
+    Dim ch As Integer = ps.ast.nodes(nodeIdx).firstChild
+    Do While ch <> -1
+        specText &= "[" & UCase(Trim(ps.ast.nodes(ch).kind)) & ":" & SemRoutineTypeSpec(ps, ch) & "]"
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return specText
+End Function
+
+Private Function SemRoutineSignature(ByRef ps As ParseState, ByVal nodeIdx As Integer) As String
+    Dim signature As String
+    signature = IIf(InStr(UCase(ps.ast.nodes(nodeIdx).kind), "FUNCTION") > 0, "FUNCTION", "SUB")
+    Dim ch As Integer = ps.ast.nodes(nodeIdx).firstChild
+    Do While ch <> -1
+        Dim ck As String = UCase(Trim(ps.ast.nodes(ch).kind))
+        If ck = "PARAM_DECL" Then
+            Dim paramMode As String = UCase(Trim(ps.ast.nodes(ch).op))
+            If paramMode = "" Then paramMode = "BYVAL"
+            signature &= "|" & paramMode
+            Dim typeChild As Integer = ps.ast.nodes(ch).firstChild
+            Do While typeChild <> -1
+                signature &= ":" & SemRoutineTypeSpec(ps, typeChild)
+                typeChild = ps.ast.nodes(typeChild).nextSibling
+            Loop
+        ElseIf ck = "RETURN_TYPE" Or ck = "GENERIC_PARAM" Then
+            signature &= "|" & ck & ":" & SemRoutineTypeSpec(ps, ch)
+        End If
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return signature
+End Function
+
+Private Function SemOverloadQualifiedName(ByVal original As String, ByRef leafName As String) As String
+    For p As Integer = Len(original) To 1 Step -1
+        If Mid(original, p, 1) = "." Then Return Left(original, p) & leafName
+    Next p
+    Return leafName
+End Function
+
+' Keep the function-name result variable consistent with the bound routine.
+' Explicit parameters/local declarations of the same name still win (S-612).
+Private Sub SemRenameOverloadResult(ByRef ps As ParseState, ByVal routineNode As Integer, ByRef oldName As String, ByRef newName As String)
+    For n As Integer = 0 To ps.ast.count - 1
+        Dim k As String = UCase(ps.ast.nodes(n).kind)
+        If k <> "IDENT" And k <> "IDENTIFIER" Then Continue For
+        If UCase(Trim(ps.ast.nodes(n).value)) <> oldName Then Continue For
+        If UXBTaskEnclosingRoutine(ps, n) <> routineNode Then Continue For
+        Dim localDecl As Integer = StiFindDeclAny(ps, oldName, n)
+        If localDecl >= 0 AndAlso UXBTaskEnclosingRoutine(ps, localDecl) = routineNode Then Continue For
+        ps.ast.nodes(n).value = newName
+    Next n
+End Sub
+
 Private Function SemValidateOverloadResolution(ByRef ps As ParseState, ByRef errText As String) As Integer
     Dim names() As String
     Dim arities() As Integer
     Dim genericArities() As Integer
+    Dim signatureNodes() As Integer
+    Dim seenDeclaration() As Integer
+    Dim seenDefinition() As Integer
+    Dim loweredNames() As String
     Dim sigCount As Integer
     Dim i As Integer
 
@@ -40,28 +99,75 @@ Private Function SemValidateOverloadResolution(ByRef ps As ParseState, ByRef err
             gargc = SemCountRoutineGenericParams(ps, i)
 
             Dim j As Integer
+            Dim isDeclaration As Integer = IIf(Left(k, 8) = "DECLARE_", 1, 0)
+            Dim mergedPair As Integer = 0
             For j = 0 To sigCount - 1
                 If names(j) = nameKey And arities(j) = argc And genericArities(j) = gargc Then
+                    If (isDeclaration <> 0 And seenDeclaration(j) = 0) Or (isDeclaration = 0 And seenDefinition(j) = 0) Then
+                        Dim previousNode As Integer = signatureNodes(j)
+                        If InStr(UCase(ps.ast.nodes(i).typeName), "LIB=") = 0 And InStr(UCase(ps.ast.nodes(previousNode).typeName), "LIB=") = 0 Then
+                            If SemRoutineSignature(ps, previousNode) <> SemRoutineSignature(ps, i) Then
+                                errText = "semantic: declaration signature mismatch " & nameKey
+                                Return 0
+                            End If
+                            If isDeclaration <> 0 Then seenDeclaration(j) = 1 Else seenDefinition(j) = 1
+                            mergedPair = 1
+                            Exit For
+                        End If
+                    End If
                     errText = "semantic: duplicate overload signature " & nameKey & "(" & Str(argc) & ")"
                     Return 0
                 End If
             Next j
+            If mergedPair <> 0 Then Continue For
 
             If sigCount = 0 Then
                 ReDim names(0)
                 ReDim arities(0)
                 ReDim genericArities(0)
+                ReDim signatureNodes(0)
+                ReDim seenDeclaration(0)
+                ReDim seenDefinition(0)
             Else
                 ReDim Preserve names(sigCount)
                 ReDim Preserve arities(sigCount)
                 ReDim Preserve genericArities(sigCount)
+                ReDim Preserve signatureNodes(sigCount)
+                ReDim Preserve seenDeclaration(sigCount)
+                ReDim Preserve seenDefinition(sigCount)
             End If
 
             names(sigCount) = nameKey
             arities(sigCount) = argc
             genericArities(sigCount) = gargc
+            signatureNodes(sigCount) = i
+            seenDeclaration(sigCount) = isDeclaration
+            seenDefinition(sigCount) = IIf(isDeclaration = 0, 1, 0)
             sigCount += 1
         End If
+    Next i
+
+    ' S-223: bind local arity overloads once in the shared front end. Backends
+    ' consume ordinary, distinct routines instead of each inventing a resolver.
+    If sigCount > 0 Then ReDim loweredNames(sigCount - 1)
+    Dim hasOverloads As Integer = 0
+    For i = 0 To sigCount - 1
+        If seenDefinition(i) = 0 Then Continue For
+        Dim declNode As Integer = signatureNodes(i)
+        If InStr(UCase(ps.ast.nodes(declNode).typeName), "LIB=") > 0 Then Continue For
+        Dim conv As String = UCase(Trim(ps.ast.nodes(declNode).op))
+        If conv = "CDECL" Or conv = "STDCALL" Then Continue For
+        For j As Integer = 0 To sigCount - 1
+            If names(i) <> names(j) Or seenDefinition(j) = 0 Then Continue For
+            If arities(i) = arities(j) And genericArities(i) = genericArities(j) Then Continue For
+            Dim leaf As String = UCase(Trim(ps.ast.nodes(declNode).value))
+            For p As Integer = Len(leaf) To 1 Step -1
+                If Mid(leaf, p, 1) = "." Then leaf = Mid(leaf, p + 1): Exit For
+            Next p
+            loweredNames(i) = "__UXB_OVERLOAD_" & LTrim(Str(arities(i))) & "_G" & LTrim(Str(genericArities(i))) & "_" & leaf
+            hasOverloads = 1
+            Exit For
+        Next j
     Next i
 
     For i = 0 To ps.ast.count - 1
@@ -78,6 +184,7 @@ Private Function SemValidateOverloadResolution(ByRef ps As ParseState, ByRef err
 
             Dim seenByName As Integer
             Dim matched As Integer
+            Dim matchedSlot As Integer = -1
             Dim j As Integer
             For j = 0 To sigCount - 1
                 If names(j) = callName Then
@@ -86,10 +193,24 @@ Private Function SemValidateOverloadResolution(ByRef ps As ParseState, ByRef err
                     If arities(j) = callArgc Then
                         If callGenericArgc = 0 Or genericArities(j) = callGenericArgc Then
                             matched += 1
+                            matchedSlot = j
                         End If
                     End If
                 End If
             Next j
+
+            ' An unqualified call in a namespace can fall back to a root
+            ' routine, just as ordinary namespace resolution already does.
+            Dim rawCall As String = UCase(Trim(ps.ast.nodes(i).value))
+            If seenByName = 0 And InStr(rawCall, ".") = 0 And rawCall <> callName Then
+                For j = 0 To sigCount - 1
+                    If names(j) <> rawCall Then Continue For
+                    seenByName += 1
+                    If arities(j) = callArgc And (callGenericArgc = 0 Or genericArities(j) = callGenericArgc) Then
+                        matched += 1: matchedSlot = j
+                    End If
+                Next j
+            End If
 
             If seenByName = 0 Then Continue For
 
@@ -102,9 +223,36 @@ Private Function SemValidateOverloadResolution(ByRef ps As ParseState, ByRef err
                 errText = "semantic: ambiguous overload call " & callName & " with " & Str(callArgc) & " argument(s)"
                 Return 0
             End If
+            If matchedSlot >= 0 AndAlso loweredNames(matchedSlot) <> "" Then
+                Dim previousName As String = UCase(Trim(ps.ast.nodes(i).value))
+                Dim symbolName As String = UCase(Trim(ps.ast.nodes(i).symbolName))
+                ps.ast.nodes(i).value = SemOverloadQualifiedName(previousName, loweredNames(matchedSlot))
+                If symbolName = previousName Or symbolName = callName Then ps.ast.nodes(i).symbolName = SemOverloadQualifiedName(symbolName, loweredNames(matchedSlot))
+            End If
         End If
     Next i
 
+    If hasOverloads <> 0 Then
+        For i = 0 To ps.ast.count - 1
+            Dim kind As String = UCase(ps.ast.nodes(i).kind)
+            If kind <> "SUB_STMT" And kind <> "FUNCTION_STMT" And kind <> "DECLARE_SUB_STMT" And kind <> "DECLARE_FUNCTION_STMT" Then Continue For
+            Dim scopedName As String = SemScopedRoutineName(ps, i, ps.ast.nodes(i).value)
+            Dim arity As Integer = SemCountRoutineParams(ps, i)
+            Dim genericArity As Integer = SemCountRoutineGenericParams(ps, i)
+            For slot As Integer = 0 To sigCount - 1
+                If loweredNames(slot) = "" Or names(slot) <> scopedName Or arities(slot) <> arity Or genericArities(slot) <> genericArity Then Continue For
+                Dim previousName As String = UCase(Trim(ps.ast.nodes(i).value))
+                If kind = "FUNCTION_STMT" Then SemRenameOverloadResult ps, i, previousName, loweredNames(slot)
+                Dim symbolName As String = UCase(Trim(ps.ast.nodes(i).symbolName))
+                ps.ast.nodes(i).value = SemOverloadQualifiedName(previousName, loweredNames(slot))
+                If symbolName = previousName Or symbolName = scopedName Then ps.ast.nodes(i).symbolName = SemOverloadQualifiedName(symbolName, loweredNames(slot))
+                Exit For
+            Next slot
+        Next i
+        ' Renaming does not change node count; invalidate name/type caches by
+        ' the existing AST epoch rather than leaving stale declaration keys.
+        gUxbAstEpoch += 1
+    End If
     Return 1
 End Function
 
@@ -335,6 +483,33 @@ Private Sub SemFoldConstantsNode(ByRef ps As ParseState, ByVal nodeIdx As Intege
 
     Dim k As String
     k = UCase(ps.ast.nodes(nodeIdx).kind)
+    If k = "UNARY" Then
+        Dim unaryChild As Integer = ps.ast.nodes(nodeIdx).left
+        If unaryChild = -1 Then unaryChild = ps.ast.nodes(nodeIdx).right
+        Dim unaryOp As String = Trim(ps.ast.nodes(nodeIdx).op)
+        If unaryChild >= 0 And unaryChild < ps.ast.count And (unaryOp = "-" Or unaryOp = "+") Then
+            If UCase(ps.ast.nodes(unaryChild).kind) = "NUMBER" AndAlso UXBNumberLiteralIsFloat(ps.ast.nodes(unaryChild).value) = 0 Then
+                ' Negating an integer literal is exact text, not a trip through
+                ' Double (which rounded I64 minima and U64 values into exponents).
+                Dim exactText As String = Trim(ps.ast.nodes(unaryChild).value)
+                If unaryOp = "-" Then
+                    If Left(exactText, 1) = "-" Then
+                        exactText = Mid(exactText, 2)
+                    Else
+                        If Left(exactText, 1) = "+" Then exactText = Mid(exactText, 2)
+                        exactText = "-" & exactText
+                    End If
+                End If
+                ps.ast.nodes(nodeIdx).kind = "NUMBER"
+                ps.ast.nodes(nodeIdx).value = exactText
+                ps.ast.nodes(nodeIdx).op = ""
+                ps.ast.nodes(nodeIdx).left = -1
+                ps.ast.nodes(nodeIdx).right = -1
+                ps.ast.nodes(nodeIdx).firstChild = -1
+                Exit Sub
+            End If
+        End If
+    End If
     If k = "BINARY" Or k = "UNARY" Then
         Dim foldedValue As Double
         Dim foldedInt As Integer
@@ -365,6 +540,51 @@ Private Function SemIsHardTerminatorKind(ByRef kindRaw As String) As Integer
     Return IIf(k = "RETURN_STMT" Or k = "THROW_STMT" Or k = "END_STMT", 1, 0)
 End Function
 
+' S-568: dizi bildiriminde skaler baslangic degeri (`DIM a(2) AS I32 = 7`) sessizce yok sayiliyordu (AST, MIR, MIR-x64, JS);
+' eski AST-x64 yalniz ilk elemani dolduruyor, WASM calisma aninda dusuyordu. Karar (varsayilan, docs/tasarim S-551 tasarimi V8):
+' dizi bildirimindeki `= deger` ACIK RETTIR; diziyi bildirin ve elemanlara atayin.
+Private Function SemValidateArrayScalarInitializers(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim arrDeclIdx As Integer
+    Dim arrDeclChild As Integer
+    Dim arrHasBounds As Integer
+    Dim arrHasInit As Integer
+    For arrDeclIdx = 0 To ps.ast.count - 1
+        If UCase(ps.ast.nodes(arrDeclIdx).kind) <> "DIM_DECL" Then Continue For
+        arrHasBounds = 0
+        arrHasInit = 0
+        arrDeclChild = ps.ast.nodes(arrDeclIdx).firstChild
+        Do While arrDeclChild <> -1
+            Select Case UCase(ps.ast.nodes(arrDeclChild).kind)
+            Case "DIM_BOUNDS": arrHasBounds = 1
+            Case "INIT_EXPR": arrHasInit = 1
+            End Select
+            arrDeclChild = ps.ast.nodes(arrDeclChild).nextSibling
+        Loop
+        If arrHasBounds <> 0 And arrHasInit <> 0 Then
+            errText = "semantic: UXB_ARRAY_SCALAR_INITIALIZER: array " & ps.ast.nodes(arrDeclIdx).value & " cannot take a scalar initial value in its DIM; declare the array and assign its elements [line " & LTrim(Str(ps.ast.nodes(arrDeclIdx).lineNo)) & "]"
+            Return 0
+        End If
+    Next arrDeclIdx
+    Return 1
+End Function
+
+' S-567: programda kendisine GOTO / GOSUB ile atlayan bir deyim olan etiket, RETURN / THROW / END'ten sonra bile
+' erisilebilirdir; erisilemez-kod denetimi etiketi atlama hedefi saymiyor ve gecerli `GOTO Son` ... `RETURN 1` ... `Son:`
+' ... `RETURN 2` programlarini reddediyordu.
+Private Function SemLabelIsJumpTarget(ByRef ps As ParseState, ByRef labelName As String) As Integer
+    Dim wantLabel As String = UCase(Trim(labelName))
+    If wantLabel = "" Then Return 0
+    Dim jumpScan As Integer
+    Dim jumpKind As String
+    For jumpScan = 0 To ps.ast.count - 1
+        jumpKind = UCase(ps.ast.nodes(jumpScan).kind)
+        If jumpKind = "GOTO_STMT" Or jumpKind = "GOSUB_STMT" Then
+            If UCase(Trim(ps.ast.nodes(jumpScan).value)) = wantLabel Then Return 1
+        End If
+    Next jumpScan
+    Return 0
+End Function
+
 Private Function SemValidateReachabilityList(ByRef ps As ParseState, ByVal firstNode As Integer, ByRef errText As String) As Integer
     Dim terminated As Integer
     Dim termKind As String
@@ -374,6 +594,10 @@ Private Function SemValidateReachabilityList(ByRef ps As ParseState, ByVal first
     Do While ch <> -1
         Dim k As String
         k = UCase(ps.ast.nodes(ch).kind)
+
+        If terminated <> 0 And k = "LABEL_STMT" Then
+            If SemLabelIsJumpTarget(ps, ps.ast.nodes(ch).value) <> 0 Then terminated = 0
+        End If
 
         If terminated <> 0 Then
             errText = "semantic: unreachable statement after " & termKind
@@ -429,6 +653,10 @@ Private Function SemValidateReachability(ByRef ps As ParseState, ByRef errText A
                 Dim sk As String
                 sk = UCase(ps.ast.nodes(st).kind)
                 If sk = "ELSEIF_PART" Or sk = "ELSE_PART" Then Exit Do
+
+                If terminated <> 0 And sk = "LABEL_STMT" Then
+                    If SemLabelIsJumpTarget(ps, ps.ast.nodes(st).value) <> 0 Then terminated = 0   ' S-567
+                End If
 
                 If terminated <> 0 Then
                     errText = "semantic: unreachable statement after " & termKind
@@ -550,6 +778,155 @@ Private Function SemRewriteVarptrElementNodes(ByRef ps As ParseState, ByRef errT
     Return 1
 End Function
 
+' S-651: birim ozellikli TIMER bicimleri yalniz AST'de calisiyordu (MIR argumanlari yok sayiyor, native ve eski AST-x64
+' cop deger veriyordu). Tanim: TIMER("birim") = TIMER * olcek; TIMER(baslangic, bitis, "birim") = (bitis - baslangic) * olcek.
+' Birimler: ns us ms s min h day year (buyuk/kucuk harf farksiz, yalniz metin sabiti). Yeniden yazim ON UCTA yapildigi icin
+' altı yolun hepsi ayni sade F64 aritmetigini gorur (VARPTR(a(i)) yeniden yazimiyla ayni yontem).
+Private Function SemTimerUnitScale(ByRef unitText As String, ByRef opOut As String, ByRef scaleOut As String) As Integer
+    Select Case LCase(Trim(unitText))
+    Case "ns": opOut = "*": scaleOut = "1000000000.0"
+    Case "us": opOut = "*": scaleOut = "1000000.0"
+    Case "ms": opOut = "*": scaleOut = "1000.0"
+    Case "s": opOut = "*": scaleOut = "1.0"
+    Case "min": opOut = "/": scaleOut = "60.0"
+    Case "h": opOut = "/": scaleOut = "3600.0"
+    Case "day": opOut = "/": scaleOut = "86400.0"
+    Case "year": opOut = "/": scaleOut = "31536000.0"
+    Case Else: Return 0
+    End Select
+    Return 1
+End Function
+
+Private Function SemRewriteTimerUnitCalls(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim originalCount As Integer
+    originalCount = ps.ast.count
+    Dim argIds(0 To 3) As Integer
+    Dim i As Integer
+    For i = 0 To originalCount - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "CALL_EXPR" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> "TIMER" Then Continue For
+
+        Dim argCount As Integer = 0
+        Dim ch As Integer = ps.ast.nodes(i).firstChild
+        Do While ch <> -1
+            If argCount <= UBound(argIds) Then argIds(argCount) = ch
+            argCount += 1
+            ch = ps.ast.nodes(ch).nextSibling
+        Loop
+        If argCount = 0 Then Continue For
+
+        Dim unitNode As Integer = -1
+        If argCount = 1 Then unitNode = argIds(0)
+        If argCount = 3 Then unitNode = argIds(2)
+        If unitNode = -1 Then
+            errText = "semantic: TIMER expects no argument, TIMER(""unit"") or TIMER(start, end, ""unit"")"
+            Return 0
+        End If
+        If UCase(Trim(ps.ast.nodes(unitNode).kind)) <> "STRING" Then
+            errText = "semantic: TIMER unit must be a string literal (ns, us, ms, s, min, h, day, year)"
+            Return 0
+        End If
+        Dim opText As String
+        Dim scaleText As String
+        If SemTimerUnitScale(ps.ast.nodes(unitNode).value, opText, scaleText) = 0 Then
+            errText = "semantic: invalid TIMER unit """ & ps.ast.nodes(unitNode).value & """ (ns, us, ms, s, min, h, day, year)"
+            Return 0
+        End If
+
+        Dim ln As Integer = ps.ast.nodes(i).lineNo
+        Dim cn As Integer = ps.ast.nodes(i).colNo
+        ' birim dugumu olcek sabitine donusur (artik bir metin dugumu kalmaz)
+        ps.ast.nodes(unitNode).kind = "NUMBER"
+        ps.ast.nodes(unitNode).value = scaleText
+        ps.ast.nodes(unitNode).op = ""
+        ps.ast.nodes(unitNode).nextSibling = -1
+        ps.ast.nodes(unitNode).parent = -1
+
+        Dim leftExpr As Integer
+        If argCount = 1 Then
+            leftExpr = ASTNewNode(ps.ast, "CALL_EXPR", "TIMER", "", ln, cn)
+        Else
+            Dim startNode As Integer = argIds(0)
+            Dim endNode As Integer = argIds(1)
+            ps.ast.nodes(startNode).nextSibling = -1
+            ps.ast.nodes(startNode).parent = -1
+            ps.ast.nodes(endNode).nextSibling = -1
+            ps.ast.nodes(endNode).parent = -1
+            leftExpr = ASTNewNode(ps.ast, "BINARY", "", "-", ln, cn)
+            ASTSetLeft ps.ast, leftExpr, endNode
+            ASTSetRight ps.ast, leftExpr, startNode
+        End If
+
+        ' TIMER cagri dugumu kendisi `sol <islec> olcek` olur
+        ps.ast.nodes(i).kind = "BINARY"
+        ps.ast.nodes(i).value = ""
+        ps.ast.nodes(i).op = opText
+        ps.ast.nodes(i).firstChild = -1
+        ASTSetLeft ps.ast, i, leftExpr
+        ASTSetRight ps.ast, i, unitNode
+    Next i
+    Return 1
+End Function
+
+' S-537: bir RETURN yalniz bir yordamin (FUNCTION, SUB, yontem, kurucu, yikici, ozellik, THREAD/PIPE/EVENT/PARALEL govdesi)
+' icinde yordamdan/gorevden doner ya da programin ust duzeyinde bir GOSUB'tan doner. Programda HIC GOSUB yokken yordam
+' disindaki RETURN bir hatadir (eskiden AST "RETURN used without GOSUB (9301)" ile duruyor, MIR, native, JS ve WASM sessizce
+' bitiyordu). GOSUB varsa RETURN'un o anda bir GOSUB'tan gelip gelmedigi ancak calisma aninda bilinir ve motorlar ayni
+' hatayi verir (AST "exec:", MIR "MIR:", native/JS/WASM kendi calisma ani).
+Private Function SemValidateStrayReturns(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim i As Integer
+    ' S-710: a routine exit must never become a top-level GOSUB return,
+    ' and EXIT SUB must not silently exit a FUNCTION/task body.
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "RETURN_STMT" Then Continue For
+        Dim exitMode As String = UCase(Trim(ps.ast.nodes(i).op))
+        Dim owner As Integer = UXBTaskEnclosingRoutine(ps, i)
+        If exitMode = "SUB" Or exitMode = "FUNCTION" Then
+            If owner < 0 Then
+                errText = "semantic: EXIT " & exitMode & " requires a matching routine body"
+                Return 0
+            End If
+            If UCase(Trim(ps.ast.nodes(owner).kind)) <> exitMode & "_STMT" Then
+                errText = "semantic: EXIT " & exitMode & " requires a matching routine body"
+                Return 0
+            End If
+        End If
+        ' S-712: a valueless FUNCTION return reads its typed result variable,
+        ' just like fallthrough. Lower through the ordinary expression return
+        ' path so FINALLY snapshots and managed ownership cannot diverge.
+        If owner >= 0 AndAlso UCase(Trim(ps.ast.nodes(owner).kind)) = "FUNCTION_STMT" Then
+            If ps.ast.nodes(i).firstChild = -1 Then
+                Dim resultName As String = ps.ast.nodes(owner).value
+                Dim resultExpr As Integer = ASTNewNode(ps.ast, "IDENT", resultName, "", ps.ast.nodes(i).lineNo, ps.ast.nodes(i).colNo)
+                ' The implicit result need not have an assignment declaration.
+                ' Carry RETURN_TYPE, never the owner's SYM_FUNCTION tag.
+                Dim resultType As String = "I64"
+                Dim resultTypeNode As Integer = ps.ast.nodes(owner).firstChild
+                Do While resultTypeNode >= 0
+                    If UCase(Trim(ps.ast.nodes(resultTypeNode).kind)) = "RETURN_TYPE" Then
+                        resultType = ps.ast.nodes(resultTypeNode).value
+                        Exit Do
+                    End If
+                    resultTypeNode = ps.ast.nodes(resultTypeNode).nextSibling
+                Loop
+                ps.ast.nodes(resultExpr).typeName = resultType
+                ASTAddChild ps.ast, i, resultExpr
+                If exitMode = "" Then ps.ast.nodes(i).op = "BARE_FUNCTION_RETURN"
+            End If
+        End If
+    Next i
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) = "GOSUB_STMT" Then Return 1
+    Next i
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "RETURN_STMT" Then Continue For
+        If UXBTaskEnclosingRoutine(ps, i) <> -1 Then Continue For
+        errText = "semantic: RETURN used without GOSUB (9301): RETURN outside any SUB, FUNCTION or task body, and the program has no GOSUB [line " & LTrim(Str(ps.ast.nodes(i).lineNo)) & "]"
+        Return 0
+    Next i
+    Return 1
+End Function
+
 ' S-068: how a NAME is declared anywhere in the program: as an array (DIM/REDIM with
 ' bounds, or an `arr AS T[]` parameter) and/or as a scalar. Name-based on purpose: a
 ' CALL node inside a PRINT item has no parent link (see Step3ContainingRoutineHasFormalParam),
@@ -562,18 +939,33 @@ Private Sub SemClassifyArrayName(ByRef ps As ParseState, ByRef nameText As Strin
     Dim target As String
     target = UCase(Trim(nameText))
     If target = "" Then Exit Sub
-    Dim i As Integer
-    For i = 0 To ps.ast.count - 1
+    ' TUR4/S-111: reuse the declaration-name index and its AST-order
+    ' contract; fall back to the original scan if it is unavailable.
+    Dim useIndex As Integer = UXBAstNameIndexEnsure(ps)
+    Dim entry As Integer = -1
+    If useIndex <> 0 Then entry = UXBAstNameIndexFirst(0, target)
+    Dim i As Integer = 0
+    Do
+        Dim d As Integer
+        If useIndex <> 0 Then
+            If entry = -1 Then Exit Do
+            d = UXBAstNameIndexNode(entry)
+            entry = UXBAstNameIndexNext(entry)
+        Else
+            If i >= ps.ast.count Then Exit Do
+            d = i
+            i += 1
+        End If
         Dim k As String
-        k = UCase(Trim(ps.ast.nodes(i).kind))
-        If k <> "DIM_DECL" And k <> "REDIM_DECL" And k <> "PARAM_DECL" Then Continue For
-        If UCase(Trim(ps.ast.nodes(i).value)) <> target Then Continue For
+        k = UCase(Trim(ps.ast.nodes(d).kind))
+        If k <> "DIM_DECL" And k <> "REDIM_DECL" And k <> "PARAM_DECL" Then Continue Do
+        If UCase(Trim(ps.ast.nodes(d).value)) <> target Then Continue Do
         Dim typeText As String
         Dim hasBounds As Integer
         typeText = ""
         hasBounds = 0
         Dim ch As Integer
-        ch = ps.ast.nodes(i).firstChild
+        ch = ps.ast.nodes(d).firstChild
         Do While ch <> -1
             Dim ck As String
             ck = UCase(Trim(ps.ast.nodes(ch).kind))
@@ -590,7 +982,7 @@ Private Sub SemClassifyArrayName(ByRef ps As ParseState, ByRef nameText As Strin
         Else
             sawScalar = 1
         End If
-    Next i
+    Loop
 End Sub
 
 ' S-068: an `arr AS T[]` parameter must receive an array of element type T, and an
@@ -688,6 +1080,19 @@ End Function
 ' `arr AS T[]` parameter), the optional dimension is an integer LITERAL >= 1 (counted from 1)
 ' that must exist in the array's declaration.
 Private Function SemValidateArrayBoundsCalls(ByRef ps As ParseState, ByRef errText As String) As Integer
+    ' TUR4/S-111: determine routine presence once, not once per call.
+    ' S-288's routine-name policy and existing namespace lookup remain
+    ' unchanged by this performance patch.
+    Dim hasUserLBound As Integer = 0, hasUserUBound As Integer = 0
+    Dim r As Integer
+    For r = 0 To ps.ast.count - 1
+        Dim rk As String = UCase(Trim(ps.ast.nodes(r).kind))
+        If rk <> "FUNCTION_STMT" And rk <> "SUB_STMT" Then Continue For
+        Dim rn As String = UCase(Trim(ps.ast.nodes(r).value))
+        If rn = "LBOUND" Then hasUserLBound = 1
+        If rn = "UBOUND" Then hasUserUBound = 1
+        If hasUserLBound <> 0 And hasUserUBound <> 0 Then Exit For
+    Next r
     Dim i As Integer
     For i = 0 To ps.ast.count - 1
         If UCase(Trim(ps.ast.nodes(i).kind)) <> "CALL_EXPR" Then Continue For
@@ -695,18 +1100,8 @@ Private Function SemValidateArrayBoundsCalls(ByRef ps As ParseState, ByRef errTe
         calleeName = UCase(Trim(ps.ast.nodes(i).value))
         If calleeName <> "LBOUND" And calleeName <> "UBOUND" Then Continue For
 
-        ' a user routine of the same name keeps its own meaning
-        Dim userRoutine As Integer
-        userRoutine = 0
-        Dim r As Integer
-        For r = 0 To ps.ast.count - 1
-            Dim rk As String
-            rk = UCase(Trim(ps.ast.nodes(r).kind))
-            If rk = "FUNCTION_STMT" Or rk = "SUB_STMT" Then
-                If UCase(Trim(ps.ast.nodes(r).value)) = calleeName Then userRoutine = 1: Exit For
-            End If
-        Next r
-        If userRoutine <> 0 Then Continue For
+        If (calleeName = "LBOUND" And hasUserLBound <> 0) Or _
+           (calleeName = "UBOUND" And hasUserUBound <> 0) Then Continue For
 
         Dim argCount As Integer
         argCount = 0
@@ -725,7 +1120,7 @@ Private Function SemValidateArrayBoundsCalls(ByRef ps As ParseState, ByRef errTe
         arrayNode = ps.ast.nodes(i).firstChild
         Dim arrayKind As String
         arrayKind = UCase(Trim(ps.ast.nodes(arrayNode).kind))
-        If arrayKind <> "IDENT" And arrayKind <> "IDENTIFIER" Then
+        If arrayKind <> "IDENT" And arrayKind <> "IDENTIFIER" And arrayKind <> "KEYWORD_REF" Then
             errText = "semantic: " & calleeName & " needs an array variable as its first argument"
             Return 0
         End If
@@ -748,20 +1143,35 @@ Private Function SemValidateArrayBoundsCalls(ByRef ps As ParseState, ByRef errTe
                 Return 0
             End If
             Dim dimNo As Integer
-            dimNo = ValInt(Trim(ps.ast.nodes(dimNode).value))
-            If dimNo < 1 Then
-                errText = "semantic: " & calleeName & " dimension must be 1 or greater (dimensions are counted from 1)"
+            If UXBArrayDimensionLiteral(ps.ast.nodes(dimNode).value, dimNo) = 0 Then
+                errText = "semantic: " & calleeName & " dimension must be a positive integer literal in range 1..2147483647"
                 Return 0
             End If
             ' how many dimensions does the array have? (a `T[]` parameter has one)
             Dim dimCount As Integer
             dimCount = 1
-            Dim d As Integer
-            For d = 0 To ps.ast.count - 1
+            ' TUR9/S-111: reuse the same declaration index and AST order;
+            ' never allocate a second name table for dimension counting.
+            Dim dimUseIndex As Integer = UXBAstNameIndexEnsure(ps)
+            Dim dimEntry As Integer = -1
+            Dim dimName As String = UCase(Trim(arrayName))
+            If dimUseIndex <> 0 Then dimEntry = UXBAstNameIndexFirst(0, dimName)
+            Dim dimScan As Integer = 0
+            Do
+                Dim d As Integer
+                If dimUseIndex <> 0 Then
+                    If dimEntry = -1 Then Exit Do
+                    d = UXBAstNameIndexNode(dimEntry)
+                    dimEntry = UXBAstNameIndexNext(dimEntry)
+                Else
+                    If dimScan >= ps.ast.count Then Exit Do
+                    d = dimScan
+                    dimScan += 1
+                End If
                 Dim dk As String
                 dk = UCase(Trim(ps.ast.nodes(d).kind))
-                If dk <> "DIM_DECL" And dk <> "REDIM_DECL" Then Continue For
-                If UCase(Trim(ps.ast.nodes(d).value)) <> UCase(arrayName) Then Continue For
+                If dk <> "DIM_DECL" And dk <> "REDIM_DECL" Then Continue Do
+                If UCase(Trim(ps.ast.nodes(d).value)) <> dimName Then Continue Do
                 Dim bch As Integer
                 bch = ps.ast.nodes(d).firstChild
                 Do While bch <> -1
@@ -778,7 +1188,7 @@ Private Function SemValidateArrayBoundsCalls(ByRef ps As ParseState, ByRef errTe
                     End If
                     bch = ps.ast.nodes(bch).nextSibling
                 Loop
-            Next d
+            Loop
             If dimNo > dimCount Then
                 errText = "semantic: " & calleeName & " dimension " & LTrim(Str(dimNo)) & " is out of range: array " & arrayName & " has " & LTrim(Str(dimCount)) & " dimension(s)"
                 Return 0
@@ -1142,6 +1552,50 @@ Private Function SemValidateVariableClassNameConflicts(ByRef ps As ParseState, B
     Return 1
 End Function
 
+' S-212: a name can be declared once per scope. The AST engine refused the second `DIM a` of a frame at run time ("DIM: duplicate variable"); canonical MIR
+' and native x64 accepted it silently and kept using one slot. The check is the sure case only: two declarations that are direct children of the SAME
+' container (routine body, MAIN, namespace/module, program top level) - nested blocks (IF/FOR/...) are not examined, so a name reused in sibling branches is
+' never refused. A routine parameter and a DIM of the same name in that routine's own body count as duplicates (the AST frame holds both).
+Private Function SemDimScopeContainer(ByRef ps As ParseState, ByVal declNode As Integer) As Integer
+    Dim stmtNode As Integer = ps.ast.nodes(declNode).parent
+    If stmtNode < 0 Or stmtNode >= ps.ast.count Then Return -1
+    Dim container As Integer = IIf(UCase(Trim(ps.ast.nodes(declNode).kind)) = "PARAM_DECL", stmtNode, ps.ast.nodes(stmtNode).parent)
+    If container < 0 Or container >= ps.ast.count Then Return -1
+    Select Case UCase(Trim(ps.ast.nodes(container).kind))
+    Case "SUB_STMT", "FUNCTION_STMT", "MAIN_STMT", "CLASS_METHOD_DECL", "CLASS_CONSTRUCTOR_DECL", "CLASS_DESTRUCTOR_DECL", "CLASS_OPERATOR_DECL", _
+         "CLASS_PROPERTY_GET_STMT", "CLASS_PROPERTY_SET_STMT", "THREAD_STMT", "EVENT_STMT", "PIPE_STMT", "PARALEL_STMT", "NAMESPACE_STMT", "MODULE_STMT"
+        Return container
+    End Select
+    If container = ps.rootNode Then Return container
+    Return -1
+End Function
+
+Private Function SemValidateDuplicateDims(ByRef ps As ParseState, ByRef errText As String) As Integer
+    If UXBAstNameIndexEnsure(ps) = 0 Then Return 1
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "DIM_DECL" Then Continue For
+        Dim nm As String = UCase(Trim(ps.ast.nodes(i).value))
+        If nm = "" Then Continue For
+        Dim myScope As Integer = SemDimScopeContainer(ps, i)
+        If myScope = -1 Then Continue For
+        Dim e As Integer = UXBAstNameIndexFirst(0, nm)
+        Do While e <> -1
+            Dim other As Integer = UXBAstNameIndexNode(e)
+            If other >= i Then Exit Do
+            Dim otherKind As String = UCase(Trim(ps.ast.nodes(other).kind))
+            If otherKind = "DIM_DECL" Or otherKind = "PARAM_DECL" Then
+                If SemDimScopeContainer(ps, other) = myScope Then
+                    errText = "semantic: duplicate variable " & nm & " (already declared at line " & LTrim(Str(ps.ast.nodes(other).lineNo)) & "; a name can be declared once per scope, use REDIM to resize an array or choose another name) [line " & LTrim(Str(ps.ast.nodes(i).lineNo)) & "]"
+                    Return 0
+                End If
+            End If
+            e = UXBAstNameIndexNext(e)
+        Loop
+    Next i
+    Return 1
+End Function
+
 ' S-037: is `targetNode` anywhere inside the subtree of `rootNode`? Expression nodes of a
 ' PRINT item hang off PRINT_ITEM.left with no parent link, so the walk follows left/right
 ' as well as the child list.
@@ -1286,7 +1740,7 @@ End Function
 Private Function SemIsExecutableTopLevelKind(ByRef kindUpper As String) As Integer
     Select Case kindUpper
     Case "ASSIGN_STMT", "EXPR_STMT", "PRINT_STMT", "INPUT_STMT", "INPUT_FILE_STMT", "INPUTF_STMT", _
-         "IF_STMT", "SELECT_STMT", "FOR_STMT", "FOR_EACH_STMT", "DO_STMT", "DO_EACH_STMT", "EXIT_STMT", _
+         "IF_STMT", "SELECT_STMT", "FOR_STMT", "FOR_EACH_STMT", "DO_STMT", "DO_EACH_STMT", "EXIT_STMT", "CONTINUE_STMT", _
          "RETURN_STMT", "GOTO_STMT", "GOSUB_STMT", "LABEL_STMT", "CALL_STMT", "CALL_DLL_STMT", "CALL_API_STMT", _
          "TRY_STMT", "THROW_STMT", "ASSERT_STMT", "END_STMT", "RANDOMIZE_STMT", "INCDEC_STMT", _
          "OPEN_STMT", "CLOSE_STMT", "GET_STMT", "PUT_STMT", "SEEK_STMT", "LOCATE_STMT", "COLOR_STMT", "CLS_STMT", _
@@ -1325,6 +1779,45 @@ Private Function SemValidateMainBlockExclusive(ByRef ps As ParseState, ByRef err
     Return 1
 End Function
 
+Private Function SemNormalizeIffCalls(ByRef ps As ParseState, ByRef errText As String) As Integer
+    For i As Integer = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "CALL_EXPR" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> "IFF" Then Continue For
+        If SemChildCount(ps, i) <> 3 Then
+            errText = "semantic: UXB_IFF_ARGUMENT_COUNT: IFF requires exactly three arguments (condition,true,false); got " & LTrim(Str(SemChildCount(ps, i)))
+            errText &= " @" & LTrim(Str(ps.ast.nodes(i).lineNo)) & ":" & LTrim(Str(ps.ast.nodes(i).colNo))
+            Return 0
+        End If
+        Dim conditionNode As Integer = SemChildAt(ps, i, 0)
+        Dim trueNode As Integer = SemChildAt(ps, i, 1)
+        Dim falseNode As Integer = SemChildAt(ps, i, 2)
+        ' Reuse the lazy conditional-expression contract on every engine.
+        ' Infix IFF remains a BINARY logical-equivalence operator.
+        ps.ast.nodes(conditionNode).nextSibling = -1
+        ps.ast.nodes(trueNode).nextSibling = -1
+        ps.ast.nodes(falseNode).nextSibling = -1
+        ps.ast.nodes(i).kind = "TERNARY_EXPR"
+        ps.ast.nodes(i).op = "IFF"
+        ps.ast.nodes(i).typeName = ""
+        ps.ast.nodes(i).firstChild = trueNode
+        ASTSetLeft ps.ast, i, conditionNode
+        ASTSetRight ps.ast, i, falseNode
+        ps.ast.nodes(trueNode).parent = i
+    Next i
+    Return 1
+End Function
+
+#include once "semantic_static_locals.fbs"
+#include once "semantic_mid_assignment.fbs"
+#include once "semantic_delete_lvalue.fbs"
+#include once "semantic_class_array_shape.fbs"
+#include once "semantic_class_array_dynamic.fbs"
+#include once "semantic_file_handle.fbs"
+#include once "semantic_base_ctor.fbs"
+#include once "semantic_declare.fbs"
+#include once "semantic_using_ambiguity.fbs"
+#include once "semantic_undefined_call.fbs"
+
 Function SemanticAnalyze(ByRef ps As ParseState, ByRef errText As String) As Integer
     errText = ""
 
@@ -1333,12 +1826,39 @@ Function SemanticAnalyze(ByRef ps As ParseState, ByRef errText As String) As Int
         Return 0
     End If
 
+    If SemNormalizeStaticLocals(ps, errText) = 0 Then Return 0
+    If SemNormalizeMidAssignments(ps, errText) = 0 Then Return 0
+    ' S-564: NULL / NOTHING identifiers become the typed literal 0 for every engine
+    If SemNormalizeNullLiterals(ps, errText) = 0 Then Return 0
+
     If SemValidateReservedRoutineNames(ps, errText) = 0 Then Return 0
     If SemValidateVariableClassNameConflicts(ps, errText) = 0 Then Return 0
+    If SemValidateDuplicateDims(ps, errText) = 0 Then Return 0
     If SemValidateMainBlockExclusive(ps, errText) = 0 Then Return 0
+    If SemNormalizeIffCalls(ps, errText) = 0 Then Return 0
     ' S-119: bare field / method names in member bodies become THIS.<name> for every engine
     If SemRewriteImplicitThis(ps, errText) = 0 Then Return 0
+    If SemNormalizeDynamicClassArrays(ps, errText) = 0 Then Return 0
+    If SemNormalizeMultidimClassArrays(ps, errText) = 0 Then Return 0
+    ' S-548 / S-549: FREEFILE, FILE_HANDLE (OPEN ... AS handle, CLOSE handle) and the channel ledger behind them (runs after the implicit-THIS step so class fields are THIS.<name>)
+    If SemNormalizeFileHandles(ps, errText) = 0 Then Return 0
+    ' S-544 / Mete 2026-10-28: optional DECLARE, including forward calls.
+    ' An explicit local declaration still needs a matching definition.
+    If SemValidateOptionalDeclareContracts(ps, errText) = 0 Then Return 0
+    ' S-271 / Mete K3 2026-10-28: a name declared by two USING namespaces needs a qualified call (runs before the overload binder renames routines)
+    If SemValidateUsingAmbiguity(ps, errText) = 0 Then Return 0
+    ' S-329 / Mete K1 2026-10-28: a call of a name declared nowhere (no routine, variable or built-in) is one compile error on every engine
+    If SemValidateUndefinedRoutineCalls(ps, errText) = 0 Then Return 0
+    If SemValidateOverloadResolution(ps, errText) = 0 Then Return 0
+    ' S-615: DELETE of an object field becomes a block that destroys the object and empties the field (needs the THIS.field form from the step above)
+    If SemNormalizeClassArrayCompoundTargets(ps, errText) = 0 Then Return 0
+    If SemNormalizeDeleteFieldTargets(ps, errText) = 0 Then Return 0
+    ' S-485 / S-487: SUPER(...) and the implicit base constructor call become explicit SUPER.CONSTRUCTOR(...) statements in the constructor bodies
+    If SemNormalizeBaseConstructorCalls(ps, errText) = 0 Then Return 0
     If SemRewriteVarptrElementNodes(ps, errText) = 0 Then Return 0
+    If SemRewriteTimerUnitCalls(ps, errText) = 0 Then Return 0   ' S-651
+    If SemValidateStrayReturns(ps, errText) = 0 Then Return 0   ' S-537
+    If SemRewriteRotateAssignments(ps, errText) = 0 Then Return 0   ' S-520
     If SemValidateTypeRefs(ps, errText) = 0 Then Return 0
     If SemValidateClassMixinDecoratorContracts(ps, errText) = 0 Then Return 0
     If SemValidateCallNodes(ps, errText) = 0 Then Return 0
@@ -1357,14 +1877,17 @@ Function SemanticAnalyze(ByRef ps As ParseState, ByRef errText As String) As Int
     If SemValidateConstNodes(ps, errText) = 0 Then Return 0
     If SemValidateNewExprNodes(ps, errText) = 0 Then Return 0
     If SemValidateDimClassInitializers(ps, errText) = 0 Then Return 0
+    If SemValidateArrayScalarInitializers(ps, errText) = 0 Then Return 0   ' S-568
     If SemValidateClassAssignments(ps, errText) = 0 Then Return 0
     If SemValidateDeleteNodes(ps, errText) = 0 Then Return 0
     If SemFoldConstants(ps, errText) = 0 Then Return 0
-    If SemValidateOverloadResolution(ps, errText) = 0 Then Return 0
     If SemValidateReachability(ps, errText) = 0 Then Return 0
     If SemValidateThisMeUsage(ps, errText) = 0 Then Return 0
+    If SemValidateConstructorMeVirtualCalls(ps, errText) = 0 Then Return 0
     If SemValidateStaticMemberReceiverUsage(ps, errText) = 0 Then Return 0
+    If SemValidateClassNameCalls(ps, errText) = 0 Then Return 0
     If SemValidateClassModifierContracts(ps, errText) = 0 Then Return 0
+    If SemValidateInheritedFieldHiding(ps, errText) = 0 Then Return 0
     If SemValidateClassPropertyContracts(ps, errText) = 0 Then Return 0
     If SemValidateClassOperatorContracts(ps, errText) = 0 Then Return 0
     If SemValidateClassMagicMethodContracts(ps, errText) = 0 Then Return 0

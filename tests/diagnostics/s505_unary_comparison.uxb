@@ -1,0 +1,8 @@
+DIM x AS F64 = 2.5
+DIM n AS I32 = 5
+PRINT -(x > 1)
+PRINT -(n > 1)
+PRINT -(1 = 1)
+DIM b AS I32
+b = -(x > 1)
+PRINT b

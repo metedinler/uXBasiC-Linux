@@ -1,0 +1,14 @@
+DIM ATOMIC counter AS I32 = 2147483647
+DIM ATOMIC fraction AS F32 = 1.5
+DIM calls AS I32 = 0
+FUNCTION Amount() AS I32
+    calls += 1
+    RETURN 1
+END FUNCTION
+PRINT counter.ADD(Amount())
+PRINT counter.CAS(-2147483648, counter.ADD(1))
+PRINT counter.LOAD()
+PRINT fraction.ADD(0.25)
+PRINT fraction.CAS(1.75, 2.5)
+PRINT fraction.LOAD()
+PRINT calls

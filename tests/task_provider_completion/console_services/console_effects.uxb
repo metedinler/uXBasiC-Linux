@@ -1,0 +1,59 @@
+' The runner creates a hidden, real Windows console. CRT stdout stays a pipe.
+FUNCTION InjectKey(handle AS I64, code AS I32) AS I32
+    DIM record(0 TO 19) AS U8
+    DIM written AS I32 = 0
+    DIM address AS PTR = VARPTR(record(0))
+    POKEW NATIVE, address, 1
+    POKED NATIVE, address + 4, 1
+    POKEW NATIVE, address + 8, 1
+    POKEW NATIVE, address + 10, code
+    POKEW NATIVE, address + 12, 30
+    POKEW NATIVE, address + 14, code
+    RETURN CALL(DLL, "kernel32.dll", "WriteConsoleInputW", I32, STDCALL, "I64,PTR,U32,PTR", handle, address, 1, VARPTR(written))
+END FUNCTION
+THREAD Ready() AS I32
+    RETURN 1
+END THREAD
+DIM consoleTask AS TASK OF I32 = SPAWN Ready()
+PRINT consoleTask.JOIN()
+DIM oldOut AS I64 = CALL(DLL, "kernel32.dll", "GetStdHandle", I64, STDCALL, "I32", -11)
+DIM buffer AS I64 = CALL(DLL, "kernel32.dll", "CreateConsoleScreenBuffer", I64, STDCALL, "U32,U32,PTR,U32,PTR", 3221225472, 3, 0, 1, 0)
+IF buffer = -1 THEN
+    PRINT "console buffer unavailable"
+    END
+END IF
+CALL(DLL, "kernel32.dll", "SetStdHandle", I32, STDCALL, "I32,I64", -11, buffer)
+DIM info(0 TO 23) AS U8
+DIM infoAddress AS PTR = VARPTR(info(0))
+LOCATE 4, 7
+CALL(DLL, "kernel32.dll", "GetConsoleScreenBufferInfo", I32, STDCALL, "I64,PTR", buffer, infoAddress)
+PRINT PEEKW(NATIVE, infoAddress + 4)
+PRINT PEEKW(NATIVE, infoAddress + 6)
+COLOR 2, 4
+CALL(DLL, "kernel32.dll", "GetConsoleScreenBufferInfo", I32, STDCALL, "I64,PTR", buffer, infoAddress)
+PRINT PEEKW(NATIVE, infoAddress + 8)
+DIM written AS I32 = 0
+CALL(DLL, "kernel32.dll", "WriteConsoleOutputCharacterA", I32, STDCALL, "I64,STRPTR,U32,U32,PTR", buffer, "X", 1, 0, VARPTR(written))
+CLS
+CALL(DLL, "kernel32.dll", "GetConsoleScreenBufferInfo", I32, STDCALL, "I64,PTR", buffer, infoAddress)
+PRINT PEEKW(NATIVE, infoAddress + 4)
+PRINT PEEKW(NATIVE, infoAddress + 6)
+DIM cell AS I32 = 0
+CALL(DLL, "kernel32.dll", "ReadConsoleOutputCharacterA", I32, STDCALL, "I64,PTR,U32,U32,PTR", buffer, VARPTR(cell), 1, 0, VARPTR(written))
+PRINT cell
+CALL(DLL, "kernel32.dll", "SetStdHandle", I32, STDCALL, "I32,I64", -11, oldOut)
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", buffer)
+DIM inputHandle AS I64 = CALL(DLL, "kernel32.dll", "CreateFileA", I64, STDCALL, "STRPTR,U32,U32,PTR,U32,U32,I64", "CONIN$", 3221225472, 3, 0, 3, 0, 0)
+IF inputHandle = -1 THEN
+    PRINT "console input unavailable"
+    END
+END IF
+CALL(DLL, "kernel32.dll", "FlushConsoleInputBuffer", I32, STDCALL, "I64", inputHandle)
+DIM injected AS I32 = InjectKey(inputHandle, 65)
+IF injected = 0 THEN PRINT "key injection failed"
+PRINT INKEY(0)
+PRINT INKEY(0)
+injected = InjectKey(inputHandle, 66)
+IF injected = 0 THEN PRINT "key injection failed"
+PRINT GETKEY()
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", inputHandle)

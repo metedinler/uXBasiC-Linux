@@ -1,0 +1,2 @@
+%%INCLUDE "..\secret.bas"
+PRINT "UNSAFE"

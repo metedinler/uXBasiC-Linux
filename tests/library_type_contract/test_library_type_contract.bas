@@ -52,6 +52,51 @@ If gUXBLibraryTypes(idx).jsProvider <> "RATIONAL_REFERENCE" Then
     End 1
 End If
 
+If UXBLibraryTypeProviderIsRegistered("MIR", gUXBLibraryTypes(idx).mirProvider) = 0 Then
+    Print "FAIL library_type_contract mir provider registry"
+    End 1
+End If
+
+If UXBLibraryTypeProviderIsRegistered("JS", gUXBLibraryTypes(idx).jsProvider) <> 0 Then
+    Print "FAIL library_type_contract js provider must remain gated"
+    End 1
+End If
+
+If UXBLibraryTypeProviderSupportsType("MIR", gUXBLibraryTypes(idx).mirProvider, "RATIONAL") = 0 Then
+    Print "FAIL library_type_contract rational provider type binding"
+    End 1
+End If
+
+If UXBLibraryTypeProviderSupportsType("MIR", gUXBLibraryTypes(idx).mirProvider, "TEXT_VALUE") <> 0 Then
+    Print "FAIL library_type_contract provider type mismatch gate"
+    End 1
+End If
+
+If UXBLibraryTypeProviderSupportsOperation("MIR", gUXBLibraryTypes(idx).mirProvider, "RATIONAL", "ADD") = 0 Then
+    Print "FAIL library_type_contract provider operation binding"
+    End 1
+End If
+
+If UXBLibraryTypeProviderSupportsOperation("MIR", gUXBLibraryTypes(idx).mirProvider, "RATIONAL", "CMP") <> 0 Then
+    Print "FAIL library_type_contract unsupported operation gate"
+    End 1
+End If
+
+If UXBLibraryTypeProviderSupportsOperation("MIR", "OWNED_TEXT_REFERENCE", "TEXT_VALUE", "HASH") <> 0 Then
+    Print "FAIL library_type_contract provider operation type gate"
+    End 1
+End If
+
+If UXBLibraryTypeProviderSupportsCapability("MIR", gUXBLibraryTypes(idx).mirProvider, "MIR_PROVIDER") = 0 Then
+    Print "FAIL library_type_contract provider capability binding"
+    End 1
+End If
+
+If UXBLibraryTypeProviderSupportsCapability("JS", gUXBLibraryTypes(idx).jsProvider, "JS_PROVIDER") <> 0 Then
+    Print "FAIL library_type_contract unsupported target capability gate"
+    End 1
+End If
+
 Dim jsonText As String
 jsonText = UXBLibraryTypeContractToJson(gUXBLibraryTypes(idx))
 If InStr(jsonText, """type"": ""RATIONAL""") = 0 Then
@@ -105,6 +150,21 @@ End If
 
 If gUXBLibraryTypes(idx).packageName <> "uxmath.external_test" Then
     Print "FAIL library_type_contract file load package"
+    End 1
+End If
+
+If gUXBLibraryTypes(idx).packageVersion <> "0.1.0" Then
+    Print "FAIL library_type_contract file load version"
+    End 1
+End If
+
+If gUXBLibraryTypes(idx).dependenciesCsv <> "uxmath.core>=0.1.0" Then
+    Print "FAIL library_type_contract file load dependencies"
+    End 1
+End If
+
+If InStr(gUXBLibraryTypes(idx).capabilitiesCsv, "MIR_PROVIDER") = 0 Then
+    Print "FAIL library_type_contract file load capabilities"
     End 1
 End If
 

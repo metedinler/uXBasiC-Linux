@@ -1,11 +1,26 @@
 ' Extracted from code_generator.fbs for wave-14 modular split
 ' Scope: node->statement dispatcher
 
+' S-538: END ends the whole program, like every other engine. At main level that is the jump to the main epilogue (task
+' shutdown, native runtime shutdown, exit status 0); inside a SUB/FUNCTION/method the frame belongs to the routine, so the
+' run-time performs the same normal close and ends the process (MIR-x64: PROGRAM_END -> __uxb_rt_program_end).
+Private Function X64EmitEndStmt(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
+    X64EmitComment cg, "stmt: END"
+    X64LockUnwindTransfer ps, nodeIdx, cg, "RETURN"
+    If Trim(cg.currentRoutineLabel) = "" And cg.currentEpilogLabel <> "" Then
+        X64EmitText cg, "    jmp " & cg.currentEpilogLabel
+    Else
+        X64EmitCall0 cg, "__uxb_rt_program_end"
+    End If
+    Return 1
+End Function
+
 Private Function X64EmitNode(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
     If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then
         errText = "x64-codegen: invalid AST node index " & LTrim(Str(nodeIdx))
         Return 0
     End If
+    gX64LastEmitNode = nodeIdx
 
     Dim nodeKind As String
     nodeKind = X64Upper(ps.ast.nodes(nodeIdx).kind)
@@ -28,6 +43,8 @@ Private Function X64EmitNode(ByRef ps As ParseState, ByVal nodeIdx As Integer, B
         Return GenerateStatement(ps, nodeIdx, cg, errText)
     Case "IF_STMT", "IF"
         Return X64EmitIfStmt(ps, nodeIdx, cg, errText)
+    Case "LOCK_STMT"
+        Return X64EmitLockStmt(ps, nodeIdx, cg, errText)
     Case "SELECT_STMT"
         Return X64EmitSelectStmt(ps, nodeIdx, cg, errText)
     Case "FOR_STMT", "FOR"
@@ -60,18 +77,24 @@ Private Function X64EmitNode(ByRef ps As ParseState, ByVal nodeIdx As Integer, B
         Return GenerateStatement(ps, nodeIdx, cg, errText)
     Case "RETURN_STMT", "RETURN"
         Return X64EmitReturnStmt(ps, nodeIdx, cg, errText)
-    Case "EXIT_STMT"
+    Case "EXIT_STMT", "CONTINUE_STMT"
         Return X64EmitExitStmt(ps, nodeIdx, cg, errText)
+    Case "END_STMT"
+        Return X64EmitEndStmt(ps, nodeIdx, cg, errText)
     Case "DELETE_STMT"
         Return X64EmitDeleteStmt(ps, nodeIdx, cg, errText)
+    Case "UNSAFE_STMT"
+        ' UNSAFE only waives semantic/synchronization guarantees for its body.
+        ' The children still emit normally, including real FFI calls and RETURN.
+        Return X64EmitBlockStmt(ps, nodeIdx, cg, errText)
     Case "BLOCK", "SCOPE_BLOCK", "BODY"
         Return X64EmitBlockStmt(ps, nodeIdx, cg, errText)
     Case "EXPR_STMT", "LET_STMT"
         Return X64EmitExprStmt(ps, nodeIdx, cg, errText)
     Case "ASSIGN_STMT"
-        Return X64EmitAssignStmt(ps, nodeIdx, cg, errText)
+        Return X64SyncEmitAssign(ps, nodeIdx, cg, errText)
     Case "INCDEC_STMT"
-        Return X64EmitIncDecStmt(ps, nodeIdx, cg, errText)
+        Return X64SyncEmitAssign(ps, nodeIdx, cg, errText)
     Case Else
         Return X64EmitUnknownNode(ps, nodeIdx, cg, errText)
     End Select

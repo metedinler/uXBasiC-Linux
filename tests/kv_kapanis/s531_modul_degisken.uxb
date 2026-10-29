@@ -1,0 +1,25 @@
+' S-531: MODULE / NAMESPACE degiskenleri program capinda globaldir; rutinler ve disaridan nitelikli erisim ayni deposunu gorur.
+MODULE Depo
+    DIM adet AS I32 = 5
+    SUB Koy(n AS I32)
+        adet = n
+    END SUB
+    FUNCTION Say() AS I32
+        RETURN adet
+    END FUNCTION
+END MODULE
+NAMESPACE Raf
+    DIM sayi AS I32 = 3
+    SUB Artir()
+        sayi += 1
+    END SUB
+END NAMESPACE
+PRINT Depo.Say()
+Depo.Koy(10)
+PRINT Depo.Say()
+Raf.Artir()
+Raf.Artir()
+PRINT Raf.sayi
+Raf.sayi = 40
+Raf.Artir()
+PRINT Raf.sayi

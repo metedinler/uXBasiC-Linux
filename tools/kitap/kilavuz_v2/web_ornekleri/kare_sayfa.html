@@ -1,0 +1,18 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>uXBasic: çıktı sayfaya yazılır</title>
+</head>
+<body>
+<h1>Kareler</h1>
+<pre id="uxb-console"></pre>
+<script src="ux_runtime.js"></script>
+<script>
+  // uXBasic PRINT çıktısını konsol yerine sayfadaki <pre> öğesine yönlendirir
+  uxb.console.setSink({
+    writeLine: function (satir) {
+      document.getElementById("uxb-console").textContent += satir + "\n";
+    }
+  });
+</script>
+<script src="kare.js"></script>
+</body></html>

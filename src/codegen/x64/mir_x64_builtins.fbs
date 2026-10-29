@@ -6,11 +6,16 @@
 ' mir_x64_arrays.fbs too) -- a second identical Declare here would be a
 ' "Duplicated definition" error.
 
+#include once "mir_x64_runtime_call_contract.fbs"
+
 Function MIRX64BuiltinRuntimeSymbol(ByRef targetText As String) As String
     Dim t As String
     t = UCase(Trim(targetText))
     Select Case t
     Case "LEN": Return "__uxb_rt_strlen"
+    ' S-179: VAL itself is handled separately (returns F64 via __uxb_rt_val_f64, see the dedicated
+    ' "VAL" case above) -- __uxb_rt_val_i64 stays mapped here only in case another integer-context
+    ' caller ever looks this table up directly.
     Case "VAL": Return "__uxb_rt_val_i64"
     Case "CHR", "CHR$": Return "__uxb_rt_chr"
     Case "STR", "STR$": Return "__uxb_rt_str_i64"
@@ -161,6 +166,10 @@ Function MIRX64EmitBuiltinOneArgResult(ByRef ins As MIRIRInstruction, ByRef cg A
         Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
 
     Case "STR", "STR$"
+        If MIRX64OperandIsString(cg, ins.operands(1)) <> 0 Then
+            If MIRX64LoadOperandToReg(cg, ins.operands(1), "rax", errText) = 0 Then Return 0
+            Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+        End If
         ' S-142: STR of a float printed the raw IEEE bits as an integer (`4617878467915022336` for 5.5).
         ' S-087: U64 >= 2^63 must use the unsigned formatter so it prints as a positive value.
         If MIRX64OperandIsFloat(cg, ins.operands(1)) <> 0 Then
@@ -178,7 +187,20 @@ Function MIRX64EmitBuiltinOneArgResult(ByRef ins As MIRIRInstruction, ByRef cg A
             Return MIRX64EmitRuntimeUnaryI64(cg, "__uxb_rt_str_u64", "rax", ins.result, errText)
         End If
         Return MIRX64EmitRuntimeUnaryI64(cg, "__uxb_rt_str_i64", "rax", ins.result, errText)
-    Case "LEN", "VAL", "CHR", "CHR$", "LCASE", "LCASE$", "UCASE", "UCASE$", "LTRIM", "LTRIM$", "RTRIM", "RTRIM$", "TRIM", "TRIM$", "SPACE", "SPACE$", "HEX", "HEX$", "OCT", "OCT$", "BIN", "BIN$", "BIGINIT"
+    Case "VAL"
+        ' S-179: the language's VAL() returns a Double (S-137's AST fix: VAL("2.75") = 2.75); every
+        ' caller reads this CALL's result as F64. __uxb_rt_val_i64 (the RAX-returning helper below, still
+        ' used for other purposes) truncates and left the result in the wrong register class -- the
+        ' caller then read RAX's raw integer bits back through XMM0 as if they were already a double.
+        If MIRX64LoadOperandToReg(cg, ins.operands(1), "rax", errText) = 0 Then Return 0
+        MIRX64Emit cg, "    mov rcx, rax"
+        MIRX64EmitRuntimeExtern cg, "__uxb_rt_val_f64"
+        MIRX64Emit cg, "    sub rsp, 32"
+        MIRX64Emit cg, "    call __uxb_rt_val_f64"
+        MIRX64Emit cg, "    add rsp, 32"
+        Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
+
+    Case "LEN", "CHR", "CHR$", "LCASE", "LCASE$", "UCASE", "UCASE$", "LTRIM", "LTRIM$", "RTRIM", "RTRIM$", "TRIM", "TRIM$", "SPACE", "SPACE$", "HEX", "HEX$", "OCT", "OCT$", "BIN", "BIN$", "BIGINIT"
         If MIRX64LoadOperandToReg(cg, ins.operands(1), "rax", errText) = 0 Then Return 0
         Dim sym As String
         sym = MIRX64BuiltinRuntimeSymbol(target)
@@ -228,9 +250,17 @@ Function MIRX64EmitBuiltinTwoArgResult(ByRef ins As MIRIRInstruction, ByRef cg A
         Return MIRX64EmitRuntimeStringLeft(cg, "rax", "r10", ins.result, errText)
     Case "RIGHT", "RIGHT$"
         Return MIRX64EmitRuntimeStringRight(cg, "rax", "r10", ins.result, errText)
+    Case "MID", "MID$"
+        MIRX64Emit cg, "    mov r11, -1"
+        Return MIRX64EmitRuntimeStringMid(cg, "rax", "r10", "r11", ins.result, errText)
     Case "INSTR"
         MIRX64Emit cg, "    mov r11, 1"
         Return MIRX64EmitRuntimeStringInstr(cg, "rax", "r10", "r11", ins.result, errText)
+    Case "STRING"
+        Dim repeatSymbol As String = "__uxb_rt_string"
+        If MIRX64OperandIsString(cg, ins.operands(2)) <> 0 Then repeatSymbol = "__uxb_rt_string_text"
+        MIRX64EmitRuntimeCall2Reg cg, repeatSymbol, "rax", "r10"
+        Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
     Case "POW"
         Return MIRX64EmitRuntimeBinaryI64(cg, "__uxb_rt_pow_i64", "rax", "r10", ins.result, errText)
     Case "STR_CONCAT"
@@ -259,7 +289,8 @@ Function MIRX64EmitBuiltinThreeArgResult(ByRef ins As MIRIRInstruction, ByRef cg
     Case "MID", "MID$"
         Return MIRX64EmitRuntimeStringMid(cg, "rax", "r10", "r11", ins.result, errText)
     Case "INSTR"
-        Return MIRX64EmitRuntimeStringInstr(cg, "rax", "r10", "r11", ins.result, errText)
+        ' Source INSTR(start, haystack, needle); runtime ABI is haystack, needle, start.
+        Return MIRX64EmitRuntimeStringInstr(cg, "r10", "r11", "rax", ins.result, errText)
     End Select
 
     errText = "MIR x64 three-argument builtin dispatch failed: " & target
@@ -273,12 +304,25 @@ Function MIRX64EmitBuiltinNoArgResult(ByRef ins As MIRIRInstruction, ByRef cg As
     End If
 
     Select Case UCase(Trim(ins.operands(0)))
+    Case "CSRLIN"
+        Return MIRX64EmitRuntimeNoArgI64(cg, "__uxb_rt_csrlin", ins.result, errText)
+    Case "POS"
+        Return MIRX64EmitRuntimeNoArgI64(cg, "__uxb_rt_pos", ins.result, errText)
     Case "TIMER"
-        Return MIRX64EmitRuntimeNoArgI64(cg, "__uxb_rt_timer_i64", ins.result, errText)
+        ' S-624: TIMER F64'tur (yerel gece yarisindan beri kesirli saniye, src/common/uxb_clock.fbs ile ayni tanim):
+        ' sonuc XMM0'dadir. Onceki __uxb_rt_timer_i64 yolu tamsayiyi F64 degiskene ham bit olarak yaziyordu
+        ' (DIM t AS F64 : t = TIMER -> 2.3e-319).
+        MIRX64EmitRuntimeCall0 cg, "__uxb_rt_timer_f64"
+        If Trim(ins.result) = "" Then Return 1
+        Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
     Case "RND"
         Return MIRX64EmitRuntimeNoArgI64(cg, "__uxb_rt_rnd_i64", ins.result, errText)
     Case "GETKEY", "INKEY"
-        Return MIRX64EmitRuntimeNoArgI64(cg, "__uxb_rt_getkey_i64", ins.result, errText)
+        ' Use the existing console ABI map: INKEY must remain nonblocking.
+        ' Sharing GETKEY's hardcoded symbol made a second empty INKEY wait.
+        Dim keyOpcode As String = UCase(Trim(ins.operands(0)))
+        Dim keySymbol As String = MIRX64RuntimeSymbolForOpcode(keyOpcode, keyOpcode)
+        Return MIRX64EmitRuntimeNoArgI64(cg, keySymbol, ins.result, errText)
     End Select
 
     errText = "MIR x64 no-argument builtin dispatch failed: " & ins.operands(0)
@@ -315,7 +359,7 @@ Function MIRX64TryEmitBuiltinCall(ByRef ins As MIRIRInstruction, ByRef cg As MIR
     Case "ABS", "SGN", "INT", "FIX", "CINT", "CLNG", "CSNG", "CDBL", "LEN", "ASC", "VAL", "CHR", "CHR$", "STR", "STR$", "LCASE", "LCASE$", "UCASE", "UCASE$", "LTRIM", "LTRIM$", "RTRIM", "RTRIM$", "TRIM", "TRIM$", "SPACE", "SPACE$", "HEX", "HEX$", "OCT", "OCT$", "BIN", "BIN$", "SQR", "SQRT", "SIN", "COS", "TAN", "ATN", "LOG", "EXP", "BIGINIT"
         handledOut = 1
         Return MIRX64EmitBuiltinOneArgResult(ins, cg, errText)
-    Case "LEFT", "LEFT$", "RIGHT", "RIGHT$", "POW", "STR_CONCAT", "STR_COMPARE", "CPLEN"
+    Case "STRING", "LEFT", "LEFT$", "RIGHT", "RIGHT$", "POW", "STR_CONCAT", "STR_COMPARE", "CPLEN"
         handledOut = 1
         Return MIRX64EmitBuiltinTwoArgResult(ins, cg, errText)
     Case "MID", "MID$"
@@ -326,7 +370,7 @@ Function MIRX64TryEmitBuiltinCall(ByRef ins As MIRIRInstruction, ByRef cg As MIR
         handledOut = 1
         If ins.operandCount >= 4 Then Return MIRX64EmitBuiltinThreeArgResult(ins, cg, errText)
         Return MIRX64EmitBuiltinTwoArgResult(ins, cg, errText)
-    Case "TIMER", "RND", "GETKEY", "INKEY"
+    Case "TIMER", "RND", "GETKEY", "INKEY", "CSRLIN", "POS"
         handledOut = 1
         Return MIRX64EmitBuiltinNoArgResult(ins, cg, errText)
     End Select

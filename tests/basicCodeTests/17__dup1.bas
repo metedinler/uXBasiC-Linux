@@ -1,0 +1,9 @@
+ASSERT 1
+x = 10
+y = 0
+IF y = 0 THEN
+    PRINT 700
+ELSE
+    PRINT x / y
+END IF
+PRINT 701

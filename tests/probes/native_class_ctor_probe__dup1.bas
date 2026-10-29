@@ -1,0 +1,13 @@
+CLASS C
+PUBLIC
+x AS I32
+END CLASS
+
+DIM g AS I32
+
+SUB C_CTOR(self AS I32)
+g = 7
+END SUB
+
+DIM p AS C = NEW C()
+PRINT g

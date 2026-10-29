@@ -1,0 +1,11 @@
+' S-533: icinde PRINT olan bir islevin cagrisi ikili isleme SAG islenen olunca eski AST-x64 yigin hizasini bozup cokuyordu.
+FUNCTION Yn(d AS I32) AS I32
+    PRINT d
+    RETURN d
+END FUNCTION
+DIM r AS I32
+r = 6 + Yn(3)
+PRINT r
+PRINT 0 AND Yn(1)
+PRINT 6 * Yn(3)
+PRINT Yn(1) + Yn(2)

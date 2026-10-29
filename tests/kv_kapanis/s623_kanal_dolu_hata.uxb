@@ -1,0 +1,6 @@
+' S-623: 255 kanal doluyken programin KENDI hatasi (THROW) kendi iletisiyle gorunur; "gunluk yazilamadi" iletisi onu gizlemez.
+DIM i AS I32
+FOR i = 1 TO 255
+    OPEN "dolu.txt" FOR OUTPUT AS #i
+NEXT
+THROW 7

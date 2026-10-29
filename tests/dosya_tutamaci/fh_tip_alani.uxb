@@ -1,0 +1,11 @@
+' S-549 (F7): a handle as a TYPE field; `AS g.dosya` picks a channel, `PRINT #g.dosya` and `CLOSE g.dosya` accept the field.
+TYPE Gunluk
+    dosya AS FILE_HANDLE
+    ad AS STRING
+END TYPE
+DIM g AS Gunluk
+OPEN "fh_g.txt" FOR APPEND AS g.dosya
+PRINT #g.dosya, "satir"
+PRINT g.dosya
+CLOSE g.dosya
+PRINT g.dosya

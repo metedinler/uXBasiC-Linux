@@ -1,0 +1,48 @@
+{
+  "integer_updates": {
+    "output": "10000\n-10000",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "float_updates": {
+    "output": "4000.5\n-3999.75",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "local_shadow": {
+    "output": "1001\n1002\n7",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "narrow_values": {
+    "output": "-128\n4\n4294967295",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "float_local": {
+    "output": "1.5\n-0.75",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "unsafe_increment": {
+    "output": "3",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  }
+}

@@ -73,6 +73,42 @@ Private Function UXBAstInterpRor64(ByVal value As ULongInt, ByVal countValue As 
     Return (value Shr shiftBits) Or (value Shl (64 - shiftBits))
 End Function
 
+' S-219: rotate in a 64-bit scratch value, then restore the declared width
+' and signedness of the left operand.  ROL/ROR are width-preserving, unlike
+' the old fixed-64-bit interpreter implementation.
+Private Function UXBAstInterpRotateResult(ByRef sourceValue As UXBInterpValue, ByVal rawBits As ULongInt) As UXBInterpValue
+    Dim t As String = UCase(Trim(sourceValue.typeName))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    Select Case t
+    Case "U8", "UBYTE", "U16", "USHORT", "U32", "UINTEGER", "UINT", "ULONG", "U64", "ULONGINT", _
+         "I8", "BYTE", "SBYTE", "I16", "SHORT", "I32", "INTEGER", "INT", "LONG", "I64", "LONGINT"
+        Return UXBInterpApplyDeclaredType(UXBInterpValueUInt(rawBits), t)
+    End Select
+    Return UXBInterpValueInt(CLngInt(rawBits))
+End Function
+
+Private Function UXBAstInterpRotateByWidth(ByRef sourceValue As UXBInterpValue, ByVal countValue As LongInt, ByVal rotateRight As Integer) As ULongInt
+    Dim t As String = UCase(Trim(sourceValue.typeName))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    Dim widthBits As Integer = 64
+    Select Case t
+    Case "U8", "UBYTE", "I8", "BYTE", "SBYTE": widthBits = 8
+    Case "U16", "USHORT", "I16", "SHORT": widthBits = 16
+    Case "U32", "UINTEGER", "UINT", "ULONG", "I32", "INTEGER", "INT", "LONG": widthBits = 32
+    End Select
+    Dim sourceBits As ULongInt
+    If sourceValue.kind = UXB_VAL_U32 Or sourceValue.kind = UXB_VAL_U64 Then sourceBits = sourceValue.uintValue Else sourceBits = CULngInt(sourceValue.intValue)
+    Dim mask As ULongInt = &hFFFFFFFFFFFFFFFFULL
+    If widthBits = 8 Then mask = &hFFULL
+    If widthBits = 16 Then mask = &hFFFFULL
+    If widthBits = 32 Then mask = &hFFFFFFFFULL
+    sourceBits And= mask
+    Dim shiftBits As Integer = countValue And (widthBits - 1)
+    If shiftBits = 0 Then Return sourceBits
+    If rotateRight = 0 Then Return ((sourceBits Shl shiftBits) Or (sourceBits Shr (widthBits - shiftBits))) And mask
+    Return ((sourceBits Shr shiftBits) Or (sourceBits Shl (widthBits - shiftBits))) And mask
+End Function
+
 Private Function UXBAstInterpIntegerPow(ByVal baseValue As LongInt, ByVal exponentValue As LongInt) As UXBInterpValue
     If exponentValue < 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_NODE_NOT_EXECUTABLE, "integer exponent cannot be negative")
     Dim baseWork As LongInt = baseValue
@@ -114,7 +150,7 @@ Private Function UXBAstInterpBinary(ByVal opText As String, ByRef l As UXBInterp
         Case "-": Return UXBInterpValueFloat(UXBAstInterpAsFloat(l) - UXBAstInterpAsFloat(r))
         Case "*": Return UXBInterpValueFloat(UXBAstInterpAsFloat(l) * UXBAstInterpAsFloat(r))
         Case "/"
-            If UXBAstInterpAsFloat(r) = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_DIV_ZERO, "division by zero")
+            ' S-691: IEEE floating point division (x / 0 = inf, -inf or nan).
             Return UXBInterpValueFloat(UXBAstInterpAsFloat(l) / UXBAstInterpAsFloat(r))
         Case "**", "POW"
             Return UXBInterpValueFloat(UXBAstInterpAsFloat(l) ^ UXBAstInterpAsFloat(r))
@@ -125,7 +161,7 @@ Private Function UXBAstInterpBinary(ByVal opText As String, ByRef l As UXBInterp
     Case "-": Return UXBInterpValueInt(l.intValue - r.intValue)
     Case "*": Return UXBInterpValueInt(l.intValue * r.intValue)
     Case "/"
-        If r.intValue = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_DIV_ZERO, "division by zero")
+        ' S-691: `/` is always a floating point division, so a zero divisor follows IEEE too.
         Return UXBInterpValueFloat(CDbl(l.intValue) / CDbl(r.intValue))
     Case "\"
         If r.intValue = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_DIV_ZERO, "division by zero")
@@ -141,8 +177,8 @@ Private Function UXBAstInterpBinary(ByVal opText As String, ByRef l As UXBInterp
     Case "SHR", ">>"
         If UXBAstInterpIsUnsignedInteger(l) <> 0 Then Return UXBInterpValueUInt(l.uintValue Shr (r.intValue And 63))
         Return UXBInterpValueInt(UXBAstInterpArithmeticShr64(l.intValue, r.intValue))
-    Case "ROL": Return UXBInterpValueInt(CLngInt(UXBAstInterpRol64(CULngInt(l.intValue), r.intValue)))
-    Case "ROR": Return UXBInterpValueInt(CLngInt(UXBAstInterpRor64(CULngInt(l.intValue), r.intValue)))
+    Case "ROL": Return UXBAstInterpRotateResult(l, UXBAstInterpRotateByWidth(l, r.intValue, 0))
+    Case "ROR": Return UXBAstInterpRotateResult(l, UXBAstInterpRotateByWidth(l, r.intValue, 1))
     End Select
     Return UXBInterpValueError(UXB_INTERP_ERR_NODE_NOT_EXECUTABLE, "binary operator not executable: " & opText)
 End Function
@@ -276,7 +312,7 @@ Function UXBAstInterpEvalExpr(ByRef ast As ASTPool, ByVal nodeIdx As Integer, By
             If UXBInterpContextGetSymbol(ctx, "THIS", v) <> 0 Then Return v
         End If
         If identUpper = "RND" Then Return UXBInterpValueFloat(Rnd)
-        If identUpper = "TIMER" Then Return UXBInterpValueFloat(Timer)
+        If identUpper = "TIMER" Then Return UXBInterpValueFloat(UXBClockTimerSeconds())   ' S-624
         If UCase(Trim(n.kind)) = ASTK_KEYWORD_REF Then Return UXBInterpValueExternal(n.typeName, 0, n.value)
         Return UXBInterpValueError(UXB_INTERP_ERR_SYMBOL_NOT_FOUND, "symbol not found: " & UXBAstInterpNodeName(ast, nodeIdx))
     Case ASTK_BINARY

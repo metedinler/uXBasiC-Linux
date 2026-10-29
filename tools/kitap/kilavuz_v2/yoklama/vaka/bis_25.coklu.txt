@@ -1,0 +1,134 @@
+V1a DIM SHARED (tasarim yazimi)
+DIM SHARED x AS I32
+x = 3
+PRINT x
+=====
+V1b genel TYPE degiskeni, LOCK, gorev icinden (beklenen 12 / 3)
+TYPE Olcum
+    kimlik AS I32
+    deger AS I32
+END TYPE
+DIM son AS Olcum
+THREAD Yaz(k AS I32)
+    LOCK son
+        son.kimlik = k
+        son.deger = k * 4
+    END LOCK
+END THREAD
+MAIN
+    DIM t AS TASK = SPAWN Yaz(3)
+    t.JOIN()
+    PRINT son.deger
+    PRINT son.kimlik
+END MAIN
+=====
+V1c sinifta PUBLIC: (iki nokta ustuste)
+CLASS A
+PUBLIC:
+    DIM x AS I32
+END CLASS
+DIM a AS A = NEW A()
+a.x = 4
+PRINT a.x
+=====
+V1d dinamik sinirli TASK dizisi, PARALEL parametresiyle (beklenen 6)
+THREAD Is(i AS I32) AS I32
+    RETURN i
+END THREAD
+PARALEL Toplu(adet AS I32) AS I32
+    DIM ts(adet - 1) AS TASK OF I32
+    DIM i AS I32
+    DIM t AS I32 = 0
+    FOR i = 0 TO adet - 1
+        ts(i) = SPAWN Is(i + 1)
+    NEXT
+    FOR i = 0 TO adet - 1
+        t = t + ts(i).JOIN()
+    NEXT
+    RETURN t
+END PARALEL
+MAIN
+    DIM b AS TASK OF I32 = SPAWN Toplu(3)
+    PRINT b.JOIN()
+END MAIN
+=====
+V1e SLOT tablosu tasarim yazimi, EVENT + THREAD (beklenen 25)
+EVENT Geldi(v AS I32)
+    TRIGGER THREAD Isle, v
+END EVENT
+THREAD Isle(v AS I32)
+    PRINT v * v
+END THREAD
+SLOT
+    GeldiSlot 1 ON EVENT  Geldi
+    IsleSlot  2 ON THREAD Isle
+END SLOT
+TRIGGER EVENT Geldi, 5
+=====
+V1f OPERATOR blok yazimi (tasarim)
+CLASS V2
+PUBLIC
+    DIM x AS I32
+    OPERATOR +(o AS V2) AS V2
+        DIM r AS V2 = NEW V2()
+        r.x = x + o.x
+        RETURN r
+    END OPERATOR
+END CLASS
+DIM a AS V2 = NEW V2()
+DIM b AS V2 = NEW V2()
+a.x = 1
+b.x = 2
+DIM c AS V2 = a + b
+PRINT c.x
+=====
+V1g BASE.Metot cagrisi (tasarim)
+CLASS Ata
+PUBLIC
+    VIRTUAL METHOD Deger() AS I32
+        RETURN 5
+    END METHOD
+END CLASS
+CLASS Cocuk EXTENDS Ata
+PUBLIC
+    OVERRIDE METHOD Deger() AS I32
+        RETURN BASE.Deger() + 1
+    END METHOD
+END CLASS
+DIM c AS Cocuk = NEW Cocuk()
+PRINT c.Deger()
+=====
+V1h PROPERTY blok yazimi (tasarim)
+CLASS S
+PUBLIC
+    DIM raw AS F64
+    PROPERTY Current AS F64
+        GET
+            RETURN raw
+        END GET
+        SET(v AS F64)
+            raw = v
+        END SET
+    END PROPERTY
+END CLASS
+DIM s AS S = NEW S()
+s.Current = 2.5
+PRINT s.Current
+=====
+V1i ERASE ve ikinci tasarim sozcukleri
+DIM a(3) AS I32
+a(0) = 5
+ERASE a
+PRINT "tamam"
+=====
+V1j DEFEXT/DEFBYT
+DEFBYT b
+b = 5
+PRINT b
+=====
+V1k UXClazz CLAZZ DATA
+CLAZZ DATA Balik
+    ph AS F64
+    DERIVE EQ
+END CLAZZ
+PRINT "tamam"

@@ -18,6 +18,7 @@
   const state = {
     out: [],
     pending: "",
+    printColumn: 0,
     channel: "screen",
     cursor: { row: 1, col: 1 },
     colorState: [],
@@ -33,17 +34,15 @@
     throw error;
   };
 
-  // S-142b: the language's floating-point text rule, identical on every engine: a non-integer (or
-  // very large) number prints with 16 significant digits and no padding zeros, the exponent form
-  // ("1e+20", "1e-07") has at least two digits, and inf/nan read "inf", "-inf", "nan". A safe integer
-  // prints as its plain digits, so integer values are unaffected. Mirrors "%.16g".
-  const formatNumber = (value) => {
+  // S-142b: the language's floating-point text rule, parameterized by the
+  // declared precision. F64 uses 16 significant digits; F32 uses 7 after
+  // Math.fround. This keeps JS PRINT/STR aligned with the other engines.
+  const formatSignificantNumber = (value, digits) => {
     if (typeof value !== "number") return String(value);
     if (value === 0) return "0";
     if (Number.isNaN(value)) return "nan";
     if (!Number.isFinite(value)) return value < 0 ? "-inf" : "inf";
-    if (Number.isSafeInteger(value)) return String(value);
-    const digits = 16;
+    if (digits >= 16 && Number.isSafeInteger(value)) return String(value);
     const scientific = value.toExponential(digits - 1);
     const parts = scientific.split("e");
     const exponent = Number(parts[1]);
@@ -55,6 +54,9 @@
     const fixed = value.toFixed(Math.max(0, digits - 1 - exponent));
     return fixed.indexOf(".") >= 0 ? fixed.replace(/\.?0+$/, "") : fixed;
   };
+
+  const formatNumber = (value) => formatSignificantNumber(value, 16);
+  const formatF32 = (value) => formatSignificantNumber(Math.fround(Number(value)), 7);
 
   const uxb = {
     contractVersion: CONTRACT_VERSION,
@@ -71,6 +73,17 @@
     wasm: {},
   };
 
+  const advanceCursor = text => {
+    for (const ch of text) {
+      if (ch === "\n") { state.cursor.row++; state.printColumn = 0; }
+      else if (ch === "\r") state.printColumn = 0;
+      else if (ch === "\t") state.printColumn += 8 - state.printColumn % 8;
+      else if (ch === "\b") state.printColumn = Math.max(0, state.printColumn - 1);
+      else if (ch.codePointAt(0) >= 32 && ch !== "\x7f") state.printColumn++;
+    }
+    state.cursor.col = state.printColumn + 1;
+  };
+
   uxb.console = {
     setSink(sink) {
       if (!sink || (typeof sink.write !== "function" && typeof sink.writeLine !== "function")) {
@@ -82,23 +95,39 @@
     print(...args) {
       const text = args.map(value => formatNumber(value)).join(" ");
       state.pending += text;
+      advanceCursor(text);
+      if (state.sink && typeof state.sink.write === "function") state.sink.write(text);
+      else if (!state.sink && typeof process !== "undefined" && process.stdout) process.stdout.write(text);
       return text;
     },
     println(...args) {
       const text = args.map(value => formatNumber(value)).join(" ");
       const line = state.pending + text;
       state.pending = "";
+      advanceCursor(text + "\n");
       state.out.push(line);
-      if (state.sink && typeof state.sink.writeLine === "function") {
+      if (state.sink && typeof state.sink.write === "function") {
+        state.sink.write(text + "\n");
+      } else if (!state.sink && typeof process !== "undefined" && process.stdout) {
+        process.stdout.write(text + "\n");
+      } else if (state.sink && typeof state.sink.writeLine === "function") {
         state.sink.writeLine(line);
       } else if (typeof globalObject.console !== "undefined" && typeof globalObject.console.log === "function") {
         globalObject.console.log(line);
       }
       return line;
     },
+    separator(kind) {
+      return this.print(kind === "comma" ? " ".repeat(14 - state.printColumn % 14) : " ");
+    },
+    formatF32,
     clear() {
       state.out.length = 0;
       state.pending = "";
+      state.printColumn = 0;
+      state.cursor = { row: 1, col: 1 };
+      if (state.sink && typeof state.sink.clear === "function") state.sink.clear();
+      else if (typeof process !== "undefined" && process.stdout?.isTTY) process.stdout.write("\x1b[2J\x1b[H");
       return 0;
     },
     lines() {
@@ -108,7 +137,8 @@
 
   uxb.time = {
     now: () => Date.now(),
-    timer: () => Date.now() / 1000,
+    // S-624: TIMER = yerel gece yarisindan beri gecen kesirli saniye (tum motorlarda ayni tanim, src/common/uxb_clock.fbs).
+    timer: () => { const d = new Date(); return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000; },
   };
 
   uxb.random = {
@@ -167,16 +197,23 @@
         case "ATN": return Math.atan(Number(a[0] || 0));
         case "LOG": return Math.log(Number(a[0] || 0));
         case "EXP": return Math.exp(Number(a[0] || 0));
-        case "FIX":
-        case "INT":
+        case "FIX": return Math.trunc(Number(a[0] || 0));
+        case "INT": return Math.floor(Number(a[0] || 0));
         case "CINT":
-        case "CLNG": return Math.trunc(Number(a[0] || 0));
+        case "CLNG": {
+          const value = Number(a[0] || 0);
+          const lower = Math.floor(value);
+          const fraction = value - lower;
+          return fraction < 0.5 ? lower : fraction > 0.5 ? lower + 1 : lower % 2 === 0 ? lower : lower + 1;
+        }
         case "CSNG":
         case "CDBL":
         case "VAL": return Number(a[0] || 0);
         case "SGN": return Math.sign(Number(a[0] || 0));
         case "RND": return uxb.random.next();
         case "TIMER": return uxb.time.timer();
+        case "CSRLIN": return state.cursor.row;
+        case "POS": return state.cursor.col;
         case "ASC": return String(a[0] || "").charCodeAt(0) || 0;
         case "CHR": return String.fromCharCode(Number(a[0] || 0));
         case "STR": return formatNumber(a[0]);
@@ -205,13 +242,29 @@
           const start = Math.max(0, Number(a[1] || 1) - 1);
           return source.substring(start, start + Number(a[2] || source.length));
         }
-        case "INSTR": return String(a[0] ?? "").indexOf(String(a[1] ?? "")) + 1;
+        case "INSTR": {
+          // INSTR(metin, aranan) ya da INSTR(baslangic, metin, aranan); S-247: baslangic eskiden metin sanilip yok sayiliyordu.
+          const instrHasStart = a.length >= 3;
+          const instrFrom = instrHasStart ? Math.max(1, Number(a[0] || 1)) : 1;
+          const instrHay = String(a[instrHasStart ? 1 : 0] ?? "");
+          const instrNeedle = String(a[instrHasStart ? 2 : 1] ?? "");
+          return instrHay.indexOf(instrNeedle, instrFrom - 1) + 1;
+        }
         case "LCASE": return String(a[0] ?? "").toLowerCase();
         case "UCASE": return String(a[0] ?? "").toUpperCase();
         case "LTRIM": return String(a[0] ?? "").replace(/^\s+/, "");
         case "RTRIM": return String(a[0] ?? "").replace(/\s+$/, "");
         case "TRIM": return String(a[0] ?? "").trim();
         case "SPACE": return " ".repeat(Number(a[0] || 0));
+        case "STRING": {
+          const count = Number(a[0]);
+          if (!Number.isInteger(count) || count < 0 || count > 65535)
+            return fail("UXB_STRING_COUNT", "STRING count must be between 0 and 65535");
+          const code = typeof a[1] === "string" ? a[1].charCodeAt(0) : Number(a[1]);
+          if (!Number.isInteger(code) || code < 0 || code > 255)
+            return fail("UXB_STRING_CODE", "STRING char code range error or empty text");
+          return String.fromCharCode(code).repeat(count);
+        }
         case "HEX": return Math.trunc(Number(a[0] || 0)).toString(16).toUpperCase();
         case "OCT": return Math.trunc(Number(a[0] || 0)).toString(8);
         case "BIN": return Math.trunc(Number(a[0] || 0)).toString(2);
@@ -237,21 +290,49 @@
       return arr;
     },
     arrayResize(array, length, fill = 0, lower = 0, preserve = false) {
-      const next = Array(Number(length) || 0).fill(fill);
-      if (preserve && array) { const n = Math.min(array.length, next.length); for (let i = 0; i < n; i++) next[i] = array[i]; }
-      next.__uxbLower = Number(lower) || 0;
-      return next;
+      if (!Array.isArray(array)) return fail("UXB_ARRAY_TARGET_MISSING", "REDIM target is not an array");
+      const n = Number(length), lo = Number(lower);
+      if (!Number.isInteger(n) || n < 1 || n > 268435455) return fail("UXB_ARRAY_SIZE", "array invalid bounds or byte size overflow");
+      const next = Array(n).fill(fill), oldLo = Number(array.__uxbLower) || 0;
+      if (preserve) {
+        const first = Math.max(lo, oldLo), last = Math.min(lo + n - 1, oldLo + array.length - 1);
+        for (let i = first; i <= last; i++) next[i-lo] = array[i-oldLo];
+      }
+      // Preserve descriptor identity for forwarded array parameters.
+      array.length = n;
+      for (let i = 0; i < n; i++) array[i] = next[i];
+      array.__uxbLower = lo;
+      return array;
     },
     arrayLoad(array, index) {
       if (!array) return 0;
       const i = (Number(index) | 0) - (Number(array.__uxbLower) || 0);
+      if (i < 0 || i >= array.length) return fail("UXB_ARRAY_INDEX", "array index out of bounds");
       return array[i] ?? 0;
     },
     arrayStore(array, index, value) {
       if (!array) return fail("UXB_ARRAY_TARGET_MISSING", "arrayStore target is missing");
       const i = (Number(index) | 0) - (Number(array.__uxbLower) || 0);
+      if (i < 0 || i >= array.length) return fail("UXB_ARRAY_INDEX", "array index out of bounds");
       array[i] = value;
       return value;
+    },
+    arrayFieldRecord(array, index) {
+      let record = this.arrayLoad(array, index);
+      if (record === 0) { record = {}; this.arrayStore(array, index, record); }
+      if (!record || typeof record !== "object") return fail("UXB_RECORD_ARRAY_TYPE", "inline record expected");
+      return record;
+    },
+    arrayFieldLoad(array, index, field, offset, width, type) {
+      const record = this.arrayFieldRecord(array, index);
+      // Inline TYPE text fields contain immutable strings, not numeric union bytes.
+      if (String(type).toUpperCase().replace(/^TYPE_/, "") === "STRING") return record[field] ?? "";
+      return uxb.object.unionFieldLoad(record, field, offset, width, type);
+    },
+    arrayFieldStore(array, index, field, value, offset, width, type) {
+      const record = this.arrayFieldRecord(array, index);
+      if (String(type).toUpperCase().replace(/^TYPE_/, "") === "STRING") return record[field] = String(value);
+      return uxb.object.unionFieldStore(record, field, value, offset, width, type);
     },
     // S-101: LBOUND/UBOUND of an array whose bounds exist only at run time (REDIM'd array,
     // `arr AS T[]` parameter). Compile-time bounds are folded to constants by the lowering.
@@ -286,23 +367,35 @@
       if (!c) return fail("UXB_COLLECTION_MISSING", `collection not found: ${id}`);
       const o = String(op || "").toUpperCase();
       if (c.kind === "LIST") {
-        if (o === "ADD" || o === "PUSH") { c.value.push(args[0]); return c.value.length; }
+        // S-652: degistirici islemler (ADD/PUSH/SET/REMOVE/CLEAR) basarida dilin DOGRU degeri -1'i dondurur (AST, MIR, x64 ile ayni);
+        // gecersiz dizin AST ve MIR gibi calisma anı hatasidir.
+        if (o === "ADD" || o === "PUSH") { c.value.push(args[0]); return -1; }
         if (o === "GET") return c.value[Number(args[0]) | 0];
-        if (o === "SET") { c.value[Number(args[0]) | 0] = args[1]; return args[1]; }
-        if (o === "REMOVE") { const i = Number(args[0]) | 0; return i < 0 || i >= c.value.length ? null : c.value.splice(i, 1)[0]; }
-        if (o === "CLEAR") { c.value.length = 0; return 0; }
+        if (o === "SET") {
+          const i = Number(args[0]) | 0;
+          if (i < 0 || i >= c.value.length) return fail("UXB_COLLECTION_INDEX", "LIST index out of range");
+          c.value[i] = args[1];
+          return -1;
+        }
+        if (o === "REMOVE") {
+          const i = Number(args[0]) | 0;
+          if (i < 0 || i >= c.value.length) return fail("UXB_COLLECTION_INDEX", "LIST index out of range");
+          c.value.splice(i, 1);
+          return -1;
+        }
+        if (o === "CLEAR") { c.value.length = 0; return -1; }
         if (o === "LEN") return c.value.length;
       } else if (c.kind === "DICT") {
-        if (o === "SET") { c.value.set(String(args[0]), args[1]); return args[1]; }
+        if (o === "SET") { c.value.set(String(args[0]), args[1]); return -1; }
         if (o === "GET") return c.value.get(String(args[0]));
-        if (o === "HAS") return c.value.has(String(args[0])) ? 1 : 0;
-        if (o === "CLEAR") { c.value.clear(); return 0; }
+        if (o === "HAS") return c.value.has(String(args[0])) ? -1 : 0;   // S-569/S-246: dilde DOGRU = -1 (AST, MIR, x64 ile ayni)
+        if (o === "CLEAR") { c.value.clear(); return -1; }
         if (o === "LEN") return c.value.size;
       } else if (c.kind === "SET") {
-        if (o === "ADD") { c.value.add(args[0]); return c.value.size; }
-        if (o === "HAS") return c.value.has(args[0]) ? 1 : 0;
-        if (o === "REMOVE") return c.value.delete(args[0]) ? 1 : 0;
-        if (o === "CLEAR") { c.value.clear(); return 0; }
+        if (o === "ADD") { c.value.add(args[0]); return -1; }
+        if (o === "HAS") return c.value.has(args[0]) ? -1 : 0;   // S-569/S-246: dilde DOGRU = -1
+        if (o === "REMOVE") { c.value.delete(args[0]); return -1; }
+        if (o === "CLEAR") { c.value.clear(); return -1; }
         if (o === "LEN") return c.value.size;
       }
       return fail("UXB_COLLECTION_OP", `unsupported ${c.kind} operation: ${o}`);
@@ -366,12 +459,16 @@
 
   uxb.object = {
     classes: new Map(),
+    unions: new Map(),
+    recordBytes: new WeakMap(),
     async create(className = "OBJECT", ...args) {
       const name = String(className || "OBJECT").toUpperCase();
       const spec = this.classes.get(name);
       if (!spec) return fail("UXB_CLASS_NOT_REGISTERED", name);
       const object = { __uxbClass: name, __uxbVTable: spec.slots.slice() };
-      const construct = async (key) => { const cur = this.classes.get(String(key).toUpperCase()); if (!cur) return fail("UXB_CLASS_NOT_REGISTERED", key); if (cur.base) await construct(cur.base); if (cur.ctor) { const fn = uxb.exports[cur.ctor]; if (typeof fn !== "function") return fail("UXB_CONSTRUCTOR_NOT_FOUND", cur.ctor); await fn(object, ...args.slice(0, cur.ctorParamCount)); } };
+      // S-485 / S-487 (P0.2): only the constructor of the class being created runs here; the base constructors are called from inside its body
+      // (the front end writes `SUPER.CONSTRUCTOR(args)` as its first statement), so every engine runs the same chain.
+      const construct = async (key) => { const cur = this.classes.get(String(key).toUpperCase()); if (!cur) return fail("UXB_CLASS_NOT_REGISTERED", key); if (cur.ctor) { const fn = uxb.exports[cur.ctor]; if (typeof fn !== "function") return fail("UXB_CONSTRUCTOR_NOT_FOUND", cur.ctor); await fn(object, ...args.slice(0, cur.ctorParamCount)); } };
       await construct(name);
       return object;
     },
@@ -379,13 +476,75 @@
       this.classes.set(String(className || "OBJECT").toUpperCase(), {slots: Array.isArray(slots) ? slots.slice() : [], ctor: String(ctor || "").toUpperCase(), dtor: String(dtor || "").toUpperCase(), base: String(base || "").toUpperCase(), ctorParamCount: Math.max(0, Number(ctorParamCount)|0)});
       return 1;
     },
-    fieldLoad(object, key) {
-      return object ? object[key] : undefined;
+    // S-574 (2026-10-17): a DELETEd object (`__uxbDeleted`, set by `delete` below) is the same error as a NULL reference in field and method access.
+    fieldLoad(object, key, dflt = 0) {
+      // S-573: reading a field of a NULL / DELETEd class reference used to return `undefined` silently
+      // (AST, MIR, x64 and the legacy backend stop with "field access on a null object reference").
+      if (!object || object.__uxbDeleted) return fail("UXB_OBJECT_TARGET_MISSING", "fieldLoad target is missing (field access on a null object reference)");
+      // S-598: a field that was never written reads as the zero value of its type (AST, MIR, native x64, WASM and legacy x64 allocate
+      // zero-filled objects); a JS object starts empty, so the emitter passes the typed default. Without it `x.n = x.n + 1` was NaN.
+      const v = object[key];
+      return v === undefined ? dflt : v;
     },
     fieldStore(object, key, value) {
-      if (!object) return fail("UXB_OBJECT_TARGET_MISSING", "fieldStore target is missing");
+      if (!object || object.__uxbDeleted) return fail("UXB_OBJECT_TARGET_MISSING", "fieldStore target is missing (field access on a null object reference)");
       object[key] = value;
       return value;
+    },
+    unionFieldLoad(root, field, offset, width, type) {
+      const isRecord = root !== null && typeof root === "object";
+      const rootKey = isRecord ? root : String(root || "").toUpperCase();
+      const off = Number(offset) | 0;
+      const w = Number(width) | 0;
+      const t = String(type || "").toUpperCase().replace(/^TYPE_/, "");
+      if (!rootKey || !String(field || "") || off < 0 || ![1, 2, 4, 8].includes(w) || (!isRecord && off + w > 256)) return fail("UXB_UNION_FIELD_RANGE", "invalid UNION field range");
+      const buffers = isRecord ? this.recordBytes : this.unions;
+      let bytes = buffers.get(rootKey);
+      if (!bytes || bytes.byteLength < off + w) {
+        const grown = new ArrayBuffer(isRecord ? off + w : 256);
+        if (bytes) new Uint8Array(grown).set(new Uint8Array(bytes));
+        buffers.set(rootKey, bytes = grown);
+      }
+      const dv = new DataView(bytes);
+      if (t === "F32" || t === "SINGLE") { if (w !== 4) return fail("UXB_UNION_FIELD_TYPE", "F32 UNION field must be 4 bytes"); return dv.getFloat32(off, true); }
+      if (t === "F64" || t === "DOUBLE") { if (w !== 8) return fail("UXB_UNION_FIELD_TYPE", "F64 UNION field must be 8 bytes"); return dv.getFloat64(off, true); }
+      if (t === "I8" || t === "BYTE" || t === "SBYTE") return w === 1 ? dv.getInt8(off) : fail("UXB_UNION_FIELD_TYPE", "I8 UNION field must be 1 byte");
+      if (t === "I16" || t === "SHORT") return w === 2 ? dv.getInt16(off, true) : fail("UXB_UNION_FIELD_TYPE", "I16 UNION field must be 2 bytes");
+      if (t === "I32" || t === "INTEGER" || t === "INT" || t === "LONG") return w === 4 ? dv.getInt32(off, true) : fail("UXB_UNION_FIELD_TYPE", "I32 UNION field must be 4 bytes");
+      if (t === "U8" || t === "UBYTE" || t === "BOOLEAN" || t === "BOOL") return w === 1 ? dv.getUint8(off) : fail("UXB_UNION_FIELD_TYPE", "U8 UNION field must be 1 byte");
+      if (t === "U16" || t === "USHORT") return w === 2 ? dv.getUint16(off, true) : fail("UXB_UNION_FIELD_TYPE", "U16 UNION field must be 2 bytes");
+      if (t === "U32" || t === "UINTEGER" || t === "UINT" || t === "ULONG") return w === 4 ? dv.getUint32(off, true) : fail("UXB_UNION_FIELD_TYPE", "U32 UNION field must be 4 bytes");
+      if (t === "I64" || t === "LONGINT") return w === 8 ? dv.getBigInt64(off, true) : fail("UXB_UNION_FIELD_TYPE", "I64 UNION field must be 8 bytes");
+      if (t === "U64" || t === "ULONGINT") return w === 8 ? dv.getBigUint64(off, true) : fail("UXB_UNION_FIELD_TYPE", "U64 UNION field must be 8 bytes");
+      return fail("UXB_UNION_FIELD_TYPE", `unsupported UNION field type: ${type}`);
+    },
+    unionFieldStore(root, field, value, offset, width, type) {
+      const isRecord = root !== null && typeof root === "object";
+      const rootKey = isRecord ? root : String(root || "").toUpperCase();
+      const off = Number(offset) | 0;
+      const w = Number(width) | 0;
+      const t = String(type || "").toUpperCase().replace(/^TYPE_/, "");
+      if (!rootKey || !String(field || "") || off < 0 || ![1, 2, 4, 8].includes(w) || (!isRecord && off + w > 256)) return fail("UXB_UNION_FIELD_RANGE", "invalid UNION field range");
+      const buffers = isRecord ? this.recordBytes : this.unions;
+      let bytes = buffers.get(rootKey);
+      if (!bytes || bytes.byteLength < off + w) {
+        const grown = new ArrayBuffer(isRecord ? off + w : 256);
+        if (bytes) new Uint8Array(grown).set(new Uint8Array(bytes));
+        buffers.set(rootKey, bytes = grown);
+      }
+      const dv = new DataView(bytes);
+      const n = Number(value);
+      if (t === "F32" || t === "SINGLE") { if (w !== 4) return fail("UXB_UNION_FIELD_TYPE", "F32 UNION field must be 4 bytes"); dv.setFloat32(off, n, true); return value; }
+      if (t === "F64" || t === "DOUBLE") { if (w !== 8) return fail("UXB_UNION_FIELD_TYPE", "F64 UNION field must be 8 bytes"); dv.setFloat64(off, n, true); return value; }
+      if (t === "I8" || t === "BYTE" || t === "SBYTE") { if (w !== 1) return fail("UXB_UNION_FIELD_TYPE", "I8 UNION field must be 1 byte"); dv.setInt8(off, n); return value; }
+      if (t === "I16" || t === "SHORT") { if (w !== 2) return fail("UXB_UNION_FIELD_TYPE", "I16 UNION field must be 2 bytes"); dv.setInt16(off, n, true); return value; }
+      if (t === "I32" || t === "INTEGER" || t === "INT" || t === "LONG") { if (w !== 4) return fail("UXB_UNION_FIELD_TYPE", "I32 UNION field must be 4 bytes"); dv.setInt32(off, n, true); return value; }
+      if (t === "U8" || t === "UBYTE" || t === "BOOLEAN" || t === "BOOL") { if (w !== 1) return fail("UXB_UNION_FIELD_TYPE", "U8 UNION field must be 1 byte"); dv.setUint8(off, n); return value; }
+      if (t === "U16" || t === "USHORT") { if (w !== 2) return fail("UXB_UNION_FIELD_TYPE", "U16 UNION field must be 2 bytes"); dv.setUint16(off, n, true); return value; }
+      if (t === "U32" || t === "UINTEGER" || t === "UINT" || t === "ULONG") { if (w !== 4) return fail("UXB_UNION_FIELD_TYPE", "U32 UNION field must be 4 bytes"); dv.setUint32(off, n, true); return value; }
+      if (t === "I64" || t === "LONGINT") { if (w !== 8) return fail("UXB_UNION_FIELD_TYPE", "I64 UNION field must be 8 bytes"); dv.setBigInt64(off, typeof value === "bigint" ? value : BigInt(Math.trunc(n)), true); return value; }
+      if (t === "U64" || t === "ULONGINT") { if (w !== 8) return fail("UXB_UNION_FIELD_TYPE", "U64 UNION field must be 8 bytes"); dv.setBigUint64(off, typeof value === "bigint" ? value : BigInt(Math.trunc(n)), true); return value; }
+      return fail("UXB_UNION_FIELD_TYPE", `unsupported UNION field type: ${type}`);
     },
     async callStaticMethod(target, args = []) {
       const fn = uxb.exports[String(target).toUpperCase()];
@@ -393,13 +552,13 @@
       return await fn(...(Array.isArray(args) ? args : []));
     },
     async callMethod(object, target, args = []) {
-      if (!object) return fail("UXB_OBJECT_TARGET_MISSING", "callMethod target is missing");
+      if (!object || object.__uxbDeleted) return fail("UXB_OBJECT_TARGET_MISSING", "callMethod target is missing (method call on a null object reference)");
       const fn = uxb.exports[String(target).toUpperCase()];
       if (typeof fn !== "function") return fail("UXB_METHOD_NOT_FOUND", `method not found: ${target}`);
       return await fn(object, ...(Array.isArray(args) ? args : []));
     },
     async virtualCall(object, slot, args = []) {
-      if (!object) return fail("UXB_OBJECT_TARGET_MISSING", "virtualCall target is missing");
+      if (!object || object.__uxbDeleted) return fail("UXB_OBJECT_TARGET_MISSING", "virtualCall target is missing (method call on a null object reference)");
       const index = Number(slot) | 0;
       const target = object.__uxbVTable && object.__uxbVTable[index];
       if (!target) return fail("UXB_VTABLE_SLOT_MISSING", `vtable slot ${index} is not bound for ${object.__uxbClass}`);
@@ -408,9 +567,11 @@
       return await fn(object, ...(Array.isArray(args) ? args : []));
     },
     async delete(object) {
-      if (!object || object.__uxbDeleted) return 0;
+      // S-616: a DELETE of the same object from inside its own destructor does nothing (the chain is already running).
+      if (!object || object.__uxbDeleted || object.__uxbDestroying) return 0;
+      object.__uxbDestroying = true;
       const destroy = async (key) => { const cur = this.classes.get(String(key).toUpperCase()); if (!cur) return fail("UXB_CLASS_NOT_REGISTERED", key); if (cur.dtor) { const fn = uxb.exports[cur.dtor]; if (typeof fn !== "function") return fail("UXB_DESTRUCTOR_NOT_FOUND", cur.dtor); await fn(object); } if (cur.base) await destroy(cur.base); };
-      await destroy(object.__uxbClass); object.__uxbDeleted = true; return 0;
+      await destroy(object.__uxbClass); object.__uxbDeleted = true; object.__uxbDestroying = false; return 0;
     },
   };
 
@@ -493,6 +654,13 @@
         case "SETREMOVE": return uxb.collections.op("REMOVE", args[0], args[1]);
         case "SETCLEAR": return uxb.collections.op("CLEAR", args[0]);
         case "SETLEN": return uxb.collections.op("LEN", args[0]);
+        case "PROGRAM_END": {
+          // S-538: END inside a SUB/FUNCTION ends the whole program. The signal unwinds every awaiting routine up to the
+          // entry point, whose catch handler treats it as a normal end (no message, exit status 0).
+          const programEnd = new Error("UXB_PROGRAM_END");
+          programEnd.uxbProgramEnd = true;
+          throw programEnd;
+        }
         default:
           if (typeof uxb.host._call !== "function") {
             return fail("UXB_HOST_BINDING_MISSING", `UXB host binding missing: ${name}`);
@@ -519,10 +687,18 @@
     set wasm(value) { uxb.wasm.instance = value; },
     print: (...args) => uxb.console.print(...args),
     println: (...args) => uxb.console.println(...args),
+    printSeparator: kind => uxb.console.separator(kind),
+    formatF32: value => uxb.console.formatF32(value),
     input: async (...args) => await uxb.input.prompt(...args),
     cls: () => { uxb.console.clear(); return uxb.canvas.clear(); },
     color: (...args) => { state.colorState = args; return 0; },
-    locate: (...args) => { state.cursor = { row: args[0] || 1, col: args[1] || 1 }; return 0; },
+    locate: (row, col) => {
+      state.cursor = { row: Math.max(1, Math.trunc(Number(row) || 1)), col: Math.max(1, Math.trunc(Number(col) || 1)) };
+      state.printColumn = state.cursor.col - 1;
+      if (state.sink && typeof state.sink.locate === "function") state.sink.locate(state.cursor.row, state.cursor.col);
+      else if (typeof process !== "undefined" && process.stdout?.isTTY) process.stdout.write(`\x1b[${state.cursor.row};${state.cursor.col}H`);
+      return 0;
+    },
     randomize: value => uxb.random.seed(value),
     rnd: () => uxb.random.next(),
     typeOf: value => uxb.lang.typeOf(value),
@@ -533,6 +709,8 @@
     arrayResize: (...args) => uxb.data.arrayResize(...args),
     arrayLoad: (...args) => uxb.data.arrayLoad(...args),
     arrayStore: (...args) => uxb.data.arrayStore(...args),
+    arrayFieldLoad: (...args) => uxb.data.arrayFieldLoad(...args),
+    arrayFieldStore: (...args) => uxb.data.arrayFieldStore(...args),
     arrayLBound: (...args) => uxb.data.arrayLBound(...args),
     arrayUBound: (...args) => uxb.data.arrayUBound(...args),
     memoryRefArray: (...args) => uxb.data.memoryRefArray(...args),
@@ -545,6 +723,8 @@
     objectNew: (...args) => uxb.object.create(...args),
     fieldLoad: (...args) => uxb.object.fieldLoad(...args),
     fieldStore: (...args) => uxb.object.fieldStore(...args),
+    unionFieldLoad: (...args) => uxb.object.unionFieldLoad(...args),
+    unionFieldStore: (...args) => uxb.object.unionFieldStore(...args),
     registerClass: (...args) => uxb.object.registerClass(...args),
     callStaticMethod: (...args) => uxb.object.callStaticMethod(...args),
     callMethod: (...args) => uxb.object.callMethod(...args),

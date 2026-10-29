@@ -1,0 +1,6 @@
+DIM A AS I32
+DIM B AS I32
+A = 2 + 3 * 4
+B = (A - 4) / 2
+PRINT A
+PRINT B

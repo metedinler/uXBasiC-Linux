@@ -1,0 +1,38 @@
+=== f_tur_taramasi
+DIM k AS I32
+DIM f AS F64
+DIM d(3) AS I32
+k = INSTR(1, "abc", "b"): PRINT "INSTR   "; k + 6
+k = ASC("A"): PRINT "ASC     "; k + 6
+k = LEN("abc"): PRINT "LEN     "; k + 6
+f = VAL("12"): PRINT "VAL     "; f + 6
+k = CINT(2.6): PRINT "CINT    "; k + 6
+k = INT(2.6): PRINT "INT     "; k + 6
+k = ABS(-3): PRINT "ABS     "; k + 6
+k = SGN(-3): PRINT "SGN     "; k + 6
+k = LBOUND(d): PRINT "LBOUND  "; k + 6
+k = UBOUND(d): PRINT "UBOUND  "; k + 6
+k = SIZEOF(I32): PRINT "SIZEOF  "; k + 6
+k = INSTRREV("abcb", "b"): PRINT "INSTRREV"; k + 6
+k = ASC(MID("ABC", 2, 1)): PRINT "ASC(MID)"; k + 6
+k = LEN(STR(1234)): PRINT "LEN(STR)"; k + 6
+=== g_instr_dogrudan_ifade
+DIM k AS I32
+PRINT INSTR(1, "abc", "b") + 6
+k = 6 + INSTR(1, "abc", "b")
+PRINT k
+k = INSTR(1, "abc", "b") * 2
+PRINT k
+k = INSTR(1, "abc", "b") - 1
+PRINT k
+=== h_instr_karsilastirma
+DIM k AS I32
+k = INSTR(1, "abc", "b")
+IF k = 2 THEN PRINT "esit 2"
+IF k > 1 THEN PRINT "buyuk 1"
+IF k + 0 = 2 THEN PRINT "k+0 = 2"
+PRINT k + 0
+PRINT k * 1 + 6
+PRINT 6 + k
+PRINT CINT(k) + 6
+PRINT I32(k) + 6

@@ -1,0 +1,10 @@
+UNION U ABI C
+    i AS I32
+    b AS U8
+END UNION
+
+DIM u AS U
+u.i = 258
+u.b += 1
+u.b++
+PRINT u.b

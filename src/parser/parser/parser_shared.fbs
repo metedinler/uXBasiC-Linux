@@ -61,6 +61,27 @@ Private Function ParserTokenIsReservedName(ByRef tk As Token) As Integer
     Return IsKeyword(tk.lexeme)
 End Function
 
+' S-288: these callable names stay legal for variables, parameters and fields.
+' Only unqualified global routine declarations reserve them. The supplied
+' registry coverage check must be kept with this declaration-only list.
+Private Function ParserNonKeywordBuiltinRoutineName(ByRef rawName As String) As Integer
+    Select Case UCase(Trim(rawName))
+    Case "API", "BIGI", "BIGINIT", "BIGINT", "BIN", "BOOL", "CASTPTR", "DICTCLEAR"
+        Return 1
+    Case "DICTGET", "DICTHAS", "DICTLEN", "DICTSET", "DICT_NEW", "DLL", "EXTFP", "FP128"
+        Return 1
+    Case "FP80", "HEX", "INSTANCEOF", "INSTR", "LBOUND", "LEFT", "LISTADD", "LISTCLEAR"
+        Return 1
+    Case "LISTGET", "LISTLEN", "LISTREMOVE", "LISTSET", "LIST_NEW", "OCT", "RIGHT", "SETADD"
+        Return 1
+    Case "SETCLEAR", "SETHAS", "SETLEN", "SETREMOVE", "SET_NEW", "TRIM", "UBOUND", "VALINT"
+        Return 1
+    Case "WSTRPTR", "CSRLIN", "POS"
+        Return 1
+    End Select
+    Return 0
+End Function
+
 Private Sub ParserSetReservedNameError(ByRef ps As ParseState, ByRef tk As Token, ByRef ownerLabel As String, ByRef whatText As String)
     ps.lastError = ownerLabel & ": '" & LCase(Trim(tk.lexeme)) & "' is a reserved uXBasic keyword and cannot be used as a " & whatText & " name; choose another name"
 End Sub
@@ -80,8 +101,9 @@ Private Function IsLegacyInlineName(ByRef nameText As String) As Integer
     Return u = "_ASM" Or u = "ASM_SUB" Or u = "ASM_FUNCTION"
 End Function
 
-Private Function IsDisabledUnderscoreCommand(ByRef identText As String, ByRef nextTok As Token) As Integer
+Private Function IsDisabledUnderscoreCommand(ByRef identText As String, ByRef nextTok As Token, ByVal trustedGeneratedInput As Integer = 0) As Integer
     If Left(identText, 1) <> "_" Then Return 0
+    If trustedGeneratedInput <> 0 And Left(UCase(identText), 5) = "_UXB_" Then Return 0
     If IsAssignOrIncDecOp(nextTok) Then Return 0
     Return 1
 End Function
@@ -195,6 +217,10 @@ Private Function CanonicalTypeNameForParser(ByRef rawTypeName As String) As Stri
         Return "I64"
     Case "ULONGINT"
         Return "U64"
+    ' S-549: FILE_HANDLE is a channel NUMBER with a name (default 0 = "not open"): the same storage and arithmetic as I32. The node keeps the spelling
+    ' (lexemeSnippet) so the file-handle pass (semantic_file_handle.fbs) can tell a handle from a plain I32 for `OPEN ... AS handle` / `CLOSE handle`.
+    Case "FILE_HANDLE"
+        Return "I32"
     End Select
 
     Return t
@@ -532,7 +558,7 @@ Private Function ValidateCoreIntrinsicCall(ByRef ps As ParseState, ByVal callNod
         Return ValidateArgCountInRange(ps, callNode, callName, 2, 2)
     Case "INKEY"
         Return ValidateArgCountInRange(ps, callNode, callName, 1, 2)
-    Case "GETKEY"
+    Case "GETKEY", "CSRLIN", "POS"
         Return ValidateArgCountInRange(ps, callNode, callName, 0, 0)
     Case "PEEK", "PEEKB", "PEEKW", "PEEKD", "PEEKQ"
         Return ValidateArgCountInRange(ps, callNode, callName, 1, 2)

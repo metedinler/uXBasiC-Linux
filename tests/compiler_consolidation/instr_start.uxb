@@ -1,0 +1,5 @@
+DIM s AS STRING = "ab-ab-ab"
+PRINT INSTR(s, "ab")
+PRINT INSTR(2, s, "ab")
+PRINT INSTR(6, s, "ab")
+PRINT INSTR(9, s, "ab")

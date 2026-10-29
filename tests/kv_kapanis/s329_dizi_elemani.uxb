@@ -1,0 +1,4 @@
+' S-329 koruma: a(2) ayristiricida cagri ile ayni dugumdur (CALL_EXPR); bir dizi elemani tanimsiz yordam sayilmaz.
+DIM a(5) AS I32
+a(2) = 7
+PRINT a(2)

@@ -1,0 +1,6 @@
+AST=DIM initializer cannot convert TOP to KUTU
+MIR=DIM initializer cannot convert TOP to KUTU
+x64=DIM initializer cannot convert TOP to KUTU
+AST-x64=DIM initializer cannot convert TOP to KUTU
+JS=DIM initializer cannot convert TOP to KUTU
+WASM=DIM initializer cannot convert TOP to KUTU

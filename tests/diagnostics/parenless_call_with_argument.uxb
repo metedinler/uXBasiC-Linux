@@ -1,0 +1,5 @@
+SUB Selam(ByRef x AS STRING)
+    PRINT x
+END SUB
+
+Selam "Ayse"

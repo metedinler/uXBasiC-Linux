@@ -1,0 +1,7 @@
+FUNCTION NumericCallback() AS I64
+    DIM n AS I64 = 7
+    RETURN n + I64(3)
+END FUNCTION
+DIM callbackAddress AS PTR
+callbackAddress = CODEPTR(NumericCallback)
+PRINT CALL(DLL, "C:/Users/mete/Downloads/BasicOyunSource/UXBc_Clean/UXBc/uxb/build/test_outputs/compiler_consolidation/c62d39c20fc1db8a/probe_support/callee_probe.dll", "CheckRegs", I64, CDECL, "PTR", callbackAddress)

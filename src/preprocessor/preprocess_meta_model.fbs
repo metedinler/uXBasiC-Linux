@@ -13,6 +13,19 @@ Type MetaBlock
     sourceFile As String
     startLine As Integer
     endLine As Integer
+    sourceTag As String     ' %%SOURCE_MAP tag that was current when the block was captured
+End Type
+
+' %%TEMPLATE_BEGIN / %%TEMPLATE file: reusable text with {{NAME}} placeholders, expanded by %%TEMPLATE_USE.
+Type MetaTemplate
+    nameText As String
+    bodyText As String
+End Type
+
+' %%DEPRECATED "old", "new": every use of old in the expanded program is reported.
+Type MetaDeprecated
+    oldName As String
+    newName As String
 End Type
 
 Type MetaAsset
@@ -21,6 +34,11 @@ Type MetaAsset
     targetPath As String
     aliasName As String
     required As Integer
+    ' filled when the package is written (UXBPkgMaterialize)
+    status As String        ' "" (not written yet) / COPIED / MISSING
+    finalPath As String     ' path of the copy below the browser folder (differs from targetPath when fingerprinted)
+    hashHex As String
+    copiedBytes As LongInt
 End Type
 
 Type MetaWatImport
@@ -74,6 +92,15 @@ Type PreprocessResult
     diagnostics(0 To 1023) As String
     diagnosticCount As Integer
 
+    templates(0 To 127) As MetaTemplate
+    templateCount As Integer
+
+    deprecatedNames(0 To 127) As MetaDeprecated
+    deprecatedCount As Integer
+
+    sectionStack(0 To 15) As String
+    sectionDepth As Integer
+
     allowRawJs As Integer
     allowRawWat As Integer
     safePaths As Integer
@@ -83,6 +110,17 @@ Type PreprocessResult
     targetText As String
     outDir As String
     assetRoot As String
+    mainSourcePath As String    ' the program file; relative asset and template paths are looked up beside it
+
+    sourceTag As String        ' %%SOURCE_MAP: tag attached to the blocks that follow
+    minifyJs As Integer         ' %%MINIFY JS|CSS|HTML ON
+    minifyCss As Integer
+    minifyHtml As Integer
+    fingerprintAssets As Integer ' %%FINGERPRINT_ASSETS ON
+    mdSafe As Integer           ' %%MD_SAFE ON: raw HTML inside Markdown is escaped
+    mdCss As String             ' %%MD_CSS: stylesheet linked from rendered Markdown
+    noZeroVars As Integer       ' %%NOZEROVARS ON: native code generators skip local zero-fill
+    secStack As Integer         ' %%SECSTACK ON: native code generators wipe the frame on exit
 End Type
 
 Dim Shared gLastPreprocessResult As PreprocessResult
@@ -121,11 +159,72 @@ Sub PreprocessResultInit(ByRef r As PreprocessResult)
     r.allowRawWat = 0
     r.safePaths = 1
     r.requireHostBinding = 1
-    r.expandLimit = 10000
+    r.expandLimit = 100000
     r.targetText = ""
     r.outDir = ""
     r.assetRoot = ""
+    r.mainSourcePath = ""
+    r.templateCount = 0
+    r.deprecatedCount = 0
+    r.sectionDepth = 0
+    r.sourceTag = ""
+    r.minifyJs = 0
+    r.minifyCss = 0
+    r.minifyHtml = 0
+    r.fingerprintAssets = 0
+    r.mdSafe = 0
+    r.mdCss = ""
+    r.noZeroVars = 0
+    r.secStack = 0
 End Sub
+
+' Default section for blocks captured inside %%SECTION name ... %%ENDSECTION ("" outside any section).
+Function PreprocessResultCurrentSection(ByRef r As PreprocessResult) As String
+    If r.sectionDepth <= 0 Then Return ""
+    Return r.sectionStack(r.sectionDepth - 1)
+End Function
+
+Function PreprocessResultPushSection(ByRef r As PreprocessResult, ByRef sectionName As String) As Integer
+    If r.sectionDepth > UBound(r.sectionStack) Then Return 0
+    r.sectionStack(r.sectionDepth) = UCase(Trim(sectionName))
+    r.sectionDepth += 1
+    Return 1
+End Function
+
+Function PreprocessResultPopSection(ByRef r As PreprocessResult) As Integer
+    If r.sectionDepth <= 0 Then Return 0
+    r.sectionDepth -= 1
+    Return 1
+End Function
+
+Function PreprocessResultFindTemplate(ByRef r As PreprocessResult, ByRef nameText As String) As Integer
+    Dim key As String = UCase(Trim(nameText))
+    Dim i As Integer
+    For i = 0 To r.templateCount - 1
+        If UCase(r.templates(i).nameText) = key Then Return i
+    Next i
+    Return -1
+End Function
+
+Function PreprocessResultAddTemplate(ByRef r As PreprocessResult, ByRef nameText As String, ByRef bodyText As String) As Integer
+    Dim idx As Integer = PreprocessResultFindTemplate(r, nameText)
+    If idx < 0 Then
+        If r.templateCount > UBound(r.templates) Then Return 0
+        idx = r.templateCount
+        r.templateCount += 1
+    End If
+    r.templates(idx).nameText = Trim(nameText)
+    r.templates(idx).bodyText = bodyText
+    Return 1
+End Function
+
+Function PreprocessResultAddDeprecated(ByRef r As PreprocessResult, ByRef oldName As String, ByRef newName As String) As Integer
+    If r.deprecatedCount > UBound(r.deprecatedNames) Then Return 0
+    r.deprecatedNames(r.deprecatedCount).oldName = Trim(oldName)
+    r.deprecatedNames(r.deprecatedCount).newName = Trim(newName)
+    r.deprecatedCount += 1
+    Return 1
+End Function
 
 Sub PreprocessResultAddDiagnostic(ByRef r As PreprocessResult, ByRef msg As String)
     If r.diagnosticCount > UBound(r.diagnostics) Then Exit Sub
@@ -180,6 +279,7 @@ Sub PreprocessResultAddBlock(ByRef r As PreprocessResult, ByRef target As String
         .sourceFile = sourceFile
         .startLine = startLine
         .endLine = endLine
+        .sourceTag = r.sourceTag
     End With
     r.blockCount += 1
 End Sub
@@ -195,6 +295,10 @@ Sub PreprocessResultAddAsset(ByRef r As PreprocessResult, ByRef assetKind As Str
         .targetPath = Trim(targetPath)
         .aliasName = Trim(aliasName)
         .required = required
+        .status = ""
+        .finalPath = ""
+        .hashHex = ""
+        .copiedBytes = 0
     End With
     r.assetCount += 1
 End Sub
@@ -244,6 +348,9 @@ Function PreprocessResultToJson(ByRef r As PreprocessResult) As String
     j &= "  " & q & "lockCount" & q & ": " & LTrim(Str(r.lockCount)) & "," & Chr(10)
     j &= "  " & q & "profileCount" & q & ": " & LTrim(Str(r.profileCount)) & "," & Chr(10)
     j &= "  " & q & "configFileCount" & q & ": " & LTrim(Str(r.configFileCount)) & "," & Chr(10)
+    j &= "  " & q & "templateCount" & q & ": " & LTrim(Str(r.templateCount)) & "," & Chr(10)
+    j &= "  " & q & "deprecatedCount" & q & ": " & LTrim(Str(r.deprecatedCount)) & "," & Chr(10)
+    j &= "  " & q & "expandLimit" & q & ": " & LTrim(Str(r.expandLimit)) & "," & Chr(10)
     j &= "  " & q & "diagnosticCount" & q & ": " & LTrim(Str(r.diagnosticCount)) & "," & Chr(10)
 
     j &= "  " & q & "blocks" & q & ": [" & Chr(10)
@@ -255,7 +362,8 @@ Function PreprocessResultToJson(ByRef r As PreprocessResult) As String
         j &= "," & q & "outFile" & q & ":" & q & UXBPreMetaJsonEscape(r.blocks(i).outFile) & q
         j &= "," & q & "source" & q & ":" & q & UXBPreMetaJsonEscape(r.blocks(i).sourceFile) & q
         j &= "," & q & "startLine" & q & ":" & LTrim(Str(r.blocks(i).startLine))
-        j &= "," & q & "endLine" & q & ":" & LTrim(Str(r.blocks(i).endLine)) & "}"
+        j &= "," & q & "endLine" & q & ":" & LTrim(Str(r.blocks(i).endLine))
+        j &= "," & q & "sourceTag" & q & ":" & q & UXBPreMetaJsonEscape(r.blocks(i).sourceTag) & q & "}"
     Next i
     j &= Chr(10) & "  ]," & Chr(10)
 
@@ -299,6 +407,11 @@ End Function
 
 Sub LexerPreprocessGetLastResult(ByRef outResult As PreprocessResult)
     outResult = gLastPreprocessResult
+End Sub
+
+' The package writer fills in asset copy results; the backends read them through the shared last result.
+Sub LexerPreprocessSetLastResult(ByRef r As PreprocessResult)
+    gLastPreprocessResult = r
 End Sub
 
 #endif

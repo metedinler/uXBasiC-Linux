@@ -1,0 +1,22 @@
+LIBTYPE "owned_text.library_type.json"
+
+SUB ThrowWithLocal()
+    DIM localValue AS TEXT_VALUE
+    localValue = TEXT_VALUE.CONSTRUCT("throw")
+    THROW 9
+END SUB
+
+FUNCTION Wrapper() AS I64
+    DIM localValue AS TEXT_VALUE
+    localValue = TEXT_VALUE.CONSTRUCT("wrapper")
+    ThrowWithLocal()
+    RETURN 1
+END FUNCTION
+
+MAIN
+    TRY
+        PRINT Wrapper()
+    CATCH
+        PRINT "caught"
+    END TRY
+END MAIN

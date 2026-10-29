@@ -1,0 +1,18 @@
+TYPE POINT
+    X AS I32
+    Y AS I32
+END TYPE
+
+TYPE WRAP
+    P AS POINT
+END TYPE
+
+DIM a(0 TO 1) AS WRAP
+
+a(0).P.X = 3
+a(0).P.Y = a(0).P.X + 9
+PRINT a(0).P.X
+PRINT a(0).P.Y
+
+a(0).P.X += 5
+PRINT a(0).P.X

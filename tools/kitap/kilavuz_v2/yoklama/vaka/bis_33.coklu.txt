@@ -1,0 +1,8 @@
+Y1 uxbdll ile uretilen DLL'i CALL(DLL) ile cagirmak (beklenen 1 / 7 / 1)
+DIM r AS I32
+r = CALL(DLL, "C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/uxbdll_deneme/dll/uxscalar_modul.dll", "uxscalar_init", I32, CDECL)
+PRINT r
+r = CALL(DLL, "C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/uxbdll_deneme/dll/uxscalar_modul.dll", "uxscalar_add", I32, CDECL, "I32,I32", 3, 4)
+PRINT r
+r = CALL(DLL, "C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/uxbdll_deneme/dll/uxscalar_modul.dll", "uxscalar_shutdown", I32, CDECL)
+PRINT r

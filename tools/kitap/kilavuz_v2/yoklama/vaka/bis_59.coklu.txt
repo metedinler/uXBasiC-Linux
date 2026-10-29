@@ -1,0 +1,34 @@
+uxclazz HashString taşınabilirlik
+FUNCTION HashString(value AS STRING) AS U64
+    DIM h AS U64
+    DIM i AS I32
+    h = 1469598103934665603
+    FOR i = 1 TO LEN(value)
+        h = (h XOR U64(ASC(MID(value, i, 1)))) * 1099511628211
+    NEXT
+    RETURN h
+END FUNCTION
+
+PRINT HashString("abc")
+PRINT HashString("")
+=====
+uxclazz EscapeJson taşınabilirlik
+FUNCTION EscapeJson(value AS STRING) AS STRING
+    DIM out AS STRING
+    DIM i AS I32
+    DIM ch AS STRING
+    out = ""
+    FOR i = 1 TO LEN(value)
+        ch = MID(value, i, 1)
+        IF ch == CHR(34) THEN
+            out = out + "\\" + CHR(34)
+        ELSEIF ch == CHR(10) THEN
+            out = out + "\\n"
+        ELSE
+            out = out + ch
+        END IF
+    NEXT
+    RETURN out
+END FUNCTION
+
+PRINT EscapeJson("a" + CHR(34) + "b" + CHR(10) + "c")

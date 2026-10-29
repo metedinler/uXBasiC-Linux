@@ -1,0 +1,19 @@
+DUMP_META tek basina
+%%DUMP_META
+PRINT 1
+=====
+DUMP_META blok ile
+%%DEFINE N 3
+%%DUMP_META
+PRINT %%N
+=====
+REM ATTR TEST islev
+REM %%ATTR TEST
+FUNCTION Test_a() AS BOOLEAN
+    RETURN TRUE
+END FUNCTION
+PRINT Test_a()
+=====
+REM ATTR bilinmeyen
+REM %%ATTR BU_YOK_BOYLE
+PRINT 7

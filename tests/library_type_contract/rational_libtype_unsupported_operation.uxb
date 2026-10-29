@@ -1,0 +1,8 @@
+LIBTYPE "rational_external.library_type.json"
+
+DIM a AS RATIONAL
+DIM b AS RATIONAL
+
+a = 1
+b = 2
+PRINT RATIONAL.CMP(a, b)

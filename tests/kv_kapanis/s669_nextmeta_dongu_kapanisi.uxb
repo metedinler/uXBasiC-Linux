@@ -1,0 +1,15 @@
+' S-669: %%NEXTMETA, %%FOR ve %%FOREACH dongusunu kapatir (%%ENDFOR / %%ENDFOREACH ile ayni is). Dongu turleri ic ice
+' ve kapanis yazimlari karisik olabilir: her kapanis en yakin acik donguye aittir. Eskiden %%NEXTMETA "dongu kapatmaz" sanilirdi.
+%%FOR P = 1 TO 2
+%%FOREACH V IN (10, 20)
+PRINT {{P}} * 100 + {{V}}
+%%ENDFOREACH
+%%NEXTMETA
+%%FOREACH V IN (1, 2)
+%%FOR P = 1 TO 2
+PRINT {{V}} * 10 + {{P}}
+%%ENDFOR
+%%NEXTMETA
+%%FOR P = 1 TO 3 STEP 2
+PRINT {{P}}
+%%NEXTMETA

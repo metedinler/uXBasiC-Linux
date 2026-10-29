@@ -1,0 +1,16 @@
+' S-516: TYPE uyesi F32 alani aritmetik islenen olunca da tum motorlarda dogru (eskiden MIR-x64'te bozuluyordu).
+TYPE R
+    v AS F32
+END TYPE
+DIM r AS R
+r.v = 2.5
+PRINT r.v + 1
+PRINT r.v * 2
+r.v = 16777217
+PRINT r.v - 16777216
+DIM x AS F64
+x = r.v
+PRINT x
+DIM y AS F32
+y = r.v
+PRINT y + 1

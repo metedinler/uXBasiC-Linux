@@ -1,0 +1,3 @@
+%%FOREACH N IN ("A","B","C")
+PRINT "%%N"
+%%ENDFOREACH

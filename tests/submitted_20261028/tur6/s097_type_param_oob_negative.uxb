@@ -1,0 +1,10 @@
+TYPE Point
+    x AS I32
+END TYPE
+DECLARE FUNCTION Probe(a AS Point[]) AS I32
+FUNCTION Probe(a AS Point[]) AS I32
+    RETURN a(7).x
+END FUNCTION
+DIM points(0 TO 1) AS Point
+PRINT Probe(points)
+' EXPECT: non-zero exit, array index out of bounds, NO silent value

@@ -1,0 +1,12 @@
+' S-562 / S-563: &H &B &O ile 0x 0b 0o yazimlari tek basina ve ifade icinde altı yolda ayni degeri verir.
+PRINT &H44
+DIM a AS I32 = &B1010
+PRINT a
+PRINT &O17
+PRINT &H44 + 1
+PRINT 0x1F
+PRINT 0b101
+PRINT 0o17
+PRINT 0x1F + 1
+DIM b AS I32 = 0xFF
+PRINT b

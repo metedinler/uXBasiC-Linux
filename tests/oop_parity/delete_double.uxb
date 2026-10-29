@@ -1,0 +1,17 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT 7
+    END DESTRUCTOR
+END CLASS
+
+' S-574 / S-473: a second DELETE of the same variable does nothing (it holds NOTHING after the first); the destructor ran twice on MIR, native x64,
+' JS and WASM and once on AST and legacy x64.
+DIM k AS Kutu = NEW Kutu(3)
+DELETE k
+DELETE k
+PRINT 9

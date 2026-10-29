@@ -1,0 +1,16 @@
+DECLARE FUNCTION Twice(BYVAL x AS I32) AS I32
+DECLARE SUB Bump(BYREF x AS I32)
+DIM n AS I32 = 4
+Bump(n)
+PRINT Twice(n)
+FUNCTION Twice(value AS I32) AS I32
+    RETURN value * 2
+END FUNCTION
+SUB Bump(BYREF value AS I32)
+    value = value + 1
+END SUB
+FUNCTION After(value AS I32) AS I32
+    RETURN value + 3
+END FUNCTION
+DECLARE FUNCTION After(value AS I32) AS I32
+PRINT After(4)

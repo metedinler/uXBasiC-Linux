@@ -1,0 +1,38 @@
+{
+  "reference_alias": {
+    "output": "8\n8\n9"
+  },
+  "null_field_write": {
+    "error": "null object reference"
+  },
+  "null_field_read": {
+    "error": "null object reference"
+  },
+  "dynamic_index": {
+    "output": "12\n13\n4"
+  },
+  "null_method": {
+    "error": "null object reference"
+  },
+  "delete_index_once": {
+    "output": "20\n10\n-1\n1\n2"
+  },
+  "deleted_alias_read": {
+    "error": "null object reference"
+  },
+  "local_lifetime": {
+    "output": "-1\n9\n-1\n-1\n9\n-1"
+  },
+  "static_virtual_receiver": {
+    "output": "10\n21"
+  },
+  "storage_width": {
+    "output": "24\n16"
+  },
+  "compound_index_once": {
+    "output": "3\n1"
+  },
+  "compound_order": {
+    "output": "3\n12"
+  }
+}

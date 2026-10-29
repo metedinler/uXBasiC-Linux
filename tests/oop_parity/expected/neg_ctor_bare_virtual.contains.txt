@@ -1,0 +1,6 @@
+AST=ME virtual method call is not allowed in CONSTRUCTOR
+MIR=ME virtual method call is not allowed in CONSTRUCTOR
+x64=ME virtual method call is not allowed in CONSTRUCTOR
+AST-x64=ME virtual method call is not allowed in CONSTRUCTOR
+JS=ME virtual method call is not allowed in CONSTRUCTOR
+WASM=ME virtual method call is not allowed in CONSTRUCTOR

@@ -1,0 +1,10 @@
+THREAD Fraction() AS F64
+    RETURN 3.75
+END THREAD
+DIM t AS TASK OF F64 = SPAWN Fraction()
+DIM converted AS I32 = I32(t.JOIN())
+PRINT converted
+PRINT I32(t.RESULT)
+DIM widened AS F64 = t.JOIN() + 0.25
+PRINT widened
+PRINT t.RESULT > 3.5

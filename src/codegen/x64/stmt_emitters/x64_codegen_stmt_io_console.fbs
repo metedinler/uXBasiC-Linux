@@ -445,7 +445,6 @@ Private Function X64EmitOpenStmt(ByRef ps As ParseState, ByVal nodeIdx As Intege
     End If
 
     If X64EmitExprToRax(ps, fileExpr, cg, errText) = 0 Then Return 0
-    X64EmitText cg, "    mov [rel __uxb_file_tmp_path], rax"
     X64EmitText cg, "    push rax"
     If X64EmitExprToRax(ps, handleExpr, cg, errText) = 0 Then Return 0
     X64EmitText cg, "    push rax"

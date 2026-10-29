@@ -1,5 +1,158 @@
+' S-579 (2026-10-17): Turkish letters in names. The lexer folds a name to ONE canonical spelling and everything after it compares that spelling:
+'   * ASCII letters are case-insensitive as always;
+'   * the pairs ç/Ç, ğ/Ğ, ö/Ö, ş/Ş, ü/Ü are case-insensitive too;
+'   * İ (dotted capital) is the capital of i, so KİŞİ = kişi;
+'   * ı (dotless) is its own letter and is NOT the lower case of the ASCII capital I: ASCII I is the capital of i (ISIK = isik, never ışık), so kisa and kısa stay
+'     two different names and no two distinct lower-case words ever merge.
+' The code-generating backends (x64 NASM, WAT, JS) see ASCII-only names: when gUxbAsciiIdentNames is 1 each remaining non-ASCII letter is replaced by
+' `u` + its four hex digits + `x` (ş -> u015fx), so `kişi` becomes `kiu015fxi`. The two interpreters keep the Turkish spelling; UxbIdentDisplayText (common/ident_names.fbs,
+' also the home of gUxbAsciiIdentNames) turns the six mangled letters back into letters in every message the user reads.
+#include once "../../common/ident_names.fbs"
+
+Private Function CanonicalIdentifierTurkish(ByVal lowered As String) As String
+    Dim hasHigh As Integer
+    hasHigh = 0
+    Dim scanPos As Integer
+    For scanPos = 1 To Len(lowered)
+        If Asc(Mid(lowered, scanPos, 1)) >= 128 Then hasHigh = 1: Exit For
+    Next scanPos
+    If hasHigh = 0 Then Return lowered
+
+    Dim folded As String
+    folded = ""
+    Dim idx As Integer
+    idx = 1
+    Do While idx <= Len(lowered)
+        Dim lead As Integer
+        lead = Asc(Mid(lowered, idx, 1))
+        If lead < 128 Or idx = Len(lowered) Then
+            folded &= Mid(lowered, idx, 1)
+            idx += 1
+            Continue Do
+        End If
+        Dim trail As Integer
+        trail = Asc(Mid(lowered, idx + 1, 1))
+        Dim codePoint As Integer
+        codePoint = -1
+        If lead >= 194 And lead <= 223 Then codePoint = ((lead And 31) Shl 6) Or (trail And 63)
+        If codePoint < 0 Then
+            ' not a two-byte sequence: keep the byte (the validator reports it)
+            folded &= Mid(lowered, idx, 1)
+            idx += 1
+            Continue Do
+        End If
+        idx += 2
+        Select Case codePoint
+        Case &hC7: codePoint = &hE7   ' Ç -> ç
+        Case &h11E: codePoint = &h11F ' Ğ -> ğ
+        Case &hD6: codePoint = &hF6   ' Ö -> ö
+        Case &h15E: codePoint = &h15F ' Ş -> ş
+        Case &hDC: codePoint = &hFC   ' Ü -> ü
+        Case &h130: folded &= "i": Continue Do ' İ -> i
+        End Select
+        If gUxbAsciiIdentNames <> 0 Then
+            folded &= "u" & LCase(Right("0000" & Hex(codePoint), 4)) & "x"
+        Else
+            folded &= Chr(&hC0 Or (codePoint Shr 6)) & Chr(&h80 Or (codePoint And 63))
+        End If
+    Loop
+    Return folded
+End Function
+
+' lower case of the ASCII letters only: LCase/tolower may be locale dependent and must never touch the bytes of a UTF-8 letter
+Private Function LexerAsciiLower(ByVal word As String) As String
+    Dim outText As String
+    outText = word
+    Dim idx As Integer
+    For idx = 1 To Len(outText)
+        Dim code As Integer
+        code = Asc(Mid(outText, idx, 1))
+        If code >= 65 And code <= 90 Then Mid(outText, idx, 1) = Chr(code + 32)
+    Next idx
+    Return outText
+End Function
+
 Private Function CanonicalIdentifier(ByVal word As String) As String
-    Return LCase(Trim(word))
+    Dim trimmed As String
+    trimmed = LexerAsciiLower(Trim(word))
+    ' Escape literal encoding prefixes before encoding Turkish letters. Otherwise
+    ' the ASCII name bu015fxa and the Turkish name bşa alias in generated code.
+    ' Escape every uXXXXx shape, including our own u0075x escape, exactly once.
+    If gUxbAsciiIdentNames <> 0 And InStr(trimmed, "u") <> 0 Then
+        Dim escaped As String
+        Dim escapePos As Integer
+        For escapePos = 1 To Len(trimmed)
+            Dim isEscape As Integer
+            isEscape = 0
+            If Mid(trimmed, escapePos, 1) = "u" And escapePos + 5 <= Len(trimmed) Then
+                If Mid(trimmed, escapePos + 5, 1) = "x" Then
+                    isEscape = 1
+                    Dim hexPos As Integer
+                    For hexPos = escapePos + 1 To escapePos + 4
+                        Dim hexChar As String
+                        hexChar = Mid(trimmed, hexPos, 1)
+                        If InStr("0123456789abcdef", hexChar) = 0 Then isEscape = 0: Exit For
+                    Next hexPos
+                End If
+            End If
+            If isEscape <> 0 Then
+                escaped &= "u0075x"
+            Else
+                escaped &= Mid(trimmed, escapePos, 1)
+            End If
+        Next escapePos
+        trimmed = escaped
+    End If
+    Dim idx As Integer
+    For idx = 1 To Len(trimmed)
+        If Asc(Mid(trimmed, idx, 1)) >= 128 Then Return CanonicalIdentifierTurkish(LexerAsciiLower(trimmed))
+    Next idx
+    Return trimmed
+End Function
+
+' 1 when every non-ASCII character of the word is one of the twelve Turkish letters; otherwise badTextOut = "<char> (U+XXXX)" of the first offender.
+Private Function LexerIdentCharsAllowed(ByVal word As String, ByRef badTextOut As String, ByRef badByteOffset As Integer) As Integer
+    badTextOut = ""
+    badByteOffset = 0
+    Dim idx As Integer
+    idx = 1
+    Do While idx <= Len(word)
+        Dim lead As Integer
+        lead = Asc(Mid(word, idx, 1))
+        If lead < 128 Then
+            idx += 1
+            Continue Do
+        End If
+        Dim seqLen As Integer
+        seqLen = 0
+        If lead >= 194 And lead <= 223 Then seqLen = 2
+        If lead >= 224 And lead <= 239 Then seqLen = 3
+        If lead >= 240 And lead <= 244 Then seqLen = 4
+        Dim codePoint As Integer
+        codePoint = -1
+        If seqLen = 2 And idx + 1 <= Len(word) Then
+            Dim trail2 As Integer
+            trail2 = Asc(Mid(word, idx + 1, 1))
+            If trail2 >= 128 And trail2 <= 191 Then codePoint = ((lead And 31) Shl 6) Or (trail2 And 63)
+        End If
+        Select Case codePoint
+        Case &hE7, &hC7, &h11F, &h11E, &h131, &h130, &hF6, &hD6, &h15F, &h15E, &hFC, &hDC
+            idx += 2
+            Continue Do
+        End Select
+        badByteOffset = idx - 1
+        If seqLen >= 2 And idx + seqLen - 1 <= Len(word) Then
+            Dim fullCodePoint As Integer
+            If seqLen = 2 Then fullCodePoint = ((lead And 31) Shl 6) Or (Asc(Mid(word, idx + 1, 1)) And 63)
+            If seqLen = 3 Then fullCodePoint = ((lead And 15) Shl 12) Or ((Asc(Mid(word, idx + 1, 1)) And 63) Shl 6) Or (Asc(Mid(word, idx + 2, 1)) And 63)
+            If seqLen = 4 Then fullCodePoint = ((lead And 7) Shl 18) Or ((Asc(Mid(word, idx + 1, 1)) And 63) Shl 12) Or ((Asc(Mid(word, idx + 2, 1)) And 63) Shl 6) Or (Asc(Mid(word, idx + 3, 1)) And 63)
+            badTextOut = Mid(word, idx, seqLen) & " (U+" & Right("0000" & Hex(fullCodePoint), 4) & ")"
+        Else
+            badTextOut = "byte " & Hex(lead) & " (not valid UTF-8)"
+        End If
+        Return 0
+    Loop
+    Return 1
 End Function
 
 Private Function CanonicalKeyword(ByVal word As String) As String
@@ -19,7 +172,7 @@ Private Function IsKeyword(ByVal word As String) As Integer
         Return 1
     Case "spawn"
         Return 1
-    Case "for", "to", "step", "next", "do", "loop", "while", "wend", "until", "exit", "each", "in"
+    Case "for", "to", "step", "next", "do", "loop", "while", "wend", "until", "exit", "continue", "each", "in"
         Return 1
     Case "sub", "function", "declare", "return", "goto", "gosub", "call"
         Return 1

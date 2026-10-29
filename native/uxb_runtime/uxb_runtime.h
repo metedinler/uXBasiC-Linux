@@ -113,6 +113,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_program_end(void);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_i64(int64_t value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_cstr(const char* value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_newline(void);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_separator(int64_t kind);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_f64(double value);
 // S-142b: floating text (PRINT and STR/concat): F64 16 / F32 7 significant digits,
 // no padding zeros, exponent at least two digits. F32 rounds the value to single first.
@@ -120,11 +121,15 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_print_f32(double value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_f32(double value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_input_i64(void);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_cls(void);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_csrlin(void);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_pos(void);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_locate(int64_t row, int64_t column);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_color(int64_t foreground, int64_t background);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_getkey_i64(void);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_inkey_i64(void);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_timer_i64(void);
+// S-624: TIMER (F64): yerel gece yarisindan beri kesirli saniye; sonuc XMM0'da (src/common/uxb_clock.fbs ile ayni tanim).
+UXB_RT_API double UXB_RT_CDECL __uxb_rt_timer_f64(void);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_rnd_i64(void);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_randomize(int64_t seed);
 
@@ -134,6 +139,9 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_str_release(const char** slot);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_temp(const char* value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_strlen(const char* value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_val_i64(const char* value);
+// S-179: the language's VAL() itself returns a Double; __uxb_rt_val_i64 truncates and is for other
+// integer-context callers only (e.g. an explicit VALINT once implemented).
+UXB_RT_API double UXB_RT_CDECL __uxb_rt_val_f64(const char* value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_i64(int64_t value);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_asc(const char* value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_chr(int64_t value);
@@ -147,11 +155,17 @@ UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_ltrim(const char* value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_rtrim(const char* value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_trim(const char* value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_space(int64_t count);
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_string(int64_t count, int64_t code);
+UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_string_text(int64_t count, const char* text);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_hex(int64_t value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_oct(int64_t value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_bin(int64_t value);
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_str_concat(const char* left, const char* right);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_str_compare(const char* left, const char* right);
+// Existing native descriptor ABI: pointer, signed lower, signed upper.
+// flags: low 32 bits = element stride; bit 32 = preserve logical 1D indices.
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_array_resize(int64_t* descriptor, int64_t lower, int64_t upper, uint64_t flags);
+UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_register_string_literals(const int64_t* pointer_length_pairs, int64_t count);
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_memcopy(void* dst, const void* src, int64_t bytes);
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_memfill(void* dst, int64_t value, int64_t bytes);

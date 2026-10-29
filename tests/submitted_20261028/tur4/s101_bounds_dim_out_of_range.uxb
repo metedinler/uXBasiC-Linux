@@ -1,0 +1,3 @@
+DIM a(2) AS I32
+PRINT UBOUND(a, 2)
+' EXPECTED: semantic error mentioning dimension 2 out of range

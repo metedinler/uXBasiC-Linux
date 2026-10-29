@@ -1,0 +1,6 @@
+section,test_id,description,current_source
+ast,TST_AST_PARSE_BASELINE,AST parse baseline run,uxb/tests/run_namespace_module_main_parse.bas
+hir,TST_HIR_INVENTORY_BASELINE,HIR inventory json baseline,uxb/tests/run_manifest.bas
+mir,TST_MIR_DISPATCH_BASELINE,MIR dispatch baseline,uxb/tests/run_interface_dispatch_exec_mir.bas
+runtime,TST_RUNTIME_MEMORY_BASELINE,Runtime memory baseline,uxb/tests/run_memory_exec_ast.bas
+integration,TST_FAZ_A_GATE,Faz-A integrated quality gate,tools/run_faz_a_gate.ps1

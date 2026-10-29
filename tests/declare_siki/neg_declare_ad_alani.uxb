@@ -1,0 +1,10 @@
+' S-544: inside a NAMESPACE a bare name means the member of that block; Kare is used by Dort before its definition and nothing announces it.
+NAMESPACE Mat
+    FUNCTION Dort(x AS I32) AS I32
+        RETURN Kare(Kare(x))
+    END FUNCTION
+    FUNCTION Kare(x AS I32) AS I32
+        RETURN x * x
+    END FUNCTION
+END NAMESPACE
+PRINT Mat.Dort(2)

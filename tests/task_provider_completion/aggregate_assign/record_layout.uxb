@@ -1,0 +1,23 @@
+TYPE Cell
+    n AS I8
+    u AS U16
+    f AS F32
+    d AS F64
+END TYPE
+DIM cells(-1 TO 0) AS Cell
+PRINT cells(-1).n
+PRINT cells(-1).f
+cells(-1).n = 127
+cells(-1).n += I8(1)
+cells(0).n = 5
+cells(-1).u = 65535
+cells(-1).u += U16(1)
+cells(-1).f = 16777216.0
+cells(-1).f += 1.0
+cells(-1).d = 0.25
+cells(-1).d += 0.5
+PRINT cells(-1).n
+PRINT cells(0).n
+PRINT cells(-1).u
+PRINT F64(cells(-1).f)
+PRINT cells(-1).d

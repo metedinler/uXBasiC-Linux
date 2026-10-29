@@ -1,0 +1,10 @@
+' S-539: ad alani (NAMESPACE) dizisine DISARIDAN nitelikli erisim: yazma, okuma ve bilesik atama (AST ssign lhs must be ident... ile dusuyordu).
+NAMESPACE sayac
+    DIM kutu(3) AS I32
+END NAMESPACE
+sayac.kutu(2) = 7
+PRINT sayac.kutu(2)
+sayac.kutu(1) = sayac.kutu(2) + 1
+PRINT sayac.kutu(1)
+sayac.kutu(3) += 2
+PRINT sayac.kutu(3)

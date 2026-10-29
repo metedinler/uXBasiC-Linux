@@ -1,0 +1,15 @@
+' S-302: CATCH govdesinde yeniden atilan istisna, ayni TRY'in FINALLY'sinden gecer; sonra dis TRY yakalar.
+TRY
+    TRY
+        THROW "birinci"
+    CATCH
+        PRINT "yakala"
+        THROW "ikinci"
+    FINALLY
+        PRINT "fin"
+    END TRY
+    PRINT "yanlis"
+CATCH
+    PRINT "dis"
+END TRY
+PRINT "son"

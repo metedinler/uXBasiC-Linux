@@ -1,0 +1,4 @@
+SUB Yaz()
+    CONTINUE SUB
+END SUB
+Yaz()

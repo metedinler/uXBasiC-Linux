@@ -1,0 +1,10 @@
+' S-329 koruma (gorunurluk): ad alani icinde nitelensiz cagri, ust duzey (kok) yordama gider.
+FUNCTION Kok(a AS I32) AS I32
+    RETURN a + 1
+END FUNCTION
+NAMESPACE A
+    FUNCTION Say(a AS I32) AS I32
+        RETURN Kok(a)
+    END FUNCTION
+END NAMESPACE
+PRINT A.Say(3)

@@ -1,0 +1,9 @@
+CLASS Ic
+    PUBLIC
+    METHOD Say() AS I32
+        RETURN 8
+    END METHOD
+END CLASS
+DIM arr(2) AS Ic
+DIM sentinel AS Ic = NEW Ic()
+PRINT arr(1).Say()

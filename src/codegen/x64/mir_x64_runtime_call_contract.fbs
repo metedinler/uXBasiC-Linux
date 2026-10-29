@@ -35,10 +35,12 @@ Function MIRX64RuntimeSymbolForOpcode(ByRef opcodeText As String, ByRef callTarg
     Case "PRINTLN": Return "__uxb_rt_print_newline"
     Case "INPUT": Return "__uxb_rt_input_i64"
     Case "CLS": Return "__uxb_rt_cls"
+    Case "CSRLIN": Return "__uxb_rt_csrlin"
+    Case "POS": Return "__uxb_rt_pos"
     Case "LOCATE": Return "__uxb_rt_locate"
     Case "COLOR": Return "__uxb_rt_color"
     Case "RANDOMIZE": Return "__uxb_rt_randomize"
-    Case "TIMER": Return "__uxb_rt_timer_i64"
+    Case "TIMER": Return "__uxb_rt_timer_f64"   ' S-624: F64 (XMM0)
     Case "RND": Return "__uxb_rt_rnd_i64"
     Case "GETKEY": Return "__uxb_rt_getkey_i64"
     Case "INKEY": Return "__uxb_rt_inkey_i64"
@@ -60,6 +62,8 @@ Function MIRX64RuntimeSymbolForOpcode(ByRef opcodeText As String, ByRef callTarg
     Case "STR_COMPARE": Return "__uxb_rt_str_compare"
     Case "CALL", "CALL_RUNTIME", "CALL_BUILTIN", "HOST_CALL", "LIBRARY_CALL", "EXTFP_CALL"
         Select Case target
+        Case "CSRLIN": Return "__uxb_rt_csrlin"
+        Case "POS": Return "__uxb_rt_pos"
         Case "LEN", "STR_LEN": Return "__uxb_rt_strlen"
         Case "ASC": Return "__uxb_rt_asc"
         Case "CHR", "CHR$": Return "__uxb_rt_chr"

@@ -1,0 +1,15 @@
+SUB Yaz()
+    DIM i AS I32
+    TRY
+        FOR i = 1 TO 2
+            PRINT i
+            EXIT SUB
+        NEXT i
+        PRINT "UNREACHABLE"
+    FINALLY
+        PRINT "FINALLY"
+    END TRY
+    PRINT "UNREACHABLE"
+END SUB
+Yaz()
+PRINT "DONE"

@@ -1,0 +1,40 @@
+BIGF duyarlikli bildirim
+DIM xx AS BIGF(256)
+PRINT 1
+=====
+BIGF ham sayi sabiti kume parantezli
+DIM xx AS BIGF
+xx = {3.1415926535897932384626433832795028841971}
+PRINT xx
+=====
+BIGF metinden kurucu
+DIM xx AS BIGF
+xx = BIGF("3.1415")
+PRINT xx
+=====
+TO_BIGF acik donusum
+DIM a AS I32 = 5
+DIM xx AS BIGF
+xx = TO_BIGF(a)
+PRINT xx
+=====
+F80 temel toplama
+DIM a AS F80
+DIM b AS F80
+DIM c AS F80
+a = 1.25
+b = 2.5
+c = a + b
+PRINT c
+=====
+F128 sabit atama
+DIM q AS F128
+q = 1.5
+PRINT q
+=====
+BIGINT BIGINIT carpma
+DIM a AS BIGINT
+DIM b AS BIGINT
+a = BIGINIT(BIGINT, "123456789012345678901234567890", 0)
+b = BIGINIT(BIGINT, "2", 0)
+PRINT a * b

@@ -1,0 +1,10 @@
+' S-537: GOSUB bulunan bir programda GOSUB govdesine "dusme" ile girilip RETURN'e varilirsa (END unutulmus) RETURN hicbir
+' GOSUB'tan gelmez: AST, MIR, native, JS ve WASM'da acik calisma ani hatasidir (sessizce bitmez, cokmez).
+' Cikti once 1 (normal GOSUB), sonra GOSUB'suz ikinci giriste hata.
+DIM t AS I32
+t = 0
+GOSUB Ekle
+PRINT t
+Ekle:
+t = t + 1
+RETURN

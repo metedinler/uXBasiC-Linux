@@ -1,0 +1,7 @@
+FUNCTION Say() AS I32
+    STATIC a(0 TO 0) AS I32
+    a(0) += 1
+    RETURN a(0)
+END FUNCTION
+PRINT Say()
+PRINT Say()

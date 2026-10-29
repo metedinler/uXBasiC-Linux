@@ -44,6 +44,26 @@ Private Function ValidateExitIfSemanticsNode(ByRef ps As ParseState, ByVal nodeI
     Dim nodeKind As String
     nodeKind = UCase(ps.ast.nodes(nodeIdx).kind)
 
+    If nodeKind = "CONTINUE_STMT" Then
+        Dim wanted As String = UCase(Trim(ps.ast.nodes(nodeIdx).op))
+        Dim ancestor As Integer = ps.ast.nodes(nodeIdx).parent
+        Dim found As Integer = 0
+        Do While ancestor >= 0 And ancestor < ps.ast.count
+            Dim ancestorKind As String = UCase(ps.ast.nodes(ancestor).kind)
+            If ancestorKind = "SUB_STMT" Or ancestorKind = "FUNCTION_STMT" Or ancestorKind = "CLASS_METHOD" Or ancestorKind = "TASK_STMT" Then Exit Do
+            Dim loopKind As String = ""
+            If ancestorKind = "FOR_STMT" Or ancestorKind = "FOR_EACH_STMT" Then loopKind = "FOR"
+            If ancestorKind = "DO_EACH_STMT" Then loopKind = "DO"
+            If ancestorKind = "DO_STMT" Then loopKind = IIf(UCase(ps.ast.nodes(ancestor).op) = "WHILE_WEND", "WHILE", "DO")
+            If loopKind <> "" And (wanted = "" Or wanted = loopKind) Then found = 1: Exit Do
+            ancestor = ps.ast.nodes(ancestor).parent
+        Loop
+        If found = 0 Then
+            ps.lastError = "CONTINUE used outside matching loop @" & LTrim(Str(ps.ast.nodes(nodeIdx).lineNo)) & ":" & LTrim(Str(ps.ast.nodes(nodeIdx).colNo))
+            Return 0
+        End If
+    End If
+
     If nodeKind = "EXIT_STMT" Then
         If UCase(Trim(ps.ast.nodes(nodeIdx).op)) = "IF" And inIfContext = 0 Then
             ps.lastError = "EXIT IF used outside IF block"
@@ -551,6 +571,14 @@ Private Function ValidateCallDllSemanticsForNode(ByRef ps As ParseState, ByVal c
                 If typeListStatus > 0 Then
                     hasTypeList = 1
                     argStartPos += 1
+                ElseIf argCount > argStartPos + 1 Then
+                    ' A string literal in this metadata position followed by
+                    ' another child is the explicit ABI type list. An unknown
+                    ' token must not fall through as a runtime string and
+                    ' reach one backend with an accidental argument ABI.
+                    ps.lastError = "UXB_FFI_ARGUMENT_TYPE_LIST: CALL(" & callKind & "): invalid argument type-list token: " & _
+                        Trim(ps.ast.nodes(typeListNode).value)
+                    Return 0
                 End If
             End If
         End If
@@ -828,6 +856,186 @@ Private Function HasConstDeclName(ByRef ps As ParseState, ByRef symbolName As St
     Return 0
 End Function
 
+' S-441: CONST is readable but never writable.  This check lives at the
+' parser boundary because the AST surface also has to reject the program;
+' AST mode does not run the full Step3 semantic pass.  Scope ownership is
+' reconstructed from AST parents so a local DIM/parameter can shadow an
+' outer constant without being rejected by this guard.
+Private Function UXBParserConstScopeOwner(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    Dim p As Integer = nodeIdx
+    Do While p >= 0 And p < ps.ast.count
+        Select Case UCase(Trim(ps.ast.nodes(p).kind))
+        Case "FUNCTION_STMT", "SUB_STMT", "CLASS_STMT", "TYPE_STMT", "ENUM_STMT", "INTERFACE_STMT", "MODULE_STMT", "NAMESPACE_STMT"
+            Return p
+        End Select
+        p = ps.ast.nodes(p).parent
+    Loop
+    Return -1
+End Function
+
+Private Function UXBParserConstScopeParent(ByRef ps As ParseState, ByVal ownerIdx As Integer) As Integer
+    If ownerIdx < 0 Or ownerIdx >= ps.ast.count Then Return -1
+    Return UXBParserConstScopeOwner(ps, ps.ast.nodes(ownerIdx).parent)
+End Function
+
+Private Function UXBParserScopeHasMutableName(ByRef ps As ParseState, ByVal ownerIdx As Integer, ByRef nameText As String) As Integer
+    Dim wanted As String = UCase(Trim(nameText))
+    If wanted = "" Then Return 0
+
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UXBParserConstScopeOwner(ps, i) <> ownerIdx Then Continue For
+        Select Case UCase(Trim(ps.ast.nodes(i).kind))
+        Case "DIM_DECL", "REDIM_DECL", "PARAM_DECL", "CLASS_FIELD", "CLASS_PROPERTY_DECL"
+            If UCase(Trim(ps.ast.nodes(i).value)) = wanted Then Return 1
+        End Select
+    Next i
+    Return 0
+End Function
+
+Private Function UXBParserConstVisibleForNode(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef nameText As String) As Integer
+    Dim wanted As String = UCase(Trim(nameText))
+    If wanted = "" Then Return 0
+
+    Dim targetOwner As Integer = UXBParserConstScopeOwner(ps, nodeIdx)
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "CONST_DECL" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> wanted Then Continue For
+
+        Dim constOwner As Integer = UXBParserConstScopeOwner(ps, i)
+        If constOwner = targetOwner Then Return 1
+
+        ' A global constant is visible in every nested scope unless a local
+        ' mutable declaration shadows it.  For a non-global constant, walk
+        ' the target scope chain until that declaration's owner is reached.
+        If constOwner = -1 Then
+            Dim localOwner As Integer = targetOwner
+            Do While localOwner <> -1
+                If UXBParserScopeHasMutableName(ps, localOwner, nameText) <> 0 Then Exit Do
+                localOwner = UXBParserConstScopeParent(ps, localOwner)
+            Loop
+            If localOwner = -1 Then Return 1
+        Else
+            Dim walkOwner As Integer = targetOwner
+            Dim shadowed As Integer = 0
+            Do While walkOwner <> -1 And walkOwner <> constOwner
+                If UXBParserScopeHasMutableName(ps, walkOwner, nameText) <> 0 Then
+                    shadowed = 1
+                    Exit Do
+                End If
+                walkOwner = UXBParserConstScopeParent(ps, walkOwner)
+            Loop
+            If shadowed = 0 And walkOwner = constOwner Then Return 1
+        End If
+    Next i
+    Return 0
+End Function
+
+Private Function UXBParserRoutineParamAt(ByRef ps As ParseState, ByVal routineIdx As Integer, ByVal wantedIndex As Integer) As Integer
+    Dim paramIndex As Integer = 0
+    Dim ch As Integer = ps.ast.nodes(routineIdx).firstChild
+    Do While ch <> -1
+        If UCase(Trim(ps.ast.nodes(ch).kind)) = "PARAM_DECL" Then
+            If paramIndex = wantedIndex Then Return ch
+            paramIndex += 1
+        End If
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return -1
+End Function
+
+Private Function UXBParserFindRoutineForCall(ByRef ps As ParseState, ByRef callName As String) As Integer
+    Dim wanted As String = UCase(Trim(callName))
+    If wanted = "" Or InStr(wanted, ".") > 0 Then Return -1
+
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Select Case UCase(Trim(ps.ast.nodes(i).kind))
+        Case "SUB_STMT", "FUNCTION_STMT", "DECLARE_SUB_STMT", "DECLARE_FUNCTION_STMT"
+            If UCase(Trim(ps.ast.nodes(i).value)) = wanted Then Return i
+        End Select
+    Next i
+    Return -1
+End Function
+
+Private Function UXBParserCheckConstWriteNode(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    Dim nodeKind As String = UCase(Trim(ps.ast.nodes(nodeIdx).kind))
+    Dim lhs As Integer = -1
+
+    Select Case nodeKind
+    Case "ASSIGN_STMT", "INCDEC_STMT", "INCDEC_EXPR"
+        lhs = ps.ast.nodes(nodeIdx).left
+        If lhs = -1 Then lhs = ps.ast.nodes(nodeIdx).right
+    End Select
+
+    If lhs <> -1 Then
+        Dim lhsKind As String = UCase(Trim(ps.ast.nodes(lhs).kind))
+        If lhsKind = "IDENT" Or lhsKind = "IDENTIFIER" Or lhsKind = "KEYWORD_REF" Then
+            Dim lhsName As String = Trim(ps.ast.nodes(lhs).value)
+            If UXBParserConstVisibleForNode(ps, nodeIdx, lhsName) <> 0 Then
+                ps.lastError = "UXB_CONST_ASSIGNMENT: cannot assign to CONST " & lhsName
+                Return 0
+            End If
+        End If
+    End If
+
+    ' BYREF is a write capability.  Reject a constant passed to a known
+    ' user-routine BYREF parameter before any backend can mutate or ignore it.
+    If nodeKind = "CALL_STMT" Or nodeKind = "CALL_EXPR" Then
+        If ps.ast.nodes(nodeIdx).left = -1 Then
+            Dim routineIdx As Integer
+            routineIdx = UXBParserFindRoutineForCall(ps, ps.ast.nodes(nodeIdx).value)
+            If routineIdx <> -1 Then
+                Dim argIndex As Integer = 0
+                Dim argNode As Integer = ps.ast.nodes(nodeIdx).firstChild
+                Do While argNode <> -1
+                    Dim paramNode As Integer
+                    paramNode = UXBParserRoutineParamAt(ps, routineIdx, argIndex)
+                    If paramNode = -1 Then Exit Do
+                    If UCase(Trim(ps.ast.nodes(paramNode).op)) = "BYREF" Then
+                        Dim argKind As String = UCase(Trim(ps.ast.nodes(argNode).kind))
+                        If argKind = "IDENT" Or argKind = "IDENTIFIER" Or argKind = "KEYWORD_REF" Then
+                            Dim argName As String = Trim(ps.ast.nodes(argNode).value)
+                            If UXBParserConstVisibleForNode(ps, nodeIdx, argName) <> 0 Then
+                                ps.lastError = "UXB_CONST_ASSIGNMENT: cannot pass CONST " & argName & " to BYREF parameter"
+                                Return 0
+                            End If
+                        End If
+                    End If
+                    argIndex += 1
+                    argNode = ps.ast.nodes(argNode).nextSibling
+                Loop
+            End If
+        End If
+    End If
+    Return 1
+End Function
+
+Private Function ValidateConstWritesSemanticsNode(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    If nodeIdx = -1 Then Return 1
+    If UXBParserCheckConstWriteNode(ps, nodeIdx) = 0 Then Return 0
+
+    If ps.ast.nodes(nodeIdx).left <> -1 Then
+        If ValidateConstWritesSemanticsNode(ps, ps.ast.nodes(nodeIdx).left) = 0 Then Return 0
+    End If
+    If ps.ast.nodes(nodeIdx).right <> -1 Then
+        If ValidateConstWritesSemanticsNode(ps, ps.ast.nodes(nodeIdx).right) = 0 Then Return 0
+    End If
+
+    Dim ch As Integer = ps.ast.nodes(nodeIdx).firstChild
+    Do While ch <> -1
+        If ValidateConstWritesSemanticsNode(ps, ch) = 0 Then Return 0
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return 1
+End Function
+
+Private Function ValidateConstWritesSemantics(ByRef ps As ParseState) As Integer
+    If ps.rootNode = -1 Then Return 1
+    Return ValidateConstWritesSemanticsNode(ps, ps.rootNode)
+End Function
+
 Private Function ValidatePointerIntrinsicCallNode(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
     Dim nodeKind As String
     nodeKind = UCase(ps.ast.nodes(nodeIdx).kind)
@@ -1081,6 +1289,7 @@ End Sub
 Sub ParserInit(ByRef ps As ParseState, ByRef lx As LexerState)
     ps.lx = lx
     ps.cursorIndex = 0
+    ps.trustedGeneratedInput = 0
     ps.lastError = ""
     ps.parseErrorCount = 0
     Erase ps.parseErrors
@@ -1121,6 +1330,7 @@ Function ParseProgram(ByRef ps As ParseState) As Integer
             Dim errTok As Token
             errTok = CurToken(ps)
             UXBParserAppendError ps, errTok, "PARSER_STMT_FAIL", ps.lastError
+            If UXBParserErrorLimitExceeded(ps) <> 0 Then Exit Do
             UXBParserRecoverToNextStatement ps
             SkipSeparators ps
             Continue Do
@@ -1142,6 +1352,7 @@ Function ParseProgram(ByRef ps As ParseState) As Integer
         Return 0
     End If
 
+    ASTBackfillExpressionParents ps.ast
     Dim vres As Integer
     vres = ValidateMainProgramSemantics(ps)
     ParserDiag ps, "[PDBG] ValidateMainProgramSemantics result=" & Str(vres)
@@ -1149,6 +1360,9 @@ Function ParseProgram(ByRef ps As ParseState) As Integer
 
     vres = ValidateIfSelectSemantics(ps)
     ParserDiag ps, "[PDBG] ValidateIfSelectSemantics result=" & Str(vres)
+    If vres = 0 Then Return 0
+
+    vres = ValidateExitIfSemantics(ps)
     If vres = 0 Then Return 0
 
     vres = ValidateUsingAliasSemantics(ps)
@@ -1195,6 +1409,17 @@ Function ParseProgram(ByRef ps As ParseState) As Integer
     ParserDiag ps, "[PDBG] ValidateConstRhsSemantics result=" & Str(vres)
     If vres = 0 Then Return 0
 
+    vres = ValidateConstWritesSemantics(ps)
+    ParserDiag ps, "[PDBG] ValidateConstWritesSemantics result=" & Str(vres)
+    If vres = 0 Then Return 0
+
+    ' A compiler-generated fragment is parsed in its owner's symbol context,
+    ' not as a standalone program. The merged AST still passes the mandatory
+    ' semantic/type/layout gates; preserve the owner's global layout table.
+    If ps.trustedGeneratedInput <> 0 Then
+        ParserBackfillAstSourceOffsets ps
+        Return 1
+    End If
     vres = ValidateTypeReferences(ps)
     ParserDiag ps, "[PDBG] ValidateTypeReferences result=" & Str(vres)
     If vres = 0 Then Return 0
@@ -1207,7 +1432,7 @@ Function ParseProgram(ByRef ps As ParseState) As Integer
     ParserDiag ps, "[PDBG] BuildTypeLayoutTable result=" & Str(vres)
     If vres = 0 Then Return 0
 
-    vres = ValidateLayoutIntrinsicSemantics(ps)
+    vres = ValidateLayoutIntrinsicSemantics(ps, 1)
     ParserDiag ps, "[PDBG] ValidateLayoutIntrinsicSemantics result=" & Str(vres)
     If vres = 0 Then Return 0
 

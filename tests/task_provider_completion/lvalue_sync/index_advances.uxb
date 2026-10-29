@@ -1,0 +1,13 @@
+DIM a(0 TO 2) AS I32
+a(0) = 10
+a(1) = 50
+DIM calls AS I32 = 0
+FUNCTION NextIndex() AS I32
+    calls += 1
+    RETURN calls - 1
+END FUNCTION
+DIM old AS I32 = a(NextIndex())++
+PRINT old
+PRINT a(0)
+PRINT a(1)
+PRINT calls

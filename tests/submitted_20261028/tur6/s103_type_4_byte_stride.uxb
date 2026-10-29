@@ -1,0 +1,11 @@
+TYPE Cell
+    x AS I32
+END TYPE
+DECLARE FUNCTION ReadSecond(a AS Cell[]) AS I32
+FUNCTION ReadSecond(a AS Cell[]) AS I32
+    RETURN a(1).x
+END FUNCTION
+DIM cells(0 TO 2) AS Cell
+cells(1).x = 7
+PRINT ReadSecond(cells)
+' EXPECT: 7 (TYPE stride = 4; cannot assume pointer stride 8)

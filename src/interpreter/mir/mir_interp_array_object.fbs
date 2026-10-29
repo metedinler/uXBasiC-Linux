@@ -24,6 +24,19 @@ Private Function UXBMIRInterpObjectId(ByRef v As UXBInterpValue) As Integer
     Return v.objectId
 End Function
 
+' S-570 (2026-10-16): a class reference is LIVE only when it is an OBJECT handle that points at an
+' active heap slot. The lowering stores the integer constant 0 for a NULL class variable (an unassigned
+' `DIM a AS Cls` and every DELETEd variable), and a plain integer value carries objectId = arrayId = 0 --
+' so UXBMIRInterpObjectId() above resolved a NULL reference to heap slot 0, i.e. to the first object the
+' program ever created: `k.v` read that object's field and `k.v = 5` silently overwrote it. The old
+' "null" tests (tests/oop_parity/neg_null_*) allocate no object first, so slot 0 did not exist yet.
+Private Function UXBMIRInterpObjectRefLive(ByRef ctx As UXBInterpContext, ByRef v As UXBInterpValue) As Integer
+    If v.kind <> UXB_VAL_OBJECT Then Return 0
+    If v.objectId < 0 Or v.objectId >= ctx.heap.slotCount Then Return 0
+    If ctx.heap.slots(v.objectId).active = 0 Then Return 0
+    Return 1
+End Function
+
 Function UXBMIRInterpExecArrayObject(ByRef ins As UXBMIRInstructionRecord, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState) As UXBInterpValue
     Dim op As String = UXBMIRStep4CanonicalOpcode(ins.opcode)
     Select Case op
@@ -77,6 +90,7 @@ Function UXBMIRInterpExecArrayObject(ByRef ins As UXBMIRInstructionRecord, ByRef
         Dim ov As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(0))
         Dim fieldName As String = ins.operands(1)
         Dim outv As UXBInterpValue = UXBInterpValueVoid()
+        If UXBMIRInterpObjectRefLive(ctx, ov) = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "field access on a null object reference: " & UCase(Trim(fieldName)))
         If UXBInterpHeapGetField(ctx.heap, UXBMIRInterpObjectId(ov), fieldName, outv) = 0 Then
             ' S-037: a field that was never written reads as the zero value of its type
             ' (AST interpreter and native x64 allocate zero-filled objects). Only an
@@ -106,6 +120,7 @@ Function UXBMIRInterpExecArrayObject(ByRef ins As UXBMIRInstructionRecord, ByRef
         Dim ov As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(0))
         Dim fieldName As String = ins.operands(1)
         Dim vv As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(2))
+        If UXBMIRInterpObjectRefLive(ctx, ov) = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "field access on a null object reference: " & UCase(Trim(fieldName)))
         If UXBInterpHeapSetField(ctx.heap, UXBMIRInterpObjectId(ov), fieldName, vv) = 0 Then
             ' S-108: NULL / dead reference -> the common clean error text
             Dim storeObjId As Integer = UXBMIRInterpObjectId(ov)

@@ -1,0 +1,3 @@
+PRINT "once"
+THROW "hata"
+PRINT "sonra"

@@ -1,0 +1,70 @@
+H6 dizi, kutuphane ile baslatilan DIM'den sonra
+INCLUDE "include/modules/uxcollections.uxmh"
+MAIN
+    DIM anahtar AS U64 = uxcollections.ListNew()
+    uxcollections.ListPushStr(anahtar, "a")
+    DIM n AS I64 = uxcollections.ListCount(anahtar)
+    DIM kul(7) AS I32
+    DIM j AS I64
+    FOR j = 0 TO n - 1
+        kul(j) = 0
+    NEXT
+    FOR j = 0 TO n - 1
+        IF kul(j) = 0 THEN PRINT "x"
+    NEXT
+END MAIN
+=====
+H7 dizi, kutuphaneli DIM'den once
+INCLUDE "include/modules/uxcollections.uxmh"
+MAIN
+    DIM kul(7) AS I32
+    DIM anahtar AS U64 = uxcollections.ListNew()
+    uxcollections.ListPushStr(anahtar, "a")
+    DIM n AS I64 = uxcollections.ListCount(anahtar)
+    DIM j AS I64
+    FOR j = 0 TO n - 1
+        kul(j) = 0
+    NEXT
+    FOR j = 0 TO n - 1
+        IF kul(j) = 0 THEN PRINT "x"
+    NEXT
+END MAIN
+=====
+H8 kutuphane yok, ayni yapi
+MAIN
+    DIM n AS I64 = 1
+    DIM kul(7) AS I32
+    DIM j AS I64
+    FOR j = 0 TO n - 1
+        kul(j) = 0
+    NEXT
+    FOR j = 0 TO n - 1
+        IF kul(j) = 0 THEN PRINT "x"
+    NEXT
+END MAIN
+=====
+H9 yalniz INCLUDE var, kullanilmiyor
+INCLUDE "include/modules/uxcollections.uxmh"
+MAIN
+    DIM n AS I64 = 1
+    DIM kul(7) AS I32
+    DIM j AS I64
+    FOR j = 0 TO n - 1
+        kul(j) = 0
+    NEXT
+    FOR j = 0 TO n - 1
+        IF kul(j) = 0 THEN PRINT "x"
+    NEXT
+END MAIN
+=====
+H10 uxjson include, dizi
+INCLUDE "include/modules/uxjson.uxmh"
+MAIN
+    DIM n AS I64 = 1
+    DIM kul(7) AS I32
+    DIM j AS I64
+    FOR j = 0 TO n - 1
+        kul(j) = 0
+    NEXT
+    PRINT kul(0)
+END MAIN

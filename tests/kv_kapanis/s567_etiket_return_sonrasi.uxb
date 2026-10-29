@@ -1,0 +1,9 @@
+' S-567: RETURN'den sonra gelen ve GOTO ile ulasilan etiket erisilebilirdir; "unreachable statement after RETURN_STMT" demez.
+FUNCTION F(n AS I32) AS I32
+    IF n > 0 THEN GOTO Pozitif
+    RETURN 0
+Pozitif:
+    RETURN 1
+END FUNCTION
+PRINT F(5)
+PRINT F(-2)

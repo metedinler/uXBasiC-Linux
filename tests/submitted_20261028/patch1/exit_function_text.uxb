@@ -1,0 +1,8 @@
+FUNCTION Metin() AS STRING
+    Metin = "A" + CHR(0) + "B"
+    EXIT FUNCTION
+END FUNCTION
+DIM s AS STRING = Metin()
+PRINT LEN(s)
+PRINT ASC(MID(s, 2, 1))
+PRINT ASC(MID(s, 3, 1))

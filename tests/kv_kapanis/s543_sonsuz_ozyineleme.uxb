@@ -1,0 +1,5 @@
+' S-543: yorumlayicilarda sinirsiz (sonsuz) ozyineleme iletisiz cokmez; AST ve MIR "call stack limit exceeded" ile temiz durur.
+FUNCTION F(n AS I64) AS I64
+    RETURN F(n + 1) + 1
+END FUNCTION
+PRINT F(0)

@@ -1,0 +1,122 @@
+[
+ {
+  "ad": "q01 WASM ctor parametresi alana",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\nEND CLASS\nDIM k1 AS Kutu = NEW Kutu(3)\nPRINT k1.v\n"
+ },
+ {
+  "ad": "q02 alan disaridan yazilir",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nDIM k1 AS Kutu = NEW Kutu()\nk1.v = 5\nPRINT k1.v\n"
+ },
+ {
+  "ad": "q03 ctor sabit deger atar",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR()\n        v = 9\n    END CONSTRUCTOR\nEND CLASS\nDIM k1 AS Kutu = NEW Kutu()\nPRINT k1.v\n"
+ },
+ {
+  "ad": "q04 ctor THIS.v = x",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        THIS.v = x\n    END CONSTRUCTOR\nEND CLASS\nDIM k1 AS Kutu = NEW Kutu(4)\nPRINT k1.v\n"
+ },
+ {
+  "ad": "q05 ctor iki parametre",
+  "kod": "CLASS Nk\n    PUBLIC\n    DIM x AS I32\n    DIM y AS I32\n    CONSTRUCTOR(ax AS I32, ay AS I32)\n        x = ax\n        y = ay\n    END CONSTRUCTOR\nEND CLASS\nDIM p1 AS Nk = NEW Nk(10, 20)\nPRINT p1.x\nPRINT p1.y\n"
+ },
+ {
+  "ad": "q06 yontem alani degistirir (donus tipli)",
+  "kod": "CLASS Say\n    PUBLIC\n    DIM n AS I32\n    METHOD Art(d AS I32) AS I32\n        n = n + d\n        RETURN n\n    END METHOD\nEND CLASS\nDIM s1 AS Say = NEW Say()\nPRINT s1.Art(5)\nPRINT s1.n\n"
+ },
+ {
+  "ad": "q07 donus tipsiz yontem parametre alani degistirir",
+  "kod": "CLASS Say\n    PUBLIC\n    DIM n AS I32\n    METHOD Art(d AS I32)\n        n = n + d\n    END METHOD\nEND CLASS\nDIM s1 AS Say = NEW Say()\ns1.Art(5)\nPRINT s1.n\n"
+ },
+ {
+  "ad": "q07b ayni ama CALL ile",
+  "kod": "CLASS Say\n    PUBLIC\n    DIM n AS I32\n    METHOD Art(d AS I32)\n        n = n + d\n    END METHOD\nEND CLASS\nDIM s1 AS Say = NEW Say()\nCALL s1.Art(5)\nPRINT s1.n\n"
+ },
+ {
+  "ad": "q07c donus tipsiz yontem parametreyi yazdirir",
+  "kod": "CLASS Say\n    PUBLIC\n    METHOD Goster(d AS I32)\n        PRINT d\n    END METHOD\nEND CLASS\nDIM s1 AS Say = NEW Say()\ns1.Goster(5)\n"
+ },
+ {
+  "ad": "q07d donus tipsiz iki parametre",
+  "kod": "CLASS Say\n    PUBLIC\n    DIM n AS I32\n    METHOD Art(a AS I32, b AS I32)\n        n = a + b\n    END METHOD\nEND CLASS\nDIM s1 AS Say = NEW Say()\ns1.Art(5, 6)\nPRINT s1.n\n"
+ },
+ {
+  "ad": "q07e SUB'li deger",
+  "kod": "CLASS Say\n    PUBLIC\n    DIM n AS I32\n    METHOD Art(d AS I32)\n        n = d\n    END METHOD\nEND CLASS\nDIM s1 AS Say = NEW Say()\ns1.Art(5)\nPRINT s1.n\n"
+ },
+ {
+  "ad": "q07f alan esitle sonra artir",
+  "kod": "CLASS Say\n    PUBLIC\n    DIM n AS I32\n    METHOD Art(d AS I32)\n        n = n + d\n    END METHOD\nEND CLASS\nDIM s1 AS Say = NEW Say()\ns1.n = 100\ns1.Art(50)\nPRINT s1.n\n"
+ },
+ {
+  "ad": "q08 turemis sinifta F64 alan (sanal degil)",
+  "kod": "CLASS Ta\n    PUBLIC\nEND CLASS\nCLASS Tb EXTENDS Ta\n    PRIVATE\n    DIM kenar AS F64\n    PUBLIC\n    CONSTRUCTOR(k AS F64)\n        kenar = k\n    END CONSTRUCTOR\n    METHOD Kare() AS F64\n        RETURN kenar * kenar\n    END METHOD\nEND CLASS\nDIM t1 AS Tb = NEW Tb(5.0)\nPRINT t1.Kare()\n"
+ },
+ {
+  "ad": "q08b turemis sinifta I32 alan",
+  "kod": "CLASS Ta\n    PUBLIC\nEND CLASS\nCLASS Tb EXTENDS Ta\n    PRIVATE\n    DIM kenar AS I32\n    PUBLIC\n    CONSTRUCTOR(k AS I32)\n        kenar = k\n    END CONSTRUCTOR\n    METHOD Kare() AS I32\n        RETURN kenar * kenar\n    END METHOD\nEND CLASS\nDIM t1 AS Tb = NEW Tb(5)\nPRINT t1.Kare()\n"
+ },
+ {
+  "ad": "q08c sanal F64 override + alan yok",
+  "kod": "CLASS Ta\n    PUBLIC\n    VIRTUAL METHOD Alan() AS F64\n        RETURN 1.5\n    END METHOD\nEND CLASS\nCLASS Tb EXTENDS Ta\n    PUBLIC\n    OVERRIDE METHOD Alan() AS F64\n        RETURN 2.5\n    END METHOD\nEND CLASS\nDIM t1 AS Tb = NEW Tb()\nPRINT t1.Alan()\nDIM t2 AS Ta = NEW Tb()\nPRINT t2.Alan()\n"
+ },
+ {
+  "ad": "q08d sanal I32 override + turemiste alan",
+  "kod": "CLASS Ta\n    PUBLIC\n    VIRTUAL METHOD Alan() AS I32\n        RETURN 0\n    END METHOD\nEND CLASS\nCLASS Tb EXTENDS Ta\n    PRIVATE\n    DIM kenar AS I32\n    PUBLIC\n    CONSTRUCTOR(k AS I32)\n        kenar = k\n    END CONSTRUCTOR\n    OVERRIDE METHOD Alan() AS I32\n        RETURN kenar * kenar\n    END METHOD\nEND CLASS\nDIM t1 AS Tb = NEW Tb(5)\nPRINT t1.Alan()\n"
+ },
+ {
+  "ad": "q08e sanal F64 override + turemiste F64 alan",
+  "kod": "CLASS Ta\n    PUBLIC\n    VIRTUAL METHOD Alan() AS F64\n        RETURN 0.0\n    END METHOD\nEND CLASS\nCLASS Tb EXTENDS Ta\n    PRIVATE\n    DIM kenar AS F64\n    PUBLIC\n    CONSTRUCTOR(k AS F64)\n        kenar = k\n    END CONSTRUCTOR\n    OVERRIDE METHOD Alan() AS F64\n        RETURN kenar * kenar\n    END METHOD\nEND CLASS\nDIM t1 AS Tb = NEW Tb(5.0)\nPRINT t1.Alan()\n"
+ },
+ {
+  "ad": "q08f sanal F64 override + turemiste F64 alan + taban turlu degisken",
+  "kod": "CLASS Ta\n    PUBLIC\n    VIRTUAL METHOD Alan() AS F64\n        RETURN 0.0\n    END METHOD\nEND CLASS\nCLASS Tb EXTENDS Ta\n    PRIVATE\n    DIM kenar AS F64\n    PUBLIC\n    CONSTRUCTOR(k AS F64)\n        kenar = k\n    END CONSTRUCTOR\n    OVERRIDE METHOD Alan() AS F64\n        RETURN kenar * kenar\n    END METHOD\nEND CLASS\nDIM t1 AS Ta = NEW Tb(5.0)\nPRINT t1.Alan()\n"
+ },
+ {
+  "ad": "q08g F64 alan kurucuda sabit ile",
+  "kod": "CLASS Tb\n    PRIVATE\n    DIM kenar AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        kenar = 5.0\n    END CONSTRUCTOR\n    METHOD Kare() AS F64\n        RETURN kenar * kenar\n    END METHOD\nEND CLASS\nDIM t1 AS Tb = NEW Tb()\nPRINT t1.Kare()\n"
+ },
+ {
+  "ad": "q08h F64 kurucu parametresi taban yok",
+  "kod": "CLASS Tb\n    PRIVATE\n    DIM kenar AS F64\n    PUBLIC\n    CONSTRUCTOR(k AS F64)\n        kenar = k\n    END CONSTRUCTOR\n    METHOD Kare() AS F64\n        RETURN kenar * kenar\n    END METHOD\nEND CLASS\nDIM t1 AS Tb = NEW Tb(5.0)\nPRINT t1.Kare()\n"
+ },
+ {
+  "ad": "q09 fabrika islevi atama",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\nEND CLASS\nFUNCTION Uret(n AS I32) AS Kutu\n    RETURN NEW Kutu(n)\nEND FUNCTION\nDIM a1 AS Kutu\na1 = Uret(8)\nPRINT a1.v\n"
+ },
+ {
+  "ad": "q10 yontem baska nesne dondurur",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\n    METHOD Kopya() AS Kutu\n        RETURN NEW Kutu(v + 1)\n    END METHOD\nEND CLASS\nDIM a1 AS Kutu = NEW Kutu(3)\nDIM a2 AS Kutu\na2 = a1.Kopya()\nPRINT a2.v\n"
+ },
+ {
+  "ad": "q11 SUB parametresi olarak nesne",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nSUB Doldur(k AS Kutu)\n    k.v = 42\nEND SUB\nDIM a1 AS Kutu = NEW Kutu()\nDoldur(a1)\nPRINT a1.v\n"
+ },
+ {
+  "ad": "q12 PROPERTY get/set (AS tipli bicim)",
+  "kod": "CLASS Ogr\n    PRIVATE\n    DIM _n AS I32\n    PUBLIC\n    PROPERTY Puan AS I32\n        GET\n            RETURN _n\n        END GET\n        SET(y AS I32)\n            _n = y\n        END SET\n    END PROPERTY\nEND CLASS\nDIM o AS Ogr = NEW Ogr()\no.Puan = 95\nPRINT o.Puan\n"
+ },
+ {
+  "ad": "q13 ABSTRACT CLASS kisa ad",
+  "kod": "ABSTRACT CLASS Sk\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nPRINT 1\n"
+ },
+ {
+  "ad": "q13b FINAL CLASS kisa ad ve govde bos",
+  "kod": "FINAL CLASS Sk\nEND CLASS\nPRINT 1\n"
+ },
+ {
+  "ad": "q13c ABSTRACT sonra yeni satir CLASS",
+  "kod": "ABSTRACT\nCLASS Sk\nEND CLASS\nPRINT 1\n"
+ },
+ {
+  "ad": "q14 tasarim belgesi: THIS dogrudan ME sanal",
+  "kod": "CLASS Ta\n    PUBLIC\n    VIRTUAL METHOD Deger() AS I32\n        RETURN 10\n    END METHOD\n    METHOD ThisCagri() AS I32\n        RETURN THIS.Deger()\n    END METHOD\n    METHOD MeCagri() AS I32\n        RETURN ME.Deger()\n    END METHOD\nEND CLASS\nCLASS Tb EXTENDS Ta\n    PUBLIC\n    OVERRIDE METHOD Deger() AS I32\n        RETURN 20\n    END METHOD\nEND CLASS\nDIM o AS Tb = NEW Tb()\nPRINT o.ThisCagri()\nPRINT o.MeCagri()\n"
+ },
+ {
+  "ad": "q15 DIM nesne baslangic NEW + sonra yeniden NEW",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nDIM a1 AS Kutu = NEW Kutu()\na1.v = 1\na1 = NEW Kutu()\nPRINT a1.v\n"
+ },
+ {
+  "ad": "q16 ayni nesneye iki degisken",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nDIM a1 AS Kutu = NEW Kutu()\nDIM a2 AS Kutu\na2 = a1\na2.v = 7\nPRINT a1.v\n"
+ }
+]

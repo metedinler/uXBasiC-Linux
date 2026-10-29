@@ -207,6 +207,7 @@ End Function
 Declare Function UXBMIRInterpExecuteControl(ByRef ins As UXBMIRInstructionRecord, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState, ByVal currentIndex As Integer, ByVal gosubBase As Integer = 0) As UXBMIRInterpControlSignal
 Declare Function UXBMIRInterpExecTaskRuntimeCall(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState, ByVal currentIndex As Integer, ByRef handledOut As Integer, ByRef errText As String) As UXBInterpValue
 Declare Function UXBMIRInterpExecObjectNewWithCtor(ByRef ins As UXBMIRInstructionRecord, instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState) As UXBInterpValue
+Declare Function UXBMIRInterpExecObjectDelete(ByRef ins As UXBMIRInstructionRecord, instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState) As UXBInterpValue
 
 Private Function UXBMIRInterpPendingException(ByRef st As UXBMIRInterpState, ByRef errText As String) As Integer
     Dim activeText As String = UXBMIRInterpGetTextVar(st, "__mir_exc_active")
@@ -217,7 +218,7 @@ Private Function UXBMIRInterpPendingException(ByRef st As UXBMIRInterpState, ByR
     Return 1
 End Function
 
-Private Function UXBMIRInterpInvokeLabel( _
+Private Function UXBMIRInterpInvokeLabelCore( _
     instructions() As UXBMIRInstructionRecord, _
     ByVal instructionCount As Integer, _
     ByRef ctx As UXBInterpContext, _
@@ -278,6 +279,8 @@ Private Function UXBMIRInterpInvokeLabel( _
                 Dim r As UXBInterpValue
                 If UXBMIRStep4CanonicalOpcode(instructions(pc).opcode) = "MIR_OBJECT_NEW" Then
                     r = UXBMIRInterpExecObjectNewWithCtor(instructions(pc), instructions(), instructionCount, ctx, st)
+                ElseIf UXBMIRStep4CanonicalOpcode(instructions(pc).opcode) = "MIR_DELETE_OBJECT" Then
+                    r = UXBMIRInterpExecObjectDelete(instructions(pc), instructions(), instructionCount, ctx, st)
                 Else
                     r = UXBMIRInterpDispatch(instructions(pc), ctx, st)
                 End If
@@ -288,6 +291,32 @@ Private Function UXBMIRInterpInvokeLabel( _
     Loop
 
     Return UXBInterpValueVoid()
+End Function
+
+' S-543: kullanici rutini / kurucu / yikici / gorev govdesi cagrilarinin ORTAK girisi; ic ice cagri derinligini sayar.
+' Eskiden sayac yoktu: MIR'de derinlik ~50'yi asan ozyineleme iletisiz erisim ihlaliyle (0xC0000005) dusuyordu.
+Private Function UXBMIRInterpInvokeLabel( _
+    instructions() As UXBMIRInstructionRecord, _
+    ByVal instructionCount As Integer, _
+    ByRef ctx As UXBInterpContext, _
+    ByRef st As UXBMIRInterpState, _
+    ByVal labelName As String, _
+    ByRef errText As String _
+) As UXBInterpValue
+    Dim invokeDepthLimit As Integer = UXBMirCallDepthLimit()
+    If st.invokeDepth >= invokeDepthLimit Then
+        errText = "MIR: call stack limit exceeded (depth " & LTrim(Str(invokeDepthLimit)) & ")"
+        Return UXBInterpValueError(UXB_INTERP_ERR_LIMIT, errText)
+    End If
+    st.invokeDepth += 1
+    ' Argument binding still sees the caller. Only the invoked body switches
+    ' lexical visibility; restore it for both normal and error returns.
+    Dim savedVisibleScope As Integer = st.visibleRoutineScope
+    st.visibleRoutineScope = st.currentScopeDepth
+    Dim invokeResult As UXBInterpValue = UXBMIRInterpInvokeLabelCore(instructions(), instructionCount, ctx, st, labelName, errText)
+    st.visibleRoutineScope = savedVisibleScope
+    st.invokeDepth -= 1
+    Return invokeResult
 End Function
 
 ' S-030 Faz 1B: gorev saglayicisi rutin cagirma (UXBMIRInterpInvokeLabel) kullanir;
@@ -313,38 +342,136 @@ Function UXBMIRInterpExecObjectNewWithCtor(ByRef ins As UXBMIRInstructionRecord,
     ' `STORE_VAR a <- __t4` read the unknown name as a NUMBER (0). The FIRST object of a
     ' program has heap id 0, so single-object programs worked by coincidence; the second
     ' object was lost (and `a.Speak()` never saw the runtime class). Store it here.
-    If ctorIdx < 0 Then
-        If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, objectValue
-        Return objectValue
-    End If
-    If ctorIdx >= instructionCount Then Return UXBInterpValueError(UXB_INTERP_ERR_MIR_OPCODE, "MIR constructor label out of range: " & ctorName)
+    ' S-485 (2026-10-17): the instantiated class having NO constructor label of its own used to end the construction right here,
+    ' so a derived class without a constructor never ran its bases' constructors (`NEW Alt()` left the inherited field 0 while
+    ' AST, native x64, JS, WASM and legacy x64 ran the base constructor). The chain below skips every class that has no
+    ' constructor, so the early return is not needed: a program with no constructor anywhere falls through to the store below.
 
-    Dim ctorLabel As UXBMIRInstructionRecord = instructions(ctorIdx)
-    Dim ctorParamCount As Integer = ctorLabel.operandCount - 1
-    If ctorParamCount < 0 Then ctorParamCount = 0
-    UXBMIRInterpEnterScope st
-    If ctorParamCount > 0 Then
-        Dim receiverName As String = Trim(ctorLabel.operands(1))
-        If receiverName = "" Then receiverName = "THIS"
-        UXBMIRInterpSetVar st, receiverName, objectValue
-        UXBMIRInterpSetVar st, "THIS", objectValue
-        UXBMIRInterpSetVar st, "ME", objectValue
+    ' Canonical MIR carries the OOP class table alongside the instruction list.
+    ' Walk the derived-to-base chain, then invoke constructors base-first.  The
+    ' metadata is deliberately kept outside OBJECT_NEW operands so existing
+    ' backend ABI positions remain unchanged.
+    Dim ctorChain(0 To 64) As Integer
+    Dim chainCount As Integer
+    Dim classIdx As Integer
+    classIdx = -1
+    Dim ci As Integer
+    For ci = 0 To ctx.oopClassCount - 1
+        If UCase(Trim(ctx.oopClassNames(ci))) = objectTypeName Then classIdx = ci: Exit For
+    Next ci
+
+    ' S-485 / S-487 (P0.2, 2026-10-17): NEW runs ONLY the constructor of the class it creates. The base constructors are called from inside the
+    ' constructor body: the front end (semantic_base_ctor.fbs) writes `SUPER.CONSTRUCTOR(args)` as its first statement (explicit SUPER(...) or the
+    ' implicit parameterless one), so the chain is the same on every engine. This loop used to walk the bases and hand each one the NEW arguments.
+    If classIdx >= 0 Then
+        ctorChain(0) = classIdx
+    Else
+        ctorChain(0) = -1
     End If
-    Dim ctorArgIdx As Integer
-    For ctorArgIdx = 1 To ctorParamCount - 1
-        If ctorArgIdx + 1 >= ctorLabel.operandCount Then Exit For
-        Dim argValue As UXBInterpValue = UXBInterpValueVoid()
-        Dim sourceIdx As Integer = ctorArgIdx + 1
-        If ins.operandCount > sourceIdx Then argValue = UXBMIRInterpGetOperand(st, ins.operands(sourceIdx))
-        Dim paramName As String = Trim(ctorLabel.operands(ctorArgIdx + 1))
-        If paramName <> "" Then UXBMIRInterpSetVar st, paramName, argValue
-    Next ctorArgIdx
-    Dim ctorErr As String
-    Dim ctorResult As UXBInterpValue = UXBMIRInterpInvokeLabel(instructions(), instructionCount, ctx, st, ctorName, ctorErr)
-    UXBMIRInterpLeaveScope st
-    If UXBInterpIsError(ctorResult) <> 0 Then Return ctorResult
+    chainCount = 1
+
+    For ci = chainCount - 1 To 0 Step -1
+        Dim chainIdx As Integer = ctorChain(ci)
+        Dim currentCtorName As String
+        Dim expectedExplicitCount As Integer
+        If chainIdx >= 0 Then
+            currentCtorName = Trim(ctx.oopClassCtorNames(chainIdx))
+            expectedExplicitCount = ctx.oopClassCtorParamCounts(chainIdx)
+        Else
+            currentCtorName = ctorName
+            expectedExplicitCount = -1
+            If ctorIdx < 0 Then Continue For
+        End If
+        If currentCtorName = "" Then Continue For
+
+        Dim currentCtorIdx As Integer = UXBMIRInterpFindLabel(st, currentCtorName)
+        If currentCtorIdx < 0 Or currentCtorIdx >= instructionCount Then Return UXBInterpValueError(UXB_INTERP_ERR_MIR_OPCODE, "MIR constructor label out of range: " & currentCtorName)
+        Dim ctorLabel As UXBMIRInstructionRecord = instructions(currentCtorIdx)
+        Dim ctorParamCount As Integer = ctorLabel.operandCount - 1
+        If ctorParamCount < 0 Then ctorParamCount = 0
+        Dim userArgCount As Integer = ins.operandCount - 2
+        If userArgCount < 0 Then userArgCount = 0
+        If expectedExplicitCount >= 0 And expectedExplicitCount > userArgCount Then
+            Return UXBInterpValueError(UXB_INTERP_ERR_MIR_OPCODE, "MIR constructor requires " & LTrim(Str(expectedExplicitCount)) & " arguments but NEW supplies " & LTrim(Str(userArgCount)) & " for " & currentCtorName)
+        End If
+
+        UXBMIRInterpEnterScope st
+        If ctorParamCount > 0 Then
+            Dim receiverName As String = Trim(ctorLabel.operands(1))
+            If receiverName = "" Then receiverName = "THIS"
+            UXBMIRInterpSetVar st, receiverName, objectValue
+            UXBMIRInterpSetVar st, "THIS", objectValue
+            UXBMIRInterpSetVar st, "ME", objectValue
+            ' SUPER.CONSTRUCTOR(args) (S-485 / S-487) and SUPER.Method(args) in a constructor body use the receiver alias SUPER, exactly like methods
+            UXBMIRInterpSetVar st, "SUPER", objectValue
+        End If
+        Dim ctorArgIdx As Integer
+        For ctorArgIdx = 1 To ctorParamCount - 1
+            If ctorArgIdx + 1 >= ctorLabel.operandCount Then Exit For
+            Dim argValue As UXBInterpValue = UXBInterpValueVoid()
+            Dim sourceIdx As Integer = ctorArgIdx + 1
+            If ins.operandCount > sourceIdx Then argValue = UXBMIRInterpGetOperand(st, ins.operands(sourceIdx))
+            Dim paramName As String = Trim(ctorLabel.operands(ctorArgIdx + 1))
+            If paramName <> "" Then UXBMIRInterpSetVar st, paramName, argValue
+        Next ctorArgIdx
+        Dim ctorErr As String
+        Dim ctorResult As UXBInterpValue = UXBMIRInterpInvokeLabel(instructions(), instructionCount, ctx, st, currentCtorName, ctorErr)
+        UXBMIRInterpLeaveScope st
+        If UXBInterpIsError(ctorResult) <> 0 Then Return ctorResult
+    Next ci
     If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, objectValue
     Return objectValue
+End Function
+
+' S-574 (2026-10-17): MIR_DELETE_OBJECT destroys the object a reference names: the destructor chain of the object's REAL class (derived to
+' base, taken from the heap slot's class, not from the variable's declared type), exactly once, then the slot is marked dead so that every
+' other reference to it (aliases, fields, parameters) meets the same "null object reference" error as a NULL one. An empty reference (a plain
+' number: the NULL of this interpreter) or an object that is already dead is left alone: DELETE is harmless to repeat.
+Function UXBMIRInterpExecObjectDelete(ByRef ins As UXBMIRInstructionRecord, instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState) As UXBInterpValue
+    If ins.operandCount < 1 Then Return UXBInterpValueVoid()
+    Dim deleteTarget As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(0))
+    If deleteTarget.kind <> UXB_VAL_OBJECT Then Return UXBInterpValueVoid()
+    Dim deleteObjId As Integer = deleteTarget.objectId
+    If deleteObjId < 0 Or deleteObjId >= ctx.heap.slotCount Then Return UXBInterpValueVoid()
+    If ctx.heap.slots(deleteObjId).active = 0 Then Return UXBInterpValueVoid()
+    ' S-616: a DELETE of the same object from inside its own destructor does nothing (the chain is already running)
+    If ctx.heap.slots(deleteObjId).destroying <> 0 Then Return UXBInterpValueVoid()
+    ctx.heap.slots(deleteObjId).destroying = 1
+
+    Dim deleteClass As String = UCase(Trim(ctx.heap.slots(deleteObjId).typeName))
+    Dim deleteHops As Integer = 0
+    Do While deleteClass <> "" And deleteHops < 65
+        deleteHops += 1
+        Dim dtorIdx As Integer = UXBMIRInterpFindLabel(st, deleteClass & "_DTOR")
+        If dtorIdx >= 0 And dtorIdx < instructionCount Then
+            Dim dtorLabel As UXBMIRInstructionRecord = instructions(dtorIdx)
+            UXBMIRInterpEnterScope st
+            Dim dtorReceiverName As String = ""
+            If dtorLabel.operandCount > 1 Then dtorReceiverName = Trim(dtorLabel.operands(1))
+            If dtorReceiverName = "" Then dtorReceiverName = "THIS"
+            UXBMIRInterpSetVar st, dtorReceiverName, deleteTarget
+            UXBMIRInterpSetVar st, "THIS", deleteTarget
+            UXBMIRInterpSetVar st, "ME", deleteTarget
+            UXBMIRInterpSetVar st, "SUPER", deleteTarget
+            Dim dtorErr As String
+            Dim dtorResult As UXBInterpValue = UXBMIRInterpInvokeLabel(instructions(), instructionCount, ctx, st, deleteClass & "_DTOR", dtorErr)
+            UXBMIRInterpLeaveScope st
+            If UXBInterpIsError(dtorResult) <> 0 Then Return dtorResult
+        End If
+        Dim deleteBase As String = ""
+        Dim deleteCi As Integer
+        For deleteCi = 0 To ctx.oopClassCount - 1
+            If UCase(Trim(ctx.oopClassNames(deleteCi))) = deleteClass Then
+                deleteBase = UCase(Trim(ctx.oopClassBaseNames(deleteCi)))
+                Exit For
+            End If
+        Next deleteCi
+        If deleteBase = deleteClass Then Exit Do
+        deleteClass = deleteBase
+    Loop
+    ctx.heap.slots(deleteObjId).active = 0
+    ctx.heap.slots(deleteObjId).destroying = 0
+    Return UXBInterpValueVoid()
 End Function
 
 Private Sub UXBMIRInterpResetShellState(ByRef st As UXBMIRInterpState)
@@ -421,6 +548,31 @@ Private Function UXBMIRInterpRunShell(ByRef st As UXBMIRInterpState, ByVal comma
     Return 1
 End Function
 
+' S-336: the dynamic class need not declare the method itself. Resolve the
+' closest real body through canonical class/base metadata; do not parse the
+' mangled label (class and method names can both contain underscores).
+Private Function UXBMIRInterpVirtualTarget(ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState, ByVal className As String, ByVal methodName As String) As String
+    Dim currentClass As String = UCase(Trim(className))
+    Dim methodUpper As String = UCase(Trim(methodName))
+    Dim firstTarget As String = currentClass & "_" & methodUpper
+    Dim hop As Integer
+    For hop = 0 To ctx.oopClassCount
+        If currentClass = "" Then Exit For
+        Dim targetName As String = currentClass & "_" & methodUpper
+        If UXBMIRInterpFindLabel(st, targetName) >= 0 Then Return targetName
+        Dim baseName As String = ""
+        Dim classIdx As Integer
+        For classIdx = 0 To ctx.oopClassCount - 1
+            If UCase(Trim(ctx.oopClassNames(classIdx))) = currentClass Then
+                baseName = UCase(Trim(ctx.oopClassBaseNames(classIdx)))
+                Exit For
+            End If
+        Next classIdx
+        currentClass = baseName
+    Next hop
+    Return firstTarget
+End Function
+
 Private Function UXBMIRInterpExecTaskRuntimeCall( _
     instructions() As UXBMIRInstructionRecord, _
     ByVal instructionCount As Integer, _
@@ -474,12 +626,12 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
         If virtualReceiver.kind = UXB_VAL_OBJECT And virtualReceiver.objectId >= 0 And virtualReceiver.objectId < ctx.heap.slotCount Then
             Dim dynamicClass As String
             dynamicClass = UCase(Trim(ctx.heap.slots(virtualReceiver.objectId).typeName))
-            If dynamicClass <> "" Then callName = dynamicClass & "_" & UCase(Trim(ins.operands(2)))
+            If dynamicClass <> "" Then callName = UXBMIRInterpVirtualTarget(ctx, st, dynamicClass, ins.operands(2))
         ElseIf receiverTypeFallback <> "" Then
             ' A typed object slot may still contain a null/default handle at
             ' this point. Resolve the statically declared vtable owner so a
             ' valid method label is not mistaken for the raw __VT_SLOT token.
-            callName = receiverTypeFallback & "_" & UCase(Trim(ins.operands(2)))
+            callName = UXBMIRInterpVirtualTarget(ctx, st, receiverTypeFallback, ins.operands(2))
         End If
     End If
 
@@ -540,6 +692,17 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
                 ReDim userArgValues(userParamCount - 1)
                 ReDim userAliasTargets(userParamCount - 1)
             End If
+            ' S-604: an instance method / constructor-like callee carries the hidden receiver as its FIRST parameter ("THIS"):
+            ' that parameter reads operand 1, the real arguments start at operand 4. A STATIC method has no such parameter, so its
+            ' first declared parameter is argument 1 (operand 4). The old rule treated parameter 0 as the receiver in every METHOD_CALL
+            ' and shifted every static argument by one place (`Sq(3)` ran with an empty first parameter).
+            Dim userCalleeHasThis As Integer
+            userCalleeHasThis = 0
+            If canonicalCallOp = "MIR_METHOD_CALL" Or canonicalCallOp = "MIR_VIRTUAL_CALL" Then
+                If userParamCount > 0 Then
+                    If UCase(Trim(userLabel.operands(1))) = "THIS" Then userCalleeHasThis = 1
+                End If
+            End If
             Dim userParamIdx As Integer
             For userParamIdx = 0 To userParamCount - 1
                 userAliasTargets(userParamIdx) = -1
@@ -560,7 +723,9 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
                     userArgValue = UXBInterpValueVoid()
                     Dim sourceOperandIndex As Integer
                     If canonicalCallOp = "MIR_METHOD_CALL" Or canonicalCallOp = "MIR_VIRTUAL_CALL" Then
-                        If userParamIdx = 0 Then
+                        If userCalleeHasThis = 0 Then
+                            sourceOperandIndex = userParamIdx + 4
+                        ElseIf userParamIdx = 0 Then
                             sourceOperandIndex = 1
                         Else
                             sourceOperandIndex = userParamIdx + 3
@@ -578,13 +743,10 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
                     End If
                     If userAliasTargets(userParamIdx) < 0 Then
                         If ins.operandCount > sourceOperandIndex Then userArgValue = UXBMIRInterpGetOperand(st, ins.operands(sourceOperandIndex))
-                        If userParamIsByRef = 0 Then
-                            userArgValue = UXBInterpLibraryValueCopy(userArgValue)
-                            If UXBInterpIsError(userArgValue) <> 0 Then
-                                UXBMIRInterpLeaveScope st
-                                Return userArgValue
-                            End If
-                        End If
+                        ' B3: BYVAL ownership is explicit in canonical MIR. The
+                        ' lowering emits TYPE.COPY for managed values; keeping an
+                        ' implicit runtime copy here would clone twice and make
+                        ' provider lifecycle counts target-dependent.
                         userArgValues(userParamIdx) = userArgValue
                     End If
                 End If
@@ -609,7 +771,7 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
                     UXBMIRInterpSetVar st, userParamNames(userParamIdx), userArgValues(userParamIdx)
                 End If
             Next userParamIdx
-            If canonicalCallOp = "MIR_METHOD_CALL" Or canonicalCallOp = "MIR_VIRTUAL_CALL" Then
+            If userCalleeHasThis <> 0 Then
                 If ins.operandCount > 1 Then
                     Dim receiverAliasValue As UXBInterpValue
                     receiverAliasValue = UXBMIRInterpGetOperand(st, ins.operands(1))
@@ -649,7 +811,12 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
         Dim openResult As UXBInterpValue = UXBRuntimeDispatch(ctx.runtime, RT_FILE_OPEN, openArgs)
         If UXBInterpIsError(openResult) <> 0 Then Return openResult
         Dim openChannelText As String = UXBMIRInterpOperandText(st, ins, 3)
+        ' S-621: a file channel belongs to the PROGRAM, not to the routine that opened it (AST, native x64 and the legacy engine keep it until CLOSE);
+        ' the channel table entry was created in the current call scope and vanished when the routine returned ("file channel not open: 1" in the caller).
+        Dim openSavedDepth As Integer = st.currentScopeDepth
+        st.currentScopeDepth = 0
         UXBMIRInterpSetVar st, "__UXB_FILE_" & openChannelText, openResult
+        st.currentScopeDepth = openSavedDepth
         Return UXBInterpValueVoid()
 
     Case "CLOSE"
@@ -662,6 +829,20 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
         UXBRuntimeArgListInit closeArgs
         UXBRuntimeArgListAdd closeArgs, st.vars(closeMapIdx)->value
         Return UXBRuntimeDispatch(ctx.runtime, RT_FILE_CLOSE, closeArgs)
+
+    Case "EOF", "LOF"
+        handledOut = 1
+        If ins.operandCount <> 2 Then Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, callName & " expects one channel argument")
+        Dim queryChannelText As String = UXBMIRInterpOperandText(st, ins, 1)
+        Dim queryMapIdx As Integer = UXBMIRInterpFindVar(st, "__UXB_FILE_" & queryChannelText)
+        If queryMapIdx < 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "file channel not open: " & queryChannelText)
+        Dim queryArgs As UXBRuntimeArgList
+        UXBRuntimeArgListInit queryArgs
+        UXBRuntimeArgListAdd queryArgs, st.vars(queryMapIdx)->value
+        Dim queryService As String = IIf(callName = "EOF", RT_FILE_EOF, RT_FILE_LOF)
+        Dim queryResult As UXBInterpValue = UXBRuntimeDispatch(ctx.runtime, queryService, queryArgs)
+        If UXBInterpIsError(queryResult) = 0 And Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, queryResult
+        Return queryResult
 
     Case "INPUTF"
         handledOut = 1
@@ -814,6 +995,15 @@ Private Function UXBMIRInterpExecTaskRuntimeCall( _
         ' ends (UXBMIRInterpRunInstructions); rebuilding the events JSON here made
         ' every PRINT cost O(all output so far).
         UXBRuntimeWriteOutput ctx.runtime, printText, RT_PRINT
+        Return UXBInterpValueVoid()
+
+    Case "PRINT_SEP_COMMA", "PRINT_SEP_SPACE", "PRINT_SEP_SEMICOLON"
+        handledOut = 1
+        If ins.operandCount <> 1 Then Return UXBInterpValueError(UXB_INTERP_ERR_MIR_OPCODE, "PRINT separator does not accept operands")
+        Dim separatorText As String = ""
+        If callName = "PRINT_SEP_COMMA" Then separatorText = String(14 - (ctx.runtime.printColumnPos Mod 14), " ")
+        If callName = "PRINT_SEP_SPACE" Then separatorText = " "
+        If separatorText <> "" Then UXBRuntimeWriteOutput ctx.runtime, separatorText, RT_PRINT
         Return UXBInterpValueVoid()
 
     Case "PRINTLN"
@@ -986,10 +1176,15 @@ Private Function UXBMIRInterpExecuteControl(ByRef ins As UXBMIRInstructionRecord
             If st.gosubDepth = 0 Then Erase st.gosubReturns
             Return sig
         End If
+        ' S-537: yordam disindaki (ana program) bir RETURN yalniz bir GOSUB'tan doner; GOSUB yigini bossa programi sessizce
+        ' bitirmek yerine acik calisma ani hatasidir (AST ile ayni). Programin ortuk sonundaki RET kaynak RETURN'u degildir.
+        If st.invokeDepth = 0 And UCase(Trim(ins.sourceAstKind)) = "SOURCE_RETURN" Then
+            Return UXBMIRInterpControlFail(currentIndex, UXB_INTERP_ERR_RUNTIME_SERVICE, "MIR: RETURN used without GOSUB (9301)")
+        End If
         sig.returnNow = 1
         If ins.operandCount > 0 Then sig.returnValue = UXBMIRInterpGetOperand(st, ins.operands(0))
-        sig.returnValue = UXBInterpLibraryValueCopy(sig.returnValue)
-        If UXBInterpIsError(sig.returnValue) <> 0 Then Return UXBMIRInterpControlFail(currentIndex, sig.returnValue.errorCode, sig.returnValue.errorText)
+        ' B3: managed RETURN transfer is made explicit by TYPE.COPY in MIR
+        ' lowering. Provider-produced call results move through RET unchanged.
         Return sig
     End Select
     Return sig
@@ -1117,6 +1312,8 @@ Private Function UXBMIRInterpRunInstructionsCore(instructions() As UXBMIRInstruc
                 Dim r As UXBInterpValue
                 If UXBMIRStep4CanonicalOpcode(instructions(i).opcode) = "MIR_OBJECT_NEW" Then
                     r = UXBMIRInterpExecObjectNewWithCtor(instructions(i), instructions(), instructionCount, ctx, st)
+                ElseIf UXBMIRStep4CanonicalOpcode(instructions(i).opcode) = "MIR_DELETE_OBJECT" Then
+                    r = UXBMIRInterpExecObjectDelete(instructions(i), instructions(), instructionCount, ctx, st)
                 Else
                     r = UXBMIRInterpDispatch(instructions(i), ctx, st)
                 End If
@@ -1158,6 +1355,9 @@ End Function
 Function UXBMIRInterpRunInstructions(instructions() As UXBMIRInstructionRecord, ByVal instructionCount As Integer, ByRef ctx As UXBInterpContext, ByRef errText As String) As UXBInterpResult
     Dim res As UXBInterpResult
     res = UXBMIRInterpRunInstructionsCore(instructions(), instructionCount, ctx, errText)
+    ' S-623: program bitti (her cikis yolu); acik kullanici kanallari, kendi gunluk/rapor yazicilarimizin
+    ' dosya numarasi havuzunu tuketmesin diye simdi kapatilir.
+    UXBRuntimeFileCloseAll ctx.runtime
     ' S-030 K5: okunmamis gorev hatasi sessiz kaybolmaz -- basarili bitis bile basarisiz sayilir.
     If res.statusText = "PASS" Then
         Dim unreadTaskErr As String

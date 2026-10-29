@@ -87,7 +87,7 @@ Private Function MIRX64TryEmitGuardSurface(ByRef ins As MIRIRInstruction, ByRef 
     Case "ON", "OFF"
         handledOut = 1
         Return MIRX64EmitOnOffOpcode(ins, op, cg, errText)
-    Case "EXIT"
+    Case "EXIT", "CONTINUE"
         handledOut = 1
         Return MIRX64EmitExitOpcode(ins, cg, errText)
     End Select

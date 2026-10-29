@@ -1,0 +1,2 @@
+DIM values(0 TO 3) AS I32
+PRINT PEEKD(NATIVE, VARPTR(values(0)) - 1)

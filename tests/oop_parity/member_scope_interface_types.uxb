@@ -1,0 +1,17 @@
+' S-611: the methods of an INTERFACE own their parameters too (same name `v`, types I32 and F64); WASM prints no floats.
+INTERFACE IX
+    METHOD A(v AS I32) AS I32
+    METHOD B(v AS F64) AS F64
+END INTERFACE
+CLASS K IMPLEMENTS IX
+    PUBLIC
+    METHOD A(v AS I32) AS I32
+        RETURN v + 1
+    END METHOD
+    METHOD B(v AS F64) AS F64
+        RETURN v + 0.5
+    END METHOD
+END CLASS
+DIM kk AS K = NEW K()
+PRINT kk.A(4)
+PRINT kk.B(1.0)

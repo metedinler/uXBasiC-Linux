@@ -1,0 +1,38 @@
+' S-576 (2026-10-17): a NON-virtual helper may be called from a constructor in every form - bare, ME. and THIS. (the old rule rejected ME.
+' even for a non-virtual target).
+CLASS Bir
+    PUBLIC
+    DIM v AS I32
+    METHOD Duz() AS I32
+        RETURN 7
+    END METHOD
+    CONSTRUCTOR()
+        v = Duz()
+    END CONSTRUCTOR
+END CLASS
+CLASS Iki
+    PUBLIC
+    DIM v AS I32
+    METHOD Duz() AS I32
+        RETURN 7
+    END METHOD
+    CONSTRUCTOR()
+        v = ME.Duz()
+    END CONSTRUCTOR
+END CLASS
+CLASS Uc
+    PUBLIC
+    DIM v AS I32
+    METHOD Duz() AS I32
+        RETURN 7
+    END METHOD
+    CONSTRUCTOR()
+        v = THIS.Duz()
+    END CONSTRUCTOR
+END CLASS
+DIM a1 AS Bir = NEW Bir()
+DIM a2 AS Iki = NEW Iki()
+DIM a3 AS Uc = NEW Uc()
+PRINT a1.v
+PRINT a2.v
+PRINT a3.v

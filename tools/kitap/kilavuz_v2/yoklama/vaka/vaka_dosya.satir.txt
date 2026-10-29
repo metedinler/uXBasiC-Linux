@@ -1,0 +1,26 @@
+yaz_oku | | OPEN "t1.txt" FOR OUTPUT AS #1\nPRINT #1, "satir bir"\nPRINT #1, "satir iki"\nCLOSE #1\nDIM s AS STRING\nOPEN "t1.txt" FOR INPUT AS #1\nWHILE EOF(1) = 0\n    INPUT #1, s\n    PRINT s\nWEND\nCLOSE #1
+line_input | | OPEN "t2.txt" FOR OUTPUT AS #1\nPRINT #1, "a, b"\nCLOSE #1\nDIM s AS STRING\nOPEN "t2.txt" FOR INPUT AS #1\nLINE INPUT #1, s\nCLOSE #1\nPRINT s
+sayi_yaz_oku | | OPEN "t3.txt" FOR OUTPUT AS #1\nPRINT #1, 42\nPRINT #1, 2.5\nCLOSE #1\nDIM a AS I32\nDIM b AS F64\nOPEN "t3.txt" FOR INPUT AS #1\nINPUT #1, a\nINPUT #1, b\nCLOSE #1\nPRINT a + 1; " "; b * 2
+append | | OPEN "t4.txt" FOR OUTPUT AS #1\nPRINT #1, "ilk"\nCLOSE #1\nOPEN "t4.txt" FOR APPEND AS #1\nPRINT #1, "ikinci"\nCLOSE #1\nDIM s AS STRING\nDIM n AS I32\nOPEN "t4.txt" FOR INPUT AS #1\nWHILE EOF(1) = 0\n    INPUT #1, s\n    n += 1\nWEND\nCLOSE #1\nPRINT n
+lof_boyut | | OPEN "t5.txt" FOR OUTPUT AS #1\nPRINT #1, "12345"\nCLOSE #1\nOPEN "t5.txt" FOR INPUT AS #1\nPRINT LOF(1)\nCLOSE #1
+freefile | | PRINT FREEFILE
+olmayan_dosya | | OPEN "yok_dosya.txt" FOR INPUT AS #1\nPRINT "acildi"
+binary_put_get | | OPEN "t6.bin" FOR BINARY AS #1\nDIM x AS I32 = 258\nPUT #1, 1, x\nDIM y AS I32\nGET #1, 1, y\nCLOSE #1\nPRINT y
+seek_dene | | OPEN "t7.txt" FOR OUTPUT AS #1\nPRINT #1, "abcdef"\nCLOSE #1\nOPEN "t7.txt" FOR BINARY AS #1\nDIM c AS U8\nSEEK #1, 3\nGET #1, , c\nCLOSE #1\nPRINT c
+kill_dene | | OPEN "t8.txt" FOR OUTPUT AS #1\nCLOSE #1\nKILL "t8.txt"\nPRINT "silindi"
+dir_dene | | PRINT DIR("*.txt") <> ""
+mkdir_dene | | MKDIR "dd1"\nPRINT "ok"
+name_dene | | OPEN "t9.txt" FOR OUTPUT AS #1\nCLOSE #1\nNAME "t9.txt" AS "t9b.txt"\nPRINT "ok"
+write_dene | | OPEN "t10.txt" FOR OUTPUT AS #1\nWRITE #1, "a", 5\nCLOSE #1\nPRINT "ok"
+input_konsol | | PRINT "x"
+cls_color | | CLS\nCOLOR 15, 1\nLOCATE 2, 5\nPRINT "ok"
+shell_basit | | SHELL "cmd /c echo merhaba"
+shell_outvar | DIM o AS STRING | SHELL "cmd /c echo merhaba" OUTVAR o\nPRINT "[" + o + "]"
+shell_kod | DIM c AS I32 | SHELL "cmd /c exit 3" CODEVAR c\nPRINT c
+shell_timeout | DIM o AS STRING | SHELL "cmd /c echo a" TIMEOUT 5000 OUTVAR o\nPRINT LEN(o) > 0
+timer_olcum | | DIM t AS F64 = TIMER\nPRINT t >= 0
+print_hash_degisken | DIM f AS I32 = 1 | OPEN "t11.txt" FOR OUTPUT AS #f\nPRINT #f, "x"\nCLOSE #f\nPRINT "ok"
+print_dosya_virgul | | OPEN "t12.txt" FOR OUTPUT AS #1\nPRINT #1, 1, 2\nCLOSE #1\nOPEN "t12.txt" FOR INPUT AS #1\nDIM s AS STRING\nLINE INPUT #1, s\nCLOSE #1\nPRINT "["; s; "]"
+eof_bos_dosya | | OPEN "t13.txt" FOR OUTPUT AS #1\nCLOSE #1\nOPEN "t13.txt" FOR INPUT AS #1\nPRINT EOF(1)\nCLOSE #1
+kapatilmamis | | OPEN "t14.txt" FOR OUTPUT AS #1\nPRINT #1, "x"\nPRINT "bitti"
+close_hepsi | | OPEN "t15.txt" FOR OUTPUT AS #1\nCLOSE\nPRINT "ok"

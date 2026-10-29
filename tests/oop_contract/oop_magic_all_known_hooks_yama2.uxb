@@ -1,0 +1,27 @@
+CLASS Sayi
+    DIM value AS I32
+
+    MAGIC GET(name AS I32) AS I32
+        RETURN value
+    END MAGIC
+
+    MAGIC SET(name AS I32, v AS I32)
+        value = v
+    END MAGIC
+
+    MAGIC CALL(x AS I32) AS I32
+        RETURN x + value
+    END MAGIC
+
+    MAGIC TOSTRING() AS I32
+        RETURN value
+    END MAGIC
+
+    MAGIC ADD(other AS Sayi) AS Sayi
+        RETURN NEW Sayi()
+    END MAGIC
+
+    MAGIC GE(other AS Sayi) AS I32
+        RETURN 1
+    END MAGIC
+END CLASS

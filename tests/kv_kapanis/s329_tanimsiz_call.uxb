@@ -1,0 +1,3 @@
+' S-329: CALL ile hic tanimlanmamis yordam = derleme hatasi.
+PRINT "once"
+CALL Yok(3)

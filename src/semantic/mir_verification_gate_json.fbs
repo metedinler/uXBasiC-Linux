@@ -2,6 +2,7 @@
 #define UXB_MIR_VERIFICATION_GATE_JSON_FBS
 
 #include once "mir_verification_gate.fbs"
+#include once "../common/report_writer.fbs"
 
 Private Function UXBMIRGateJsonEscape(ByVal rawText As String) As String
     Dim s As String = ""
@@ -37,11 +38,8 @@ End Function
 Function UXBMIRWriteGateJson(ByRef r As UXBMIRGateResult, ByVal outPath As String, ByRef errText As String) As Integer
     errText = ""
     If Trim(outPath) = "" Then Return 1
-    Dim f As Integer = FreeFile
-    Open outPath For Output As #f
-    Print #f, UXBMIRGateResultToJson(r)
-    Close #f
-    Return 1
+    Dim contentText As String = UXBMIRGateResultToJson(r) & Chr(10)
+    Return UXBReportWriteText(outPath, contentText, errText)
 End Function
 
 #endif

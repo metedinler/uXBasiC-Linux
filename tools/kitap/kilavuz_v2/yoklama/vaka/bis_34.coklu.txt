@@ -1,0 +1,48 @@
+K1 BOOLEAN yazdirma ve STR (beklenen -1 / -1)
+DIM b AS BOOLEAN = TRUE
+PRINT b
+PRINT STR(b)
+=====
+K2 BOOLEAN sinif alani STR
+CLASS Kb
+PUBLIC
+    DIM a AS BOOLEAN
+    METHOD Yaz() AS STRING
+        RETURN "a=" + STR(a)
+    END METHOD
+END CLASS
+DIM k AS Kb = NEW Kb()
+k.a = TRUE
+PRINT k.Yaz()
+=====
+K3 BIGF / BIGD / F128 / F80 temel islem
+DIM a AS F128
+DIM b AS F80
+a = F128("1.5")
+b = F80("2.5")
+PRINT a
+PRINT b
+=====
+K4 BIGF toplama
+DIM x AS BIGF
+DIM y AS BIGF
+x = BIGF("1.5")
+y = BIGF("2.25")
+PRINT x + y
+=====
+K5 BALL
+DIM x AS BALL
+x = BALL("1.5")
+PRINT x
+=====
+K6 JS_OBJECT ve WASM_EXTERNREF ve VARIANT ve ANY ayri ayri
+DIM a AS VARIANT
+PRINT "tamam"
+=====
+K7 ANY
+DIM a AS ANY
+PRINT "tamam"
+=====
+K8 WSTRPTR
+DIM a AS WSTRPTR
+PRINT "tamam"

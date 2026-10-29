@@ -1,0 +1,21 @@
+' S-532: dongu icinden GOSUB; alt program baska bir alt programi cagirir ve IF icinden RETURN eder. Her GOSUB kendi cagri
+' noktasina doner.   i=1: 1, +10 (Ic), +100  -> 111   i=2: +1, +10, RETURN (IF) -> 122   i=3: +1, +10, +100 -> 233
+DIM i AS I32
+DIM t AS I32
+t = 0
+FOR i = 1 TO 3
+    GOSUB Dis
+NEXT
+PRINT t
+END
+
+Dis:
+t = t + 1
+GOSUB Ic
+IF i = 2 THEN RETURN
+t = t + 100
+RETURN
+
+Ic:
+t = t + 10
+RETURN

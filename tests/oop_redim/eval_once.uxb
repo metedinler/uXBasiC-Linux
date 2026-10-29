@@ -1,0 +1,29 @@
+CLASS Cell
+ PUBLIC
+ value AS I32
+END CLASS
+DIM calls AS I32 = 0
+DIM trace AS I32 = 0
+FUNCTION BoundValue() AS I32
+ calls += 1
+ RETURN calls
+END FUNCTION
+FUNCTION RowIndex() AS I32
+ trace = trace*10+1
+ RETURN 1
+END FUNCTION
+FUNCTION ColumnIndex() AS I32
+ trace = trace*10+2
+ RETURN 2
+END FUNCTION
+DIM a(0 TO BoundValue(), 0 TO BoundValue()) AS Cell
+a(RowIndex(),ColumnIndex()) = NEW Cell()
+PRINT calls
+PRINT trace
+a(1,2).value = 31
+REDIM PRESERVE a(0 TO BoundValue(), 0 TO BoundValue()) AS Cell
+PRINT calls
+PRINT a(1,2).value
+trace = 0
+PRINT a(RowIndex(),ColumnIndex()).value
+PRINT trace

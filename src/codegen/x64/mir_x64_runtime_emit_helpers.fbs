@@ -7,10 +7,9 @@
 
 Sub MIRX64EmitRuntimeExtern(ByRef cg As MIRX64Context, ByRef symbolName As String)
     If Trim(symbolName) = "" Then Exit Sub
-    ' Avoid duplicates by simple text check.
-    If InStr(cg.externText, "extern " & symbolName) = 0 Then
-        MIRX64EmitExtern cg, "extern " & symbolName
-    End If
+    ' The central helper compares complete lines, including symbol boundaries.
+    ' Prefix matching suppressed STRING when STRING_TEXT had already been emitted.
+    MIRX64EmitExtern cg, "extern " & symbolName
 End Sub
 
 Sub MIRX64EmitRuntimeCall0(ByRef cg As MIRX64Context, ByRef symbolName As String)

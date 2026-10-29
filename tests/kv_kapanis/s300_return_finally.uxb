@@ -1,0 +1,85 @@
+' S-300: RETURN, gectigi her TRY'in FINALLY'sini (icten disa) calistirir; donus degeri RETURN aninda sabitlenir,
+' FINALLY'deki RETURN once bekleyen RETURN'u ezer. (CONTINUE ile ayni kural: continue_finally.)
+DIM g AS I32 = 7
+FUNCTION Basit() AS I32
+    TRY
+        RETURN 1
+    FINALLY
+        PRINT "basit-fin"
+    END TRY
+    RETURN 0
+END FUNCTION
+FUNCTION IcIce() AS I32
+    TRY
+        TRY
+            RETURN 2
+        FINALLY
+            PRINT "ic-fin"
+        END TRY
+    FINALLY
+        PRINT "dis-fin"
+    END TRY
+    RETURN 0
+END FUNCTION
+FUNCTION Dongu() AS I32
+    DIM i AS I32
+    FOR i = 1 TO 3
+        TRY
+            IF i = 2 THEN RETURN i * 10
+        FINALLY
+            PRINT "dongu-fin"
+        END TRY
+    NEXT i
+    RETURN 0
+END FUNCTION
+FUNCTION Kesir() AS F64
+    TRY
+        RETURN 2.5
+    FINALLY
+        PRINT "kesir-fin"
+    END TRY
+    RETURN 0
+END FUNCTION
+FUNCTION Metin() AS STRING
+    TRY
+        RETURN "abc"
+    FINALLY
+        PRINT "metin-fin"
+    END TRY
+    RETURN ""
+END FUNCTION
+FUNCTION Sabit() AS I32
+    TRY
+        RETURN g
+    FINALLY
+        g = 99
+        PRINT "sabit-fin"
+    END TRY
+    RETURN 0
+END FUNCTION
+SUB Yordam()
+    TRY
+        PRINT "yordam"
+        RETURN
+    FINALLY
+        PRINT "yordam-fin"
+    END TRY
+    PRINT "yanlis"
+END SUB
+FUNCTION Ezen() AS I32
+    TRY
+        RETURN 1
+    FINALLY
+        RETURN 2
+    END TRY
+    RETURN 0
+END FUNCTION
+PRINT Basit()
+PRINT IcIce()
+PRINT Dongu()
+PRINT Kesir()
+PRINT Metin()
+PRINT Sabit()
+PRINT g
+Yordam()
+PRINT Ezen()

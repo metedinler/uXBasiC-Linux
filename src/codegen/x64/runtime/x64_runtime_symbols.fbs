@@ -15,7 +15,7 @@ Function UXBX64RuntimeSymbol(ByVal serviceName As String) As String
     Case "GETKEY", "RT_GETKEY": Return "__uxb_rt_getkey_i64"
     Case "INKEY", "RT_INKEY": Return "__uxb_rt_inkey_i64"
     Case "RND", "RT_RND": Return "__uxb_rt_rnd_i64"
-    Case "TIMER", "RT_TIMER": Return "__uxb_rt_timer_i64"
+    Case "TIMER", "RT_TIMER": Return "__uxb_rt_timer_f64"   ' S-624: F64 (XMM0)
     Case "RANDOMIZE", "RT_RANDOMIZE": Return "__uxb_rt_randomize"
     Case "STR_LEN", "LEN", "RT_STR_LEN": Return "__uxb_rt_strlen"
     Case "VAL", "RT_VAL": Return "__uxb_rt_val_i64"
@@ -58,6 +58,7 @@ Function UXBX64RuntimeExternBlock() As String
     s &= "extern __uxb_rt_inkey_i64" & Chr(10)
     s &= "extern __uxb_rt_rnd_i64" & Chr(10)
     s &= "extern __uxb_rt_timer_i64" & Chr(10)
+    s &= "extern __uxb_rt_timer_f64" & Chr(10)
     s &= "extern __uxb_rt_randomize" & Chr(10)
     s &= "extern __uxb_rt_strlen" & Chr(10)
     s &= "extern __uxb_rt_val_i64" & Chr(10)

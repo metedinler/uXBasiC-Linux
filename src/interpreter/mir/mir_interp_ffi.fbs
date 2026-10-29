@@ -218,11 +218,7 @@ End Function
 
 Private Function UXBMIRFfiPointerBits(ByRef value As UXBInterpValue) As ULongInt
     If value.ptrValue <> 0 Then
-#Ifdef __FB_64BIT__
         Return CULngInt(CLngInt(value.ptrValue))
-#Else
-        Return CULngInt(CULng(value.ptrValue))
-#EndIf
     End If
     If value.uintValue <> 0 Then Return value.uintValue
     Return CULngInt(value.intValue)
@@ -261,11 +257,7 @@ Private Function UXBMIRFfiArgValue( _
         stringKeepAlive = UXBInterpValueToString(value)
         ' S-145: FreeBASIC StrPtr of an empty string is NULL; "" must reach the callee as a real empty C string.
         If Len(stringKeepAlive) = 0 Then stringKeepAlive = Chr(0)
-#Ifdef __FB_64BIT__
         u64Out = CULngInt(CLngInt(CPtr(Any Ptr, StrPtr(stringKeepAlive))))
-#Else
-        u64Out = CULngInt(CULng(CPtr(Any Ptr, StrPtr(stringKeepAlive))))
-#EndIf
     Case "PTR"
         u64Out = UXBMIRFfiPointerBits(value)
     Case "I32", "I64"

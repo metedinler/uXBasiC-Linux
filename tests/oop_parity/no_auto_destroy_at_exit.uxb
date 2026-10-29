@@ -1,0 +1,16 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT 7
+    END DESTRUCTOR
+END CLASS
+
+' S-574 / S-473: an object nobody DELETEs is not destroyed when the program ends (the book says so since 11.2). The AST interpreter alone
+' ran the destructors of the remaining global objects at the end.
+DIM a AS Kutu = NEW Kutu(1)
+DIM b AS Kutu = NEW Kutu(2)
+PRINT 9

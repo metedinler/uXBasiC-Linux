@@ -1,0 +1,136 @@
+K1_yerlesik_adlar
+' S-329 yanlis pozitif haritasi: yerlesik yordamlar "tanimsiz" sayilmamali. Beklenen: 3 | Mer | AB
+PRINT LEN("abc")
+PRINT Left("Merhaba", 3)
+PRINT UCASE("ab")
+=====
+K2_ileri_cagri_declare_siz
+' Tanimdan once cagri (S-544 karari: DECLARE zorunlu degil). Beklenen: 8
+PRINT Iki(4)
+FUNCTION Iki(a AS I32) AS I32
+    RETURN a * 2
+END FUNCTION
+=====
+K3_namespace_nitelikli
+' Beklenen: 6
+NAMESPACE S
+    FUNCTION F(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+END NAMESPACE
+PRINT S.F(2)
+=====
+K4_using_ile_nitelensiz
+' Beklenen: 6
+NAMESPACE S
+    FUNCTION F(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+END NAMESPACE
+USING S
+PRINT F(2)
+=====
+K5_call_ve_parantezli_sub_deyimi
+' CALL deyimi ve parantezli SUB deyimi. Beklenen: sub:3 | sub:4
+' (Parantezsiz `Bas 4` bugun altı yolda UXB_CALL_PAREN_REQUIRED ayristirma hatasidir; bu vakada kullanilmaz.)
+SUB Bas(n AS I32)
+    PRINT "sub:" + STR(n)
+END SUB
+CALL Bas(3)
+Bas(4)
+=====
+K6_sinif_yontemi_yalin_cagri
+' Sinif govdesinde yalin yontem cagrisi implicit THIS ile cozulur (semantic_implicit_this.fbs). Beklenen: 2
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    SUB Bump()
+        n = n + 1
+    END SUB
+    SUB Iki()
+        Bump()
+        Bump()
+    END SUB
+END CLASS
+DIM s AS Sayac = NEW Sayac()
+s.Iki()
+PRINT s.n
+=====
+K7_ozyineleme
+' Beklenen: 120
+FUNCTION Fakt(n AS I32) AS I32
+    IF n <= 1 THEN
+        RETURN 1
+    END IF
+    RETURN n * Fakt(n - 1)
+END FUNCTION
+PRINT Fakt(5)
+=====
+K8_koleksiyon_kutuphane_cagrilari
+' Kutuphane yordamlari (LISTADD, LISTGET) kullanici tanimi degildir. Beklenen: 10
+DIM l AS LIST
+CALL LISTADD(l, 10)
+PRINT LISTGET(l, 0)
+=====
+K9_declare_sonra_tanim
+' Beklenen: 9
+DECLARE FUNCTION Uc(a AS I32) AS I32
+PRINT Uc(3)
+FUNCTION Uc(a AS I32) AS I32
+    RETURN a * 3
+END FUNCTION
+=====
+K10_slot_trigger_ad
+' SLOT/TRIGGER adlari yordam cagrisi degil. Beklenen: THREAD_RUN
+THREAD Isci
+    PRINT "THREAD_RUN"
+END THREAD
+SLOT
+    Is 8 ON THREAD Isci
+END SLOT
+TRIGGER Isci
+=====
+H1_tanimsiz_ifade
+' Hedef: derleme hatasi, "once" HIC yazilmaz. Bugun AST/MIR/JS calisma aninda "once" yazar sonra hata verir.
+PRINT "once"
+PRINT Yok(4)
+=====
+H2_tanimsiz_call
+' Hedef: derleme hatasi.
+PRINT "once"
+CALL Yok(3)
+=====
+H3_tanimsiz_olu_dal
+' Hedef: derleme hatasi (dal hic calismasa da). Bugun AST/MIR "ok" yazip basarili biter mi?
+IF 0 THEN
+    PRINT Yok(4)
+END IF
+PRINT "ok"
+=====
+H4_yazim_hatasi
+' Topla var, Topl yok. Hedef: derleme hatasi.
+FUNCTION Topla(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+PRINT Topl(1, 2)
+=====
+H5_namespace_icinde_yok
+' S.Yok yok. Hedef: derleme hatasi.
+NAMESPACE S
+    FUNCTION F(a AS I32) AS I32
+        RETURN a
+    END FUNCTION
+END NAMESPACE
+PRINT S.Yok(1)
+=====
+H6_sub_deyimi_yok
+' Parantezli, tanimsiz SUB deyimi (CALL'suz). Hedef: derleme hatasi, "once" HIC yazilmaz.
+PRINT "once"
+Yok(3)
+=====
+H7_hic_cagrilmayan_yordam_icinde
+' Cagrilmayan yordamin govdesi de denetlenmeli. Hedef: derleme hatasi.
+SUB Hic()
+    PRINT Yok(4)
+END SUB
+PRINT "ok"

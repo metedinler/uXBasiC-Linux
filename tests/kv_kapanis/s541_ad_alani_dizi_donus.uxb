@@ -1,0 +1,20 @@
+' S-541: NAMESPACE icindeki bir islevde, ad alaninin DIZI elemani dogrudan RETURN kaynagi ya da DIM baslangic degeri olabilir
+' (semantic-step3: ... TYPE_OBJECT to TYPE_I32 ile reddediliyordu).
+NAMESPACE sayac
+    DIM kutu(3) AS I32
+    SUB Yaz(i AS I32, v AS I32)
+        kutu(i) = v
+    END SUB
+    FUNCTION Al() AS I32
+        RETURN kutu(1)
+    END FUNCTION
+    FUNCTION Topla() AS I32
+        DIM t AS I32 = kutu(1) + kutu(2)
+        DIM u AS I32 = kutu(2)
+        RETURN t + u
+    END FUNCTION
+END NAMESPACE
+sayac.Yaz(1, 5)
+sayac.Yaz(2, 7)
+PRINT sayac.Al()
+PRINT sayac.Topla()

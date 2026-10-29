@@ -1,0 +1,6 @@
+DIM value AS SINGLE = 0
+DIM i AS I64
+FOR i = 1 TO 4
+ value += 0.25
+NEXT
+PRINT value

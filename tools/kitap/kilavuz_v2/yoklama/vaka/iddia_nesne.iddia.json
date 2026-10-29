@@ -1,0 +1,16 @@
+[
+ {"ad": "ayni adli iki metot", "kod": "CLASS K\n    PUBLIC\n    METHOD M()\n        PRINT 1\n    END METHOD\n    METHOD M()\n        PRINT 2\n    END METHOD\nEND CLASS\nDIM a AS K = NEW K()\na.M()", "beklenen": "HATA"},
+ {"ad": "ME ve THIS", "kod": "CLASS K\n    PUBLIC\n    DIM v AS I32\n    METHOD A()\n        ME.v = 3\n    END METHOD\n    METHOD B()\n        THIS.v = THIS.v + 4\n    END METHOD\nEND CLASS\nDIM a AS K = NEW K()\na.A()\na.B()\nPRINT a.v", "beklenen": "7", "yoksay": ["JS"]},
+ {"ad": "DIM nesne baska nesneyle baslatilamaz", "kod": "CLASS K\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nDIM a AS K = NEW K()\nDIM b AS K = a\nPRINT 1", "beklenen": "HATA"},
+ {"ad": "nesne atamasi referans", "kod": "CLASS K\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nDIM a AS K = NEW K()\nDIM b AS K = NEW K()\na.v = 1\nb = a\nb.v = 9\nPRINT a.v", "beklenen": "9"},
+ {"ad": "INTERFACE eksik metot", "kod": "INTERFACE IA\n    METHOD A() AS I32\n    METHOD B() AS I32\nEND INTERFACE\nCLASS C IMPLEMENTS IA\n    PUBLIC\n    METHOD A() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nDIM x AS C = NEW C()\nPRINT x.A()", "beklenen": "HATA"},
+ {"ad": "ABSTRACT yok", "kod": "ABSTRACT CLASS K\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nPRINT 1", "beklenen": "HATA"},
+ {"ad": "BASE yok", "kod": "CLASS A1\n    PUBLIC\n    VIRTUAL METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS B1 EXTENDS A1\n    PUBLIC\n    OVERRIDE METHOD F() AS I32\n        RETURN BASE.F() + 10\n    END METHOD\nEND CLASS\nDIM x AS B1 = NEW B1()\nPRINT x.F()", "beklenen": "HATA"},
+ {"ad": "SUPER var", "kod": "CLASS A1\n    PUBLIC\n    VIRTUAL METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS B1 EXTENDS A1\n    PUBLIC\n    OVERRIDE METHOD F() AS I32\n        RETURN SUPER.F() + 10\n    END METHOD\nEND CLASS\nDIM x AS B1 = NEW B1()\nPRINT x.F()", "beklenen": "11"},
+ {"ad": "yikici yalniz DELETE", "kod": "CLASS K\n    PUBLIC\n    DESTRUCTOR()\n        PRINT \"yikildi\"\n    END DESTRUCTOR\nEND CLASS\nSUB S()\n    DIM a AS K = NEW K()\n    PRINT \"yordam\"\nEND SUB\nS()\nPRINT \"bitti\"", "beklenen": ["yordam", "bitti"]},
+ {"ad": "yikici DELETE ile", "kod": "CLASS K\n    PUBLIC\n    DESTRUCTOR()\n        PRINT \"yikildi\"\n    END DESTRUCTOR\nEND CLASS\nDIM a AS K = NEW K()\nDELETE a\nPRINT \"bitti\"", "beklenen": ["yikildi", "bitti"]},
+ {"ad": "kurucu argumanli", "kod": "CLASS P\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR(ax AS I32)\n        x = ax\n    END CONSTRUCTOR\nEND CLASS\nDIM q AS P = NEW P(7)\nPRINT q.x", "beklenen": "7", "not": "degisken adi sinif adiyla cakisiyordu (tip ve degisken adlari ayni ad uzayindadir); program duzeltildi"},
+ {"ad": "PROPERTY kisa biçim", "kod": "CLASS K\n    PUBLIC\n    PROPERTY Deger AS I32 GET SET\nEND CLASS\nDIM a AS K = NEW K()\na.Deger = 5\nPRINT a.Deger", "beklenen": "5", "yoksay": ["JS"]},
+ {"ad": "PRIVATE metot disaridan", "kod": "CLASS K\n    PRIVATE\n    METHOD Gizli()\n        PRINT 1\n    END METHOD\n    PUBLIC\n    METHOD Acik()\n        Gizli()\n    END METHOD\nEND CLASS\nDIM a AS K = NEW K()\na.Gizli()", "beklenen": "HATA"},
+ {"ad": "PRIVATE metot icerden", "kod": "CLASS K\n    PRIVATE\n    METHOD Gizli()\n        PRINT 1\n    END METHOD\n    PUBLIC\n    METHOD Acik()\n        Gizli()\n    END METHOD\nEND CLASS\nDIM a AS K = NEW K()\na.Acik()", "beklenen": "1"}
+]

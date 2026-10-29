@@ -1,0 +1,11 @@
+FUNCTION Identity(value AS F64) AS F64
+    RETURN value
+END FUNCTION
+DIM a AS F32 = 0.25
+PRINT Identity(a++)
+PRINT Identity(--a)
+PRINT a
+DIM b AS I64 = 5000000000
+WHILE b++ < 5000000001
+WEND
+PRINT b

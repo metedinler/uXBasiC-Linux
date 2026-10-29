@@ -1,0 +1,16 @@
+{
+  "S288_fail_declare_left": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_bin": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_dictget": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_hex": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_instr": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_left": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_oct": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_right": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_trim": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_valint": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_function_wstrptr": {"error":"reserved uXBasic builtin function name"},
+  "S288_fail_sub_left": {"error":"reserved uXBasic builtin function name"},
+  "S288_pass_builtins_and_identifiers": {"output":"7\n4\nab\n7"},
+  "namespace_builtin": {"output":"Mer\n7\n11"}
+}

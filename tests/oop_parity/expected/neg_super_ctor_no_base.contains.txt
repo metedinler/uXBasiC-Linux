@@ -1,0 +1,6 @@
+AST=the class has no base class
+MIR=the class has no base class
+x64=the class has no base class
+AST-x64=the class has no base class
+JS=the class has no base class
+WASM=the class has no base class

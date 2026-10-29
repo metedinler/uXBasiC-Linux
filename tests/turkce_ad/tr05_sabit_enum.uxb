@@ -1,0 +1,21 @@
+' S-579: Türkçe harfli sabit, ENUM adı ve ENUM üyeleri (SELECT CASE içinde de); ASCII I, i'nin büyüğü olduğundan ALT_SINIR = alt_sinir
+CONST ÜST_SINIR = 100
+CONST ALT_SINIR = ÜST_SINIR \ 4
+ENUM Gün
+    Pazartesi
+    Salı
+    Çarşamba
+END ENUM
+PRINT ÜST_SINIR
+PRINT alt_sinir
+PRINT Gün.Çarşamba
+DIM g AS Gün = Gün.Salı
+PRINT g
+SELECT CASE g
+CASE Gün.Pazartesi
+    PRINT 10
+CASE Gün.Salı
+    PRINT 20
+CASE ELSE
+    PRINT 30
+END SELECT

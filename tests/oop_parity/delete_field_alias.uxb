@@ -1,0 +1,19 @@
+CLASS Ic
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT 5
+    END DESTRUCTOR
+END CLASS
+CLASS Kap
+    PUBLIC
+    DIM ic AS Ic
+    DIM n AS I32
+END CLASS
+' S-615 / S-574: DELETE empties the FIELD it names; another variable that holds the same child is a dead alias (differs from NOTHING).
+DIM c AS Kap = NEW Kap()
+c.ic = NEW Ic()
+DIM keep AS Ic = c.ic
+DELETE c.ic
+IF c.ic = NOTHING THEN PRINT 1
+IF keep <> NOTHING THEN PRINT 2

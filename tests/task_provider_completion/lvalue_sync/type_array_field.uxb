@@ -1,0 +1,18 @@
+TYPE Point
+    n AS I32
+    f AS F32
+END TYPE
+DIM a(0 TO 1) AS Point
+a(0).n = 10
+a(0).f = 0.25
+DIM calls AS I32 = 0
+FUNCTION NextIndex() AS I32
+    calls += 1
+    RETURN 0
+END FUNCTION
+DIM old AS I32 = a(NextIndex()).n++
+DIM f AS F64 = ++a(NextIndex()).f
+PRINT old
+PRINT a(0).n
+PRINT f
+PRINT calls

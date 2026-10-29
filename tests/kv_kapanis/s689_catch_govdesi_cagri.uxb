@@ -1,0 +1,16 @@
+' S-689: istisna CATCH'e girince yakalanmistir. CATCH govdesindeki kullanici rutini cagrisi, yakalanmis istisnayi
+' yakalanmamis gibi cagirana gecirmemeli (MIR ailesinde cagri sonrasi istisna denetimi bayragi hala acik goruyordu).
+SUB Yaz2()
+    PRINT "yaz2"
+END SUB
+SUB Yaz()
+    PRINT "yaz"
+    Yaz2()
+END SUB
+TRY
+    THROW "x"
+CATCH
+    Yaz()
+    PRINT "sonra"
+END TRY
+PRINT "son"

@@ -1,0 +1,105 @@
+komut;sozdizim;durum;derleyici_katmani;test_referansi;notlar
+PRINT;PRINT expr;uygulandi;parser+ast;TST-BOOT-001|tests/run_manifest.bas;print statement parse evidence active runtime evidence file pending refresh
+CONST;CONST name = expr;uygulandi;parser+ast;TST-CONST-001;const declaration parse active
+DIM;DIM name AS TYPE [= expr];uygulandi;parser+ast;TST-DIM-INIT-001|TST-DIM-INIT-002|tests/run_manifest.bas;DIM parse evidence active runtime evidence file pending refresh
+REDIM;REDIM name(bounds) AS TYPE;uygulandi;parser+ast;TST-REDIM-001|tests/run_manifest.bas;REDIM parse evidence active runtime evidence file pending refresh
+ARRAY;DIM name(bounds...) AS TYPE;uygulandi;parser+ast;TST-DIM-ARRAY-2D-001|TST-DIM-STRING-ARRAY-001;multi-dimensional and string arrays parse active
+LIST;DIM name AS LIST;uygulandi;parser+ast;TST-DIM-LIST-001;LIST type token parse active
+DICT;DIM name AS DICT;uygulandi;parser+ast;TST-DIM-DICT-001;DICT type token parse active
+SET;DIM name AS SET;uygulandi;parser+ast;TST-DIM-SET-001;SET type token parse active
+MATRIX;DIM mat( ) AS F64;uygulandi;parser+ast;TST-DIM-MATRIX-001;
+TYPE;TYPE ... END TYPE;uygulandi;parser+ast;TST-TYPE-001;structured type block parse active
+CLASS;CLASS ... END CLASS;uygulandi;parser+ast;TST-CLASS-001;class block parse active
+METHOD;METHOD name(...) [AS TYPE];uygulandi;parser+ast+semantic+runtime+mir+x64;tests/run_class_this_me_binding_exec_ast.bas|tests/oop/class_constructor_method_runtime.bas;method bildirimi ve govde yolu parser+semantik+runtime+mir+x64 katmanlarinda aktif
+DECLARE;DECLARE SUB/FUNCTION signature;uygulandi;parser+ast+runtime;TST-DECLARE-SUB-001|TST-DECLARE-FUNC-001|tests/run_call_exec.bas;signature parse + runtime resolver uyumu active
+SUB;SUB ... END SUB;uygulandi;parser+ast+runtime;TST-SUB-001|tests/run_call_exec.bas;block parse + user-defined runtime call active
+FUNCTION;FUNCTION ... END FUNCTION;uygulandi;parser+ast+runtime;TST-FUNCTION-001|tests/run_call_exec.bas;return type + block parse + runtime call active
+CALL;CALL proc(...);uygulandi;parser+ast+runtime;TST-CALL-001|TST-CALL-ARGS-001|TST-CALL-RUNTIME-001|tests/run_call_exec.bas;call statement parse + builtin and user-defined runtime dispatch active
+INCLUDE;"INCLUDE ""file.bas""";uygulandi;parser+resolver;TST-INCLUDE-001|CMP-LIB-INCLUDE-WIN11;path hygiene + include-once resolver active
+IMPORT;"IMPORT(<LANG>,  ""file"")";uygulandi;parser+build-manifest;TST-IMPORT-C-001|TST-IMPORT-CPP-001|TST-IMPORT-ASM-001|CMP-IMP-WIN11;normalized syntax + import manifest/link plan
+INLINE;INLINE(...) ... END INLINE;uygulandi;parser;TST-INLINE-001;legacy inline forms disabled
+IF;IF ... THEN ... END IF;uygulandi;parser+ast;TST-AST-IF-001|tests/run_manifest.bas;control-flow ast parse evidence active runtime evidence file pending refresh
+SELECT;SELECT CASE ... END SELECT;uygulandi;parser+ast;TST-AST-SELECT-001|tests/run_manifest.bas;control-flow ast parse evidence active runtime evidence file pending refresh
+CASEIS;CASE IS <relop> expr;uygulandi;parser+ast;tests/run_manifest.bas;SELECT CASE relational-branch parse evidence active runtime evidence file pending refresh
+FOR;FOR ... NEXT;uygulandi;parser+ast;TST-AST-FOR-001;control-flow ast
+DO;DO ... LOOP;uygulandi;parser+ast;TST-AST-LOOP-001;control-flow ast
+GOTO;GOTO label;uygulandi;parser+ast;TST-GOTO-001|tests/run_manifest.bas;label parse ast evidence active runtime evidence file pending refresh
+GOSUB;GOSUB label;uygulandi;parser+ast;TST-GOSUB-001|tests/run_manifest.bas;label parse ast evidence active runtime evidence file pending refresh
+RETURN;RETURN [expr];uygulandi;parser+ast;TST-RETURN-001|tests/run_manifest.bas;bare and expression return parse evidence active runtime evidence file pending refresh
+EXIT;EXIT [FOR|DO|IF];uygulandi;parser+ast+runtime;TST-EXIT-001|TST-EXIT-IF-001|tests/run_exit_if_byval_parse_exec.bas;flow-exit mode parse active
+END;END;uygulandi;parser+ast;TST-END-001|tests/run_manifest.bas;program-termination statement parse evidence active runtime evidence file pending refresh
+TIMER;TIMER()|TIMER(unit)|TIMER(a,b, unit);uygulandi;parser+runtime;TST-TIMER-UNIT-001|TST-TIMER-RANGE-001;unit validation enabled
+OPEN;OPEN file FOR mode AS n;uygulandi;parser+ast;TST-OPEN-001;mode and handle parsed
+CLOSE;CLOSE [n];uygulandi;parser+ast;TST-CLOSE-001;single/multi handle parse
+GET;GET n[pos][bytes];uygulandi;parser+ast;TST-GET-001;mvp form GET n  value
+PUT;PUT n[pos][bytes];uygulandi;parser+ast;TST-PUT-001;mvp form PUT n  value
+GET;GET n,off | GET n,pos,off | GET n,pos,bytes,off;uygulandi;parser+ast;TST-GET-001|TST-GET-COMPAT-001|TST-GET-COMPAT-002;legacy compatibility parse enabled for offset/record forms
+PUT;PUT n,off | PUT n,pos,off | PUT n,pos,bytes,off;uygulandi;parser+ast;TST-PUT-001|TST-PUT-COMPAT-001|TST-PUT-COMPAT-002;legacy compatibility parse enabled for offset/record forms
+SEEK;SEEK n[pos];uygulandi;parser+ast;TST-SEEK-001;optional position expression
+LOF;LOF(n);uygulandi;parser+expr-validation+runtime;TST-LOF-001|tests/run_runtime_intrinsics.bas;single-argument call validation + runtime channel guard active
+EOF;EOF(n);uygulandi;parser+expr-validation+runtime;TST-EOF-001|tests/run_runtime_intrinsics.bas;single-argument call validation + runtime channel guard active
+LOCATE;LOCATE y, x;uygulandi;parser+ast;TST-LOCATE-001|tests/run_manifest.bas;row-column expression parse evidence active runtime evidence file pending refresh
+COLOR;COLOR fg, bg;uygulandi;parser+ast;TST-COLOR-001|tests/run_manifest.bas;foreground-background expression parse evidence active runtime evidence file pending refresh
+CLS;CLS;uygulandi;parser+ast;TST-CLS-001|tests/run_manifest.bas;no-argument statement parse evidence active runtime evidence file pending refresh
+INPUT;INPUT [prompt] vars;uygulandi;parser+ast;TST-INPUT-001|TST-INPUT-PROMPT-001|tests/run_manifest.bas;target and prompt parse evidence active runtime evidence file pending refresh
+INPUT#;INPUT #n,  vars;uygulandi;parser+ast;TST-INPUTF-001|tests/run_manifest.bas;file-channel input parse evidence active runtime evidence file pending refresh
+LEN;LEN(expr);uygulandi;parser+expr-validation;TST-LEN-001;single-argument intrinsic validation active
+MID;MID(str, start[len]);uygulandi;parser+expr-validation+runtime;TST-MID-001|tests/run_runtime_intrinsics.bas;2-3 argument intrinsic validation + text-context runtime evaluation active
+STR;STR(expr);uygulandi;parser+expr-validation+runtime;TST-STR-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + text-context runtime evaluation active
+VAL;VAL(expr);uygulandi;parser+expr-validation;TST-VAL-001;single-argument intrinsic validation active
+ABS;ABS(expr);uygulandi;parser+expr-validation;TST-ABS-001;single-argument intrinsic validation active
+INT;INT(expr);uygulandi;parser+expr-validation;TST-INT-001;single-argument intrinsic validation active
+UCASE;UCASE(expr);uygulandi;parser+expr-validation+runtime;TST-UCASE-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + text-context runtime evaluation active
+LCASE;LCASE(expr);uygulandi;parser+expr-validation+runtime;TST-LCASE-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + text-context runtime evaluation active
+ASC;ASC(expr);uygulandi;parser+expr-validation;TST-ASC-001;single-argument intrinsic validation active
+CHR;CHR(expr);uygulandi;parser+expr-validation+runtime;TST-CHR-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + text-context runtime evaluation active
+LTRIM;LTRIM(expr);uygulandi;parser+expr-validation+runtime;TST-LTRIM-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + text-context runtime evaluation active
+RTRIM;RTRIM(expr);uygulandi;parser+expr-validation+runtime;TST-RTRIM-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + text-context runtime evaluation active
+STRING;STRING(count, charExpr);uygulandi;parser+expr-validation+runtime;TST-STRING-001|tests/run_runtime_intrinsics.bas;two-argument intrinsic validation + text-context runtime evaluation active
+SPACE;SPACE(expr);uygulandi;parser+expr-validation+runtime;TST-SPACE-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + text-context runtime evaluation active
+SGN;SGN(expr);uygulandi;parser+expr-validation;TST-SGN-001;single-argument intrinsic validation active
+SQRT;SQRT(expr);uygulandi;parser+expr-validation;TST-SQRT-001;single-argument intrinsic validation active
+SIN;SIN(expr);uygulandi;parser+expr-validation+runtime;TST-SIN-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + runtime evaluation active
+COS;COS(expr);uygulandi;parser+expr-validation+runtime;TST-COS-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + runtime evaluation active
+TAN;TAN(expr);uygulandi;parser+expr-validation+runtime;TST-TAN-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + runtime evaluation active
+ATN;ATN(expr);uygulandi;parser+expr-validation+runtime;TST-ATN-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + runtime evaluation active
+EXP;EXP(expr);uygulandi;parser+expr-validation+runtime;TST-EXP-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + runtime evaluation active
+LOG;LOG(expr);uygulandi;parser+expr-validation+runtime;TST-LOG-001|tests/run_runtime_intrinsics.bas;single-argument intrinsic validation + runtime evaluation active + domain fail-fast
+INKEY;INKEY(flags[state]);uygulandi;parser+expr-validation+runtime;TST-INKEY-001|TST-INKEY-002|tests/run_runtime_intrinsics.bas;1-2 argument intrinsic validation + deterministic key queue runtime active
+GETKEY;GETKEY();uygulandi;parser+expr-validation+runtime;TST-GETKEY-001|tests/run_runtime_intrinsics.bas;zero-argument key-read intrinsic validation + deterministic key queue runtime active
+DEFINT;DEFINT range-list;uygulandi;parser+ast;TST-DEFINT-001;default integer range parse active
+DEFLNG;DEFLNG range-list;uygulandi;parser+ast;TST-DEFLNG-001;default long range parse active
+DEFSNG;DEFSNG range-list;uygulandi;parser+ast;TST-DEFSNG-001;default single range parse active
+DEFDBL;DEFDBL range-list;uygulandi;parser+ast;TST-DEFDBL-001;default double range parse active
+DEFEXT;DEFEXT range-list;uygulandi;parser+ast;TST-DEFEXT-001;default extended range parse active
+DEFSTR;DEFSTR range-list;uygulandi;parser+ast;TST-DEFSTR-001;default string range parse active
+DEFBYT;DEFBYT range-list;uygulandi;parser+ast;TST-DEFBYT-001;default byte range parse active
+SETSTRINGSIZE;SETSTRINGSIZE expr;uygulandi;parser+ast;TST-SETSTRINGSIZE-001;string default-size parse active
+COMPATINTRINSICS;compat intrinsic aliases;uygulandi;parser+expr-validation+runtime;TST-MID-COMPAT-001|TST-STR-COMPAT-001|TST-UCASE-COMPAT-001|TST-LCASE-COMPAT-001|TST-CHR-COMPAT-001|TST-STRING-COMPAT-001|TST-INTR-RUNTIME-001;phase16 intrinsic compatibility forms and core runtime intrinsic path active
+CINT;CINT(expr);uygulandi;parser+expr-validation;TST-CINT-001;single-argument cast intrinsic validation active
+CLNG;CLNG(expr);uygulandi;parser+expr-validation;TST-CLNG-001;single-argument cast intrinsic validation active
+CDBL;CDBL(expr);uygulandi;parser+expr-validation+runtime;TST-CDBL-001|tests/run_runtime_intrinsics.bas;single-argument cast intrinsic validation + runtime evaluation active
+CSNG;CSNG(expr);uygulandi;parser+expr-validation+runtime;TST-CSNG-001|tests/run_runtime_intrinsics.bas;single-argument cast intrinsic validation + runtime evaluation active
+FIX;FIX(expr);uygulandi;parser+expr-validation+runtime;TST-FIX-001|tests/run_runtime_intrinsics.bas;single-argument numeric intrinsic validation + runtime evaluation active
+SQR;SQR(expr);uygulandi;parser+expr-validation+runtime;TST-SQR-001|tests/run_runtime_intrinsics.bas;single-argument numeric intrinsic validation + runtime evaluation active
+RND;RND([expr]);uygulandi;parser+expr-validation+runtime;TST-RND-001|TST-RND-002|tests/run_runtime_intrinsics.bas;zero-or-one argument numeric intrinsic validation + runtime range assertion active
+RANDOMIZE;RANDOMIZE [seed];uygulandi;parser+ast+runtime;TST-RANDOMIZE-001|TST-RANDOMIZE-002|tests/run_runtime_intrinsics.bas;statement form with optional seed expression + deterministic reseed runtime assertion active
+VARPTR;VARPTR(expr);uygulandi;parser+expr-validation+runtime;TST-VARPTR-001|tests/run_runtime_intrinsics.bas;pseudo-address pointer intrinsic active with stability assertion in guarded runtime
+SADD;SADD(expr);uygulandi;parser+expr-validation+runtime;TST-SADD-001|tests/run_runtime_intrinsics.bas;string-address intrinsic active with stability/tag assertions in guarded runtime
+LPTR;LPTR(label);uygulandi;parser+expr-validation+runtime;TST-LPTR-001|tests/run_runtime_intrinsics.bas;label-pointer intrinsic active with stability/tag assertions in guarded runtime
+CODEPTR;CODEPTR(proc);uygulandi;parser+expr-validation+runtime;TST-CODEPTR-001|tests/run_runtime_intrinsics.bas;code-pointer intrinsic active with stability/tag assertions in guarded runtime
+SIZEOF;SIZEOF(type);uygulandi;parser+expr-validation;TST-LAYOUT-SIZEOF-001;type-size intrinsic syntax+semantic gate active
+OFFSETOF;"OFFSETOF(type, ""path"")";uygulandi;parser+expr-validation;TST-LAYOUT-OFFSETOF-001|TST-LAYOUT-OFFSETOF-FAIL-001;field-path offset intrinsic semantic validation active
+POKE;POKE addr, val;uygulandi;parser+ast+runtime;TST-POKE-LEGACY-001;legacy alias mapped to dword poke semantics
+POKES;POKES addr text;uygulandi;parser+ast+runtime;TST-POKES-001;string-to-memory write active in guarded vm
+MEMCOPYW;MEMCOPYW src dst n;uygulandi;parser+ast+runtime;TST-MEMCOPYW-001;word-copy command active via vm bridge
+MEMCOPYD;MEMCOPYD src dst n;uygulandi;parser+ast+runtime;TST-MEMCOPYD-001;dword-copy command active via vm bridge
+MEMFILLW;MEMFILLW addr val n;uygulandi;parser+ast+runtime;TST-MEMFILLW-001;word-fill command active via vm bridge
+MEMFILLD;MEMFILLD addr val n;uygulandi;parser+ast+runtime;TST-MEMFILLD-001;dword-fill command active via vm bridge
+SETNEWOFFSET;SETNEWOFFSET var newaddr;uygulandi;parser+ast+runtime;TST-SETNEWOFFSET-001;variable offset rebinding active for guarded pointer model
+INLINEX64BACKEND;INLINE(... ) ... END INLINE;uygulandi;parser+codegen-x64;TST-INLINE-X64-001|TST-INLINE-X64-FAIL-001;x64 inline policy validation active (ABI/PRESERVE/STACK and CALL->SHADOW rule)
+FILEIOADVANCED;OPEN/GET/PUT/SEEK extended modes;uygulandi;runtime+memory-exec;TST-FIO-RUNTIME-001|TST-FIO-EXEC-001;channel contract + mode normalization + error codes standardized for binary/random modes
+
+
+
+

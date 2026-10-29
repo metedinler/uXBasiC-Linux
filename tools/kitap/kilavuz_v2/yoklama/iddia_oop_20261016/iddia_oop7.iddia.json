@@ -1,0 +1,138 @@
+[
+ {
+  "ad": "a:f01 sanal SUB donussuz",
+  "kod": "CLASS Taban\n    PUBLIC\n    VIRTUAL METHOD San()\n        PRINT 2\n    END METHOD\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    OVERRIDE METHOD San()\n        PRINT 3\n        PRINT 4\n    END METHOD\nEND CLASS\nDIM t AS Taban = NEW Alt()\nt.San()\nDIM u AS Taban = NEW Taban()\nu.San()\nPRINT 9\n"
+ },
+ {
+  "ad": "a:f02 sanal SUB ve yikici",
+  "kod": "CLASS Taban\n    PUBLIC\n    VIRTUAL METHOD San()\n        PRINT 2\n    END METHOD\n    DESTRUCTOR()\n        PRINT 7\n    END DESTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    OVERRIDE METHOD San()\n        PRINT 3\n    END METHOD\nEND CLASS\nDIM x AS Alt = NEW Alt()\nx.San()\nDELETE x\nPRINT 9\n"
+ },
+ {
+  "ad": "a:f03 CALL biçimleri",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Yaz()\n        PRINT v\n    END METHOD\n    METHOD Ac()\n        v = 4\n        CALL Yaz()\n        Yaz()\n        CALL ME.Yaz()\n        CALL THIS.Yaz()\n        ME.Yaz()\n    END METHOD\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nx.Ac()\nCALL x.Yaz()\nx.Yaz()\n"
+ },
+ {
+  "ad": "a:f04 metot BYREF",
+  "kod": "CLASS Kutu\n    PUBLIC\n    METHOD Artir(BYREF n AS I32)\n        n = n + 1\n    END METHOD\n    METHOD Iki(BYREF a AS I32, b AS I32)\n        a = a + b\n    END METHOD\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nDIM k AS I32\nk = 5\nx.Artir(k)\nx.Artir(k)\nPRINT k\nx.Iki(k, 10)\nPRINT k\n"
+ },
+ {
+  "ad": "a:f05 statik metotlar",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Iki() AS I32\n        RETURN 2\n    END METHOD\n    STATIC METHOD Topla(a AS I32, b AS I32) AS I32\n        RETURN a + b\n    END METHOD\n    STATIC METHOD Fark(a AS I32, b AS I32, c AS I32) AS I32\n        RETURN a - b - c\n    END METHOD\n    METHOD Dort() AS I32\n        RETURN Say.Iki() * 2\n    END METHOD\nEND CLASS\nCLASS Yardim\n    PUBLIC\n    STATIC METHOD Kare(n AS I32) AS I32\n        RETURN n * n\n    END METHOD\nEND CLASS\nDIM x AS Say = NEW Say()\nPRINT x.Dort()\nPRINT Say.Iki()\nPRINT Say.Topla(3, 4)\nPRINT Say.Topla(Say.Iki(), 10)\nPRINT Say.Fark(20, 5, 3)\nPRINT Yardim.Kare(6)\n"
+ },
+ {
+  "ad": "a:f06 yikicida niteliksiz cagri",
+  "kod": "CLASS Kutu\n    PUBLIC\n    METHOD Kapat()\n        PRINT 5\n    END METHOD\n    DESTRUCTOR()\n        Kapat()\n    END DESTRUCTOR\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nDELETE x\nPRINT 6\n"
+ },
+ {
+  "ad": "a:f07 yikicida ME ve THIS",
+  "kod": "CLASS Taban\n    PUBLIC\n    METHOD Duz()\n        PRINT 1\n    END METHOD\n    VIRTUAL METHOD San()\n        PRINT 2\n    END METHOD\n    DESTRUCTOR()\n        ME.Duz()\n        THIS.San()\n    END DESTRUCTOR\nEND CLASS\nCLASS Alt EXTENDS Taban\n    PUBLIC\n    OVERRIDE METHOD San()\n        PRINT 3\n    END METHOD\nEND CLASS\nDIM x AS Alt = NEW Alt()\nDELETE x\nPRINT 9\n"
+ },
+ {
+  "ad": "a:f08 MAGIC ADD niteliksiz",
+  "kod": "CLASS Vek\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR(ax AS I32)\n        x = ax\n    END CONSTRUCTOR\n    METHOD Deger() AS I32\n        RETURN x\n    END METHOD\n    MAGIC ADD(o AS Vek) AS Vek\n        RETURN NEW Vek(Deger() + o.Deger())\n    END MAGIC\nEND CLASS\nDIM a AS Vek = NEW Vek(3)\nDIM b AS Vek = NEW Vek(4)\nDIM c AS Vek = a + b\nPRINT c.Deger()\n"
+ },
+ {
+  "ad": "a:f09 MAGIC TOSTRING niteliksiz",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(a AS I32)\n        v = a\n    END CONSTRUCTOR\n    METHOD Onek() AS STRING\n        RETURN \"K\"\n    END METHOD\n    MAGIC TOSTRING() AS STRING\n        RETURN Onek() + STR(v)\n    END MAGIC\nEND CLASS\nDIM x AS Kutu = NEW Kutu(7)\nPRINT STR(x)\n"
+ },
+ {
+  "ad": "b:c1 CALL Yaz()",
+  "kod": "\nCLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Yaz()\n        PRINT v\n    END METHOD\n    METHOD Ac()\n        v = 4\n        CALL Yaz()\n    END METHOD\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nx.Ac()\n"
+ },
+ {
+  "ad": "b:c2 CALL ME.Yaz()",
+  "kod": "\nCLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Yaz()\n        PRINT v\n    END METHOD\n    METHOD Ac()\n        v = 4\n        CALL ME.Yaz()\n    END METHOD\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nx.Ac()\n"
+ },
+ {
+  "ad": "b:c3 CALL THIS.Yaz()",
+  "kod": "\nCLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Yaz()\n        PRINT v\n    END METHOD\n    METHOD Ac()\n        v = 4\n        CALL THIS.Yaz()\n    END METHOD\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nx.Ac()\n"
+ },
+ {
+  "ad": "b:c4 ME.Yaz()",
+  "kod": "\nCLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Yaz()\n        PRINT v\n    END METHOD\n    METHOD Ac()\n        v = 4\n        ME.Yaz()\n    END METHOD\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nx.Ac()\n"
+ },
+ {
+  "ad": "b:c5 Yaz()",
+  "kod": "\nCLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Yaz()\n        PRINT v\n    END METHOD\n    METHOD Ac()\n        v = 4\n        Yaz()\n    END METHOD\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nx.Ac()\n"
+ },
+ {
+  "ad": "b:c6 CALL x.Yaz() disaridan",
+  "kod": "\nCLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    METHOD Yaz()\n        PRINT v\n    END METHOD\n    METHOD Ac()\n        v = 4\n        PRINT 1\n    END METHOD\nEND CLASS\nDIM x AS Kutu = NEW Kutu()\nx.Ac()\nCALL x.Yaz()\n"
+ },
+ {
+  "ad": "c:g1 statik metot ornek alanini okur",
+  "kod": "CLASS Say\n    PUBLIC\n    DIM n AS I32\n    STATIC METHOD Oku() AS I32\n        RETURN n\n    END METHOD\nEND CLASS\nPRINT Say.Oku()\n"
+ },
+ {
+  "ad": "c:g2 ornek metot sinif adiyla",
+  "kod": "CLASS Say\n    PUBLIC\n    METHOD Dort() AS I32\n        RETURN 4\n    END METHOD\nEND CLASS\nPRINT Say.Dort()\n"
+ },
+ {
+  "ad": "c:g3 statik metot baska statigi niteliksiz cagirir",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD B() AS I32\n        RETURN 5\n    END METHOD\n    STATIC METHOD A() AS I32\n        RETURN B() + 1\n    END METHOD\nEND CLASS\nPRINT Say.A()\n"
+ },
+ {
+  "ad": "c:g4 statik metot turemis sinif adiyla",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Iki() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nCLASS Alt EXTENDS Say\n    PUBLIC\nEND CLASS\nPRINT Alt.Iki()\n"
+ },
+ {
+  "ad": "c:g5 statik metot nesne degiskeniyle",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Iki() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nDIM x AS Say = NEW Say()\nPRINT x.Iki()\n"
+ },
+ {
+  "ad": "c:g6 statik metot metin",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Selam(ad AS STRING) AS STRING\n        RETURN \"Merhaba \" + ad\n    END METHOD\nEND CLASS\nPRINT Say.Selam(\"Ayse\")\n"
+ },
+ {
+  "ad": "c:g7 statik metot BYREF",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Artir(BYREF n AS I32)\n        n = n + 1\n    END METHOD\nEND CLASS\nDIM k AS I32\nk = 5\nSay.Artir(k)\nPRINT k\n"
+ },
+ {
+  "ad": "c:g8 statik metot SUB gibi (donussuz)",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Yaz(n AS I32)\n        PRINT n * 2\n    END METHOD\nEND CLASS\nSay.Yaz(21)\nCALL Say.Yaz(4)\n"
+ },
+ {
+  "ad": "c:g9 iki sinifta ayni statik ad",
+  "kod": "CLASS Ad\n    PUBLIC\n    STATIC METHOD Bul() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Be\n    PUBLIC\n    STATIC METHOD Bul() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nPRINT Ad.Bul()\nPRINT Be.Bul()\n"
+ },
+ {
+  "ad": "c:g10 statik metot ornek metot icinden sinif adiyla",
+  "kod": "CLASS Say\n    PUBLIC\n    DIM n AS I32\n    STATIC METHOD Kat(a AS I32) AS I32\n        RETURN a * 10\n    END METHOD\n    METHOD Hesapla() AS I32\n        n = 3\n        RETURN Say.Kat(n) + Kat(2)\n    END METHOD\nEND CLASS\nDIM x AS Say = NEW Say()\nPRINT x.Hesapla()\n"
+ },
+ {
+  "ad": "d:h1 ozyinelemeli statik ve turemis sinifta niteliksiz",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Fakt(k AS I32) AS I32\n        IF k <= 1 THEN\n            RETURN 1\n        END IF\n        RETURN k * Fakt(k - 1)\n    END METHOD\nEND CLASS\nCLASS Alt EXTENDS Say\n    PUBLIC\n    METHOD Kullan() AS I32\n        RETURN Fakt(4)\n    END METHOD\nEND CLASS\nDIM a AS Alt = NEW Alt()\nPRINT Say.Fakt(5)\nPRINT a.Kullan()\n"
+ },
+ {
+  "ad": "d:h2 statikte ornek alanla ayni adli genel degisken",
+  "kod": "DIM n AS I32\nn = 9\nCLASS Say\n    PUBLIC\n    DIM n AS I32\n    STATIC METHOD G() AS I32\n        RETURN n\n    END METHOD\nEND CLASS\nPRINT Say.G()\n"
+ },
+ {
+  "ad": "d:h3 statikte ornek metotla ayni adli genel islev",
+  "kod": "FUNCTION Hesap() AS I32\n    RETURN 100\nEND FUNCTION\nCLASS Say\n    PUBLIC\n    METHOD Hesap() AS I32\n        RETURN 1\n    END METHOD\n    STATIC METHOD G() AS I32\n        RETURN Hesap()\n    END METHOD\nEND CLASS\nPRINT Say.G()\n"
+ },
+ {
+  "ad": "d:h4 CALL ile niteliksiz statik",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Yaz(n AS I32)\n        PRINT n\n    END METHOD\n    STATIC METHOD Iki()\n        CALL Yaz(2)\n        Yaz(3)\n    END METHOD\n    METHOD Uc()\n        CALL Yaz(4)\n    END METHOD\nEND CLASS\nSay.Iki()\nDIM x AS Say = NEW Say()\nx.Uc()\n"
+ },
+ {
+  "ad": "d:h5 statik metot ornek alani yerel gölgeler",
+  "kod": "CLASS Say\n    PUBLIC\n    DIM n AS I32\n    STATIC METHOD G(n AS I32) AS I32\n        RETURN n + 1\n    END METHOD\nEND CLASS\nPRINT Say.G(4)\n"
+ },
+ {
+  "ad": "d:h6 siniftan sinifa statik cagri",
+  "kod": "CLASS A\n    PUBLIC\n    STATIC METHOD Bir() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS B\n    PUBLIC\n    STATIC METHOD Iki() AS I32\n        RETURN A.Bir() + 1\n    END METHOD\n    METHOD Uc() AS I32\n        RETURN A.Bir() + B.Iki()\n    END METHOD\nEND CLASS\nDIM x AS B = NEW B()\nPRINT B.Iki()\nPRINT x.Uc()\n"
+ },
+ {
+  "ad": "d:h7 olmayan statik metot",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Iki() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nPRINT Say.Yok()\n"
+ },
+ {
+  "ad": "d:h8 statik metot ornek metodu niteliksiz cagirir",
+  "kod": "CLASS Say\n    PUBLIC\n    METHOD Dort() AS I32\n        RETURN 4\n    END METHOD\n    STATIC METHOD G() AS I32\n        RETURN Dort()\n    END METHOD\nEND CLASS\nPRINT Say.G()\n"
+ },
+ {
+  "ad": "k1 kitap ornegi: statik metotlar",
+  "kod": "CLASS Say\n    PUBLIC\n    STATIC METHOD Topla(a AS I32, b AS I32) AS I32\n        RETURN a + b\n    END METHOD\n    STATIC METHOD Kare(n AS I32) AS I32\n        RETURN n * n\n    END METHOD\n    STATIC METHOD KareToplam(a AS I32, b AS I32) AS I32\n        RETURN Topla(Kare(a), Kare(b))\n    END METHOD\nEND CLASS\n\nPRINT Say.Topla(3, 4)\nPRINT Say.KareToplam(3, 4)\n"
+ }
+]

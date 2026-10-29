@@ -1,0 +1,3 @@
+' Shared manifest directives; no preprocessor selection.
+INCLUDE "constant.uxbh"
+PRINT "etiket="; VALUE

@@ -1,0 +1,32 @@
+JS VARPTR tum dizi
+DIM a(3) AS I32
+DIM p AS PTR
+p = VARPTR(a)
+PRINT "tamam"
+=====
+JS VARPTR dizi elemani
+DIM a(3) AS I32
+DIM p AS PTR
+p = VARPTR(a(2))
+PRINT "tamam"
+=====
+JS VARPTR skaler
+DIM x AS I32 = 4
+DIM p AS PTR
+p = VARPTR(x)
+PRINT "tamam"
+=====
+JS SADD
+DIM s AS STRING = "abc"
+DIM p AS PTR
+p = SADD(s)
+PRINT "tamam"
+=====
+JS PTR aritmetigi
+DIM p AS PTR
+p = PTR(100)
+p = p + 4
+PRINT "tamam"
+=====
+JS SIZEOF
+PRINT SIZEOF(I32); " "; SIZEOF(F80); " "; SIZEOF(PTR)

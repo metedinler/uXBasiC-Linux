@@ -1,0 +1,235 @@
+' S-629/M7: normalized dynamic CLASS arrays use the same three-qword
+' descriptor as MIR-x64. Ordinary legacy scalar arrays retain their ABI.
+Private Function X64DcaKind(ByRef ps As ParseState, ByRef nameText As String) As Integer
+    For d As Integer = 0 To ps.ast.count - 1
+        Dim k As String = ps.ast.nodes(d).kind
+        If k <> "DIM_DECL" And k <> "PARAM_DECL" Then Continue For
+        If UCase(ps.ast.nodes(d).value) <> UCase(nameText) Then Continue For
+        Dim marked As Integer = 0, arrayDecl As Integer = IIf(k = "PARAM_DECL", 1, 0), typeName As String
+        Dim ch As Integer = ps.ast.nodes(d).firstChild
+        Do While ch >= 0
+            Select Case ps.ast.nodes(ch).kind
+            Case "CLASS_ARRAY_RUNTIME": marked = 1
+            Case "DIM_BOUNDS": arrayDecl = 1
+            Case "TYPE_REF": typeName = ps.ast.nodes(ch).value
+            End Select
+            ch = ps.ast.nodes(ch).nextSibling
+        Loop
+        If marked = 0 Or arrayDecl = 0 Then Continue For
+        If Right(typeName, 2) = "[]" Then typeName = Left(typeName, Len(typeName)-2)
+        If X64FindClassDeclNode(ps, typeName) >= 0 Then Return IIf(k = "PARAM_DECL", 2, 1)
+    Next d
+    Return 0
+End Function
+
+Private Function X64DcaDescriptor(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByRef nameText As String, ByVal regName As String) As Integer
+    Dim kind As Integer = X64DcaKind(ps, nameText)
+    If kind = 0 Then Return 0
+    For i As Integer = 0 To cg.localCount - 1
+        If gX64LocalKeys(i) <> UCase(nameText) Then Continue For
+        X64EmitText cg, "    " & IIf(kind = 2, "mov ", "lea ") & regName & ", " & X64FormatRbpRef(gX64LocalOffsets(i))
+        Return 1
+    Next i
+    For i As Integer = 0 To cg.globalCount - 1
+        If gX64GlobalKeys(i) <> UCase(nameText) Then Continue For
+        X64EmitText cg, "    lea " & regName & ", [rel " & gX64GlobalLabels(i) & "]"
+        Return 1
+    Next i
+    Return 0
+End Function
+
+' ===== S-529: dynamic SCALAR arrays (REDIM, run-time bounds) =====
+' A scalar array whose size changes at run time cannot live in a fixed block that was sized from its first declaration: the
+' legacy emitter reserved the first DIM's size, a later REDIM only changed the compile-time numbers, so the new elements were
+' written over neighbouring variables and string constants (`REDIM PRESERVE e(0 TO 4)` after `DIM e(0 TO 1)`; in a SUB the
+' program crashed on return). Such an array now has the same descriptor the MIR-x64 emitter and the runtime use:
+'     qword 0 = pointer to the element block, qword 1 = lower bound, qword 2 = upper bound
+' DIM and REDIM call __uxb_rt_array_resize (new zeroed block; PRESERVE copies the overlapping range), every access subtracts the
+' RUN-TIME lower bound and checks the index against the RUN-TIME upper bound, UBOUND / LBOUND read the descriptor.
+Dim Shared gX64SdaCache As String
+
+Private Function X64SdaCompute(ByRef ps As ParseState, ByRef targetUpper As String) As Integer
+    Dim hasRedim As Integer = 0
+    Dim arrayDecls As Integer = 0
+    Dim dynamicDecl As Integer = 0
+    Dim elemType As String = ""
+    Dim d As Integer
+    For d = 0 To ps.ast.count - 1
+        Dim k As String = ps.ast.nodes(d).kind
+        If k <> "DIM_DECL" And k <> "REDIM_DECL" Then Continue For
+        If UCase(Trim(ps.ast.nodes(d).value)) <> targetUpper Then Continue For
+        Dim boundsNode As Integer = -1
+        Dim typeText As String = ""
+        Dim hasInit As Integer = 0
+        Dim ch As Integer = ps.ast.nodes(d).firstChild
+        Do While ch >= 0
+            Select Case ps.ast.nodes(ch).kind
+            Case "DIM_BOUNDS": boundsNode = ch
+            Case "TYPE_REF": typeText = ps.ast.nodes(ch).value
+            Case "INIT_EXPR": hasInit = 1
+            End Select
+            ch = ps.ast.nodes(ch).nextSibling
+        Loop
+        If boundsNode < 0 Then Continue For
+        arrayDecls += 1
+        If hasInit <> 0 Then Return 0
+        If k = "REDIM_DECL" Then hasRedim = 1
+        If typeText <> "" Then elemType = UCase(Trim(typeText))
+        Dim firstBound As Integer = ps.ast.nodes(boundsNode).firstChild
+        If firstBound < 0 Then Return 0
+        If ps.ast.nodes(firstBound).nextSibling >= 0 Then Return 0
+        Dim loNode As Integer = -1
+        Dim hiNode As Integer = firstBound
+        If UCase(ps.ast.nodes(firstBound).kind) = "RANGE_EXPR" Then
+            loNode = ps.ast.nodes(firstBound).left
+            hiNode = ps.ast.nodes(firstBound).right
+        End If
+        Dim litValue As LongInt
+        If UXBArrayMemoryIsIntegerLiteral(ps, hiNode, litValue) = 0 Then dynamicDecl = 1
+        If loNode >= 0 Then
+            If UXBArrayMemoryIsIntegerLiteral(ps, loNode, litValue) = 0 Then dynamicDecl = 1
+        End If
+    Next d
+    If arrayDecls = 0 Then Return 0
+    If hasRedim = 0 And dynamicDecl = 0 Then Return 0
+    If X64DcaKind(ps, targetUpper) <> 0 Then Return 0
+    If Right(elemType, 2) = "[]" Then elemType = Left(elemType, Len(elemType) - 2)
+    If elemType = "" Or elemType = "OBJECT" Then Return 0
+    If X64FindClassDeclNode(ps, elemType) <> -1 Then Return 0
+    Dim fk As Integer = X64TypeToFloatKind(elemType)
+    If fk = UXF_F80 Or fk = UXF_F128 Then Return 0
+    If X64TypeNameIsStringLike(elemType) <> 0 Then Return 1
+    Dim abiPayload As Integer, abiAlign As Integer, abiStride As Integer
+    If UXBTypeAbi(UXBStep3StorageType(elemType), abiPayload, abiAlign, abiStride) = 0 Then Return 0
+    Return 1
+End Function
+
+Private Function X64SdaKind(ByRef ps As ParseState, ByRef nameText As String) As Integer
+    Dim target As String = UCase(Trim(nameText))
+    If target = "" Then Return 0
+    If InStr(gX64SdaCache, "|" & target & "=1|") > 0 Then Return 1
+    If InStr(gX64SdaCache, "|" & target & "=0|") > 0 Then Return 0
+    Dim result As Integer = X64SdaCompute(ps, target)
+    gX64SdaCache &= "|" & target & "=" & IIf(result <> 0, "1", "0") & "|"
+    Return result
+End Function
+
+Private Function X64SdaStride(ByRef ps As ParseState, ByRef nameText As String) As Integer
+    Dim t As String = ""
+    If X64FindDeclaredTypeName(ps, nameText, t) = 0 Then Return 8
+    t = X64Upper(Trim(t))
+    If Right(t, 2) = "[]" Then t = Left(t, Len(t) - 2)
+    Dim sz As Integer, e As String
+    If TypeLayoutStrideOf(ps, t, sz, e) <> 0 Then
+        If sz > 0 Then Return sz
+    End If
+    If X64TypeToFloatKind(t) = UXF_F32 Then Return 4
+    Return 8
+End Function
+
+' reg = address of the array's descriptor (frame slot of the routine that declares it, otherwise the global)
+Private Function X64SdaDescriptorToReg(ByRef cg As X64CodegenContext, ByRef nameText As String, ByVal regName As String) As Integer
+    Dim localOffset As Integer
+    Dim slotCount As Integer
+    Dim labelText As String
+    If cg.currentRoutineLabel <> "" Then
+        If X64TryFindLocalInfo(cg, nameText, localOffset, slotCount) <> 0 Then
+            ' S-713: a borrowed T[] slot contains a descriptor pointer; the
+            ' same name may also be a dynamic DIM in the caller. Loading the
+            ' address of the pointer slot corrupts bounds and element access.
+            Dim paramStride As Integer
+            If X64ParamArrayElemBytes(cg, nameText, paramStride) <> 0 Then
+                X64EmitText cg, "    mov " & regName & ", " & X64FormatRbpRef(localOffset)
+            Else
+                X64EmitText cg, "    lea " & regName & ", " & X64FormatRbpRef(localOffset)
+            End If
+            Return 1
+        End If
+    End If
+    If X64TryFindGlobalInfo(cg, nameText, labelText, slotCount) <> 0 Then
+        X64EmitText cg, "    lea " & regName & ", [rel " & labelText & "]"
+        Return 1
+    End If
+    Return 0
+End Function
+
+' rax = the index as written in the program; leaves rcx = address of the element (bounds checked against the descriptor).
+' Clobbers rax, rbx, rdx. xmm registers are not touched.
+Private Function X64EmitSdaElementAddr(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByRef varName As String) As Integer
+    If X64SdaDescriptorToReg(cg, varName, "rcx") = 0 Then Return 0
+    Dim okLabel As String = X64NextLabel(cg, "sda_index_ok")
+    Dim messageLabel As String = X64NextLabel(cg, "sda_index_error")
+    X64EmitData cg, messageLabel & ": db ""uXBasic runtime error: array index out of bounds " & X64Upper(Trim(varName)) & """, 10, 0"
+    X64EmitText cg, "    sub rax, [rcx + 8]"
+    X64EmitText cg, "    mov rdx, [rcx + 16]"
+    X64EmitText cg, "    sub rdx, [rcx + 8]"
+    X64EmitText cg, "    cmp rax, rdx"
+    X64EmitText cg, "    jbe " & okLabel
+    X64EmitText cg, "    lea rcx, [rel " & messageLabel & "]"
+    X64EmitText cg, "    and rsp, -16"
+    X64EmitText cg, "    sub rsp, 32"
+    X64EmitText cg, "    call printf"
+    X64EmitText cg, "    mov ecx, 1"
+    X64EmitText cg, "    call exit"
+    X64EmitLabel cg, okLabel
+    Dim strideBytes As Integer
+    If X64ParamArrayElemBytes(cg, varName, strideBytes) = 0 Then strideBytes = X64SdaStride(ps, varName)
+    If strideBytes <> 1 Then X64EmitText cg, "    imul rax, " & X64ToStr(strideBytes)
+    X64EmitText cg, "    add rax, [rcx]"
+    X64EmitText cg, "    mov rcx, rax"
+    Return 1
+End Function
+
+' DIM / REDIM [PRESERVE] of a dynamic scalar array: (re)allocates the block through the runtime
+Private Function X64SdaResize(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByVal declNode As Integer, ByRef nameText As String, ByVal keepOld As Integer, ByRef errText As String) As Integer
+    Dim bounds As Integer = -1
+    Dim child As Integer = ps.ast.nodes(declNode).firstChild
+    Do While child >= 0
+        If ps.ast.nodes(child).kind = "DIM_BOUNDS" Then bounds = child: Exit Do
+        child = ps.ast.nodes(child).nextSibling
+    Loop
+    Dim firstBound As Integer = IIf(bounds >= 0, ps.ast.nodes(bounds).firstChild, -1)
+    If firstBound < 0 Then errText = "x64-codegen: dynamic array bounds missing: " & nameText: Return 0
+    Dim loNode As Integer = -1
+    Dim hiNode As Integer = firstBound
+    If UCase(ps.ast.nodes(firstBound).kind) = "RANGE_EXPR" Then
+        loNode = ps.ast.nodes(firstBound).left
+        hiNode = ps.ast.nodes(firstBound).right
+    End If
+    If X64EmitExprToRax(ps, hiNode, cg, errText) = 0 Then Return 0
+    X64EmitText cg, "    push rax"
+    If loNode >= 0 Then
+        If X64EmitExprToRax(ps, loNode, cg, errText) = 0 Then Return 0
+    Else
+        X64EmitText cg, "    xor eax, eax"
+    End If
+    X64EmitText cg, "    mov rdx, rax"
+    X64EmitText cg, "    pop r8"
+    If X64SdaDescriptorToReg(cg, nameText, "rcx") = 0 Then errText = "x64-codegen: dynamic array descriptor missing: " & nameText: Return 0
+    Dim flagValue As LongInt = X64SdaStride(ps, nameText)
+    If keepOld <> 0 Then flagValue += 4294967296
+    X64EmitText cg, "    mov r9, " & LTrim(Str(flagValue))
+    X64EmitCall0 cg, "__uxb_rt_array_resize"
+    Return 1
+End Function
+
+Private Function X64DcaResize(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByVal decl As Integer, ByRef nameText As String, ByRef errText As String) As Integer
+    Dim bounds As Integer = -1, child As Integer = ps.ast.nodes(decl).firstChild
+    Do While child >= 0
+        If ps.ast.nodes(child).kind = "DIM_BOUNDS" Then bounds = child: Exit Do
+        child = ps.ast.nodes(child).nextSibling
+    Loop
+    Dim range As Integer = X64ChildAt(ps, bounds, 0)
+    If bounds < 0 Or range < 0 Then errText = "x64-codegen: dynamic CLASS array bounds missing": Return 0
+    Dim lo As Integer = ps.ast.nodes(range).left, hi As Integer = ps.ast.nodes(range).right
+    If lo < 0 Or hi < 0 Then errText = "x64-codegen: normalized CLASS array needs a range": Return 0
+    If X64EmitExprToRax(ps, lo, cg, errText) = 0 Then Return 0
+    X64EmitText cg, "    push rax"
+    If X64EmitExprToRax(ps, hi, cg, errText) = 0 Then Return 0
+    X64EmitText cg, "    mov r8, rax"
+    X64EmitText cg, "    pop rdx"
+    If X64DcaDescriptor(ps, cg, nameText, "rcx") = 0 Then errText = "x64-codegen: dynamic CLASS descriptor missing": Return 0
+    X64EmitText cg, "    mov r9, 8"
+    X64EmitCall0 cg, "__uxb_rt_array_resize"
+    Return 1
+End Function

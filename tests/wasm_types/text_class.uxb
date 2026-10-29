@@ -1,0 +1,15 @@
+CLASS NoteBox
+ PUBLIC
+ body AS STRING
+ CONSTRUCTOR(value AS STRING)
+  THIS.body = value
+ END CONSTRUCTOR
+ METHOD Append(value AS STRING) AS STRING
+  THIS.body = THIS.body + value
+  RETURN THIS.body
+ END METHOD
+END CLASS
+DIM n AS NoteBox = NEW NoteBox("kept")
+PRINT n.body
+PRINT n.Append("!")
+PRINT n.body

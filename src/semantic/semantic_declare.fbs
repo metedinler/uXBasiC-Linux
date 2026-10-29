@@ -1,0 +1,166 @@
+#ifndef UXB_SEMANTIC_DECLARE_FBS
+#define UXB_SEMANTIC_DECLARE_FBS
+
+' S-544, Mete 2026-10-28: DECLARE is recommended, optional even for forward
+' calls. Written declarations still need matching local definitions (except
+' C-ABI imports); SemValidateOverloadResolution checks their signatures.
+
+Private Function SemDeclareLookup(tableSlot() As Integer, routineKey() As String, ByVal tableMask As Integer, ByRef keyText As String, ByRef freePos As Integer) As Integer
+    ' open-addressing lookup; returns the routine slot of keyText or -1, freePos = table position where it is (or would be) stored
+    Dim hashValue As LongInt = 5381
+    Dim charPos As Integer
+    For charPos = 1 To Len(keyText)
+        hashValue = (hashValue * 33 + Asc(Mid(keyText, charPos, 1))) And &h7FFFFFFF
+    Next charPos
+    Dim probe As Integer = CInt(hashValue And tableMask)
+    Do
+        Dim occupant As Integer = tableSlot(probe)
+        If occupant = -1 Then
+            freePos = probe
+            Return -1
+        End If
+        If routineKey(occupant) = keyText Then
+            freePos = probe
+            Return occupant
+        End If
+        probe = (probe + 1) And tableMask
+    Loop
+End Function
+
+Private Function SemValidateOptionalDeclareContracts(ByRef ps As ParseState, ByRef errText As String) As Integer
+    ' pass 1: top-level routine definitions and DECLAREs, one slot per (name, parameter count)
+    Dim routineTotal As Integer
+    routineTotal = 0
+    Dim countIdx As Integer
+    For countIdx = 0 To ps.ast.count - 1
+        Dim countKind As String
+        countKind = UCase(ps.ast.nodes(countIdx).kind)
+        If countKind = "SUB_STMT" Or countKind = "FUNCTION_STMT" Or countKind = "DECLARE_SUB_STMT" Or countKind = "DECLARE_FUNCTION_STMT" Then routineTotal += 1
+    Next countIdx
+    If routineTotal = 0 Then Return 1
+
+    Dim tableSize As Integer
+    tableSize = 16
+    Do While tableSize < routineTotal * 2 + 1
+        tableSize *= 2
+    Loop
+    Dim tableMask As Integer
+    tableMask = tableSize - 1
+    Dim tableSlot() As Integer
+    ReDim tableSlot(tableSize - 1)
+    Dim fillPos As Integer
+    For fillPos = 0 To tableSize - 1
+        tableSlot(fillPos) = -1
+    Next fillPos
+
+    Dim routineKey() As String
+    Dim routineName() As String
+    Dim routineArity() As Integer
+    Dim definedAt() As Integer
+    Dim declaredAt() As Integer
+    Dim routineExternal() As Integer
+    ReDim routineKey(routineTotal - 1)
+    ReDim routineName(routineTotal - 1)
+    ReDim routineArity(routineTotal - 1)
+    ReDim definedAt(routineTotal - 1)
+    ReDim declaredAt(routineTotal - 1)
+    ReDim routineExternal(routineTotal - 1)
+    Dim routineCount As Integer
+    routineCount = 0
+
+    Dim scanIdx As Integer
+    For scanIdx = 0 To ps.ast.count - 1
+        Dim scanKind As String
+        scanKind = UCase(ps.ast.nodes(scanIdx).kind)
+        Dim isDefinition As Integer
+        isDefinition = 0
+        Dim isDeclare As Integer
+        isDeclare = 0
+        If scanKind = "SUB_STMT" Or scanKind = "FUNCTION_STMT" Then isDefinition = 1
+        If scanKind = "DECLARE_SUB_STMT" Or scanKind = "DECLARE_FUNCTION_STMT" Then isDeclare = 1
+        If isDefinition = 0 And isDeclare = 0 Then Continue For
+        ' definitions only from the program root or a NAMESPACE / MODULE block (members of a CLASS follow their own scope rules); a DECLARE is an announcement
+        ' wherever a statement may stand (a DECLARE written inside a routine body announces from that point on), but never inside a type container
+        Dim ownerNode As Integer
+        ownerNode = ps.ast.nodes(scanIdx).parent
+        If ownerNode <> ps.rootNode Then
+            If ownerNode < 0 Or ownerNode >= ps.ast.count Then Continue For
+            Dim ownerKind As String
+            ownerKind = UCase(Trim(ps.ast.nodes(ownerNode).kind))
+            If isDefinition <> 0 Then
+                If ownerKind <> "NAMESPACE_STMT" And ownerKind <> "MODULE_STMT" Then Continue For
+            Else
+                If ownerKind = "CLASS_STMT" Or ownerKind = "INTERFACE_STMT" Or ownerKind = "MIXIN_STMT" Or ownerKind = "TYPE_STMT" Or ownerKind = "UNION_STMT" Then Continue For
+            End If
+        End If
+        ' the routines the compiler writes itself (_UXB_MID_REPLACE_n ...) are appended at the end of the tree and are not source text
+        Dim rawName As String
+        rawName = UCase(Trim(ps.ast.nodes(scanIdx).value))
+        If rawName = "" Or Left(rawName, 5) = "_UXB_" Or Left(rawName, 5) = "__UXB" Then Continue For
+        ' a DECLARE ... LIB import has no definition in the program; ALIAS / CDECL / STDCALL mark a C-ABI symbol resolved at link time (IMPORT(C, ...), the runtime)
+        Dim isExternal As Integer
+        isExternal = 0
+        If isDeclare <> 0 Then
+            If InStr(UCase(ps.ast.nodes(scanIdx).typeName), "LIB=") > 0 Then Continue For
+            If Trim(ps.ast.nodes(scanIdx).symbolName) <> "" Then isExternal = 1
+            Dim callConv As String
+            callConv = UCase(Trim(ps.ast.nodes(scanIdx).op))
+            If callConv = "CDECL" Or callConv = "STDCALL" Then isExternal = 1
+        End If
+        Dim scanName As String
+        scanName = SemScopedRoutineName(ps, scanIdx, ps.ast.nodes(scanIdx).value)
+        If scanName = "" Then Continue For
+
+        Dim scanArity As Integer
+        scanArity = SemCountRoutineParams(ps, scanIdx)
+        Dim scanKey As String
+        scanKey = scanName & "/" & LTrim(Str(scanArity))
+        Dim slotPos As Integer
+        Dim slot As Integer
+        slot = SemDeclareLookup(tableSlot(), routineKey(), tableMask, scanKey, slotPos)
+        If slot = -1 Then
+            slot = routineCount
+            routineCount += 1
+            routineKey(slot) = scanKey
+            routineName(slot) = scanName
+            routineArity(slot) = scanArity
+            definedAt(slot) = -1
+            declaredAt(slot) = -1
+            routineExternal(slot) = 0
+            tableSlot(slotPos) = slot
+        End If
+        If isDefinition <> 0 Then
+            If definedAt(slot) = -1 Then definedAt(slot) = scanIdx
+        Else
+            If declaredAt(slot) = -1 Then declaredAt(slot) = scanIdx
+            If isExternal <> 0 Then routineExternal(slot) = 1
+        End If
+    Next scanIdx
+
+    ' Only an explicitly written, unmatched local declaration is an error.
+    Dim violationCount As Integer
+    violationCount = 0
+    Dim violationText As String
+    violationText = ""
+
+    ' pass 3: a DECLARE with no definition of the same name and parameter count
+    Dim missSlot As Integer
+    For missSlot = 0 To routineCount - 1
+        If declaredAt(missSlot) <> -1 And definedAt(missSlot) = -1 And routineExternal(missSlot) = 0 Then
+            Dim missWord As String
+            missWord = IIf(UCase(ps.ast.nodes(declaredAt(missSlot)).kind) = "DECLARE_FUNCTION_STMT", "FUNCTION", "SUB")
+            violationCount += 1
+            If violationCount <= 20 Then
+                If violationText <> "" Then violationText &= " | "
+                violationText &= "UXB_DECLARE_MISSING_DEFINITION: DECLARE " & missWord & " " & routineName(missSlot) & " with " & LTrim(Str(routineArity(missSlot))) & " parameter(s) has no definition with the same name and parameter count in the program [line " & LTrim(Str(ps.ast.nodes(declaredAt(missSlot)).lineNo)) & "]"
+            End If
+        End If
+    Next missSlot
+
+    If violationCount = 0 Then Return 1
+    errText = "semantic: " & violationText
+    If violationCount > 20 Then errText &= " | and " & LTrim(Str(violationCount - 20)) & " more routine(s)"
+    Return 0
+End Function
+
+#endif

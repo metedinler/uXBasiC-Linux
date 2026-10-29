@@ -1,0 +1,12 @@
+{
+  "s097_param_static_nonzero_read": {"output": "41"},
+  "s097_param_static_nonzero_write": {"output": "62"},
+  "s097_param_forward": {"output": "17"},
+  "s097_param_local_static": {"output": "25"},
+  "s097_param_local_recursive": {"output": "6"},
+  "s097_param_dynamic_v2": {"output": "33"},
+  "extra_local_dynamic_recursive": {"output": "10"},
+  "extra_static_array_lifetime": {"output": "1\n2"},
+  "s097_param_low_oob": {"error": "array index out of bounds"},
+  "s097_param_high_oob": {"error": "array index out of bounds"}
+}

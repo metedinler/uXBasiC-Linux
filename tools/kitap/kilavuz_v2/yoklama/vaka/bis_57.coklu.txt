@@ -1,0 +1,32 @@
+x64 eksi karsilastirma
+DIM a AS I32 = 7
+DIM b AS I32 = 2
+PRINT -(a > b)
+PRINT 0 - (a > b)
+DIM t AS I32
+t = (a > b)
+PRINT t
+PRINT -t
+PRINT -(t)
+=====
+x64 eksi karsilastirma sabit
+PRINT -(7 > 2)
+PRINT -(2 > 7)
+=====
+parantez esitlik carpim
+DIM z AS I32 = 0
+PRINT (z = 0) * 3
+=====
+parantez esitlik toplam
+DIM z AS I32 = 0
+PRINT (z = 0) + 3
+=====
+parantez kucuktur carpim
+DIM z AS I32 = 0
+PRINT (z < 1) * 3
+=====
+atama icinde esitlik carpim
+DIM z AS I32 = 0
+DIM r AS I32
+r = (z = 0) * 3
+PRINT r

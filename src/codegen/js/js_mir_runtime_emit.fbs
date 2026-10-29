@@ -22,7 +22,7 @@ Public Function UXBJsEmitPreamble(ByRef wasmPath As String) As String
 End Function
 
 Public Function UXBJsEmitMainFooter() As String
-    Return "if (!globalThis.uxb || globalThis.uxb.autoRun !== false) { main().catch(err => { const message = 'uXBasic runtime error: ' + (err && err.message ? err.message : String(err)); if (globalThis.uxb && globalThis.uxb.console) globalThis.uxb.console.println(message); else if (typeof console !== 'undefined' && console.error) console.error(err); if (typeof process !== 'undefined' && process) process.exitCode = 1; else throw err; }); }" & Chr(10)
+    Return "if (!globalThis.uxb || globalThis.uxb.autoRun !== false) { main().catch(err => { if (err && err.uxbProgramEnd) return; const message = 'uXBasic runtime error: ' + (err && err.message ? err.message : String(err)); if (globalThis.uxb && globalThis.uxb.console) globalThis.uxb.console.println(message); else if (typeof console !== 'undefined' && console.error) console.error(err); if (typeof process !== 'undefined' && process) process.exitCode = 1; else throw err; }); }" & Chr(10)
 End Function
 
 #endif

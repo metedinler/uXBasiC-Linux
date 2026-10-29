@@ -1,0 +1,19 @@
+TYPE BITBOX
+    v AS I32
+END TYPE
+
+DIM a AS BITBOX
+DIM b AS BITBOX
+DIM c AS BITBOX
+DIM q AS I32
+a.v = 12
+b.v = 4
+c.v = a.v AND b.v
+PRINT c.v
+c.v = a.v OR b.v
+PRINT c.v
+c.v = a.v XOR b.v
+PRINT c.v
+q = 8
+c.v = q > 3 AND q < 20
+PRINT c.v

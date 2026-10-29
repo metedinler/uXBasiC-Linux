@@ -1,0 +1,8 @@
+=== sifir_arg_liste_yok
+DIM r AS I32
+r = CALL(DLL, "ucrtbase.dll", "rand", I32, CDECL)
+IF r >= 0 THEN PRINT "ok"
+=== sifir_arg_pid
+DIM p AS I32
+p = CALL(DLL, "kernel32.dll", "GetCurrentProcessId", I32, STDCALL)
+IF p > 0 THEN PRINT "pid var"

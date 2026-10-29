@@ -1,0 +1,66 @@
+DELETE sonrasi alan okuma
+CLASS Kutu
+    PUBLIC
+    DIM en AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.en = 7
+DELETE k
+PRINT k.en
+PRINT "ulasildi"
+=====
+DELETE sonrasi alan yazma
+CLASS Kutu
+    PUBLIC
+    DIM en AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+DELETE k
+k.en = 9
+PRINT "ulasildi"
+=====
+iki kez DELETE
+CLASS Kutu
+    PUBLIC
+    DIM en AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+DELETE k
+DELETE k
+PRINT "ulasildi"
+=====
+DELETE sonrasi metot cagirma
+CLASS Kutu
+    PUBLIC
+    DIM en AS I32
+    SUB Yaz()
+        PRINT en
+    END SUB
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.en = 3
+DELETE k
+k.Yaz()
+PRINT "ulasildi"
+=====
+ikinci referans uzerinden eski nesne
+CLASS Kutu
+    PUBLIC
+    DIM en AS I32
+END CLASS
+DIM a AS Kutu = NEW Kutu()
+a.en = 4
+DIM b AS Kutu
+b = a
+DELETE a
+PRINT b.en
+PRINT "ulasildi"
+=====
+NEW atanmamis nesne alani
+CLASS Kutu
+    PUBLIC
+    DIM en AS I32
+END CLASS
+DIM k AS Kutu
+PRINT k.en
+PRINT "ulasildi"

@@ -1,0 +1,16 @@
+CLASS BitBox
+    PUBLIC:
+    DIM value AS I32
+
+    MAGIC AND(other AS BitBox) AS BitBox
+        DIM result AS BitBox = NEW BitBox()
+        result.value = 4
+        RETURN result
+    END MAGIC
+END CLASS
+
+DIM leftBox AS BitBox = NEW BitBox()
+DIM rightBox AS BitBox = NEW BitBox()
+DIM andBox AS BitBox = NEW BitBox()
+andBox = leftBox AND rightBox
+PRINT andBox.value

@@ -1,0 +1,30 @@
+TYPE POINT
+    X AS I32
+    Y AS I32
+END TYPE
+
+TYPE WRAP
+    P AS POINT
+END TYPE
+
+CLASS CBOX
+    W AS WRAP
+END CLASS
+
+DIM t AS WRAP
+t.P.X = 7
+t.P.Y = t.P.X + 5
+PRINT t.P.X
+PRINT t.P.Y
+
+t.P.X += 3
+PRINT t.P.X
+
+DIM c AS CBOX = NEW CBOX()
+c.W.P.X = 20
+c.W.P.Y = c.W.P.X + 2
+PRINT c.W.P.X
+PRINT c.W.P.Y
+
+c.W.P.X += 4
+PRINT c.W.P.X

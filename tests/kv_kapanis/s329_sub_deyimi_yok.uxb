@@ -1,0 +1,3 @@
+' S-329: parantezli, tanimsiz SUB deyimi (CALL'suz) = derleme hatasi; "once" HIC yazilmaz.
+PRINT "once"
+Yok(3)

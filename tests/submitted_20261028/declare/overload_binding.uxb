@@ -1,0 +1,8 @@
+PRINT Choose(3)
+PRINT Choose(4, 5)
+FUNCTION Choose(Choose AS I32) AS I32
+    RETURN Choose + 1
+END FUNCTION
+FUNCTION Choose(a AS I32, b AS I32) AS I32
+    Choose = a + b
+END FUNCTION

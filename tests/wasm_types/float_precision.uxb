@@ -1,0 +1,5 @@
+DIM x AS F32 = 1.2
+DIM y AS F64 = 0.125
+PRINT x
+PRINT y
+PRINT 1.0E-7

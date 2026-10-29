@@ -1,5 +1,5 @@
-# S-146 Model D motor durumu. Legacy AST-x64 LOCK/MUTEX/ATOMIC/UNSAFE/SPAWN'i acik taniyla reddeder.
+# S-692: legacy provider executes LOCK/MUTEX/ATOMIC with the common native runtime.
 AST=run
 MIR=run
 x64=run
-AST-x64=reject:legacy AST-x64
+AST-x64=run

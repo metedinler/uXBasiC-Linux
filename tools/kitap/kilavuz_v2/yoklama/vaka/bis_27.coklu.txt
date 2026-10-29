@@ -1,0 +1,100 @@
+X1 READONLY alana yazma (zorlaniyorsa derleme hatasi)
+CLASS Kutu
+PUBLIC
+    READONLY DIM x AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.x = 5
+PRINT k.x
+=====
+X2 MUTABLE ve FRIEND niteleyicileri kabul mu
+CLASS Kutu
+PUBLIC
+    MUTABLE DIM x AS I32
+    FRIEND DIM y AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.x = 5
+PRINT k.x
+=====
+X3 STRUCT baslik satirinda ABI C PACK 4 (beklenen 8)
+STRUCT Baslik ABI C PACK 4
+    boyut AS U32
+    bayrak AS U32
+END STRUCT
+PRINT SIZEOF(Baslik)
+=====
+X4 FOR EACH uc kaynak CHAIN / ZIP (tasarim)
+DIM a AS LIST
+DIM b AS LIST
+LISTADD(a, 1)
+LISTADD(b, 2)
+DIM v AS I32
+FOR EACH v IN CHAIN(a, b)
+    PRINT v
+NEXT
+=====
+X5 MAGIC ITER (tasarim)
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+    MAGIC ITER()
+        RETURN n
+    END MAGIC
+END CLASS
+PRINT "tamam"
+=====
+X6 PTR TO tipli isaretci (tasarim)
+DIM x AS I32 = 5
+DIM p AS PTR TO I32
+PRINT "tamam"
+=====
+X7 TASKGROUP JOINALL (tasarim)
+THREAD W(x AS I32) AS I32
+    RETURN x
+END THREAD
+DIM g AS TASKGROUP
+g.ADD(SPAWN W(1))
+DIM r AS LIST
+r = g.JOINALL()
+PRINT LISTLEN(r)
+=====
+X8 KILL TASK / PAUSE TASK (tasarim)
+THREAD W(x AS I32) AS I32
+    RETURN x
+END THREAD
+DIM t AS TASK OF I32 = SPAWN W(1)
+KILL TASK t
+PRINT "tamam"
+=====
+X9 DECLARE THREAD (tasarim)
+DECLARE THREAD W(x AS I32) AS I32
+THREAD W(x AS I32) AS I32
+    RETURN x
+END THREAD
+PRINT "tamam"
+=====
+X10 TRIGGER SLOT ad (tasarim)
+EVENT E(v AS I32)
+    PRINT v
+END EVENT
+SLOT
+    S1 1 ON EVENT E
+END SLOT
+TRIGGER S1, 4
+=====
+X11 ON SLOT / OFF SLOT (tasarim)
+EVENT E(v AS I32)
+    PRINT v
+END EVENT
+SLOT
+    S1 1 ON EVENT E
+END SLOT
+OFF SLOT S1
+TRIGGER EVENT E, 4
+=====
+X12 yerel SHARED / BYSHARED (tasarim)
+THREAD P(BYSHARED buf() AS F64)
+    buf(0) = 1.0
+END THREAD
+PRINT "tamam"

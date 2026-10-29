@@ -1,0 +1,19 @@
+DIM hits AS I32 = 0
+FUNCTION Hit() AS I32
+  hits += 1
+  RETURN hits
+END FUNCTION
+FUNCTION Explode() AS I32
+  RETURN 1 \ 0
+END FUNCTION
+PRINT IFF(1, Hit(), Explode())
+PRINT IFF(0, Explode(), Hit())
+PRINT hits
+PRINT IFF(1, "yes", "no")
+PRINT IFF(0, "wrong", "right")
+PRINT IFF(1, 5, 2.5)
+PRINT IFF(0, 5, 2.5)
+PRINT IFF(0.5, 7, 9)
+PRINT IFF(0.0, 7, 9)
+PRINT 1 IFF 1
+PRINT 1 IFF 0

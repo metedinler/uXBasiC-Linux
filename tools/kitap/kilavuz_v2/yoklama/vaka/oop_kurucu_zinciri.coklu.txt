@@ -1,0 +1,87 @@
+taban kurucusu parametresiz ve turetilmis kurucu var (A.x taban kurucuda 5 olur mu)
+CLASS A
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR()
+        x = 5
+    END CONSTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DIM y AS I32
+    CONSTRUCTOR()
+        y = 7
+    END CONSTRUCTOR
+END CLASS
+DIM nb AS B = NEW B()
+PRINT nb.x
+PRINT nb.y
+=====
+taban kurucusu parametreli turetilmis SUPER yok x degeri
+CLASS A
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(ax AS I32)
+        x = ax
+    END CONSTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DIM y AS I32
+    CONSTRUCTOR(ay AS I32)
+        y = ay
+    END CONSTRUCTOR
+END CLASS
+DIM nb AS B = NEW B(4)
+PRINT nb.x
+PRINT nb.y
+=====
+turetilmiste kurucu yok taban kurucusu var
+CLASS A
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR()
+        x = 5
+    END CONSTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DIM y AS I32
+END CLASS
+DIM nb AS B = NEW B()
+PRINT nb.x
+=====
+turetilmiste yikici yok tabanda var
+CLASS A
+    PUBLIC
+    DESTRUCTOR()
+        PRINT "A.dtor"
+    END DESTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DIM y AS I32
+END CLASS
+DIM nb AS B = NEW B()
+DELETE nb
+=====
+uc seviye kurucu zinciri
+CLASS A
+    PUBLIC
+    CONSTRUCTOR()
+        PRINT "A"
+    END CONSTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    CONSTRUCTOR()
+        PRINT "B"
+    END CONSTRUCTOR
+END CLASS
+CLASS C EXTENDS B
+    PUBLIC
+    CONSTRUCTOR()
+        PRINT "C"
+    END CONSTRUCTOR
+END CLASS
+DIM nc AS C = NEW C()

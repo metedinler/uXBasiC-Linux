@@ -1,0 +1,11 @@
+DIM arr(0 TO 2) AS I32
+v0 = 7
+v1 = 8
+v2 = 9
+
+REDIM PRESERVE arr(0 TO 4) AS I32
+v3 = 10
+v4 = 11
+
+PRINT v0
+PRINT v4

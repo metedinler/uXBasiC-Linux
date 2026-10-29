@@ -1,3 +1,3 @@
-AST=dimensions are counted from 1
-MIR=dimensions are counted from 1
-x64=dimensions are counted from 1
+AST=dimension must be a positive integer literal in range 1..2147483647
+MIR=dimension must be a positive integer literal in range 1..2147483647
+x64=dimension must be a positive integer literal in range 1..2147483647

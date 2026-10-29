@@ -1,0 +1,6 @@
+AST=must be reached through a variable or THIS
+MIR=must be reached through a variable or THIS
+x64=must be reached through a variable or THIS
+AST-x64=must be reached through a variable or THIS
+JS=must be reached through a variable or THIS
+WASM=must be reached through a variable or THIS

@@ -1,0 +1,4 @@
+DIM s AS STRING = "A" + CHR(0) + "B"
+PRINT s
+PRINT "[" + s + "]"
+PRINT LEN(s)

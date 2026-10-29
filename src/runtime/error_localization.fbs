@@ -77,6 +77,7 @@ End Function
 Function UxbYerellestirHata(ByRef rawText As String) As String
     Dim u As String
     u = UCase(rawText)
+    If InStr(u, "UXB_IFF_ARGUMENT_COUNT:") > 0 Then Return "IFF tam olarak uc arguman ister (kosul,dogru,yanlis)"
 
     If Instr(u, "SOURCE FILE PATH NOT PROVIDED") > 0 Then Return "Kaynak dosya yolu verilmedi"
     If Instr(u, "SOURCE ARGUMENT MISSING VALUE") > 0 Then Return "Kaynak dosya parametresi eksik"
@@ -108,13 +109,6 @@ Function UxbYerellestirHata(ByRef rawText As String) As String
         ffi64Tail = UxbErrorTailAfterPrefix(rawText, "ffi-x64:")
         If ffi64Tail = "" Then Return "FFI x64 kod uretim hatasi"
         Return "FFI x64 kod uretim hatasi: " & ffi64Tail
-    End If
-
-    If Left(u, 8) = "FFI-X86:" Then
-        Dim ffi86Tail As String
-        ffi86Tail = UxbErrorTailAfterPrefix(rawText, "ffi-x86:")
-        If ffi86Tail = "" Then Return "FFI x86 kod uretim hatasi"
-        Return "FFI x86 kod uretim hatasi: " & ffi86Tail
     End If
 
     Dim fileCode As Integer

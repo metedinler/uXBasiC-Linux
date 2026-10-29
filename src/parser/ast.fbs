@@ -34,6 +34,9 @@ Enum ASTNodeFlags
     AST_FLAG_INLINE      = 1 Shl 11
     AST_FLAG_EXTERN      = 1 Shl 12
     AST_FLAG_FRIEND      = 1 Shl 13
+    ' S-548 / S-549: the file-channel operand of OPEN / CLOSE was written with the `#` marker (`AS #n`), i.e. it is an explicit channel NUMBER;
+    ' without `#` a FILE_HANDLE variable lets the compiler pick the channel (the parser used to drop the marker).
+    AST_FLAG_FILE_HASH   = 1 Shl 14
 End Enum
 
 ' 2026-05-26 19:32 +03:00 - Codex: Step 2 contract için node sabitleri resmi ast_node_kinds.fbs dosyasına taşındı.
@@ -186,6 +189,21 @@ Function ASTPoolChildCount(ByRef p As ASTPool, ByVal nodeIdx As Integer) As Inte
     Loop
     Return n
 End Function
+
+' Legacy parser paths assign left/right directly. Complete only missing
+' reverse edges before scope-sensitive semantic passes inspect expressions.
+Sub ASTBackfillExpressionParents(ByRef p As ASTPool)
+    For i As Integer = 0 To p.count - 1
+        Dim child As Integer = p.nodes(i).left
+        If child >= 0 AndAlso child < p.count Then
+            If p.nodes(child).parent = AST_NULL Then p.nodes(child).parent = i
+        End If
+        child = p.nodes(i).right
+        If child >= 0 AndAlso child < p.count Then
+            If p.nodes(child).parent = AST_NULL Then p.nodes(child).parent = i
+        End If
+    Next i
+End Sub
 
 Function ASTFirstChildByRole(ByRef p As ASTPool, ByVal nodeIdx As Integer, ByRef roleName As String) As Integer
     If nodeIdx < 0 Or nodeIdx >= p.count Then Return AST_NULL
@@ -388,7 +406,7 @@ Private Function ASTContractJsonGroupForFamily(ByVal familyValue As Integer, ByR
     If k = ASTK_BLOCK Then Return "STATEMENT"
     If Instr(k, "CLASS_") = 1 Or Instr(k, "INTERFACE_") = 1 Then Return "OOP"
     If Instr(k, "TYPE_") = 1 Or k = ASTK_TYPE_REF Or k = ASTK_RETURN_TYPE Then Return "TYPE_SYSTEM"
-    If k = ASTK_IF_STMT Or k = ASTK_FOR_STMT Or k = ASTK_FOR_EACH_STMT Or k = ASTK_DO_STMT Or k = ASTK_DO_EACH_STMT Or k = ASTK_SELECT_STMT Or k = ASTK_CASE_BLOCK Or k = ASTK_CASE_ELSE Or k = ASTK_ELSEIF_PART Or k = ASTK_ELSE_PART Or k = ASTK_EXIT_STMT Or k = ASTK_RETURN_STMT Or k = ASTK_GOTO_STMT Or k = ASTK_GOSUB_STMT Or k = ASTK_END_STMT Then Return "CONTROL_FLOW"
+    If k = ASTK_IF_STMT Or k = ASTK_FOR_STMT Or k = ASTK_FOR_EACH_STMT Or k = ASTK_DO_STMT Or k = ASTK_DO_EACH_STMT Or k = ASTK_SELECT_STMT Or k = ASTK_CASE_BLOCK Or k = ASTK_CASE_ELSE Or k = ASTK_ELSEIF_PART Or k = ASTK_ELSE_PART Or k = ASTK_EXIT_STMT Or k = ASTK_CONTINUE_STMT Or k = ASTK_RETURN_STMT Or k = ASTK_GOTO_STMT Or k = ASTK_GOSUB_STMT Or k = ASTK_END_STMT Then Return "CONTROL_FLOW"
     If k = ASTK_TRY_STMT Or k = ASTK_TRY_BODY Or k = ASTK_CATCH_PART Or k = ASTK_FINALLY_PART Or k = ASTK_THROW_STMT Or k = ASTK_ASSERT_STMT Then Return "ERROR_HANDLING"
     If k = ASTK_OPEN_STMT Or k = ASTK_CLOSE_STMT Or k = ASTK_GET_STMT Or k = ASTK_PUT_STMT Or k = ASTK_SEEK_STMT Or k = ASTK_INPUT_FILE_STMT Or k = ASTK_INPUTF_STMT Then Return "FILE_IO"
     If Instr(k, "POKE") > 0 Or Instr(k, "MEMCOPY") > 0 Or Instr(k, "MEMFILL") > 0 Or k = ASTK_SETNEWOFFSET_STMT Then Return "MEMORY"

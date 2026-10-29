@@ -1,0 +1,38 @@
+{
+  "interface_param": {
+    "output": "4"
+  },
+  "interface_two_implementers": {
+    "output": "11\n22"
+  },
+  "interface_float_arg": {
+    "output": "7"
+  },
+  "interface_null_param": {
+    "error": "null object reference"
+  },
+  "namespace_using": {
+    "output": "5"
+  },
+  "namespace_using_function": {
+    "output": "7\n30"
+  },
+  "namespace_global_precedence": {
+    "output": "5\n50"
+  },
+  "interface_distinct_contracts": {
+    "output": "5\n3.5"
+  },
+  "interface_inherited": {
+    "output": "4"
+  },
+  "virtual_middle_owner": {
+    "output": "20\n1020"
+  },
+  "interface_multilevel_owners": {
+    "output": "21\n42\n2"
+  },
+  "comparison_masks": {
+    "output": "0\n-1\n-1\n-1\n0\n0\n-4\n-1\n0\n-1\n0\n-1\n0"
+  }
+}

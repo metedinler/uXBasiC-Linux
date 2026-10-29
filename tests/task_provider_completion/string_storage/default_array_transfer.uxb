@@ -1,0 +1,12 @@
+TYPE Record
+    text AS STRING
+    mark AS I32
+END TYPE
+DIM source(0 TO 1) AS STRING
+DIM records(0 TO 1) AS Record
+records(0).mark = 42
+records(0).text = source(0)
+PRINT LEN(records(0).text)
+records(0).text += source(1)
+PRINT LEN(records(0).text)
+PRINT records(0).mark

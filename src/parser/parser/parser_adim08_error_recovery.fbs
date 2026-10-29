@@ -1,7 +1,18 @@
 #ifndef UXB_PARSER_ADIM08_ERROR_RECOVERY_FBS
 #define UXB_PARSER_ADIM08_ERROR_RECOVERY_FBS
+#include once "../../common/error_limit.fbs"
 
 Const UXB_PARSER_MAX_ERRORS As Integer = 64
+
+Function UXBParserDiagnosticCodeFromMessage(ByRef msgText As String) As String
+    Dim upperText As String
+    upperText = UCase(msgText)
+    If InStr(upperText, "UXB_CALL_PAREN_REQUIRED:") > 0 Then Return "UXB_CALL_PAREN_REQUIRED"
+    If InStr(upperText, "UXB_CONST_ASSIGNMENT:") > 0 Then Return "UXB_CONST_ASSIGNMENT"
+    If InStr(upperText, "UXB_MIXED_STRING_NUMERIC:") > 0 Then Return "UXB_MIXED_STRING_NUMERIC"
+    If InStr(upperText, "UXB_FFI_ARGUMENT_TYPE_LIST:") > 0 Then Return "UXB_FFI_ARGUMENT_TYPE_LIST"
+    Return ""
+End Function
 
 Function UXBParserTokenText(ByRef tk As Token) As String
     Dim k As String
@@ -11,10 +22,14 @@ Function UXBParserTokenText(ByRef tk As Token) As String
 End Function
 
 Sub UXBParserAppendError(ByRef ps As ParseState, ByRef tk As Token, ByRef codeText As String, ByRef detailText As String)
+    If ps.parseErrorCount >= gUXBDiagnosticErrorLimit Then Exit Sub
     Dim code As String
     Dim msg As String
 
     code = UCase(Trim(codeText))
+    Dim inferredCode As String
+    inferredCode = UXBParserDiagnosticCodeFromMessage(detailText)
+    If inferredCode <> "" Then code = inferredCode
     If code = "" Then code = "PARSER_ERROR"
 
     msg = Trim(detailText)
@@ -83,7 +98,7 @@ Sub UXBParserRecoverToBlockSync(ByRef ps As ParseState)
 End Sub
 
 Function UXBParserErrorLimitExceeded(ByRef ps As ParseState) As Integer
-    If ps.parseErrorCount >= UXB_PARSER_MAX_ERRORS Then Return 1
+    If ps.parseErrorCount >= gUXBDiagnosticErrorLimit Then Return 1
     Return 0
 End Function
 

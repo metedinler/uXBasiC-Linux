@@ -1,0 +1,234 @@
+A1_ns_left_mete_oldugu_gibi
+' Mete 2026-10-28 ornegi harfi harfine. I8 + I8 sonucu I32'ye terfi eder; I16 dondururken
+' acik donusum gerekir (Left adindan bagimsiz sayisal kural). Beklenen: semantic ret.
+NAMESPACE S
+    FUNCTION Left(a AS I8, b AS I8) AS I16
+        RETURN a + b
+    END FUNCTION
+END NAMESPACE
+PRINT Left("Merhaba", 3)
+PRINT S.Left(3, 4)
+=====
+A1b_ns_left_i16_donusumlu
+' Ayni ornek, RETURN I16(a + b). Beklenen: Mer / 7
+NAMESPACE S
+    FUNCTION Left(a AS I8, b AS I8) AS I16
+        RETURN I16(a + b)
+    END FUNCTION
+END NAMESPACE
+PRINT Left("Merhaba", 3)
+PRINT S.Left(3, 4)
+=====
+A2_ns_left_declare_shadow
+' Mete'nin onerdigi OF SHADOW bicimi (dilde henuz yok). Beklenen: Mer / 7
+NAMESPACE S
+    DECLARE FUNCTION Left(a AS I8, b AS I8) AS I16 OF SHADOW
+    FUNCTION Left(a AS I8, b AS I8) AS I16 OF SHADOW
+        RETURN a + b
+    END FUNCTION
+END NAMESPACE
+PRINT Left("Merhaba", 3)
+PRINT S.Left(3, 4)
+=====
+A3_ns_left_declare_shadowsiz
+' DECLARE var, OF SHADOW yok. Beklenen: Mer / 7
+NAMESPACE S
+    DECLARE FUNCTION Left(a AS I8, b AS I8) AS I16
+    FUNCTION Left(a AS I8, b AS I8) AS I16
+        RETURN I16(a + b)
+    END FUNCTION
+END NAMESPACE
+PRINT Left("Merhaba", 3)
+PRINT S.Left(3, 4)
+=====
+A4_global_left
+' S-288 ozgun hali: kok duzeyde FUNCTION Left. Beklenen (A karari): acik ret.
+FUNCTION Left(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+PRINT Left(3, 4)
+=====
+A5_ns_left_tum_yerlesikler
+' Namespace icinde Left, Right, Mid, Len, Str adlari serbest mi?
+NAMESPACE S
+    FUNCTION Left(a AS I32, b AS I32) AS I32
+        RETURN a + b
+    END FUNCTION
+    FUNCTION Right(a AS I32, b AS I32) AS I32
+        RETURN a - b
+    END FUNCTION
+END NAMESPACE
+PRINT S.Left(3, 4)
+PRINT S.Right(9, 4)
+PRINT Right("Merhaba", 3)
+=====
+A6_ns_len_anahtar_sozcuk
+' LEN lexer'da KEYWORD; IDENT bekleyen FUNCTION basligi namespace icinde bile kabul eder mi?
+NAMESPACE S
+    FUNCTION Len(a AS I32) AS I32
+        RETURN a * 2
+    END FUNCTION
+END NAMESPACE
+PRINT S.Len(21)
+PRINT Len("abcd")
+=====
+B1_using_catisma_ayni_ad
+' S-271: iki NAMESPACE ayni adli islev, ikisi de USING ile acik, nitelensiz cagri.
+' Dogrusu: belirsizlik hatasi. Sessiz ilk-kazanan hatadir.
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+PRINT Topla(3, 4)
+=====
+B2_using_nitelikli
+' Ayni iki NAMESPACE, nitelikli cagri: kesin sonuc 7 / 12.
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+PRINT A.Topla(3, 4)
+PRINT B.Topla(3, 4)
+=====
+B3_using_golge_yerlesik
+' USING S ile S.Left gorunur olunca nitelensiz Left("Merhaba",3) hangisini secer?
+NAMESPACE S
+    FUNCTION Left(a AS I8, b AS I8) AS I16
+        RETURN I16(a + b)
+    END FUNCTION
+END NAMESPACE
+USING S
+PRINT Left("Merhaba", 3)
+PRINT Left(3, 4)
+=====
+B4_using_kullanici_islevi_ile_yerlesik_ad_tip
+' S-288 koku: Left(...) sonucunu I32 degiskene atamak.
+NAMESPACE S
+    FUNCTION Left(a AS I8, b AS I8) AS I16
+        RETURN I16(a + b)
+    END FUNCTION
+END NAMESPACE
+DIM r AS I32 = S.Left(3, 4)
+PRINT r
+=====
+C1_ileri_cagri_function_declaresiz
+' Codex karari: DECLARE istege bagli. Beklenen: 8
+PRINT Iki(4)
+FUNCTION Iki(x AS I32) AS I32
+    RETURN x * 2
+END FUNCTION
+=====
+C2_ileri_cagri_sub_declaresiz
+PRINT "bas"
+Selam(3)
+SUB Selam(x AS I32)
+    PRINT x
+END SUB
+=====
+C3k_thread_trigger_tanimdan_sonra
+' Kontrol: TRIGGER tanimdan SONRA. C3 ile farki yalniz sira; sonuc farkliysa sorun ileri kullanimdadir.
+THREAD Isci
+    PRINT "THREAD_RUN"
+END THREAD
+TRIGGER Isci
+=====
+C3_ileri_cagri_thread_trigger_declaresiz
+TRIGGER Isci
+THREAD Isci
+    PRINT "THREAD_RUN"
+END THREAD
+=====
+C4_ileri_cagri_event_trigger_declaresiz
+TRIGGER VeriGeldi, 42
+EVENT VeriGeldi
+    PRINT "EVENT_RUN"
+END EVENT
+=====
+C5_tanimsiz_cagri
+' S-329: hic tanimlanmamis islev cagrisi.
+PRINT Yok(4)
+=====
+D0_kontrol_tanimlar_declaresiz
+EVENT VeriGeldi
+    PRINT "EVENT_RUN"
+END EVENT
+THREAD Isci
+    PRINT "THREAD_RUN"
+END THREAD
+PARALEL Grup
+    PRINT "PARALEL_RUN"
+END PARALEL
+PIPE Donustur deger AS I32
+    PRINT "PIPE_RUN"
+    RETURN 7
+END PIPE
+TRIGGER VeriGeldi, 1
+TRIGGER Isci
+TRIGGER Grup
+TRIGGER Donustur, 3
+=====
+D1_declare_event
+DECLARE EVENT VeriGeldi
+EVENT VeriGeldi
+    PRINT "EVENT_RUN"
+END EVENT
+TRIGGER VeriGeldi, 1
+=====
+D2_declare_pipe
+DECLARE PIPE Donustur deger AS I32
+PIPE Donustur deger AS I32
+    PRINT "PIPE_RUN"
+    RETURN 7
+END PIPE
+TRIGGER Donustur, 3
+=====
+D3_declare_thread
+DECLARE THREAD Isci
+THREAD Isci
+    PRINT "THREAD_RUN"
+END THREAD
+TRIGGER Isci
+=====
+D4_declare_paralel
+DECLARE PARALEL Grup
+PARALEL Grup
+    PRINT "PARALEL_RUN"
+END PARALEL
+TRIGGER Grup
+=====
+E1_declare_govdesiz
+' Yazilmis ama gövdesi hic gelmeyen bildirim: yerel gövde yoksa hata beklenir.
+DECLARE FUNCTION Iki(x AS I32) AS I32
+PRINT "bitti"
+=====
+E2_declare_imza_uyusmaz
+' Bildirim I32 -> I32, tanim I64 -> I64: imza tutarsizligi hata olmali.
+DECLARE FUNCTION Iki(x AS I32) AS I32
+FUNCTION Iki(x AS I64) AS I64
+    RETURN x * 2
+END FUNCTION
+PRINT Iki(4)
+=====
+E3_declare_sub_tur_uyusmaz
+' Bildirim SUB, tanim FUNCTION: tur uyusmazligi hata olmali.
+DECLARE SUB Iki(x AS I32)
+FUNCTION Iki(x AS I32) AS I32
+    RETURN x * 2
+END FUNCTION
+PRINT Iki(4)

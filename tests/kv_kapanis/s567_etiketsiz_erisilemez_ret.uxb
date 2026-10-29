@@ -1,0 +1,7 @@
+' S-567 (negatif): RETURN'den sonra gelen ve hicbir GOTO/GOSUB'un hedeflemedigi etiket HALA erisilemezdir; denetim gevsemedi.
+FUNCTION F(n AS I32) AS I32
+    RETURN 0
+Yalniz:
+    RETURN 1
+END FUNCTION
+PRINT F(5)

@@ -1,19 +1,17 @@
 #ifndef UXB_MAIN_PREPROCESS_INCLUDE_BUNDLE_FBS
 #define UXB_MAIN_PREPROCESS_INCLUDE_BUNDLE_FBS
 
-' Separate preprocessor line.
-' A is the current in-tree preprocessor engine.
-' B lives under src/preprocessor/PreproesssorB and is selected by %%PP B or CLI --pp B.
+' Unified preprocessor and shared directive helpers.
 
 #include once "../preprocessor/preprocess_meta_model.fbs"
 #include once "../preprocessor/preprocess_meta_eval_adim34.fbs"
 #include once "../preprocessor/preprocess_lexer.fbs"
 #include once "../preprocessor/preprocess_parser.fbs"
-#include once "../preprocessor/preprocess_selector.fbs"
 #include once "../preprocessor/PreproesssorB/preprocess_path_policy.fbs"
 #include once "../preprocessor/PreproesssorB/preprocess_manifest_schema.fbs"
 #include once "../preprocessor/PreproesssorB/preprocess_block_scanner.fbs"
 #include once "../preprocessor/PreproesssorB/preprocess_web_manifest_commands.fbs"
+#include once "../preprocessor/preprocess_package.fbs"
 #include once "../preprocessor/preprocess_engine.fbs"
 
 #endif

@@ -1,0 +1,16 @@
+' uXBasic destructor parser/semantic/runtime/x64 contract smoke
+
+CLASS DtorBox
+    DIM value AS I32
+
+    CONSTRUCTOR()
+        value = 1
+    END CONSTRUCTOR
+
+    DESTRUCTOR DtorBox()
+        value = 0
+    END DESTRUCTOR
+END CLASS
+
+DIM d AS DtorBox
+DELETE d

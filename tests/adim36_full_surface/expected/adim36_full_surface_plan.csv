@@ -1,0 +1,95 @@
+test_id,category,source,polarity,chain,notes
+01_CORE_ARITHMETIC,core,tests/adim36_full_surface/positive/01_core_arithmetic.bas,positive,ALL,positive surface/library stress
+02_OPERATOR_PRECEDENCE,operators,tests/adim36_full_surface/positive/02_operator_precedence.bas,positive,"CORE,JS,WAT",positive surface/library stress
+03_STRING_FUNCTIONS,string,tests/adim36_full_surface/positive/03_string_functions.bas,positive,"INTERP,JS,WAT",positive surface/library stress
+04_BRANCH_IF_SELECT,control,tests/adim36_full_surface/positive/04_branch_if_select.bas,positive,"INTERP,JS,WAT",positive surface/library stress
+05_LOOPS_FOR_WHILE_DO,control,tests/adim36_full_surface/positive/05_loops_for_while_do.bas,positive,"INTERP,JS,WAT",positive surface/library stress
+06_ARRAYS_BASIC,data,tests/adim36_full_surface/positive/06_arrays_basic.bas,positive,"CORE,INTERP",positive surface/library stress
+07_LIST_DICT_SET_SURFACE,data,tests/adim36_full_surface/positive/07_list_dict_set_surface.bas,positive,"CORE,JS,WAT",positive surface/library stress
+08_TYPE_RECORD,type,tests/adim36_full_surface/positive/08_type_record.bas,positive,"CORE,X64,JS,WAT",positive surface/library stress
+09_CLASS_CONSTRUCTOR_METHOD,oop,tests/adim36_full_surface/positive/09_class_constructor_method.bas,positive,"CORE,X64,JS,WAT",positive surface/library stress
+10_CLASS_FIELD_STRICT,oop,tests/adim36_full_surface/positive/10_class_field_strict.bas,positive,"CORE,X64,JS,WAT",positive surface/library stress
+11_FUNCTIONS_RECURSION,function,tests/adim36_full_surface/positive/11_functions_recursion.bas,positive,"INTERP,X64,JS,WAT",positive surface/library stress
+12_NAMESPACE_USING_ALIAS,namespace,tests/adim36_full_surface/positive/12_namespace_using_alias.bas,positive,"CORE,JS,WAT",positive surface/library stress
+13_INCLUDE_HEADER_MATH,include,tests/adim36_full_surface/positive/13_include_header_math.uxb,positive,"CORE,INTERP",positive surface/library stress
+14_INCLUDE_NESTED,include,tests/adim36_full_surface/positive/14_include_nested.uxb,positive,"CORE,INTERP",positive surface/library stress
+15_IMPORT_C,import,tests/adim36_full_surface/positive/15_import_c.uxb,positive,"CORE,X64",positive surface/library stress
+16_IMPORT_CPP,import,tests/adim36_full_surface/positive/16_import_cpp.uxb,positive,"CORE,X64",positive surface/library stress
+17_IMPORT_ASM,import,tests/adim36_full_surface/positive/17_import_asm.uxb,positive,"CORE,X64",positive surface/library stress
+18_POINTER_VARPTR_SADD,pointer,tests/adim36_full_surface/positive/18_pointer_varptr_sadd.bas,positive,"CORE,X64,JS,WAT",positive surface/library stress
+19_MEMORY_PEEK_POKE,memory,tests/adim36_full_surface/positive/19_memory_peek_poke.bas,positive,"CORE,X64,JS,WAT",positive surface/library stress
+20_FILE_OPEN_CLOSE_PRINT,file,tests/adim36_full_surface/positive/20_file_open_close_print.bas,positive,"CORE,INTERP",positive surface/library stress
+21_FILE_GET_PUT_SEEK,file,tests/adim36_full_surface/positive/21_file_get_put_seek.bas,positive,CORE,positive surface/library stress
+22_EVENT_THREAD_PIPE_SLOT,event,tests/adim36_full_surface/positive/22_event_thread_pipe_slot.bas,positive,"CORE,JS,WAT",positive surface/library stress
+23_ON_OFF_TRIGGER_SLOT,event,tests/adim36_full_surface/positive/23_on_off_trigger_slot.bas,positive,"CORE,JS,WAT",positive surface/library stress
+24_ERROR_TRY_CATCH,error,tests/adim36_full_surface/positive/24_error_try_catch.bas,positive,"CORE,JS,WAT",positive surface/library stress
+25_OOP_MAGIC_CONSTRUCTOR,oop,tests/adim36_full_surface/positive/25_oop_magic_constructor.bas,positive,CORE,positive surface/library stress
+26_BIG_BIGF,big,tests/adim36_full_surface/positive/26_big_bigf.bas,positive,"CORE,JS,WAT",positive surface/library stress
+27_BIG_BIGD,big,tests/adim36_full_surface/positive/27_big_bigd.bas,positive,"CORE,JS,WAT",positive surface/library stress
+28_BIG_BALL,big,tests/adim36_full_surface/positive/28_big_ball.bas,positive,"CORE,JS,WAT",positive surface/library stress
+29_BIG_BIGI_BIGINT,big,tests/adim36_full_surface/positive/29_big_bigi_bigint.bas,positive,"CORE,JS,WAT",positive surface/library stress
+30_EXTFP_INIT_MIXED,big,tests/adim36_full_surface/positive/30_extfp_init_mixed.bas,positive,"CORE,JS,WAT",positive surface/library stress
+31_FFI_CALL_DLL_DECL,ffi,tests/adim36_full_surface/positive/31_ffi_call_dll_decl.bas,positive,"CORE,X64,NATIVE_ONLY_WEB_NEG",positive surface/library stress
+32_WINAPI_MESSAGEBOX_DECL,ffi,tests/adim36_full_surface/positive/32_winapi_messagebox_decl.bas,positive,"CORE,X64,NATIVE_ONLY_WEB_NEG",positive surface/library stress
+33_SCIENCE_MATH_DLL_ROUTES,library,tests/adim36_full_surface/positive/33_science_math_dll_routes.bas,positive,"CORE,X64,NATIVE_ONLY_WEB_NEG",positive surface/library stress
+34_STATS_DLL_ROUTES,library,tests/adim36_full_surface/positive/34_stats_dll_routes.bas,positive,"CORE,X64,NATIVE_ONLY_WEB_NEG",positive surface/library stress
+35_MATRIX_DLL_ROUTES,library,tests/adim36_full_surface/positive/35_matrix_dll_routes.bas,positive,"CORE,X64,NATIVE_ONLY_WEB_NEG",positive surface/library stress
+36_TENSOR_NN_ROUTES,library,tests/adim36_full_surface/positive/36_tensor_nn_routes.bas,positive,"CORE,X64,NATIVE_ONLY_WEB_NEG",positive surface/library stress
+37_LLAMA_ONNX_ROUTES,library,tests/adim36_full_surface/positive/37_llama_onnx_routes.bas,positive,"CORE,X64,NATIVE_ONLY_WEB_NEG",positive surface/library stress
+38_BROWSER_META_HTML_CSS_JS,browser,tests/adim36_full_surface/positive/38_browser_meta_html_css_js.uxb,positive,WEB,positive surface/library stress
+39_BROWSER_CANVAS,browser,tests/adim36_full_surface/positive/39_browser_canvas.uxb,positive,WEB,positive surface/library stress
+40_PREPROCESSOR_ALIAS_SET_EVAL,preprocessor,tests/adim36_full_surface/positive/40_preprocessor_alias_set_eval.uxb,positive,"CORE,JS,WAT",positive surface/library stress
+41_PREPROCESSOR_LOOPS,preprocessor,tests/adim36_full_surface/positive/41_preprocessor_loops.uxb,positive,"LEX,PAR,AST",positive surface/library stress
+42_JSON_MANIFEST_ASSETS,preprocessor,tests/adim36_full_surface/positive/42_json_manifest_assets.uxb,positive,"LEX,BROWSER",positive surface/library stress
+43_WAT_IMPORT_HOST,wasm,tests/adim36_full_surface/positive/43_wat_import_host.uxb,positive,WEB,positive surface/library stress
+44_WASM_HOST_JS,wasm,tests/adim36_full_surface/positive/44_wasm_host_js.uxb,positive,WEB,positive surface/library stress
+45_GUI_WINAPI_SURFACE,ffi,tests/adim36_full_surface/positive/45_gui_winapi_surface.bas,positive,"CORE,X64,NATIVE_ONLY_WEB_NEG",positive surface/library stress
+46_RANDOM_TIMER,runtime,tests/adim36_full_surface/positive/46_random_timer.bas,positive,"INTERP,JS,WAT",positive surface/library stress
+47_NUMERIC_CASTS,types,tests/adim36_full_surface/positive/47_numeric_casts.bas,positive,"INTERP,JS,WAT",positive surface/library stress
+48_BIT_OPS,operators,tests/adim36_full_surface/positive/48_bit_ops.bas,positive,"INTERP,JS,WAT",positive surface/library stress
+49_STRUCT_POINTER_IMPORT_MIX,mixed,tests/adim36_full_surface/positive/49_struct_pointer_import_mix.uxb,positive,"CORE,X64,NATIVE_ONLY_WEB_NEG",positive surface/library stress
+50_MODULE_MAIN_USING,module,tests/adim36_full_surface/positive/50_module_main_using.uxb,positive,"CORE,JS,WAT",positive surface/library stress
+51_INPUT_FILE_CHANNEL,file,tests/adim36_full_surface/positive/51_input_file_channel.bas,positive,"CORE,INTERP",input # channel read/write coverage
+52_PREPROCESSOR_EXTENDED_META,preprocessor,tests/adim36_full_surface/positive/52_preprocessor_extended_meta.uxb,positive,"LEX,PAR,AST,JS,WAT",extended ADIM34 preprocessor command coverage
+53_INPUT_FILE_STRICT_ROUNDTRIP,file,tests/adim36_full_surface/positive/53_input_file_strict_roundtrip.bas,positive,"CORE,INTERP",INPUT# strict roundtrip
+54_PREPROCESSOR_IFN_ELIF_EXTENDED,preprocessor,tests/adim36_full_surface/positive/54_preprocessor_ifn_elif_extended.uxb,positive,"LEX,PAR,AST,JS,WAT",extended IFN/ELIF meta coverage
+55_INPUT_FILE_ROUNDTRIP_REAL,file,tests/adim36_full_surface/positive/55_input_file_roundtrip_real.bas,positive,"CORE,INTERP",INPUT# real roundtrip runtime coverage
+90_BAD_SYNTAX_MISSING_END,negative,tests/adim36_full_surface/negative/90_bad_syntax_missing_end.bas,negative,NEG_PARSER,negative strict stress
+91_UNKNOWN_SYMBOL,negative,tests/adim36_full_surface/negative/91_unknown_symbol.bas,negative,NEG_SEM,negative strict stress
+92_TYPE_MISMATCH,negative,tests/adim36_full_surface/negative/92_type_mismatch.bas,negative,NEG_SEM,negative strict stress
+93_NATIVE_DLL_ON_JS,negative,tests/adim36_full_surface/negative/93_native_dll_on_js.bas,negative,"NEG_NATIVE_JS,NEG_NATIVE_WASM",negative strict stress
+94_IMPORT_WRONG_FORM,negative,tests/adim36_full_surface/negative/94_import_wrong_form.uxb,negative,NEG_PARSER,negative strict stress
+95_INCLUDE_CYCLE_A,negative,tests/adim36_full_surface/negative/95_include_cycle_a.uxb,negative,NEG_LEXER,negative strict stress
+96_SLOT_RANGE_NEG,negative,tests/adim36_full_surface/negative/96_slot_range_neg.bas,negative,NEG_SEM,negative strict stress
+97_UNKNOWN_EVENT_TRIGGER,negative,tests/adim36_full_surface/negative/97_unknown_event_trigger.bas,negative,NEG_SEM,negative strict stress
+98_BIGINIT_UNKNOWN_KIND,negative,tests/adim36_full_surface/negative/98_biginit_unknown_kind.bas,negative,NEG_SEM,negative strict stress
+99_ALIAS_CYCLE,negative,tests/adim36_full_surface/negative/99_alias_cycle.uxb,negative,NEG_PREPROCESSOR,negative strict stress
+100_PREPROCESSOR_UNKNOWN_DIRECTIVE,negative,tests/adim36_full_surface/negative/100_preprocessor_unknown_directive.uxb,negative,NEG_PREPROCESSOR,negative strict stress
+101_PREPROCESSOR_ASSERT_FAIL,negative,tests/adim36_full_surface/negative/101_preprocessor_assert_fail.uxb,negative,NEG_PREPROCESSOR,negative strict stress
+102_RAW_JS_WITHOUT_GATE,negative,tests/adim36_full_surface/negative/102_raw_js_without_gate.uxb,negative,NEG_PREPROCESSOR,negative strict stress
+103_BAD_PATH_ASSET_ESCAPE,negative,tests/adim36_full_surface/negative/103_bad_path_asset_escape.uxb,negative,NEG_PREPROCESSOR,negative strict stress
+104_WAT_IMPORT_MISSING_BINDING,negative,tests/adim36_full_surface/negative/104_wat_import_missing_binding.uxb,negative,NEG_PREPROCESSOR,negative strict stress
+105_BIGINT_DECIMAL_STRING_NEG,negative,tests/adim36_full_surface/negative/105_bigint_decimal_string_neg.bas,negative,NEG_SEM,negative strict stress
+106_PRINT_FILE_WITHOUT_OPEN,negative,tests/adim36_full_surface/negative/106_print_file_without_open.bas,negative,NEG_SEM,negative strict stress
+107_POKE_BAD_ADDR,negative,tests/adim36_full_surface/negative/107_poke_bad_addr.bas,negative,NEG_SEM,negative strict stress
+108_DUPLICATE_CLASS_FIELD,negative,tests/adim36_full_surface/negative/108_duplicate_class_field.bas,negative,NEG_SEM,negative strict stress
+109_CONSTRUCTOR_DUPLICATE,negative,tests/adim36_full_surface/negative/109_constructor_duplicate.bas,negative,NEG_SEM,negative strict stress
+110_IMPORT_LIB_DISALLOWED,negative,tests/adim36_full_surface/negative/110_import_lib_disallowed.uxb,negative,NEG_PARSER,negative strict stress
+111_INPUT_FILE_BAD_TARGET,negative,tests/adim36_full_surface/negative/111_input_file_bad_target.bas,negative,NEG_PARSER,INPUT# target-kind negative
+112_THREAT_PARALLEL_SIHIRLIMETOT_REMOVED,negative,tests/adim36_full_surface/negative/112_threat_parallel_sihirlimetot_removed.bas,negative,NEG_LEXER,removed typo keyword guard
+113_WRONG_KEYWORDS_REMOVED,negative,tests/adim36_full_surface/negative/113_wrong_keywords_removed.bas,negative,NEG_LEXER,wrong keyword spellings must fail
+"56_STRING_BUILTINS_FULL","string","tests/adim36_full_surface/positive/56_string_builtins_full.bas","positive","INTERP,JS,WAT","ADIM40 string builtin coverage"
+"57_ARRAY_INDEX_LVALUE","data","tests/adim36_full_surface/positive/57_array_index_lvalue.bas","positive","CORE,INTERP","ADIM40 array-index lvalue"
+"58_RECURSION_FACTORIAL_TYPE","function","tests/adim36_full_surface/positive/58_recursion_factorial_type.bas","positive","INTERP,X64,JS,WAT","ADIM40 recursion type inference"
+"59_FILE_INPUT_ROUNDTRIP_NO_DOLLAR","file","tests/adim36_full_surface/positive/59_file_input_roundtrip_no_dollar.bas","positive","CORE,INTERP","ADIM40 INPUT# roundtrip without string suffix"
+"60_BIG_NUMBER_CANONICAL","big","tests/adim36_full_surface/positive/60_big_number_canonical.bas","positive","CORE,JS,WAT","ADIM40 BIGI/BIGINT/BIGINIT canonical"
+"61_PREPROCESSOR_FOREACH_IFN_ELIF","preprocessor","tests/adim36_full_surface/positive/61_preprocessor_foreach_ifn_elif.uxb","positive","LEX,PAR,AST,JS,WAT","ADIM40 FOREACH IFN ELIF"
+"114_WRONG_KEYWORD_TYPOS_REMOVED","negative","tests/adim36_full_surface/negative/114_wrong_keyword_typos_removed.bas","negative","NEG_LEXER","THREAT/PARALLEL/SIHIRLIMETOT must fail"
+"62_PLAIN_INCLUDE_VISIBILITY","include","tests/adim36_full_surface/positive/62_plain_include_visibility.uxb","positive","CORE,INTERP","ADIM42 plain INCLUDE expansion and symbol visibility"
+"63_STRING_BUILTINS_ADIM42","string","tests/adim36_full_surface/positive/63_string_builtins_adim42.bas","positive","INTERP,JS,WAT","ADIM42 string builtin route"
+"64_ARRAY_INDEX_LVALUE_ADIM42","data","tests/adim36_full_surface/positive/64_array_index_lvalue_adim42.bas","positive","CORE,INTERP","ADIM42 array-index lvalue"
+"65_RECURSION_TYPE_ADIM42","function","tests/adim36_full_surface/positive/65_recursion_type_adim42.bas","positive","INTERP,X64,JS,WAT","ADIM42 recursion return type"
+"66_BIGINIT_TYPE_ADIM42","big","tests/adim36_full_surface/positive/66_biginit_type_adim42.bas","positive","CORE,JS,WAT","ADIM42 BIGINIT type inference"
+"67_PREPROCESSOR_FOREACH_ADIM42","preprocessor","tests/adim36_full_surface/positive/67_preprocessor_foreach_adim42.uxb","positive","LEX,PAR,AST","ADIM42 meta FOREACH expansion"
+"115_CALL_EXPR_FUNCTION_NOT_LVALUE","negative","tests/adim36_full_surface/negative/115_call_expr_function_not_lvalue.bas","negative","NEG_SEM","Function call cannot be assignment target"
+"116_WRONG_KEYWORDS_REMOVED_ADIM42","negative","tests/adim36_full_surface/negative/116_wrong_keywords_removed_adim42.bas","negative","NEG_LEXER","THREAT/PARALLEL/SIHIRLIMETOT removed"

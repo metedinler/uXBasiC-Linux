@@ -1,0 +1,153 @@
+#ifndef UXB_SEMANTIC_STATIC_LOCALS_FBS
+#define UXB_SEMANTIC_STATIC_LOCALS_FBS
+
+' Lower routine STATIC storage to distinct typed globals and a guarded first-use
+' initializer. The usual global lifecycle and Model D synchronization then apply.
+Private Function SemStaticRoutineKind(ByVal kindText As String) As Integer
+    Select Case UCase(kindText)
+    Case "FUNCTION_STMT", "SUB_STMT", "THREAD_STMT", "PARALEL_STMT", "EVENT_STMT", "PIPE_STMT", _
+         "CLASS_METHOD_DECL", "CLASS_CONSTRUCTOR_DECL", "CLASS_DESTRUCTOR_DECL", "CLASS_OPERATOR_DECL", _
+         "CLASS_PROPERTY_GET_STMT", "CLASS_PROPERTY_SET_STMT"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Private Function SemStaticRoutineOwner(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    Dim owner As Integer = ps.ast.nodes(nodeIdx).parent
+    Do While owner >= 0
+        If SemStaticRoutineKind(ps.ast.nodes(owner).kind) <> 0 Then Return owner
+        owner = ps.ast.nodes(owner).parent
+    Loop
+    Return -1
+End Function
+Private Function SemStaticNode(ByRef ps As ParseState, ByVal origin As Integer, ByVal kindText As String, ByVal valueText As String = "", ByVal opText As String = "") As Integer
+    Dim lineNo As Integer = ps.ast.nodes(origin).lineNo
+    Dim colNo As Integer = ps.ast.nodes(origin).colNo
+    Dim sourceFile As String = ps.ast.nodes(origin).sourceFile
+    Dim result As Integer = ASTNewNode(ps.ast, kindText, valueText, opText, lineNo, colNo)
+    ps.ast.nodes(result).sourceFile = sourceFile
+    Return result
+End Function
+
+Private Function SemStaticRename(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByVal oldName As String, ByVal newName As String, ByVal declaration As Integer, ByRef errText As String, ByVal scopeRoot As Integer = -1) As Integer
+    If nodeIdx < 0 Then Return 1
+    If scopeRoot < 0 Then scopeRoot = nodeIdx
+    Dim kindText As String = UCase(ps.ast.nodes(nodeIdx).kind)
+    If nodeIdx <> scopeRoot And SemStaticRoutineKind(kindText) <> 0 Then Return 1
+    If (kindText = "FOR_EACH_STMT" Or kindText = "DO_EACH_STMT") And UCase(ps.ast.nodes(nodeIdx).op) = oldName Then ps.ast.nodes(nodeIdx).op = newName
+    Dim nameText As String = UCase(ps.ast.nodes(nodeIdx).value)
+    If nameText = oldName Then
+        Select Case kindText
+        Case "PARAM_DECL", "DIM_DECL", "CONST_DECL"
+            If nodeIdx <> declaration Then errText = "semantic: duplicate STATIC local " & oldName: Return 0
+        Case "IDENT", "IDENTIFIER", "CALL_EXPR", "FOR_STMT", "FOR_EACH_STMT", "DO_EACH_STMT", "REDIM_DECL"
+            ps.ast.nodes(nodeIdx).value = newName
+            If UCase(ps.ast.nodes(nodeIdx).symbolName) = oldName Then ps.ast.nodes(nodeIdx).symbolName = newName
+        End Select
+    End If
+    Dim child As Integer = ps.ast.nodes(nodeIdx).firstChild
+    Do While child <> -1
+        If SemStaticRename(ps, child, oldName, newName, declaration, errText, scopeRoot) = 0 Then Return 0
+        child = ps.ast.nodes(child).nextSibling
+    Loop
+    If SemStaticRename(ps, ps.ast.nodes(nodeIdx).left, oldName, newName, declaration, errText, scopeRoot) = 0 Then Return 0
+    If SemStaticRename(ps, ps.ast.nodes(nodeIdx).right, oldName, newName, declaration, errText, scopeRoot) = 0 Then Return 0
+    Return 1
+End Function
+
+Private Sub SemStaticPrependGlobal(ByRef ps As ParseState, ByVal dimNode As Integer)
+    ps.ast.nodes(dimNode).parent = ps.rootNode
+    ps.ast.nodes(dimNode).nextSibling = ps.ast.nodes(ps.rootNode).firstChild
+    ps.ast.nodes(ps.rootNode).firstChild = dimNode
+End Sub
+
+Private Function SemNormalizeStaticLocals(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim sourceNodeCount As Integer = ps.ast.count
+    For i As Integer = 0 To sourceNodeCount - 1
+        If UCase(ps.ast.nodes(i).kind) <> "DIM_STMT" Or UCase(ps.ast.nodes(i).op) <> "STATIC" Then Continue For
+        Dim routine As Integer = SemStaticRoutineOwner(ps, i)
+        If routine < 0 Then errText = "semantic: STATIC local requires a routine": Return 0
+        Dim declNode As Integer = ps.ast.nodes(i).firstChild
+        ' Replace the declaration site with a normal statement container.
+        ps.ast.nodes(i).firstChild = -1
+        ps.ast.nodes(i).kind = "IF_STMT"
+        ps.ast.nodes(i).op = "STATIC_INIT"
+        Dim alwaysNode As Integer = SemStaticNode(ps, i, "NUMBER", "1")
+        ASTAddChild ps.ast, i, alwaysNode
+        Do While declNode <> -1
+            Dim nextDecl As Integer = ps.ast.nodes(declNode).nextSibling
+            Dim oldName As String = UCase(ps.ast.nodes(declNode).value)
+            Dim storageName As String = "_UXB_STATIC_" & LTrim(Str(routine)) & "_" & LTrim(Str(declNode)) & "_" & oldName
+            Dim guardName As String = storageName & "_READY"
+            ' The detached declaration's initializer may use the same local name.
+            If SemStaticRename(ps, routine, oldName, storageName, declNode, errText) = 0 Then Return 0
+            If SemStaticRename(ps, declNode, oldName, storageName, declNode, errText) = 0 Then Return 0
+            Dim pendingDecl As Integer = nextDecl
+            Do While pendingDecl <> -1
+                If SemStaticRename(ps, pendingDecl, oldName, storageName, declNode, errText) = 0 Then Return 0
+                pendingDecl = ps.ast.nodes(pendingDecl).nextSibling
+            Loop
+            ps.ast.nodes(declNode).value = storageName
+            ps.ast.nodes(declNode).nextSibling = -1
+
+            Dim initExpr As Integer = -1
+            Dim previous As Integer = -1
+            Dim ch As Integer = ps.ast.nodes(declNode).firstChild
+            Do While ch <> -1
+                Dim nextChild As Integer = ps.ast.nodes(ch).nextSibling
+                If UCase(ps.ast.nodes(ch).kind) = "INIT_EXPR" Then
+                    initExpr = ps.ast.nodes(ch).left
+                    If previous < 0 Then ps.ast.nodes(declNode).firstChild = nextChild Else ps.ast.nodes(previous).nextSibling = nextChild
+                    ps.ast.nodes(ch).left = -1
+                    ps.ast.nodes(ch).nextSibling = -1
+                    ps.ast.nodes(ch).kind = "TYPE_REF"
+                    ps.ast.nodes(ch).value = "I32"
+                    ps.ast.nodes(ch).parent = -1
+                Else
+                    previous = ch
+                End If
+                ch = nextChild
+            Loop
+            Dim globalDim As Integer = SemStaticNode(ps, i, "DIM_STMT")
+            ASTAddChild ps.ast, globalDim, declNode
+            Dim guardDecl As Integer = SemStaticNode(ps, i, "DIM_DECL", guardName)
+            Dim guardType As Integer = SemStaticNode(ps, i, "TYPE_REF", "I32")
+            ASTAddChild ps.ast, guardDecl, guardType
+            ASTAddChild ps.ast, globalDim, guardDecl
+            SemStaticPrependGlobal ps, globalDim
+
+            Dim lockNode As Integer = SemStaticNode(ps, i, "LOCK_STMT", "", "STATIC_INIT")
+            Dim targetNode As Integer = SemStaticNode(ps, i, "LOCK_TARGET", guardName)
+            ps.ast.nodes(targetNode).role = "LOCK_TARGET"
+            Dim targetIdent As Integer = SemStaticNode(ps, i, "IDENT", guardName)
+            ASTSetLeft ps.ast, targetNode, targetIdent
+            ASTAddChild ps.ast, lockNode, targetNode
+            Dim ifNode As Integer = SemStaticNode(ps, i, "IF_STMT")
+            Dim conditionNode As Integer = SemStaticNode(ps, i, "BINARY", "", "=")
+            Dim guardIdent As Integer = SemStaticNode(ps, i, "IDENT", guardName)
+            Dim zeroNode As Integer = SemStaticNode(ps, i, "NUMBER", "0")
+            ASTSetLeft ps.ast, conditionNode, guardIdent
+            ASTSetRight ps.ast, conditionNode, zeroNode
+            ASTAddChild ps.ast, ifNode, conditionNode
+            If initExpr <> -1 Then
+                Dim assignment As Integer = SemStaticNode(ps, i, "ASSIGN_STMT", "", "=")
+                Dim storageIdent As Integer = SemStaticNode(ps, i, "IDENT", storageName)
+                ASTSetLeft ps.ast, assignment, storageIdent
+                ASTSetRight ps.ast, assignment, initExpr
+                ASTAddChild ps.ast, ifNode, assignment
+            End If
+            Dim readyAssignment As Integer = SemStaticNode(ps, i, "ASSIGN_STMT", "", "=")
+            Dim readyIdent As Integer = SemStaticNode(ps, i, "IDENT", guardName)
+            Dim oneNode As Integer = SemStaticNode(ps, i, "NUMBER", "1")
+            ASTSetLeft ps.ast, readyAssignment, readyIdent
+            ASTSetRight ps.ast, readyAssignment, oneNode
+            ASTAddChild ps.ast, ifNode, readyAssignment
+            ASTAddChild ps.ast, lockNode, ifNode
+            ASTAddChild ps.ast, i, lockNode
+            declNode = nextDecl
+        Loop
+    Next i
+    Return 1
+End Function
+#endif

@@ -1,0 +1,24 @@
+' S-534 + S-536: PRINT #n ile tamsayi yazmak eski AST-x64'te cokuyordu; satir sonu CR LF olmaliydi (LOF 5 degil 4 gosteriyordu).
+OPEN "s534_dosya.txt" FOR OUTPUT AS #1
+PRINT #1, 10
+DIM n AS I32 = 5
+PRINT #1, n
+PRINT #1, "a"; 5
+CLOSE #1
+OPEN "s534_dosya.txt" FOR INPUT AS #1
+PRINT LOF(1)
+DIM s AS STRING
+INPUT #1, s
+PRINT "[" + s + "]"
+INPUT #1, s
+PRINT "[" + s + "]"
+INPUT #1, s
+PRINT "[" + s + "]"
+CLOSE #1
+OPEN "s536_dosya.txt" FOR OUTPUT AS #1
+PRINT #1, "abc"
+CLOSE #1
+OPEN "s536_dosya.txt" FOR INPUT AS #1
+PRINT LOF(1)
+CLOSE #1
+

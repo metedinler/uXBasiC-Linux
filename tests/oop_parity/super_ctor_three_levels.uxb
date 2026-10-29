@@ -1,0 +1,29 @@
+CLASS A
+    PUBLIC
+    DIM fa AS I32
+    CONSTRUCTOR(p AS I32)
+        fa = p
+        PRINT 10 + p
+    END CONSTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DIM fb AS I32
+    CONSTRUCTOR(q AS I32)
+        SUPER(q + 1)
+        fb = q
+        PRINT 20 + q
+    END CONSTRUCTOR
+END CLASS
+CLASS C EXTENDS B
+    PUBLIC
+    DIM fc AS I32
+    CONSTRUCTOR(r AS I32)
+        SUPER(r + 1)
+        fc = r
+        PRINT 30 + r
+    END CONSTRUCTOR
+END CLASS
+' S-487: every level passes its own arguments to the level above; the constructors finish base first (13, 22, 31).
+DIM x AS C = NEW C(1)
+PRINT x.fa * 100 + x.fb * 10 + x.fc

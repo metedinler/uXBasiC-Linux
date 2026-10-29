@@ -1,0 +1,67 @@
+R1 kayit degisken fonksiyona (deger)
+TYPE N
+    x AS I32
+    y AS I32
+END TYPE
+FUNCTION T(p AS N) AS I32
+    RETURN p.x + p.y
+END FUNCTION
+DIM a AS N
+a.x = 3
+a.y = 4
+PRINT T(a)
+=====
+R2 kayit degisken fonksiyona, ic ice alan
+TYPE N
+    x AS I32
+    y AS I32
+END TYPE
+TYPE C
+    a AS N
+    b AS N
+END TYPE
+FUNCTION T(c AS C) AS I32
+    RETURN c.a.x + c.b.y
+END FUNCTION
+DIM k AS C
+k.a.x = 3
+k.b.y = 4
+PRINT T(k)
+=====
+R3 BYREF kayit
+TYPE N
+    x AS I32
+    y AS I32
+END TYPE
+SUB Art(BYREF p AS N)
+    p.x = p.x + 1
+END SUB
+DIM a AS N
+a.x = 3
+Art(a)
+PRINT a.x
+=====
+R4 kayit alan degeri fonksiyona
+TYPE N
+    x AS I32
+    y AS I32
+END TYPE
+FUNCTION T(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+DIM a AS N
+a.x = 3
+a.y = 4
+PRINT T(a.x, a.y)
+=====
+R5 kayit atama t = a
+TYPE N
+    x AS I32
+    y AS I32
+END TYPE
+DIM a AS N
+DIM b AS N
+a.x = 3
+a.y = 4
+b = a
+PRINT b.x; " "; b.y

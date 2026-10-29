@@ -1,0 +1,5 @@
+{
+  "lower_read":{"engines":["AST","MIR","x64"],"errors":{"AST":"MemoryRef","MIR":"MemoryRef","x64":"memory read out of range or invalid address"}},
+  "lower_copy":{"engines":["AST","MIR","x64"],"errors":{"AST":"MemoryRef","MIR":"MemoryRef","x64":"memory copy out of range or invalid address"}},
+  "span_overflow":{"engines":["AST","MIR","x64"],"errors":{"AST":"MemoryRef","MIR":"MemoryRef","x64":"memory read out of range or invalid address"}}
+}

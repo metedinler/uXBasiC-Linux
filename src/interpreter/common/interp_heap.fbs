@@ -28,6 +28,9 @@ Type UXBInterpHeapSlot
     upperBound As Integer
     boundsDeclared As Integer
     active As Integer
+    ' S-574 / S-616 (2026-10-17): 1 while MIR_DELETE_OBJECT runs the object's destructor chain; a DELETE of the same object from inside its own
+    ' destructor (through a global alias) then does nothing instead of starting the chain again without end.
+    destroying As Integer
     ' S-033 follow-up: an ARRAY slot whose element type is a plain native
     ' scalar (I8..U64, F32/F64, PTR/BOOL -- see ExecDeclTypeIsNativeScalar,
     ' reused from the AST interpreter's own S-036 fix) additionally gets a
@@ -48,6 +51,8 @@ End Type
 Type UXBInterpHeap
     slots(Any) As UXBInterpHeapSlot
     slotCount As Integer
+    ' S-583: allocated length of slots(); slotCount (used) grows one by one, the array doubles.
+    slotCapacity As Integer
 End Type
 
 Sub UXBInterpHeapReleaseLibraryScope(ByRef h As UXBInterpHeap, ByVal scopeDepth As Integer)
@@ -62,14 +67,23 @@ End Sub
 
 Sub UXBInterpHeapInit(ByRef h As UXBInterpHeap)
     h.slotCount = 0
+    h.slotCapacity = 0
     Erase h.slots
 End Sub
 
 Function UXBInterpHeapAlloc(ByRef h As UXBInterpHeap, ByVal kindText As String, ByVal typeText As String) As Integer
-    If h.slotCount = 0 Then
-        ReDim h.slots(0)
-    Else
-        ReDim Preserve h.slots(h.slotCount)
+    ' S-583 (2026-10-16): the slot table used to grow by ONE element per allocation (`ReDim Preserve h.slots(h.slotCount)`),
+    ' copying every slot (each holds dynamic arrays) every time: MIR allocation was super-linear (0,56 ms per object at 8 000
+    ' objects, 1,1 ms at 64 000). The capacity now doubles, so the amortised cost per allocation is constant.
+    If h.slotCount >= h.slotCapacity Then
+        Dim newCapacity As Integer = h.slotCapacity * 2
+        If newCapacity < 16 Then newCapacity = 16
+        If h.slotCapacity = 0 Then
+            ReDim h.slots(newCapacity - 1)
+        Else
+            ReDim Preserve h.slots(newCapacity - 1)
+        End If
+        h.slotCapacity = newCapacity
     End If
     Dim id As Integer = h.slotCount
     h.slotCount += 1
@@ -80,6 +94,7 @@ Function UXBInterpHeapAlloc(ByRef h As UXBInterpHeap, ByVal kindText As String, 
     h.slots(id).upperBound = -1
     h.slots(id).boundsDeclared = 0
     h.slots(id).active = 1
+    h.slots(id).destroying = 0
     h.slots(id).isNativeScalar = 0
     h.slots(id).elemStride = 0
     Erase h.slots(id).rawData
@@ -127,7 +142,7 @@ Private Sub UXBInterpHeapRawGet(ByRef slot As UXBInterpHeapSlot, ByVal storageIn
     baseAddr = @slot.rawData(storageIndex * slot.elemStride)
     Select Case t
     Case "F32", "SINGLE"
-        valueOut = UXBInterpValueFloat(CDbl(*CPtr(Single Ptr, baseAddr)))
+        valueOut = UXBInterpApplyDeclaredType(UXBInterpValueFloat(CDbl(*CPtr(Single Ptr, baseAddr))), "F32")
     Case "F64", "DOUBLE", "F80", "EXTENDED"
         valueOut = UXBInterpValueFloat(*CPtr(Double Ptr, baseAddr))
     Case "I64", "LONGINT"
@@ -158,7 +173,9 @@ Private Sub UXBInterpHeapRawSet(ByRef slot As UXBInterpHeapSlot, ByVal storageIn
     baseAddr = @slot.rawData(storageIndex * slot.elemStride)
     Select Case t
     Case "F32", "SINGLE"
-        *CPtr(Single Ptr, baseAddr) = CSng(valueIn.floatValue)
+        Dim singleValue As UXBInterpValue
+        singleValue = UXBInterpApplyDeclaredType(valueIn, "F32")
+        *CPtr(Single Ptr, baseAddr) = CSng(singleValue.floatValue)
     Case "F64", "DOUBLE", "F80", "EXTENDED"
         *CPtr(Double Ptr, baseAddr) = valueIn.floatValue
     Case "I64", "LONGINT"
@@ -231,6 +248,14 @@ Function UXBInterpHeapGetIndex(ByRef h As UXBInterpHeap, ByVal id As Integer, By
     Return 1
 End Function
 
+Private Sub UXBInterpHeapInitTextElements(ByRef slot As UXBInterpHeapSlot, ByVal first As Integer)
+    Dim kind As String = UXBInterpCanonicalType(slot.typeName)
+    If kind <> UXB_VAL_STRING And kind <> UXB_VAL_WSTRING Then Exit Sub
+    For i As Integer = first To slot.count - 1
+        slot.values(i) = UXBInterpValueDefaultForType(slot.typeName)
+    Next
+End Sub
+
 Function UXBInterpHeapResizeArray(ByRef h As UXBInterpHeap, ByVal id As Integer, ByVal newCount As Integer) As Integer
     If id < 0 Or id >= h.slotCount Then Return 0
     If newCount < 0 Then Return 0
@@ -244,12 +269,14 @@ Function UXBInterpHeapResizeArray(ByRef h As UXBInterpHeap, ByVal id As Integer,
         Return 1
     End If
     With h.slots(id)
+        Dim oldCount As Integer = .count
         ReDim Preserve .values(newCount - 1)
         ReDim Preserve .names(newCount - 1)
         .count = newCount
         .lowerBound = 0
         .upperBound = newCount - 1
         .boundsDeclared = 1
+        UXBInterpHeapInitTextElements h.slots(id), oldCount
     End With
     Return 1
 End Function
@@ -268,6 +295,7 @@ Function UXBInterpHeapSetArrayBounds(ByRef h As UXBInterpHeap, ByVal id As Integ
         .lowerBound = lowerValue
         .upperBound = upperValue
         .boundsDeclared = 1
+        UXBInterpHeapInitTextElements h.slots(id), 0
         If .isNativeScalar <> 0 Then
             ReDim .rawData(newCount * .elemStride - 1)
             Dim rawZeroPos As Integer
@@ -339,6 +367,7 @@ Function UXBInterpHeapRedimArray(ByRef h As UXBInterpHeap, ByVal id As Integer, 
         .lowerBound = newLower
         .upperBound = newUpper
         .boundsDeclared = 1
+        UXBInterpHeapInitTextElements h.slots(id), 0
         If .isNativeScalar <> 0 Then
             ReDim .rawData(newCount * .elemStride - 1)
             Dim zeroPos As Integer

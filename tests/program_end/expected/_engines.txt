@@ -1,5 +1,5 @@
-# S-156: END semantigi. Legacy AST-x64 END_STMT'i (IF icinde ana programda da) desteklemiyor: acik red, bilinen sinir.
+# S-156: END semantigi. S-538: eski AST-x64 de END'i calistirir (ana programda epilog atlamasi, rutinde __uxb_rt_program_end); dort motor ayni cikti.
 AST=run
 MIR=run
 x64=run
-AST-x64=reject:unsupported AST node kind=END_STMT
+AST-x64=run

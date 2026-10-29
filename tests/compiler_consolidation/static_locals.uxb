@@ -1,0 +1,43 @@
+DIM initializations AS I32 = 0
+FUNCTION Seed() AS I32
+    initializations += 1
+    RETURN 10
+END FUNCTION
+FUNCTION Count() AS I32
+    STATIC n AS I32 = Seed()
+    n += 1
+    RETURN n
+END FUNCTION
+SUB Other()
+    STATIC n AS I32 = 100
+    n += 1
+    PRINT n
+END SUB
+FUNCTION Recursive(depth AS I32) AS I32
+    STATIC calls AS I32
+    calls += 1
+    IF depth > 0 THEN RETURN Recursive(depth - 1)
+    RETURN calls
+END FUNCTION
+FUNCTION Text() AS STRING
+    STATIC s AS STRING = "a"
+    s += "b"
+    RETURN s
+END FUNCTION
+FUNCTION Pair() AS I32
+    STATIC a AS I32 = 1, b AS I32 = a + 2
+    a += 1
+    b += 1
+    RETURN a + b
+END FUNCTION
+PRINT Count()
+PRINT Count()
+PRINT initializations
+Other()
+Other()
+PRINT Recursive(3)
+PRINT Recursive(1)
+PRINT Text()
+PRINT Text()
+PRINT Pair()
+PRINT Pair()

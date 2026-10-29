@@ -1,0 +1,15 @@
+& ile metin
+PRINT "a" & "b"
+=====
+demet
+PRINT (1, 2)
+=====
+AND= yok
+DIM x AS I32 = 20
+x AND= 3
+PRINT x
+=====
+INC x, 5 yok
+DIM x AS I32 = 20
+INC x, 5
+PRINT x

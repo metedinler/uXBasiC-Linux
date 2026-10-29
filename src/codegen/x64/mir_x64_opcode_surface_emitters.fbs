@@ -86,7 +86,25 @@ Private Function MIRX64EmitShiftRotateOpcode(ByRef ins As MIRIRInstruction, ByRe
         Return 0
     End If
     If MIRX64EmitLoadPairToRaxR10(cg, ins.operands(0), ins.operands(1), errText) = 0 Then Return 0
-    If MIRX64EmitSafeShiftRotateI64(cg, op, errText) = 0 Then Return 0
+    If op = "ROL" Or op = "ROR" Then
+        Dim rotateType As String
+        rotateType = UCase(Trim(ins.resultType))
+        If rotateType = "" Then rotateType = UCase(Trim(MIRX64ResolvedOperandType(cg, ins.operands(0))))
+        If Left(rotateType, 5) = "TYPE_" Then rotateType = Mid(rotateType, 6)
+        MIRX64Emit cg, "    mov ecx, r10d"
+        Select Case rotateType
+        Case "U8", "UBYTE", "I8", "BYTE", "SBYTE"
+            If op = "ROL" Then MIRX64Emit cg, "    rol al, cl" Else MIRX64Emit cg, "    ror al, cl"
+        Case "U16", "USHORT", "I16", "SHORT"
+            If op = "ROL" Then MIRX64Emit cg, "    rol ax, cl" Else MIRX64Emit cg, "    ror ax, cl"
+        Case "U32", "UINTEGER", "UINT", "ULONG", "I32", "INTEGER", "INT", "LONG"
+            If op = "ROL" Then MIRX64Emit cg, "    rol eax, cl" Else MIRX64Emit cg, "    ror eax, cl"
+        Case Else
+            If op = "ROL" Then MIRX64Emit cg, "    rol rax, cl" Else MIRX64Emit cg, "    ror rax, cl"
+        End Select
+    Else
+        If MIRX64EmitSafeShiftRotateI64(cg, op, errText) = 0 Then Return 0
+    End If
     Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
 End Function
 
@@ -138,6 +156,8 @@ Private Function MIRX64CompoundToBinaryOpcode(ByRef op As String) As String
     Case "MOD_ASSIGN": Return "MOD"
     Case "SHL_ASSIGN": Return "SHL"
     Case "SHR_ASSIGN": Return "SHR"
+    Case "ROL_ASSIGN": Return "ROL"
+    Case "ROR_ASSIGN": Return "ROR"
     Case "AND_ASSIGN": Return "AND"
     Case "OR_ASSIGN": Return "OR"
     Case "XOR_ASSIGN": Return "XOR"
@@ -182,6 +202,22 @@ Private Function MIRX64EmitCompoundAssignOpcode(ByRef ins As MIRIRInstruction, B
 
     If binOp = "SHL" Or binOp = "SHR" Then
         If MIRX64EmitSafeShiftRotateI64(cg, binOp, errText) = 0 Then Return 0
+    ElseIf binOp = "ROL" Or binOp = "ROR" Then
+        Dim compoundRotateType As String
+        compoundRotateType = UCase(Trim(ins.resultType))
+        If compoundRotateType = "" Then compoundRotateType = UCase(Trim(MIRX64ResolvedOperandType(cg, targetName)))
+        If Left(compoundRotateType, 5) = "TYPE_" Then compoundRotateType = Mid(compoundRotateType, 6)
+        MIRX64Emit cg, "    mov ecx, r10d"
+        Select Case compoundRotateType
+        Case "U8", "UBYTE", "I8", "BYTE", "SBYTE"
+            If binOp = "ROL" Then MIRX64Emit cg, "    rol al, cl" Else MIRX64Emit cg, "    ror al, cl"
+        Case "U16", "USHORT", "I16", "SHORT"
+            If binOp = "ROL" Then MIRX64Emit cg, "    rol ax, cl" Else MIRX64Emit cg, "    ror ax, cl"
+        Case "U32", "UINTEGER", "UINT", "ULONG", "I32", "INTEGER", "INT", "LONG"
+            If binOp = "ROL" Then MIRX64Emit cg, "    rol eax, cl" Else MIRX64Emit cg, "    ror eax, cl"
+        Case Else
+            If binOp = "ROL" Then MIRX64Emit cg, "    rol rax, cl" Else MIRX64Emit cg, "    ror rax, cl"
+        End Select
     Else
         If MIRX64EmitSafeBinaryI64(cg, binOp, errText) = 0 Then Return 0
     End If
@@ -411,7 +447,7 @@ Private Function MIRX64TryEmitSurfaceOpcode(ByRef ins As MIRIRInstruction, ByRef
         handledOut = 1
         Return MIRX64EmitIncDecOpcode(ins, op, cg, errText)
 
-    Case "ADD_ASSIGN", "SUB_ASSIGN", "MUL_ASSIGN", "DIV_ASSIGN", "IDIV_ASSIGN", "MOD_ASSIGN", "SHL_ASSIGN", "SHR_ASSIGN", "AND_ASSIGN", "OR_ASSIGN", "XOR_ASSIGN", "POW_ASSIGN"
+    Case "ADD_ASSIGN", "SUB_ASSIGN", "MUL_ASSIGN", "DIV_ASSIGN", "IDIV_ASSIGN", "MOD_ASSIGN", "SHL_ASSIGN", "SHR_ASSIGN", "ROL_ASSIGN", "ROR_ASSIGN", "AND_ASSIGN", "OR_ASSIGN", "XOR_ASSIGN", "POW_ASSIGN"
         handledOut = 1
         Return MIRX64EmitCompoundAssignOpcode(ins, op, cg, errText)
 
@@ -569,6 +605,11 @@ Private Function MIRX64TryEmitSurfaceOpcode(ByRef ins As MIRIRInstruction, ByRef
     Case "GOSUB"
         handledOut = 1
         If ins.operandCount < 1 Then errText = "MIR x64 emitter: GOSUB target missing": Return 0
+        ' S-537: ana programdaki etkin GOSUB sayisi (bos yigindaki RETURN'u yakalamak icin)
+        If UCase(Trim(cg.currentFunctionName)) = "MAIN" Then
+            MIRX64EnsureGosubDepthSlot cg
+            MIRX64Emit cg, "    inc qword [rel __uxb_gosub_depth]"
+        End If
         MIRX64Emit cg, "    call .Lmir_user_" & MIRX64NormalizeVarName(ins.operands(0))
         Return 1
 
@@ -577,8 +618,11 @@ Private Function MIRX64TryEmitSurfaceOpcode(ByRef ins As MIRIRInstruction, ByRef
         Return MIRX64EmitRuntimeHostCallInstruction(cg, op, ins, 0, ins.result, errText)
 
     Case "DELETE_OBJECT"
-        handledOut = 1
-        Return MIRX64EmitRuntimeHostCallInstruction(cg, "DELETE_OBJECT", ins, 0, "", errText)
+        ' S-574 (2026-10-17): not a runtime host call any more. The lowering never produced MIR_DELETE_OBJECT until now, so the host-call
+        ' route was never exercised; the native emitter in MIRX64EmitInstruction destroys the object by the destructor thunk its vtable
+        ' carries (real class, derived to base) and marks it dead.
+        handledOut = 0
+        Return 1
     End Select
 
 

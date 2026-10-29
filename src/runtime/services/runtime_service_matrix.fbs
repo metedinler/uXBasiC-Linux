@@ -57,7 +57,7 @@ Function UXBRuntimeServiceTargetStatus(ByVal serviceId As String, ByVal targetNa
     Dim t As String = UCase(Trim(targetName))
     Select Case fam
     Case "FFI"
-        If t = "X64" Or t = "NATIVE" Or t = "X86" Then Return "NATIVE_ONLY"
+        If t = "X64" Or t = "NATIVE" Then Return "NATIVE_ONLY"
         Return "NATIVE_ONLY"
     Case "BROWSER"
         If t = "BROWSER" Or t = "JS" Then Return "BROWSER_ONLY"

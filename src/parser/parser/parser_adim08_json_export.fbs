@@ -1,6 +1,8 @@
 #ifndef UXB_PARSER_ADIM08_JSON_EXPORT_FBS
 #define UXB_PARSER_ADIM08_JSON_EXPORT_FBS
 
+#include once "../../common/report_writer.fbs"
+
 Function UXBParserJsonEscape(ByVal rawText As String) As String
     Dim outText As String
     Dim i As Integer
@@ -36,7 +38,10 @@ Function UXBParserErrorsToJson(ByRef ps As ParseState) As String
 
     If ps.parseErrorCount > 0 Then j &= Chr(10)
     For i = 0 To ps.parseErrorCount - 1
-        j &= "    {""index"": " & LTrim(Str(i)) & ", ""message"": """ & UXBParserJsonEscape(ps.parseErrors(i)) & """}"
+        Dim errorCode As String
+        errorCode = UXBParserDiagnosticCodeFromMessage(ps.parseErrors(i))
+        If errorCode = "" Then errorCode = "PARSER_DIAGNOSTIC"
+        j &= "    {""index"": " & LTrim(Str(i)) & ", ""code"": """ & UXBParserJsonEscape(errorCode) & """, ""message"": """ & UXBParserJsonEscape(ps.parseErrors(i)) & """}"
         If i < ps.parseErrorCount - 1 Then j &= ","
         j &= Chr(10)
     Next i
@@ -50,15 +55,14 @@ Function UXBParserWriteErrorsJson(ByRef ps As ParseState, ByRef outPath As Strin
     errText = ""
     If Trim(outPath) = "" Then Return 1
 
-    Dim ff As Integer
-    ff = FreeFile
-    Open outPath For Output As #ff
-    If Err <> 0 Then
-        errText = "parser: cannot open errors json: " & outPath
+    ' S-466: ust klasor yokken (varsayilan frontend/parser/ klasoru henuz olusmamisken ya da klasorlu --...-json-out yolu)
+    ' ciplak `Open` -exx altinda derleyiciyi "runtime error 2 (file not found)" ile iptal ediyordu ve `If Err` satirina varilmiyordu.
+    ' Ortak yazici ust klasoru olusturur ve acma hatasini tani olarak dondurur. `Print #` satir sonu (CRLF) korunur.
+    Dim writeErr As String
+    If UXBReportWriteText(outPath, UXBParserErrorsToJson(ps) & Chr(13) & Chr(10), writeErr) = 0 Then
+        errText = "parser: cannot write errors json: " & outPath & " (" & writeErr & ")"
         Return 0
     End If
-    Print #ff, UXBParserErrorsToJson(ps)
-    Close #ff
     Return 1
 End Function
 

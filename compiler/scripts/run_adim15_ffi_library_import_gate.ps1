@@ -29,8 +29,7 @@ $changed = @(
   "src/build/interop_manifest_json_adim15.fbs",
   "src/parser/parser/parser_ffi_import_contract_adim15.fbs",
   "src/backend/backend_native_only_diagnostics_adim15.fbs",
-  "src/codegen/x64/mir_x64_ffi_contract_gate_adim15.fbs",
-  "src/codegen/x86/mir_x86_ffi_contract_gate_adim15.fbs"
+  "src/codegen/x64/mir_x64_ffi_contract_gate_adim15.fbs"
 )
 "path,status" | Set-Content "$current/adim10_changed_files.csv" -Encoding UTF8
 foreach ($p in $changed) {

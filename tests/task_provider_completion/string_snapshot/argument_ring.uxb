@@ -1,0 +1,25 @@
+DIM sharedText AS STRING = "AB" + CHR(0) + "CD"
+FUNCTION MakeText() AS STRING
+    RETURN sharedText
+END FUNCTION
+FUNCTION Churn() AS I32
+    sharedText = "changed"
+    DIM scratch AS STRING
+    DIM i AS I32
+    FOR i = 1 TO 128
+        scratch = STR(i) + "-temporary"
+    NEXT
+    RETURN 128
+END FUNCTION
+FUNCTION CheckValue(value AS STRING, noise AS I32) AS I32
+    PRINT LEN(value)
+    PRINT ASC(MID(value, 1, 1))
+    PRINT ASC(MID(value, 3, 1))
+    PRINT ASC(MID(value, 5, 1))
+    RETURN noise
+END FUNCTION
+THREAD Worker() AS I32
+    RETURN CheckValue(MakeText(), Churn())
+END THREAD
+DIM work AS TASK OF I32 = SPAWN Worker()
+PRINT work.JOIN()

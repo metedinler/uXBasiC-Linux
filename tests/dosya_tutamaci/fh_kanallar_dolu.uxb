@@ -1,0 +1,14 @@
+' S-548 (F1): with all 255 channels open FREEFILE is 0; closing a channel gives exactly that number back.
+DIM i AS I32
+FOR i = 1 TO 255
+    OPEN "fh_full.txt" FOR OUTPUT AS #i
+NEXT
+PRINT FREEFILE
+CLOSE #7
+PRINT FREEFILE
+CLOSE #3
+PRINT FREEFILE
+FOR i = 1 TO 255
+    IF i <> 3 AND i <> 7 THEN CLOSE #i
+NEXT
+PRINT FREEFILE

@@ -101,6 +101,103 @@ Private Function MIRLibraryTypeOperandTypeName(ByRef ps As ParseState, ByRef mod
     Return 0
 End Function
 
+' B3: only these provider calls hand a fresh or explicitly retained value to
+' the caller. NORMALIZE is intentionally excluded: it mutates and returns its
+' source payload, so a later BYVAL/RETURN boundary still needs TYPE.COPY.
+Private Function MIRManagedCallProducesOwnedTransfer(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return 0
+    If UCase(Trim(ps.ast.nodes(nodeIdx).kind)) <> "CALL_EXPR" Then Return 0
+
+    Dim ownerIdx As Integer
+    Dim typeName As String
+    Dim memberName As String
+    If UXBLibraryTypeFindCallOwner(ps.ast.nodes(nodeIdx).value, ownerIdx, typeName, memberName) <> 0 Then
+        Select Case UCase(Trim(memberName))
+        Case "CONSTRUCT", "COPY", "CLONE", "RETAIN"
+            Return 1
+        Case Else
+            Return 0
+        End Select
+    End If
+
+    ' User FUNCTION results are lowered through their declared RETURN type;
+    ' the return boundary below provides the managed transfer.
+    Return 1
+End Function
+
+' B3: a managed value passed to a default (BYVAL) parameter needs its own
+' language-level value before the callee starts.  Provider-produced call
+' results already represent a fresh/owned transfer, so copying those again
+' would change the provider's ownership count without adding semantic value.
+Private Function MIRPrepareManagedByValArgument(ByRef ps As ParseState, ByVal argNode As Integer, ByVal paramTypeRaw As String, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef argName As String, ByRef errText As String) As Integer
+    Dim paramType As String
+    paramType = UCase(Trim(MIRCanonicalTypeName(paramTypeRaw)))
+    If paramType = "" Or UXBLibraryTypeNeedsManagedCopy(paramType) = 0 Then Return 1
+
+    If argNode < 0 Or argNode >= ps.ast.count Then Return 1
+    Dim sourceKind As String
+    sourceKind = UCase(Trim(ps.ast.nodes(argNode).kind))
+    If sourceKind = "CALL_EXPR" And MIRManagedCallProducesOwnedTransfer(ps, argNode) <> 0 Then Return 1
+
+    Dim transferMember As String
+    transferMember = UXBLibraryTypeManagedTransferMember(paramType)
+    If transferMember = "" Then Return 0
+    Dim copyTemp As String
+    copyTemp = MIRNextTemp(tempSeed)
+    MIRSetCurrentSourceFromAstNode ps, argNode
+    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, copyTemp, 2, paramType & "." & transferMember, argName
+    MIRSetLastInstructionMetadata module, fnIdx, blkIdx, paramType
+    argName = copyTemp
+    Return 1
+End Function
+
+Private Function MIRPrepareManagedReturnValue(ByRef ps As ParseState, ByVal exprNode As Integer, ByVal returnTypeRaw As String, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef valueName As String, ByRef errText As String) As Integer
+    Dim returnType As String
+    returnType = UCase(Trim(MIRCanonicalTypeName(returnTypeRaw)))
+    ' A numeric return is an assignment to the declared result slot. Carry
+    ' the conversion in MIR so both interpreters and backends see its type.
+    If exprNode >= 0 And exprNode < ps.ast.count And UXBStep3TypeIsNumeric(returnType) <> 0 Then
+        Dim sourceType As String
+        If UXBStep3InferExprType(ps, exprNode, sourceType, errText) = 0 Then Return 0
+        If UXBStep3TypeCanonical(sourceType) <> UXBStep3TypeCanonical(returnType) Then
+            Dim castTemp As String = MIRNextTemp(tempSeed)
+            MIRSetCurrentSourceFromAstNode ps, exprNode
+            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CAST, castTemp, 1, valueName
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, returnType
+            valueName = castTemp
+        End If
+    End If
+    If returnType = "" Or UXBLibraryTypeNeedsManagedCopy(returnType) = 0 Then Return 1
+
+    If exprNode < 0 Or exprNode >= ps.ast.count Then Return 1
+    Dim sourceKind As String
+    sourceKind = UCase(Trim(ps.ast.nodes(exprNode).kind))
+    If sourceKind = "CALL_EXPR" And MIRManagedCallProducesOwnedTransfer(ps, exprNode) <> 0 Then Return 1
+
+    Dim transferMember As String
+    transferMember = UXBLibraryTypeManagedTransferMember(returnType)
+    If transferMember = "" Then Return 0
+    Dim copyTemp As String
+    copyTemp = MIRNextTemp(tempSeed)
+    MIRSetCurrentSourceFromAstNode ps, exprNode
+    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, copyTemp, 2, returnType & "." & transferMember, valueName
+    MIRSetLastInstructionMetadata module, fnIdx, blkIdx, returnType
+    valueName = copyTemp
+    Return 1
+End Function
+
+Private Function MIRFindCallFunctionIndexLocal(ByRef module As MIRModule, ByRef callNameRaw As String) As Integer
+    Dim wanted As String
+    wanted = UCase(Trim(callNameRaw))
+    If wanted = "" Then Return -1
+
+    Dim i As Integer
+    For i = 0 To module.functionCount - 1
+        If UCase(Trim(module.functions(i).name)) = wanted Then Return i
+    Next i
+    Return -1
+End Function
+
 Private Function MIRLowerArraySizeOfCall(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByRef tempSeed As Integer, ByRef valueNameOut As String, ByRef handledOut As Integer, ByRef errText As String) As Integer
     handledOut = 0
     If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return 1
@@ -417,6 +514,44 @@ Private Function MIRMethodDeclaredReturnType(ByRef ps As ParseState, ByRef recei
     Return MIRCanonicalTypeName(ps.ast.nodes(retTypeNode).value)
 End Function
 
+' S-484: does the function being lowered receive a hidden THIS parameter (a method, operator, constructor, destructor or property accessor)?
+Private Function MIRFunctionHasThisParam(ByRef module As MIRModule, ByVal fnIdx As Integer) As Integer
+    If fnIdx < 0 Or fnIdx >= module.functionCount Then Return 0
+    Dim pi As Integer
+    For pi = 0 To module.functions(fnIdx).paramVarCount - 1
+        If UCase(Trim(module.functions(fnIdx).paramVars(pi))) = "THIS" Then Return 1
+    Next pi
+    Return 0
+End Function
+
+' S-270: an unqualified name inside a routine of a NAMESPACE/MODULE may be a CONST of that container (CONST SINIR = 5 ... RETURN SINIR).
+' Qualified uses (geo.SINIR) were already resolved by lowering the initializer at the use site; the bare name fell through to a plain
+' variable read (MIR 0, native garbage, JS undefined, WASM unbound local). Returns the CONST initializer node, -1 when the name is not one:
+' a parameter or local of the running routine shadows the CONST, and the search climbs through enclosing containers.
+Private Function MIRFindContainerConstInit(ByRef ps As ParseState, ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal identNode As Integer, ByRef nameRaw As String) As Integer
+    Dim wanted As String = UCase(Trim(nameRaw))
+    If wanted = "" Or identNode < 0 Or identNode >= ps.ast.count Then Return -1
+    If fnIdx >= 0 And fnIdx < module.functionCount Then
+        Dim bi As Integer
+        For bi = 0 To module.functions(fnIdx).paramVarCount - 1
+            If UCase(Trim(module.functions(fnIdx).paramVars(bi))) = wanted Then Return -1
+        Next bi
+        For bi = 0 To module.functions(fnIdx).localVarCount - 1
+            If UCase(Trim(module.functions(fnIdx).localVars(bi))) = wanted Then Return -1
+        Next bi
+    End If
+    Dim anc As Integer = ps.ast.nodes(identNode).parent
+    Do While anc >= 0 And anc < ps.ast.count
+        Dim ancKind As String = UCase(Trim(ps.ast.nodes(anc).kind))
+        If ancKind = "NAMESPACE_STMT" Or ancKind = "MODULE_STMT" Then
+            Dim constDecl As Integer, constInit As Integer
+            If UXBAstFindNamespaceConstDecl(ps.ast, ps.ast.nodes(anc).value, wanted, constDecl, constInit) <> 0 Then Return constInit
+        End If
+        anc = ps.ast.nodes(anc).parent
+    Loop
+    Return -1
+End Function
+
 Private Function MIRIsClassNameExpr(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef classNameOut As String) As Integer
     classNameOut = ""
     If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return 0
@@ -463,11 +598,26 @@ Private Function MIRNormalizeMethodTargetFromReceiver(ByRef ps As ParseState, By
         Return 1
     End If
 
+    ' S-484 (2026-10-17): THIS.m() is a DIRECT call of the implementation visible from the class that contains the call
+    ' (the receiver's static type, walking up the bases); ME.m(), the bare m() the front end rewrites to ME.m(), and every
+    ' other receiver dispatch through the vtable when the method owns a slot (design: THIS vs ME in UXB OPP SISTEMI TASARIM).
+    Dim receiverIsThis As Integer
+    receiverIsThis = 0
+    If receiverNodeIdx >= 0 And receiverNodeIdx < ps.ast.count Then
+        Dim receiverKindText As String
+        receiverKindText = UCase(Trim(ps.ast.nodes(receiverNodeIdx).kind))
+        If receiverKindText = "IDENT" Or receiverKindText = "KEYWORD_REF" Then
+            If UCase(Trim(ps.ast.nodes(receiverNodeIdx).value)) = "THIS" Then receiverIsThis = 1
+        End If
+    End If
+
     Dim slotIdx As Integer
     slotIdx = -1
-    If MIRFindMethodSlotInClass(ps, receiverTypeOut, methodName, slotIdx) <> 0 And slotIdx >= 0 Then
-        targetNameOut = "__VT_SLOT__:" & receiverTypeOut & ":" & LTrim(Str(slotIdx))
-        Return 1
+    If receiverIsThis = 0 Then
+        If MIRFindMethodSlotInClass(ps, receiverTypeOut, methodName, slotIdx) <> 0 And slotIdx >= 0 Then
+            targetNameOut = "__VT_SLOT__:" & receiverTypeOut & ":" & LTrim(Str(slotIdx))
+            Return 1
+        End If
     End If
 
     If MIRResolveMethodRoutineNameFromType(ps, receiverTypeOut, methodName, targetNameOut) <> 0 Then Return 1
@@ -539,13 +689,28 @@ Private Function MIRAppendMethodCallInstruction(ByRef ps As ParseState, ByVal no
                 Return 0
             End If
             receiverType = UCase(Trim(receiverType))
-            If MIRResolveMethodRoutineNameFromType(ps, receiverType, methodName, methodTarget) = 0 Then
+            If UCase(Trim(methodName)) = "CONSTRUCTOR" Then
+                ' S-485 / S-487 (P0.2): SUPER.CONSTRUCTOR(args) is the base-class constructor call the front end wrote (semantic_base_ctor.fbs):
+                ' a direct call of the base class's constructor routine, which has the same ABI as a method (THIS first).
+                methodTarget = receiverType & "_CTOR"
+            ElseIf MIRResolveMethodRoutineNameFromType(ps, receiverType, methodName, methodTarget) = 0 Then
                 errText = "mir: SUPER method not found in base class " & receiverType & ": " & methodName
                 Return 0
             End If
         ElseIf MIRNormalizeMethodTargetFromReceiver(ps, n.left, methodName, methodTarget, receiverType, errText) = 0 Then
             If errText = "" Then errText = "mir: unresolved METHOD_CALL target " & methodName
             Return 0
+        End If
+        If receiverIsSuper = 0 Then
+            ' S-608 (2026-10-17): `x.Iki()` where Iki is a STATIC method of x's class: the call needs no object. The receiver expression was
+            ' lowered above (its side effects stay), but it is not passed: the static routine has no hidden THIS parameter, so a passed
+            ' receiver shifted the arguments (native x64: "user function arg count mismatch").
+            Dim instStaticOwner As String
+            Dim instStaticNode As Integer
+            If MIRFindStaticMethodInHierarchy(ps, receiverType, methodName, instStaticOwner, instStaticNode) = 1 Then
+                methodTarget = instStaticOwner & "_" & methodName
+                receiverName = ""
+            End If
         End If
     End If
 
@@ -843,6 +1008,9 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         Dim literalType As String
         If k = "STRING" Then
             literalType = "STRING"
+        ElseIf UCase(Trim(n.typeName)) = "TYPE_NULL" Then
+            ' S-564: the NULL / NOTHING literal (the front end rewrote the identifier to the NUMBER 0): a null pointer / object reference
+            literalType = "PTR"
         ElseIf UXBNumberLiteralIsFloat(cText) <> 0 Then
             literalType = "F64"
         Else
@@ -877,6 +1045,10 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         ' context name any more, so an old "PRINT INPUT" fails loudly instead
         ' of silently reading a value that no longer lands there.
         If kwName = "THIS" Or kwName = "ME" Then
+            If kwName = "ME" And MIRFunctionHasThisParam(module, fnIdx) <> 0 Then
+                valueNameOut = "THIS"
+                Return 1
+            End If
             valueNameOut = MIRNormalizeTaskResultAlias(module, fnIdx, kwName)
             Return 1
         End If
@@ -916,6 +1088,15 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
     End If
 
     If k = "IDENT" Then
+        ' S-484 (2026-10-17): `ME` is the receiver of the running member = its THIS parameter. The MIR interpreter only aliased ME for
+        ' method and constructor calls, so a bare call rewritten to ME.m() inside a destructor or a MAGIC operator body read a null
+        ' receiver ("method call on a null object reference"). Mapping it here makes every call path (and every backend) see THIS.
+        If UCase(Trim(n.value)) = "ME" And MIRFunctionHasThisParam(module, fnIdx) <> 0 Then
+            valueNameOut = "THIS"
+            Return 1
+        End If
+        Dim containerConstInit As Integer = MIRFindContainerConstInit(ps, module, fnIdx, nodeIdx, n.value)
+        If containerConstInit <> -1 Then Return MIRLowerExprNode(ps, containerConstInit, module, fnIdx, blkIdx, tempSeed, valueNameOut, errText)
         valueNameOut = MIRNormalizeTaskResultAlias(module, fnIdx, n.value)
         Return 1
     End If
@@ -967,8 +1148,14 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
             End If
             If rkind <> MIR_UXF_UNKNOWN Then negOp = MIR_OP_FNEG
             MIRAppendInstruction module, fnIdx, blkIdx, negOp, t, 1, rhsName
-            ' S-088: the negation carries its static type (a U32 result wraps modulo 2^32)
-            If UCase(Trim(n.typeName)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, UCase(Trim(n.typeName))
+            ' S-088: the negation carries its static type (a U32 result wraps modulo 2^32).
+            ' A comparison is BOOLEAN, but arithmetic negation of its -1/0 value
+            ' is an integer expression.  Keeping BOOL here makes native MIR-x64
+            ' canonicalize the resulting 1 back to Boolean -1 (S-505).
+            Dim negResultType As String
+            negResultType = UCase(Trim(n.typeName))
+            If negResultType = "BOOL" Or negResultType = "BOOLEAN" Then negResultType = "I64"
+            If negResultType <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, negResultType
             valueNameOut = t
             Return 1
         End If
@@ -977,7 +1164,7 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         Return 1
     End If
 
-    If k = "INCDEC_EXPR" Then
+    If k = "INCDEC_EXPR" Or k = "INCDEC_STMT" Then
         If n.left = -1 Then
             errText = "mir: INCDEC expression target missing"
             Return 0
@@ -990,22 +1177,53 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         Dim incOne As String
         Dim incIndexName As String
         Dim incIndexed As Integer
+        Dim incArrayElemType As String
+        Dim incStoredType As String
+        If UXBStep3InferExprType(ps, n.left, incStoredType, errText) = 0 Then Return 0
+        Dim incArrayField As Integer, incArrayName As String, incMember As String
+        Dim incReceiver As String, incFieldOffset As Integer, incFieldSize As Integer
         incIndexed = 0
 
         If UCase(ps.ast.nodes(n.left).kind) = "IDENT" Then
-            incTarget = ps.ast.nodes(n.left).value
+            incTarget = MIRNormalizeTaskResultAlias(module, fnIdx, ps.ast.nodes(n.left).value)
             incSource = incTarget
         ElseIf UCase(ps.ast.nodes(n.left).kind) = "FIELD_EXPR" Then
             ' S-130: same target handling as the INCDEC statement form: read the field through the regular
             ' field-read lowering (MIR_FIELD_LOAD for a class field) and write it back below
             If MIRBuildFieldPath(ps, n.left, incTarget, errText) = 0 Then Return 0
             If MIRNormalizeFieldPathForAccess(ps, n.left, incTarget, 1, errText) = 0 Then Return 0
-            If MIRLowerExprNode(ps, n.left, module, fnIdx, blkIdx, tempSeed, incSource, errText) = 0 Then Return 0
+            Dim receiverNode As Integer = ps.ast.nodes(n.left).left
+            If receiverNode >= 0 AndAlso UCase(ps.ast.nodes(receiverNode).kind) = "CALL_EXPR" Then
+                incArrayName = ps.ast.nodes(receiverNode).value
+                If MIRIsKnownArray(module, incArrayName) <> 0 Then
+                    incArrayField = 1
+                    If MIRLowerFlatArrayIndex(ps, receiverNode, incArrayName, module, fnIdx, blkIdx, tempSeed, incIndexName, errText) = 0 Then Return 0
+                    incMember = ps.ast.nodes(n.left).value
+                    incArrayElemType = MIRArrayElementTypeOf(module, incArrayName)
+                    Dim fieldErr As String, fieldType As String
+                    If TypeLayoutResolvePath(ps, incArrayElemType, incMember, incFieldOffset, fieldType, incFieldSize, fieldErr) = 0 Then errText = "mir: INCDEC field layout: " & fieldErr: Return 0
+                    incSource = MIRNextTemp(tempSeed)
+                    If MIRFindClassDeclNode(ps, incArrayElemType) <> -1 Then
+                        incReceiver = MIRNextTemp(tempSeed)
+                        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_INDEXED, incReceiver, 2, incArrayName, incIndexName
+                        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, incArrayElemType
+                        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_FIELD_LOAD, incSource, 3, incReceiver, incMember, LTrim(Str(incFieldOffset))
+                    Else
+                        MIRAppendInstruction module, fnIdx, blkIdx, "MIR_ARRAY_FIELD_LOAD", incSource, 6, incArrayName, incIndexName, incMember, incArrayElemType, LTrim(Str(incFieldOffset)), LTrim(Str(incFieldSize))
+                    End If
+                End If
+            End If
+            If incArrayField = 0 Then
+                If MIRLowerExprNode(ps, n.left, module, fnIdx, blkIdx, tempSeed, incSource, errText) = 0 Then Return 0
+            End If
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, incStoredType
         ElseIf UCase(ps.ast.nodes(n.left).kind) = "CALL_EXPR" And InStr(ps.ast.nodes(n.left).value, ".") = 0 And MIRIsKnownArray(module, ps.ast.nodes(n.left).value) <> 0 And MIRChildCount(ps, n.left) >= 1 Then
             incTarget = ps.ast.nodes(n.left).value
             If MIRLowerFlatArrayIndex(ps, n.left, incTarget, module, fnIdx, blkIdx, tempSeed, incIndexName, errText) = 0 Then Return 0
             incSource = MIRNextTemp(tempSeed)
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_INDEXED, incSource, 2, incTarget, incIndexName
+            incArrayElemType = MIRArrayElementTypeOf(module, incTarget)
+            If UCase(Trim(incArrayElemType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, incArrayElemType
             incIndexed = 1
         Else
             errText = "mir: INCDEC expression target must be ident, field, or indexed array"
@@ -1013,10 +1231,25 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         End If
 
         incOldName = MIRNextTemp(tempSeed)
-        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_VAR, incOldName, 1, incSource
+        If UCase(ps.ast.nodes(n.left).kind) = "FIELD_EXPR" Then
+            ' MIRLowerExprNode already materialized FIELD_EXPR (including UNION overlay
+            ' fields) into incSource. Loading that temporary as a variable would turn
+            ' the value into a pseudo-name such as __T6 and lose the field semantics.
+            incOldName = incSource
+        Else
+            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_VAR, incOldName, 1, incSource
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, incStoredType
+        End If
         incOne = MIRNextTemp(tempSeed)
         Dim incKind As Integer
-        incKind = MIRInferExprFloatKind(ps, n.left)
+        ' The resolved lvalue type is authoritative, including TYPE and
+        ' indexed CLASS fields whose textual root is not a scalar symbol.
+        Select Case MIRCanonicalTypeName(incStoredType)
+        Case "F32": incKind = MIR_UXF_F32
+        Case "F64": incKind = MIR_UXF_F64
+        Case "F80": incKind = MIR_UXF_F80
+        Case Else: incKind = MIR_UXF_UNKNOWN
+        End Select
         If incKind = MIR_UXF_F80 Then
             errText = "mir: F80 arithmetic not supported"
             Return 0
@@ -1024,19 +1257,47 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_CONST, incOne, 1, IIf(incKind <> MIR_UXF_UNKNOWN, "1.0", "1")
         incNewName = MIRNextTemp(tempSeed)
         If Trim(n.op) = "--" Then
-            MIRAppendInstruction module, fnIdx, blkIdx, IIf(incKind <> MIR_UXF_UNKNOWN, MIR_OP_FSUB, MIR_OP_SUB), incNewName, 2, incSource, incOne
+            MIRAppendInstruction module, fnIdx, blkIdx, IIf(incKind <> MIR_UXF_UNKNOWN, MIR_OP_FSUB, MIR_OP_SUB), incNewName, 2, incOldName, incOne
         Else
-            MIRAppendInstruction module, fnIdx, blkIdx, IIf(incKind <> MIR_UXF_UNKNOWN, MIR_OP_FADD, MIR_OP_ADD), incNewName, 2, incSource, incOne
+            MIRAppendInstruction module, fnIdx, blkIdx, IIf(incKind <> MIR_UXF_UNKNOWN, MIR_OP_FADD, MIR_OP_ADD), incNewName, 2, incOldName, incOne
         End If
 
-        If incIndexed <> 0 Then
+        ' Both the write and prefix result have the target's storage type.
+        ' Carry the conversion in shared MIR; no backend-specific narrow fix.
+        Dim incStoredName As String = MIRNextTemp(tempSeed)
+        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CAST, incStoredName, 1, incNewName
+        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, incStoredType
+        incNewName = incStoredName
+
+        If incArrayField <> 0 Then
+            If incReceiver <> "" Then
+                MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_FIELD_STORE, "", 4, incReceiver, incMember, incNewName, LTrim(Str(incFieldOffset))
+            Else
+                MIRAppendInstruction module, fnIdx, blkIdx, "MIR_ARRAY_FIELD_STORE", "", 7, incArrayName, incIndexName, incMember, incNewName, incArrayElemType, LTrim(Str(incFieldOffset)), LTrim(Str(incFieldSize))
+            End If
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, incStoredType
+        ElseIf incIndexed <> 0 Then
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_INDEXED, "", 3, incTarget, incIndexName, incNewName
+            If UCase(Trim(incArrayElemType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, incArrayElemType
         ElseIf UCase(ps.ast.nodes(n.left).kind) = "FIELD_EXPR" Then
+            Dim propertyStore As Integer = MIRTryEmitPropertySetterCall(ps, n.left, incNewName, module, fnIdx, blkIdx, tempSeed, errText)
+            If propertyStore = 0 Then Return 0
+            If propertyStore < 0 Then
+            Dim unionStoreIncExpr As Integer
+            unionStoreIncExpr = MIRTryEmitUnionFieldStore(ps, n.left, incTarget, incNewName, "=", module, fnIdx, blkIdx, tempSeed, errText)
+            If unionStoreIncExpr = 0 Then Return 0
+            If unionStoreIncExpr > 0 Then
+                ' The canonical UNION store owns the write; do not fall through to
+                ' the class/pseudo-variable fallback below.
+            Else
             ' S-130: a per-object class field is written with MIR_FIELD_STORE
             Dim classStoreIncExpr As Integer
             classStoreIncExpr = MIRTryEmitClassFieldStore(ps, n.left, incTarget, incNewName, module, fnIdx, blkIdx, errText)
             If classStoreIncExpr = 0 Then Return 0
             If classStoreIncExpr < 0 Then MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, incTarget, 1, incNewName
+            End If
+            End If
+
         Else
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, incTarget, 1, incNewName
         End If
@@ -1196,6 +1457,10 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
                         Dim opTemp As String
                         opTemp = MIRNextTemp(tempSeed)
                         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, opTemp, 3, opCallName, lName, rName
+                        Dim opResultType As String, opTypeError As String
+                        If UXBStep3InferExprType(ps, nodeIdx, opResultType, opTypeError) <> 0 Then
+                            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, MIRCanonicalTypeName(opResultType)
+                        End If
                         valueNameOut = opTemp
                         Return 1
                     End If
@@ -1225,7 +1490,18 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         ' (mixed I64/U64 -> U64), so pick the unsigned opcode. Float operands
         ' keep the ordinary opcode (they convert to floating point first).
         If preferFloatKind = MIR_UXF_UNKNOWN Then
-            If UXBExprIsU64(ps, n.left) <> 0 Or UXBExprIsU64(ps, n.right) <> 0 Then
+            Dim unsignedBinaryDomain As Integer
+            unsignedBinaryDomain = IIf(UXBExprIsU64(ps, n.left) <> 0 Or UXBExprIsU64(ps, n.right) <> 0, 1, 0)
+            ' S-628: two unsigned operands also require unsigned ordering in
+            ' the i32 WASM lane (U32's high bit is not a negative sign).
+            ' Mixed signed/U32 operands retain the existing promotion rule.
+            If unsignedBinaryDomain = 0 Then
+                Dim unsignedLeftType As String, unsignedRightType As String
+                If MIRTryInferExprTypeName(ps, n.left, unsignedLeftType) <> 0 And MIRTryInferExprTypeName(ps, n.right, unsignedRightType) <> 0 Then
+                    If MIRTypeNameIsUnsignedInteger(unsignedLeftType) <> 0 And MIRTypeNameIsUnsignedInteger(unsignedRightType) <> 0 Then unsignedBinaryDomain = 1
+                End If
+            End If
+            If unsignedBinaryDomain <> 0 Then
                 Select Case bop
                 Case MIR_OP_IDIV: bop = MIR_OP_UIDIV
                 Case MIR_OP_MOD: bop = MIR_OP_UMOD
@@ -1241,7 +1517,39 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         t = MIRNextTemp(tempSeed)
         MIRAppendInstruction module, fnIdx, blkIdx, bop, t, 2, lName, rName
         Dim binaryResultType As String
-        binaryResultType = UCase(Trim(n.typeName))
+        ' The float-kind inference is the lowering-side source of truth for
+        ' numeric operator precision. Semantic type metadata can still carry
+        ' the legacy F64 default for an expression such as F32 * I32; allowing
+        ' that default to overwrite the inferred F32 result widens the value
+        ' before the backend sees it.
+        ' Comparisons always produce the language Boolean value (-1/0).  The
+        ' operand promotion above selects the comparison instruction's numeric
+        ' domain, but must never leak that domain into the result metadata.  A
+        ' float operand used to mark GE/LT/etc. as F64; MIR-x64 then stored the
+        ' integer truth bit pattern as a floating value (NaN for TRUE).
+        Select Case UCase(Trim(bop))
+        Case "EQ", "NE", "LT", "LE", "GT", "GE", "ULT", "ULE", "UGT", "UGE"
+            binaryResultType = "BOOLEAN"
+        Case Else
+            binaryResultType = ""
+        End Select
+        ' S-219: ROL/ROR are width-preserving integer operations.  The
+        ' machine implementation may use a 64-bit scratch register, but the
+        ' language result has the left operand's declared integer type.
+        If binaryResultType = "" And (UCase(Trim(bop)) = "ROL" Or UCase(Trim(bop)) = "ROR") Then
+            Dim rotateResultType As String
+            If MIRTryInferExprTypeName(ps, n.left, rotateResultType) <> 0 Then
+                rotateResultType = MIRCanonicalTypeName(rotateResultType)
+                If UXBStep3TypeIsInteger(rotateResultType) <> 0 Then binaryResultType = rotateResultType
+            End If
+        End If
+        If binaryResultType = "" And preferFloatKind = MIR_UXF_F32 Then
+            binaryResultType = "F32"
+        ElseIf binaryResultType = "" And preferFloatKind = MIR_UXF_F64 Then
+            binaryResultType = "F64"
+        ElseIf binaryResultType = "" Then
+            binaryResultType = UCase(Trim(n.typeName))
+        End If
         If binaryResultType = "" Then
             Select Case UCase(Trim(bop))
             Case "FADD", "FSUB", "FMUL", "FDIV", "FNEG"
@@ -1283,6 +1591,9 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
 
         Dim resultTemp As String
         resultTemp = MIRNextTemp(tempSeed)
+        Dim conditionalType As String
+        If UXBStep3InferExprType(ps, nodeIdx, conditionalType, errText) = 0 Then Return 0
+        conditionalType = MIRCanonicalTypeName(conditionalType)
 
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JNZ, "", 2, condBool, LTrim(Str(thenBlock))
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(elseBlock))
@@ -1290,13 +1601,27 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         blkIdx = thenBlock
         Dim thenValue As String
         If MIRLowerExprNode(ps, thenNode, module, fnIdx, blkIdx, tempSeed, thenValue, errText) = 0 Then Return 0
+        If UXBStep3TypeIsNumeric(conditionalType) <> 0 Then
+            Dim thenCast As String = MIRNextTemp(tempSeed)
+            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CAST, thenCast, 1, thenValue
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, conditionalType
+            thenValue = thenCast
+        End If
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, resultTemp, 1, thenValue
+        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, conditionalType
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(endBlock))
 
         blkIdx = elseBlock
         Dim elseValue As String
         If MIRLowerExprNode(ps, n.right, module, fnIdx, blkIdx, tempSeed, elseValue, errText) = 0 Then Return 0
+        If UXBStep3TypeIsNumeric(conditionalType) <> 0 Then
+            Dim elseCast As String = MIRNextTemp(tempSeed)
+            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CAST, elseCast, 1, elseValue
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, conditionalType
+            elseValue = elseCast
+        End If
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, resultTemp, 1, elseValue
+        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, conditionalType
         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_JMP, "", 1, LTrim(Str(endBlock))
 
         blkIdx = endBlock
@@ -1550,6 +1875,9 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
             If MIRLowerFlatArrayIndex(ps, nodeIdx, callName, module, fnIdx, blkIdx, tempSeed, indexName, errText) = 0 Then Return 0
             loadTemp = MIRNextTemp(tempSeed)
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_INDEXED, loadTemp, 2, callName, indexName
+            Dim indexedElementType As String
+            indexedElementType = MIRArrayElementTypeOf(module, callName)
+            If UCase(Trim(indexedElementType)) <> "" Then MIRSetLastInstructionMetadata module, fnIdx, blkIdx, indexedElementType
             valueNameOut = loadTemp
             Return 1
         End If
@@ -1602,29 +1930,51 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
             ffiBasePos = IIf(skipFirstCallChild <> 0, 1, 0)
             Dim ffiReturnNode As Integer
             ffiReturnNode = MIRChildAt(ps, nodeIdx, ffiBasePos + 2)
-            If ffiReturnNode <> -1 Then callResultType = MIRCanonicalTypeName(ps.ast.nodes(ffiReturnNode).value)
-            ffiArgStart = 5
-            Dim ffiTypeListNode As Integer
-            ffiTypeListNode = MIRChildAt(ps, nodeIdx, ffiBasePos + 4)
-            If ffiTypeListNode <> -1 Then
-                If UCase(Trim(ps.ast.nodes(ffiTypeListNode).kind)) = "STRING" Then
-                    If MIRLooksLikeFfiArgTypeList(ps.ast.nodes(ffiTypeListNode).value) <> 0 Then ffiArgStart = 6
+            Dim ffiChildStart As Integer = ffiBasePos + 3
+            If ffiReturnNode <> -1 Then
+                Dim ffiReturnKind As String = UCase(Trim(ps.ast.nodes(ffiReturnNode).kind))
+                Dim ffiReturnToken As String = UCase(Trim(ps.ast.nodes(ffiReturnNode).value))
+                If ffiReturnKind = "KEYWORD_REF" Or ffiReturnKind = "IDENT" Or ffiReturnKind = "IDENTIFIER" Or ffiReturnKind = "TYPE_REF" Or ffiReturnKind = "VAR_REF" Then
+                    Select Case ffiReturnToken
+                    Case "CDECL", "STDCALL", "FASTCALL", "THISCALL", "WINAPI"
+                        callResultType = "VOID"
+                    Case Else
+                        callResultType = MIRCanonicalTypeName(ffiReturnToken)
+                    End Select
+                Else
+                    ffiChildStart = ffiBasePos + 2
+                    Dim ffiSymbolNode As Integer = MIRChildAt(ps, nodeIdx, ffiBasePos + 1)
+                    If ffiSymbolNode <> -1 Then MIRFindFunctionReturnType ps, ps.ast.nodes(ffiSymbolNode).value, callResultType
+                    If callResultType = "" Then callResultType = "VOID"
                 End If
             End If
+            Dim ffiConventionNode As Integer = MIRChildAt(ps, nodeIdx, ffiChildStart)
+            If ffiChildStart = ffiBasePos + 3 And ffiConventionNode <> -1 Then
+                If UCase(Trim(ps.ast.nodes(ffiConventionNode).kind)) = "KEYWORD_REF" Then
+                    Select Case UCase(Trim(ps.ast.nodes(ffiConventionNode).value))
+                    Case "CDECL", "STDCALL", "FASTCALL", "THISCALL", "WINAPI"
+                        ffiChildStart += 1
+                    End Select
+                End If
+            End If
+            Dim ffiTypeListNode As Integer
+            ffiTypeListNode = MIRChildAt(ps, nodeIdx, ffiChildStart)
+            If ffiTypeListNode <> -1 Then
+                If UCase(Trim(ps.ast.nodes(ffiTypeListNode).kind)) = "STRING" Then
+                    If MIRLooksLikeFfiArgTypeList(ps.ast.nodes(ffiTypeListNode).value) <> 0 Then ffiChildStart += 1
+                End If
+            End If
+            ' Operand zero is the callee; the CALL marker is omitted.
+            ffiArgStart = ffiChildStart - ffiBasePos + 1
         Else
             If callResultType = "" Then MIRFindFunctionReturnType ps, callName, callResultType
             If callResultType = "" Then
                 Select Case callName
-                Case "CDBL", "VAL", "SQR", "SQRT", "SIN", "COS", "TAN", "ATN", "EXP", "LOG", "RND", "TIMER", "INPUTF"
+                Case "ABS", "CDBL", "VAL", "SQR", "SQRT", "SIN", "COS", "TAN", "ATN", "EXP", "LOG", "RND", "TIMER", "INPUTF"
                     callResultType = "F64"
                 Case "CSNG"
                     callResultType = "F32"
                 End Select
-                If callName = "ABS" Then
-                    Dim absArgNode As Integer
-                    absArgNode = MIRChildAt(ps, nodeIdx, 0)
-                    If MIRInferExprFloatKind(ps, absArgNode) <> MIR_UXF_UNKNOWN Then callResultType = "F64"
-                End If
             End If
         End If
 
@@ -1642,6 +1992,11 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
         Dim t As String
         t = MIRNextTemp(tempSeed)
 
+        Dim callFunctionIndex As Integer
+        callFunctionIndex = MIRFindCallFunctionIndexLocal(module, callName)
+        Dim callParamIndex As Integer
+        callParamIndex = 0
+
         If childCount = 0 Then
             MIRSetCurrentSourceFromAstNode ps, nodeIdx
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, t, 1, callName
@@ -1655,6 +2010,7 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
             If injectReceiver <> 0 Then
                 a2 = receiverVar
                 idx = 3
+                callParamIndex = 1
             End If
 
             ch = n.firstChild
@@ -1670,6 +2026,11 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
                     argName = Chr(34) & ps.ast.nodes(ch).value & Chr(34)
                 Else
                     If MIRLowerExprNode(ps, ch, module, fnIdx, blkIdx, tempSeed, argName, errText) = 0 Then Return 0
+                End If
+                If callFunctionIndex >= 0 AndAlso callParamIndex < module.functions(callFunctionIndex).paramVarCount Then
+                    If callParamIndex > UBound(module.functions(callFunctionIndex).paramByRef) OrElse module.functions(callFunctionIndex).paramByRef(callParamIndex) = 0 Then
+                        If MIRPrepareManagedByValArgument(ps, ch, module.functions(callFunctionIndex).paramVarTypes(callParamIndex), module, fnIdx, blkIdx, tempSeed, argName, errText) = 0 Then Return 0
+                    End If
                 End If
                 Select Case idx
                 Case 2: a2 = argName
@@ -1692,6 +2053,7 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
                     Return 0
                 End Select
                 idx += 1
+                callParamIndex += 1
                 ch = ps.ast.nodes(ch).nextSibling
             Loop
 
@@ -1800,7 +2162,8 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
                             staticProperty = MIRClassPropertyHasFlag(ps, propertyNode, "STATIC")
                         End If
 
-                        If staticProperty <> 0 And MIRIsClassNameExpr(ps, n.left, rootType) <> 0 Then
+                        Dim staticOwnerType As String
+                        If staticProperty <> 0 AndAlso MIRIsClassNameExpr(ps, n.left, staticOwnerType) <> 0 Then
                             recvName = ""
                         ElseIf recvNode = -1 Then
                             recvName = rootName
@@ -1811,6 +2174,7 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
                         Dim callTemp As String
                         callTemp = MIRNextTemp(tempSeed)
                         MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_METHOD_CALL, callTemp, 4, UCase(Trim(getterName)), recvName, MIRFieldPathFirstIdent(memberPath), rootType
+                        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, propertyType
                         valueNameOut = callTemp
                         Return 1
                     End If
@@ -1832,6 +2196,24 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
             Dim fieldFinalNode As Integer
             Dim fieldOwnerType As String
             If MIRResolveFieldRootType(ps, nodeIdx, fieldRoot, fieldRootType) <> 0 Then
+                Dim unionFieldType As String
+                Dim unionFieldOffset As Integer
+                Dim unionFieldSize As Integer
+                Dim unionFieldErr As String
+                Dim unionFieldRv As Integer
+                unionFieldRv = MIRTryResolveUnionFieldLayout(ps, fieldRootType, fieldMemberPath, unionFieldType, unionFieldOffset, unionFieldSize, unionFieldErr)
+                If unionFieldRv < 0 Then
+                    errText = unionFieldErr
+                    Return 0
+                End If
+                If unionFieldRv > 0 Then
+                    Dim unionLoadTemp As String
+                    unionLoadTemp = MIRNextTemp(tempSeed)
+                    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_UNION_FIELD_LOAD, unionLoadTemp, 5, fieldRoot, fieldMemberPath, LTrim(Str(unionFieldOffset)), LTrim(Str(unionFieldSize)), unionFieldType
+                    MIRSetLastInstructionMetadata module, fnIdx, blkIdx, unionFieldType
+                    valueNameOut = unionLoadTemp
+                    Return 1
+                End If
                 If MIRResolveFieldPathTypeOwner(ps, fieldRootType, fieldMemberPath, fieldFinalType, fieldFinalNode, fieldOwnerType) <> 0 Then
                     If fieldFinalNode >= 0 And UCase(Trim(ps.ast.nodes(fieldFinalNode).kind)) = "CLASS_FIELD" Then
                         If MIRClassFieldHasFlag(ps, fieldFinalNode, "STATIC") = 0 Then
@@ -1883,7 +2265,14 @@ Private Function MIRLowerExprNode(ByRef ps As ParseState, ByVal nodeIdx As Integ
                 Dim arrFieldFieldType As String
                 Dim arrFieldTypeErr As String
                 If TypeLayoutResolvePath(ps, arrFieldElemType, arrFieldMemberName, arrFieldOffsetTmp, arrFieldFieldType, arrFieldSizeTmp, arrFieldTypeErr) <> 0 Then
+                    If MIRFindClassDeclNode(ps, arrFieldElemType) <> -1 Then
+                        Dim afReadReceiver As String = MIRNextTemp(tempSeed)
+                        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_LOAD_INDEXED, afReadReceiver, 2, arrFieldArrName, arrFieldIdxName
+                        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, arrFieldElemType
+                        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_FIELD_LOAD, arrFieldTemp, 3, afReadReceiver, arrFieldMemberName, LTrim(Str(arrFieldOffsetTmp))
+                    Else
                     MIRAppendInstruction module, fnIdx, blkIdx, "MIR_ARRAY_FIELD_LOAD", arrFieldTemp, 6, arrFieldArrName, arrFieldIdxName, arrFieldMemberName, arrFieldElemType, LTrim(Str(arrFieldOffsetTmp)), LTrim(Str(arrFieldSizeTmp))
+                    End If
                     MIRSetLastInstructionMetadata module, fnIdx, blkIdx, arrFieldFieldType
                 Else
                     errText = "mir: array field layout resolve failed " & arrFieldTypeErr

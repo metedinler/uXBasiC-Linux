@@ -1,0 +1,20 @@
+INCLUDE "include/modules/uxllamax.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxllamax.LastCommand(0, 0, 0)
+        PRINT uxllamax.LastError(0, 0, 0)
+        PRINT uxllamax.Prompt(0, "", 0, 0)
+        PRINT uxllamax.PromptFile(0, "", 0, 0)
+        PRINT uxllamax.SetCliPath(0, "")
+        PRINT uxllamax.SetContext(0, 0)
+        PRINT uxllamax.SetModelPath(0, "")
+        PRINT uxllamax.SetPredict(0, 0)
+        PRINT uxllamax.SetSeed(0, 0)
+        PRINT uxllamax.SetTemperature(0, 0.0)
+        PRINT uxllamax.SetThreads(0, 0)
+        PRINT uxllamax.SetTopK(0, 0)
+        PRINT uxllamax.SetTopP(0, 0.0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXLLAMAX"
+END MAIN

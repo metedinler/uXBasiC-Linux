@@ -1,0 +1,16 @@
+DIM total AS SINGLE = 0
+FUNCTION Quarter(n AS F32) AS F32
+ RETURN n * 0.25
+END FUNCTION
+THREAD Work(n AS F32) AS I64
+ DIM i AS I64
+ FOR i = 1 TO 1000
+  total = total + Quarter(n)
+ NEXT
+ RETURN 0
+END THREAD
+DIM a AS TASK OF I64 = SPAWN Work(1)
+DIM b AS TASK OF I64 = SPAWN Work(3)
+a.JOIN()
+b.JOIN()
+PRINT total

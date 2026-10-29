@@ -1,0 +1,36 @@
+O1 N3 + bos MAIN
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Salin(x AS Sayac)
+    DIM y AS Sayac
+    y = x
+    DELETE y
+END SUB
+MAIN
+END MAIN
+=====
+O2 N3 + bos ust duzey bildirim
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Salin(x AS Sayac)
+    DIM y AS Sayac
+    y = x
+    DELETE y
+END SUB
+DIM z AS I32
+=====
+O3 N3 + ust duzey atama
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Salin(x AS Sayac)
+    DIM y AS Sayac
+    y = x
+    DELETE y
+END SUB
+DIM z AS I32 = 0

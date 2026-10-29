@@ -1,0 +1,10 @@
+' S-329 (gorunurluk): Bump yalniz CLASS icinde yontem; sinif disinda nitelensiz cagri = derleme hatasi (nesne uzerinden cagrilir).
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    SUB Bump()
+        n = n + 1
+    END SUB
+END CLASS
+PRINT "once"
+Bump()

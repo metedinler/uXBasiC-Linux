@@ -1,0 +1,32 @@
+' S-300: EXIT FOR/DO/WHILE, ayrildigi her TRY'in FINALLY'sini calistirir (CONTINUE ve RETURN gibi); sonraki RETURN da kendi FINALLY'sini calistirir.
+FUNCTION Ara() AS I32
+    DIM i AS I32
+    FOR i = 1 TO 3
+        TRY
+            IF i = 1 THEN EXIT FOR
+        FINALLY
+            PRINT "fin"
+        END TRY
+    NEXT i
+    TRY
+        RETURN i
+    FINALLY
+        PRINT "fin-return"
+    END TRY
+    RETURN 0
+END FUNCTION
+PRINT Ara()
+DIM n AS I32 = 0
+DO
+    TRY
+        TRY
+            n = n + 1
+            IF n = 2 THEN EXIT DO
+        FINALLY
+            PRINT "ic"
+        END TRY
+    FINALLY
+        PRINT "dis"
+    END TRY
+LOOP
+PRINT n

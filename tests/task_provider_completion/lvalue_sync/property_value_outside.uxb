@@ -1,0 +1,8 @@
+CLASS Box
+    PUBLIC
+    PROPERTY Amount AS I32
+        SET
+            PRINT VALUE
+        END SET
+END CLASS
+PRINT VALUE

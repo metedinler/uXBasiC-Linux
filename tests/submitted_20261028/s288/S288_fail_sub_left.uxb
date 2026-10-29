@@ -1,0 +1,6 @@
+SUB Left()
+    PRINT 1
+END SUB
+MAIN
+    Left()
+END MAIN

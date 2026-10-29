@@ -1,0 +1,22 @@
+DIM destroyed AS I32 = 0
+CLASS Kutu
+    PUBLIC
+    n AS I32
+    METHOD Oku() AS I32
+        RETURN THIS.n + 1
+    END METHOD
+    DESTRUCTOR()
+        destroyed = destroyed + 1
+    END DESTRUCTOR
+END CLASS
+DIM a(-1 TO 0, 2 TO 4) AS Kutu
+a(-1, 3) = NEW Kutu()
+a(-1, 3).n = 7
+PRINT a(-1, 3).Oku()
+DIM t AS Kutu = a(-1, 3)
+t.n = 9
+PRINT a(-1, 3).n
+DELETE a(-1, 3)
+PRINT a(-1, 3) = NOTHING
+DELETE t
+PRINT destroyed

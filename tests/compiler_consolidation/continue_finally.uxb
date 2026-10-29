@@ -1,0 +1,19 @@
+DIM i AS I32
+FOR i = 1 TO 2
+    TRY
+        CONTINUE
+        PRINT 999
+    FINALLY
+        PRINT i
+        PRINT i + 10
+    END TRY
+NEXT i
+TRY
+    FOR i = 1 TO 2
+        CONTINUE FOR
+    NEXT i
+    PRINT 30
+FINALLY
+    PRINT 40
+    PRINT 50
+END TRY

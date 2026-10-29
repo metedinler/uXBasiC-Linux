@@ -1,0 +1,17 @@
+#ifndef UXB_FLOAT_INTEGER_CONVERSION_FBS
+#define UXB_FLOAT_INTEGER_CONVERSION_FBS
+
+' Type-name integer casts truncate, then apply the target width. CINT/CLNG
+' remain separate rounded builtins. Split the unsigned upper half before the
+' host's signed conversion so U64(2^63) is exact and does not overflow.
+Function UXBFloatTruncateIntegerBits(ByVal value As Double, ByRef bitsOut As ULongInt) As Integer
+    If value <> value Then Return 0
+    If value < -9.223372036854775808e18 Or value >= 1.8446744073709551616e19 Then Return 0
+    If value >= 9.223372036854775808e18 Then
+        bitsOut = CULngInt(CLngInt(Fix(value - 9.223372036854775808e18))) Or &h8000000000000000ULL
+    Else
+        bitsOut = CULngInt(CLngInt(Fix(value)))
+    End If
+    Return 1
+End Function
+#endif

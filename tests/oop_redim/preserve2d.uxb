@@ -1,0 +1,19 @@
+CLASS Cell
+ PUBLIC
+ value AS I32
+END CLASS
+DIM a(-1 TO 1, 2 TO 3) AS Cell
+a(0,3) = NEW Cell()
+a(0,3).value = 42
+DIM aliasRef AS Cell = a(0,3)
+REDIM PRESERVE a(-2 TO 2, 1 TO 5) AS Cell
+PRINT a(0,3).value
+PRINT a(-2,1) = NULL
+PRINT SIZEOF(a)
+REDIM PRESERVE a(0 TO 0, 3 TO 3) AS Cell
+PRINT a(0,3).value
+PRINT SIZEOF(a)
+REDIM PRESERVE a(1 TO 2, 4 TO 5) AS Cell
+PRINT a(1,4) = NULL
+PRINT aliasRef.value
+DELETE aliasRef

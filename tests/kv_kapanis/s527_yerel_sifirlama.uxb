@@ -1,0 +1,29 @@
+' S-527: rutin icindeki bildirimsiz-ilk-degerli yerel degisken sifirdir (onceki cagrinin yigin kalintisi degil).
+SUB Kirlet()
+    DIM a AS I32 = 99
+    DIM b AS I32 = 99
+    DIM c AS I32 = 99
+    DIM d AS F64 = 99
+END SUB
+FUNCTION Oku() AS I32
+    DIM n AS I32
+    RETURN n
+END FUNCTION
+FUNCTION OkuF() AS F64
+    DIM x AS F64
+    RETURN x
+END FUNCTION
+FUNCTION BitSay(v AS I32) AS I32
+    DIM n AS I32
+    DIM t AS I32 = v
+    DO WHILE t <> 0
+        n += t AND 1
+        t = t \ 2
+    LOOP
+    RETURN n
+END FUNCTION
+PRINT BitSay(255)
+Kirlet()
+PRINT Oku()
+PRINT OkuF()
+PRINT BitSay(7)

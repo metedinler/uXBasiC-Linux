@@ -1,0 +1,5 @@
+DIM a AS STRING
+a = "mete"
+PRINT LEN(a)
+PRINT UCASE(a)
+PRINT SQRT(16)

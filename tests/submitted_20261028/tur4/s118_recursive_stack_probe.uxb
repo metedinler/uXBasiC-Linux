@@ -1,0 +1,7 @@
+DECLARE FUNCTION Depth(n AS I32) AS I32
+FUNCTION Depth(n AS I32) AS I32
+    IF n = 0 THEN RETURN 0
+    RETURN 1 + Depth(n - 1)
+END FUNCTION
+PRINT Depth(100)
+' EXPECT: 100 or explicit stack-limit diagnostic; never a process crash.

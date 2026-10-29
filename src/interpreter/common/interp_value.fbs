@@ -4,6 +4,8 @@
 #include once "interp_error_codes.fbs"
 #include once "../../semantic/library_type_contract.fbs"
 #include once "library_payload.fbs"
+#include once "../../common/float_integer_conversion.fbs"
+#include once "../../common/type_storage_contract.fbs"
 
 Const UXB_VAL_VOID As String = "VAL_VOID"
 Const UXB_VAL_BOOL As String = "VAL_BOOL"
@@ -81,7 +83,8 @@ Private Function UXBInterpU(ByVal textValue As String) As String
 End Function
 
 Function UXBInterpCanonicalType(ByVal typeText As String) As String
-    Dim t As String = UXBInterpU(typeText)
+    Dim t As String = UXBInterpU(UXBStep3StorageType(typeText))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
     Dim parameterPos As Integer = InStr(t, "(")
     If parameterPos > 1 And Right(t, 1) = ")" Then t = Trim(Left(t, parameterPos - 1))
     Select Case t
@@ -173,7 +176,7 @@ End Function
 
 Function UXBInterpApplyDeclaredType(ByVal sourceValue As UXBInterpValue, ByVal declaredTypeRaw As String) As UXBInterpValue
     Dim v As UXBInterpValue = sourceValue
-    Dim declaredType As String = UXBInterpU(declaredTypeRaw)
+    Dim declaredType As String = UXBInterpU(UXBStep3StorageType(declaredTypeRaw))
     If declaredType = "" Then Return v
     If Left(declaredType, 5) = "TYPE_" Then declaredType = Mid(declaredType, 6)
 
@@ -195,6 +198,22 @@ Function UXBInterpApplyDeclaredType(ByVal sourceValue As UXBInterpValue, ByVal d
     ' Dog's (no dynamic dispatch). A handle is never a number; keep it as it is.
     If v.kind = UXB_VAL_OBJECT Or v.kind = UXB_VAL_ARRAY Then Return v
 
+    ' S-570 (2026-10-16): a plain number that reaches a variable whose declared type is a class reference is the
+    ' NULL reference (the lowering writes the constant 0 for an unassigned `DIM a AS Cls` and after `DELETE a`).
+    ' It used to be re-labelled OBJECT with objectId 0 -- i.e. a handle to heap slot 0, the first object the
+    ' program ever created -- so `DELETE x` followed by `x.v` read (and `x.v = 5` overwrote) that object.
+    ' A real handle never gets here (it returned above); NULL is OBJECT with no slot (objectId -1).
+    If UXBInterpCanonicalType(declaredType) = UXB_VAL_OBJECT Then
+        v.kind = UXB_VAL_OBJECT
+        v.typeName = "OBJECT"
+        v.intValue = 0
+        v.uintValue = 0
+        v.handleId = -1
+        v.objectId = -1
+        v.arrayId = -1
+        Return v
+    End If
+
     If v.kind = UXB_VAL_STRING Or v.kind = UXB_VAL_WSTRING Then
         Select Case declaredType
         Case "F32", "SINGLE", "F64", "DOUBLE"
@@ -208,6 +227,13 @@ Function UXBInterpApplyDeclaredType(ByVal sourceValue As UXBInterpValue, ByVal d
 
     Dim rawBits As ULongInt
     rawBits = IIf(v.kind = UXB_VAL_U32 Or v.kind = UXB_VAL_U64, v.uintValue, CULngInt(v.intValue))
+    If v.kind = UXB_VAL_F32 Or v.kind = UXB_VAL_F64 Then
+        Select Case declaredType
+        Case "U8", "UBYTE", "U16", "USHORT", "U32", "UINTEGER", "UINT", "ULONG", "U64", "ULONGINT", _
+             "I8", "BYTE", "SBYTE", "I16", "SHORT", "I32", "INTEGER", "INT", "LONG", "I64", "LONGINT"
+            If UXBFloatTruncateIntegerBits(v.floatValue, rawBits) = 0 Then Return UXBInterpValueError(22, "UXB_FLOAT_INTEGER_RANGE: floating value cannot be converted to an integer")
+        End Select
+    End If
     Select Case declaredType
     Case "U8", "UBYTE"
         v.kind = UXB_VAL_U32: v.uintValue = rawBits And &hFFULL: v.intValue = CLngInt(v.uintValue)
@@ -237,6 +263,10 @@ Function UXBInterpApplyDeclaredType(ByVal sourceValue As UXBInterpValue, ByVal d
         ElseIf v.kind <> UXB_VAL_F32 And v.kind <> UXB_VAL_F64 Then
             v.floatValue = CDbl(v.intValue)
         End If
+        ' F32 is a storage type, not only a display hint.  Keep the runtime
+        ' value at IEEE single precision before later arithmetic or casts read
+        ' its mirrored Double field (S-510).
+        v.floatValue = CDbl(CSng(v.floatValue))
         v.kind = UXB_VAL_F32
     Case "F64", "DOUBLE", "F80", "EXTENDED", "EXT"
         ' S-077: an unsigned source converts by its unsigned magnitude (2^64-1 is
@@ -358,7 +388,10 @@ Function UXBInterpValueDefaultForType(ByVal typeText As String) As UXBInterpValu
     Case UXB_VAL_BOOL: Return UXBInterpValueBool(0)
     Case UXB_VAL_I32, UXB_VAL_I64, UXB_VAL_BIGINT: Return UXBInterpApplyDeclaredType(UXBInterpValueInt(0), typeText)
     Case UXB_VAL_U32, UXB_VAL_U64: Return UXBInterpApplyDeclaredType(UXBInterpValueUInt(0), typeText)
-    Case UXB_VAL_F32, UXB_VAL_F64: Return UXBInterpValueFloat(0)
+    ' S-515: the default of an F32 must carry the F32 type, too. A bare UXBInterpValueFloat(0) is tagged "F64", and the MIR
+    ' interpreter takes a variable's declared type from the value it currently holds - so a routine-local F32 (declared by
+    ' MIR_LOCAL_DECL without an initializer) was assigned as an F64 and never rounded to single precision.
+    Case UXB_VAL_F32, UXB_VAL_F64: Return UXBInterpApplyDeclaredType(UXBInterpValueFloat(0), typeText)
     Case UXB_VAL_STRING, UXB_VAL_WSTRING, UXB_VAL_BIGF, UXB_VAL_BIGD, UXB_VAL_BALL: Return UXBInterpValueString("")
     Case UXB_VAL_ARRAY: Return UXBInterpValueHandle("ARRAY", -1)
     Case UXB_VAL_OBJECT, UXB_VAL_VARIANT, UXB_VAL_ANY: Return UXBInterpValueExternal(k, 0, "")
@@ -397,6 +430,20 @@ End Function
 Declare Function UXBInterpValueToString(ByRef v As UXBInterpValue) As String
 
 Function UXBInterpValuesEqual(ByRef leftValue As UXBInterpValue, ByRef rightValue As UXBInterpValue) As Integer
+    ' S-564 (2026-10-17): object references. The NULL reference is an OBJECT handle with no slot (objectId < 0, see the declared-type coercion
+    ' above) and the NULL / NOTHING literal is the number 0, so `k = NOTHING` compares a handle with a number. Two handles are equal when they name
+    ' the same heap slot (or are both NULL); a handle equals the number 0 exactly when it is NULL and no other number ever.
+    If leftValue.kind = UXB_VAL_OBJECT Or rightValue.kind = UXB_VAL_OBJECT Then
+        If leftValue.kind = UXB_VAL_OBJECT And rightValue.kind = UXB_VAL_OBJECT Then
+            If leftValue.objectId < 0 And rightValue.objectId < 0 Then Return 1
+            Return IIf(leftValue.objectId = rightValue.objectId, 1, 0)
+        End If
+        If leftValue.kind = UXB_VAL_OBJECT Then
+            If UXBInterpIsMachineNumeric(rightValue) <> 0 Or rightValue.kind = UXB_VAL_PTR Then Return IIf(leftValue.objectId < 0 And rightValue.intValue = 0, 1, 0)
+        Else
+            If UXBInterpIsMachineNumeric(leftValue) <> 0 Or leftValue.kind = UXB_VAL_PTR Then Return IIf(rightValue.objectId < 0 And leftValue.intValue = 0, 1, 0)
+        End If
+    End If
     If UXBInterpIsMachineNumeric(leftValue) <> 0 And UXBInterpIsMachineNumeric(rightValue) <> 0 Then
         If leftValue.kind = UXB_VAL_F32 Or leftValue.kind = UXB_VAL_F64 Or _
            rightValue.kind = UXB_VAL_F32 Or rightValue.kind = UXB_VAL_F64 Then

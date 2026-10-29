@@ -1,0 +1,273 @@
+U1 odunc sistemi
+' Kitap ödünç sistemi: kayıt dizisi, sözlük, hata yönetimi, sıralama ve rapor
+TYPE Kitap
+    ad AS STRING
+    stok AS I32
+    odunc AS I32
+END TYPE
+
+DIM kitaplar(5) AS Kitap
+DIM kitapSayisi AS I32 = 0
+DIM indeks AS DICT
+DIM uyeler AS DICT
+DIM sonHata AS STRING = ""
+DIM toplamIslem AS I32 = 0
+
+SUB KitapEkle(ad AS STRING, stok AS I32)
+    kitaplar(kitapSayisi).ad = ad
+    kitaplar(kitapSayisi).stok = stok
+    kitaplar(kitapSayisi).odunc = 0
+    DICTSET(indeks, ad, kitapSayisi)
+    kitapSayisi = kitapSayisi + 1
+END SUB
+
+FUNCTION KitapBul(ad AS STRING) AS I32
+    IF DICTHAS(indeks, ad) = 0 THEN
+        sonHata = "kitap bulunamadi: " + ad
+        THROW "kitap-yok"
+    END IF
+    RETURN CINT(DICTGET(indeks, ad))
+END FUNCTION
+
+SUB OduncVer(uye AS STRING, ad AS STRING)
+    DIM k AS I32
+    DIM sayi AS I32 = 0
+    k = KitapBul(ad)
+    IF kitaplar(k).stok <= 0 THEN
+        sonHata = "stokta yok: " + ad
+        THROW "stok-yok"
+    END IF
+    IF DICTHAS(uyeler, uye) THEN sayi = CINT(DICTGET(uyeler, uye))
+    IF sayi >= 2 THEN
+        sonHata = uye + " en fazla 2 kitap alabilir"
+        THROW "limit"
+    END IF
+    kitaplar(k).stok = kitaplar(k).stok - 1
+    kitaplar(k).odunc = kitaplar(k).odunc + 1
+    DICTSET(uyeler, uye, sayi + 1)
+    toplamIslem = toplamIslem + 1
+END SUB
+
+SUB IadeAl(uye AS STRING, ad AS STRING)
+    DIM k AS I32
+    DIM sayi AS I32 = 0
+    k = KitapBul(ad)
+    IF DICTHAS(uyeler, uye) THEN sayi = CINT(DICTGET(uyeler, uye))
+    IF sayi <= 0 THEN
+        sonHata = uye + " iade edecek kitap yok"
+        THROW "iade-yok"
+    END IF
+    kitaplar(k).stok = kitaplar(k).stok + 1
+    DICTSET(uyeler, uye, sayi - 1)
+    toplamIslem = toplamIslem + 1
+END SUB
+
+SUB Dene(islem AS STRING, uye AS STRING, ad AS STRING)
+    TRY
+        IF islem = "al" THEN
+            OduncVer(uye, ad)
+            PRINT uye; " aldi: "; ad
+        ELSE
+            IadeAl(uye, ad)
+            PRINT uye; " iade etti: "; ad
+        END IF
+    CATCH
+        PRINT "HATA: "; sonHata
+    END TRY
+END SUB
+
+SUB SiralaPopulerlige()
+    DIM i AS I32
+    DIM j AS I32
+    DIM a AS STRING
+    DIM s AS I32
+    DIM o AS I32
+    FOR i = 0 TO kitapSayisi - 2
+        FOR j = 0 TO kitapSayisi - 2 - i
+            IF kitaplar(j).odunc < kitaplar(j + 1).odunc THEN
+                a = kitaplar(j).ad
+                s = kitaplar(j).stok
+                o = kitaplar(j).odunc
+                kitaplar(j).ad = kitaplar(j + 1).ad
+                kitaplar(j).stok = kitaplar(j + 1).stok
+                kitaplar(j).odunc = kitaplar(j + 1).odunc
+                kitaplar(j + 1).ad = a
+                kitaplar(j + 1).stok = s
+                kitaplar(j + 1).odunc = o
+            END IF
+        NEXT
+    NEXT
+END SUB
+
+SUB Rapor()
+    DIM i AS I32
+    PRINT "KITAP        STOK  ODUNC"
+    FOR i = 0 TO kitapSayisi - 1
+        PRINT LEFT(kitaplar(i).ad + SPACE(12), 12); " "; kitaplar(i).stok; "     "; kitaplar(i).odunc
+    NEXT
+END SUB
+
+KitapEkle("Sefiller", 2)
+KitapEkle("Nutuk", 1)
+KitapEkle("Kasagi", 3)
+Dene("al", "ayse", "Sefiller")
+Dene("al", "ayse", "Nutuk")
+Dene("al", "ayse", "Kasagi")
+Dene("al", "can", "Nutuk")
+Dene("al", "can", "Sefiller")
+Dene("al", "can", "Yok")
+Dene("iade", "ayse", "Nutuk")
+Dene("al", "can", "Nutuk")
+Dene("iade", "deniz", "Kasagi")
+SiralaPopulerlige()
+Rapor()
+PRINT "toplam islem: "; toplamIslem
+ASSERT toplamIslem = 6, "islem sayisi tutarsiz"
+=====
+U2 ifade hesaplayici
+' Özyinelemeli iniş ayrıştırıcı: + - * / parantez ve eksi işareti
+DIM giris AS STRING
+DIM konum AS I32
+DIM sonHata AS STRING = ""
+
+FUNCTION Simdiki() AS STRING
+    IF konum > LEN(giris) THEN RETURN ""
+    RETURN MID(giris, konum, 1)
+END FUNCTION
+
+SUB BosluklariAtla()
+    DO WHILE Simdiki() = " "
+        konum = konum + 1
+    LOOP
+END SUB
+
+FUNCTION Say() AS F64
+    DIM deger AS F64 = 0.0
+    DIM c AS STRING
+    DIM kesir AS F64 = 0.0
+    DIM olcek AS F64 = 1.0
+    DIM basamak AS I32 = 0
+    BosluklariAtla()
+    c = Simdiki()
+    IF c = "" OR c < "0" OR c > "9" THEN
+        sonHata = "sayi bekleniyor"
+        THROW "sayi"
+    END IF
+    DO WHILE c >= "0" AND c <= "9" AND c <> ""
+        deger = deger * 10.0 + (ASC(c) - 48)
+        konum = konum + 1
+        c = Simdiki()
+    LOOP
+    IF c = "." THEN
+        konum = konum + 1
+        c = Simdiki()
+        DO WHILE c >= "0" AND c <= "9" AND c <> ""
+            olcek = olcek / 10.0
+            kesir = kesir + (ASC(c) - 48) * olcek
+            konum = konum + 1
+            c = Simdiki()
+        LOOP
+    END IF
+    RETURN deger + kesir
+END FUNCTION
+
+FUNCTION Ifade() AS F64
+    RETURN 0.0
+END FUNCTION
+
+FUNCTION Carpan() AS F64
+    DIM c AS STRING
+    DIM v AS F64
+    BosluklariAtla()
+    c = Simdiki()
+    IF c = "-" THEN
+        konum = konum + 1
+        RETURN 0.0 - Carpan()
+    END IF
+    IF c = "(" THEN
+        konum = konum + 1
+        v = Toplam()
+        BosluklariAtla()
+        IF Simdiki() <> ")" THEN
+            sonHata = "kapatma parantezi yok"
+            THROW "parantez"
+        END IF
+        konum = konum + 1
+        RETURN v
+    END IF
+    RETURN Say()
+END FUNCTION
+
+FUNCTION Terim() AS F64
+    DIM v AS F64
+    DIM c AS STRING
+    DIM b AS F64
+    v = Carpan()
+    BosluklariAtla()
+    c = Simdiki()
+    DO WHILE c = "*" OR c = "/"
+        konum = konum + 1
+        b = Carpan()
+        IF c = "*" THEN
+            v = v * b
+        ELSE
+            IF b = 0.0 THEN
+                sonHata = "sifira bolme"
+                THROW "bolme"
+            END IF
+            v = v / b
+        END IF
+        BosluklariAtla()
+        c = Simdiki()
+    LOOP
+    RETURN v
+END FUNCTION
+
+FUNCTION Toplam() AS F64
+    DIM v AS F64
+    DIM c AS STRING
+    DIM b AS F64
+    v = Terim()
+    BosluklariAtla()
+    c = Simdiki()
+    DO WHILE c = "+" OR c = "-"
+        konum = konum + 1
+        b = Terim()
+        IF c = "+" THEN
+            v = v + b
+        ELSE
+            v = v - b
+        END IF
+        BosluklariAtla()
+        c = Simdiki()
+    LOOP
+    RETURN v
+END FUNCTION
+
+SUB Hesapla(metin AS STRING)
+    DIM sonuc AS F64
+    giris = metin
+    konum = 1
+    TRY
+        sonuc = Toplam()
+        BosluklariAtla()
+        IF konum <= LEN(giris) THEN
+            sonHata = "beklenmeyen karakter: " + Simdiki()
+            THROW "artik"
+        END IF
+        PRINT metin; " = "; sonuc
+    CATCH
+        PRINT metin; " -> HATA: "; sonHata
+    END TRY
+END SUB
+
+Hesapla("2+3*4")
+Hesapla("(2+3)*4")
+Hesapla("-(1+2)*3")
+Hesapla("10/4")
+Hesapla("2*(3+4)*5")
+Hesapla("1.5+2.25")
+Hesapla("7/0")
+Hesapla("2+")
+Hesapla("(1+2")
+Hesapla("3 $ 4")

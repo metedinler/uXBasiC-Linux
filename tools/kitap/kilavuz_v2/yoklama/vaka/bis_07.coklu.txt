@@ -1,0 +1,53 @@
+D1 dizi MAIN basinda
+MAIN
+    DIM a(3) AS I32
+    DIM i AS I32
+    FOR i = 0 TO 3
+        a(i) = i * 2
+    NEXT
+    PRINT a(2)
+END MAIN
+=====
+D2 dizi ilk deyimden sonra
+MAIN
+    DIM i AS I32
+    PRINT "basla"
+    DIM a(3) AS I32
+    FOR i = 0 TO 3
+        a(i) = i * 2
+    NEXT
+    PRINT a(2)
+END MAIN
+=====
+D3 dizi ilk deyimden sonra MAIN disi
+DIM i AS I32
+PRINT "basla"
+DIM a(3) AS I32
+FOR i = 0 TO 3
+    a(i) = i * 2
+NEXT
+PRINT a(2)
+=====
+D4 dizi IF blogu oncesi
+MAIN
+    DIM i AS I32
+    DIM n AS I32 = 2
+    PRINT n
+    DIM kul(7) AS I32
+    FOR i = 0 TO n - 1
+        kul(i) = 0
+    NEXT
+    PRINT kul(1)
+END MAIN
+=====
+D5 dizi FOR dongusunden sonra
+MAIN
+    DIM i AS I32
+    DIM s AS I32 = 0
+    FOR i = 0 TO 2
+        s += i
+    NEXT
+    DIM a(3) AS I32
+    a(1) = s
+    PRINT a(1)
+END MAIN

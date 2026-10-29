@@ -1,0 +1,12 @@
+' S-544: the rule also covers the members of a NAMESPACE: Dort calls Kare, which is defined later in the block, so it is announced inside the block first.
+NAMESPACE Mat
+    DECLARE FUNCTION Kare(x AS I32) AS I32
+    FUNCTION Dort(x AS I32) AS I32
+        RETURN Kare(Kare(x))
+    END FUNCTION
+    FUNCTION Kare(x AS I32) AS I32
+        RETURN x * x
+    END FUNCTION
+END NAMESPACE
+PRINT Mat.Dort(2)
+PRINT Mat.Kare(3)

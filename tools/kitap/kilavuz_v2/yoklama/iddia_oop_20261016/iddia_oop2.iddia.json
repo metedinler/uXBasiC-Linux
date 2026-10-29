@@ -1,0 +1,190 @@
+[
+ {
+  "ad": "p01 DELETE sonrasi alan okuma",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\n    DESTRUCTOR()\n        PRINT 900\n    END DESTRUCTOR\nEND CLASS\n\nDIM k1 AS Kutu = NEW Kutu(3)\nPRINT k1.v\nDELETE k1\nPRINT 111\nPRINT k1.v\nPRINT 222\n"
+ },
+ {
+  "ad": "p02 cift DELETE yikici sayisi",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\n    DESTRUCTOR()\n        PRINT 900\n    END DESTRUCTOR\nEND CLASS\n\nDIM k1 AS Kutu = NEW Kutu(1)\nDELETE k1\nDELETE k1\nPRINT 333\n"
+ },
+ {
+  "ad": "p03 takma ad ile DELETE sonrasi okuma",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\n    DESTRUCTOR()\n        PRINT 900\n    END DESTRUCTOR\nEND CLASS\n\nDIM k1 AS Kutu = NEW Kutu(5)\nDIM k2 AS Kutu\nk2 = k1\nDELETE k1\nPRINT 111\nPRINT k2.v\nPRINT 222\n"
+ },
+ {
+  "ad": "p04 taban turlu degiskenle DELETE",
+  "kod": "CLASS Taban\n    PUBLIC\n    DESTRUCTOR()\n        PRINT 901\n    END DESTRUCTOR\nEND CLASS\nCLASS Tur EXTENDS Taban\n    PUBLIC\n    DESTRUCTOR()\n        PRINT 902\n    END DESTRUCTOR\nEND CLASS\nDIM x AS Taban = NEW Tur()\nDELETE x\nPRINT 333\n"
+ },
+ {
+  "ad": "p04b turemis turlu degiskenle DELETE",
+  "kod": "CLASS Taban\n    PUBLIC\n    DESTRUCTOR()\n        PRINT 901\n    END DESTRUCTOR\nEND CLASS\nCLASS Tur EXTENDS Taban\n    PUBLIC\n    DESTRUCTOR()\n        PRINT 902\n    END DESTRUCTOR\nEND CLASS\nDIM x AS Tur = NEW Tur()\nDELETE x\nPRINT 333\n"
+ },
+ {
+  "ad": "p05 THIS ME SUPER niteliksiz (SUPER yok)",
+  "kod": "CLASS A1\n    PUBLIC\n    VIRTUAL METHOD Value() AS I32\n        RETURN 10\n    END METHOD\n    METHOD ViaThis() AS I32\n        RETURN THIS.Value()\n    END METHOD\n    METHOD ViaMe() AS I32\n        RETURN ME.Value()\n    END METHOD\n    METHOD Plain() AS I32\n        RETURN Value()\n    END METHOD\nEND CLASS\nCLASS B1 EXTENDS A1\n    PUBLIC\n    OVERRIDE METHOD Value() AS I32\n        RETURN 20\n    END METHOD\nEND CLASS\nDIM o AS B1 = NEW B1()\nPRINT o.ViaThis()\nPRINT o.ViaMe()\nPRINT o.Plain()\nPRINT o.Value()\n"
+ },
+ {
+  "ad": "p05b SUPER yalniz",
+  "kod": "CLASS A1\n    PUBLIC\n    VIRTUAL METHOD Value() AS I32\n        RETURN 10\n    END METHOD\nEND CLASS\nCLASS B1 EXTENDS A1\n    PUBLIC\n    OVERRIDE METHOD Value() AS I32\n        RETURN SUPER.Value() + 5\n    END METHOD\nEND CLASS\nDIM o AS B1 = NEW B1()\nPRINT o.Value()\n"
+ },
+ {
+  "ad": "p05c taban degiskeniyle sanal cagri",
+  "kod": "CLASS A1\n    PUBLIC\n    VIRTUAL METHOD Value() AS I32\n        RETURN 10\n    END METHOD\nEND CLASS\nCLASS B1 EXTENDS A1\n    PUBLIC\n    OVERRIDE METHOD Value() AS I32\n        RETURN 20\n    END METHOD\nEND CLASS\nDIM o AS A1 = NEW B1()\nPRINT o.Value()\n"
+ },
+ {
+  "ad": "p05d 3 seviye THIS sanal (taban metodu orta sinifta)",
+  "kod": "CLASS A1\n    PUBLIC\n    VIRTUAL METHOD Value() AS I32\n        RETURN 1\n    END METHOD\n    METHOD Goster() AS I32\n        RETURN THIS.Value() * 100\n    END METHOD\nEND CLASS\nCLASS B1 EXTENDS A1\n    PUBLIC\n    OVERRIDE METHOD Value() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nCLASS C1 EXTENDS B1\n    PUBLIC\n    OVERRIDE METHOD Value() AS I32\n        RETURN 3\n    END METHOD\nEND CLASS\nDIM o AS C1 = NEW C1()\nPRINT o.Goster()\nDIM p AS B1 = NEW C1()\nPRINT p.Goster()\n"
+ },
+ {
+  "ad": "p07 kurucuda ME ile SANAL OLMAYAN metot",
+  "kod": "CLASS K1\n    PUBLIC\n    METHOD Duz() AS I32\n        RETURN 1\n    END METHOD\n    CONSTRUCTOR()\n        PRINT ME.Duz()\n    END CONSTRUCTOR\nEND CLASS\nDIM o AS K1 = NEW K1()\n"
+ },
+ {
+  "ad": "p07b kurucuda THIS ile SANAL metot (kural delik mi)",
+  "kod": "CLASS K1\n    PUBLIC\n    VIRTUAL METHOD Sanal() AS I32\n        RETURN 1\n    END METHOD\n    CONSTRUCTOR()\n        PRINT THIS.Sanal()\n    END CONSTRUCTOR\nEND CLASS\nCLASS K2 EXTENDS K1\n    PUBLIC\n    OVERRIDE METHOD Sanal() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nDIM o AS K2 = NEW K2()\n"
+ },
+ {
+  "ad": "p07c kurucuda niteliksiz SANAL metot",
+  "kod": "CLASS K1\n    PUBLIC\n    VIRTUAL METHOD Sanal() AS I32\n        RETURN 1\n    END METHOD\n    CONSTRUCTOR()\n        PRINT Sanal()\n    END CONSTRUCTOR\nEND CLASS\nCLASS K2 EXTENDS K1\n    PUBLIC\n    OVERRIDE METHOD Sanal() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nDIM o AS K2 = NEW K2()\n"
+ },
+ {
+  "ad": "p09 taban kurucusu parametreli, turetilmis kurucusuz",
+  "kod": "CLASS T2\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR(a AS I32)\n        x = a\n    END CONSTRUCTOR\nEND CLASS\nCLASS D2 EXTENDS T2\n    PUBLIC\nEND CLASS\nDIM o AS D2 = NEW D2(7)\nPRINT o.x\n"
+ },
+ {
+  "ad": "p09b taban kurucusu parametreli, turetilmis parametresiz kurucu",
+  "kod": "CLASS T2\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR(a AS I32)\n        x = a\n    END CONSTRUCTOR\nEND CLASS\nCLASS D2 EXTENDS T2\n    PUBLIC\n    CONSTRUCTOR()\n        PRINT 1\n    END CONSTRUCTOR\nEND CLASS\nDIM o AS D2 = NEW D2()\nPRINT o.x\n"
+ },
+ {
+  "ad": "p10 SUPER(5) taban kurucusu",
+  "kod": "CLASS T2\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR(a AS I32)\n        x = a\n    END CONSTRUCTOR\nEND CLASS\nCLASS D2 EXTENDS T2\n    PUBLIC\n    CONSTRUCTOR()\n        SUPER(5)\n    END CONSTRUCTOR\nEND CLASS\nDIM o AS D2 = NEW D2()\nPRINT o.x\n"
+ },
+ {
+  "ad": "p11 ABSTRACT CLASS uzun ad",
+  "kod": "ABSTRACT CLASS Sekil\n    PUBLIC\n    VIRTUAL METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Kare EXTENDS Sekil\n    PUBLIC\n    OVERRIDE METHOD F() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nDIM o AS Kare = NEW Kare()\nPRINT o.F()\n"
+ },
+ {
+  "ad": "p11b ABSTRACT sinifi dogrudan NEW",
+  "kod": "ABSTRACT CLASS Sekil\n    PUBLIC\n    VIRTUAL METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nDIM o AS Sekil = NEW Sekil()\nPRINT o.F()\n"
+ },
+ {
+  "ad": "p12 FINAL CLASS ve turetme",
+  "kod": "FINAL CLASS Muhur\n    PUBLIC\n    METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Alt EXTENDS Muhur\n    PUBLIC\nEND CLASS\nPRINT 1\n"
+ },
+ {
+  "ad": "p12b SEALED CLASS kullanim",
+  "kod": "SEALED CLASS Muhur\n    PUBLIC\n    METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nDIM o AS Muhur = NEW Muhur()\nPRINT o.F()\n"
+ },
+ {
+  "ad": "p13 MIXIN govde bicimi tek",
+  "kod": "CLASS Belge\n    PUBLIC\n    METHOD Ad() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Yazici\n    PUBLIC\n    METHOD Yaz() AS I32\n        RETURN 7\n    END METHOD\nEND CLASS\nCLASS Kaydedici\n    PUBLIC\n    METHOD Kaydet() AS I32\n        RETURN 8\n    END METHOD\nEND CLASS\n\nCLASS Rapor\n    MIXIN Yazici\n    PUBLIC\n    METHOD Z() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nDIM rp AS Rapor = NEW Rapor()\nPRINT rp.Yaz()\nPRINT rp.Z()\n"
+ },
+ {
+  "ad": "p14 MIXIN iki tane",
+  "kod": "CLASS Belge\n    PUBLIC\n    METHOD Ad() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Yazici\n    PUBLIC\n    METHOD Yaz() AS I32\n        RETURN 7\n    END METHOD\nEND CLASS\nCLASS Kaydedici\n    PUBLIC\n    METHOD Kaydet() AS I32\n        RETURN 8\n    END METHOD\nEND CLASS\n\nCLASS Rapor\n    MIXIN Yazici, Kaydedici\n    PUBLIC\nEND CLASS\nDIM rp AS Rapor = NEW Rapor()\nPRINT rp.Yaz()\nPRINT rp.Kaydet()\n"
+ },
+ {
+  "ad": "p15 EXTENDS ile birlikte MIXIN",
+  "kod": "CLASS Belge\n    PUBLIC\n    METHOD Ad() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Yazici\n    PUBLIC\n    METHOD Yaz() AS I32\n        RETURN 7\n    END METHOD\nEND CLASS\nCLASS Kaydedici\n    PUBLIC\n    METHOD Kaydet() AS I32\n        RETURN 8\n    END METHOD\nEND CLASS\n\nCLASS Rapor EXTENDS Belge\n    MIXIN Yazici\n    PUBLIC\nEND CLASS\nDIM rp AS Rapor = NEW Rapor()\nPRINT rp.Ad()\nPRINT rp.Yaz()\n"
+ },
+ {
+  "ad": "p16 baslikta MIXIN (tasarim belgesi bicimi)",
+  "kod": "CLASS Belge\n    PUBLIC\n    METHOD Ad() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Yazici\n    PUBLIC\n    METHOD Yaz() AS I32\n        RETURN 7\n    END METHOD\nEND CLASS\nCLASS Kaydedici\n    PUBLIC\n    METHOD Kaydet() AS I32\n        RETURN 8\n    END METHOD\nEND CLASS\n\nCLASS Rapor EXTENDS Belge MIXIN Yazici\n    PUBLIC\nEND CLASS\nDIM rp AS Rapor = NEW Rapor()\nPRINT rp.Yaz()\n"
+ },
+ {
+  "ad": "p17 iki taban ayni adli metot (cakisma testi)",
+  "kod": "CLASS Ka\n    PUBLIC\n    METHOD Selam() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Kb\n    PUBLIC\n    METHOD Selam() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nCLASS Kc\n    MIXIN Ka, Kb\n    PUBLIC\nEND CLASS\nDIM nc AS Kc = NEW Kc()\nPRINT nc.Selam()\n"
+ },
+ {
+  "ad": "p17b EXTENDS + MIXIN ayni adli metot",
+  "kod": "CLASS Ka\n    PUBLIC\n    METHOD Selam() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS Kb\n    PUBLIC\n    METHOD Selam() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nCLASS Kc EXTENDS Ka\n    MIXIN Kb\n    PUBLIC\nEND CLASS\nDIM nc AS Kc = NEW Kc()\nPRINT nc.Selam()\n"
+ },
+ {
+  "ad": "p22a F64 kurucu parametresi + alan okuma",
+  "kod": "CLASS Hesap\n    PRIVATE\n    DIM bakiye AS F64\n    PUBLIC\n    CONSTRUCTOR(ilk AS F64)\n        bakiye = ilk\n    END CONSTRUCTOR\n    METHOD Oku() AS F64\n        RETURN bakiye\n    END METHOD\nEND CLASS\nDIM h AS Hesap = NEW Hesap(100.0)\nPRINT h.Oku()\n"
+ },
+ {
+  "ad": "p22b F64 metot parametresi alani degistirir",
+  "kod": "CLASS Hesap\n    PUBLIC\n    DIM bakiye AS F64\n    METHOD Ekle(m AS F64)\n        bakiye = bakiye + m\n    END METHOD\nEND CLASS\nDIM h AS Hesap = NEW Hesap()\nh.bakiye = 100.0\nh.Ekle(50.0)\nPRINT h.bakiye\n"
+ },
+ {
+  "ad": "p22c F64 metot parametresi IF karsilastirma",
+  "kod": "CLASS Hesap\n    PUBLIC\n    DIM bakiye AS F64\n    METHOD Ekle(m AS F64)\n        IF m > 0 THEN\n            bakiye = bakiye + m\n        END IF\n    END METHOD\nEND CLASS\nDIM h AS Hesap = NEW Hesap()\nh.bakiye = 100.0\nh.Ekle(50.0)\nPRINT h.bakiye\n"
+ },
+ {
+  "ad": "p22d tam BankaHesabi (kurucu + yontem + okuma)",
+  "kod": "CLASS BankaHesabi\n    PRIVATE\n    DIM bakiye AS F64\n    PUBLIC\n    CONSTRUCTOR(ilkBakiye AS F64)\n        bakiye = ilkBakiye\n    END CONSTRUCTOR\n    METHOD ParaYatira(miktar AS F64)\n        IF miktar > 0 THEN\n            bakiye = bakiye + miktar\n        END IF\n    END METHOD\n    METHOD BakiyeOku() AS F64\n        RETURN bakiye\n    END METHOD\nEND CLASS\nDIM hesap AS BankaHesabi = NEW BankaHesabi(100.0)\nhesap.ParaYatira(50.0)\nPRINT hesap.BakiyeOku()\n"
+ },
+ {
+  "ad": "p22e I32 ile ayni yapi",
+  "kod": "CLASS BankaHesabi\n    PRIVATE\n    DIM bakiye AS I32\n    PUBLIC\n    CONSTRUCTOR(ilkBakiye AS I32)\n        bakiye = ilkBakiye\n    END CONSTRUCTOR\n    METHOD ParaYatira(miktar AS I32)\n        IF miktar > 0 THEN\n            bakiye = bakiye + miktar\n        END IF\n    END METHOD\n    METHOD BakiyeOku() AS I32\n        RETURN bakiye\n    END METHOD\nEND CLASS\nDIM hesap AS BankaHesabi = NEW BankaHesabi(100)\nhesap.ParaYatira(50)\nPRINT hesap.BakiyeOku()\n"
+ },
+ {
+  "ad": "p24a sanal F64 override THIS ile",
+  "kod": "CLASS Sekil\n    PUBLIC\n    VIRTUAL METHOD Alan() AS F64\n        RETURN 0.0\n    END METHOD\nEND CLASS\nCLASS Kare EXTENDS Sekil\n    PRIVATE\n    DIM kenar AS F64\n    PUBLIC\n    CONSTRUCTOR(k AS F64)\n        kenar = k\n    END CONSTRUCTOR\n    OVERRIDE METHOD Alan() AS F64\n        RETURN kenar * kenar\n    END METHOD\n    METHOD Goster()\n        PRINT THIS.Alan()\n    END METHOD\nEND CLASS\nDIM k1 AS Kare = NEW Kare(5.0)\nk1.Goster()\nPRINT k1.Alan()\n"
+ },
+ {
+  "ad": "p24b ayni ama arayuz IMPLEMENTS ile",
+  "kod": "INTERFACE IYaz\n    METHOD Goster()\nEND INTERFACE\nCLASS Sekil\n    PUBLIC\n    VIRTUAL METHOD Alan() AS F64\n        RETURN 0.0\n    END METHOD\nEND CLASS\nCLASS Kare EXTENDS Sekil IMPLEMENTS IYaz\n    PRIVATE\n    DIM kenar AS F64\n    PUBLIC\n    CONSTRUCTOR(k AS F64)\n        kenar = k\n    END CONSTRUCTOR\n    OVERRIDE METHOD Alan() AS F64\n        RETURN kenar * kenar\n    END METHOD\n    METHOD Goster()\n        PRINT THIS.Alan()\n    END METHOD\nEND CLASS\nDIM k1 AS Kare = NEW Kare(5.0)\nk1.Goster()\n"
+ },
+ {
+  "ad": "p25a MAGIC ADD atama ile",
+  "kod": "CLASS Vek\n    PUBLIC\n    DIM x AS I32\n    DIM y AS I32\n    CONSTRUCTOR(ax AS I32, ay AS I32)\n        x = ax\n        y = ay\n    END CONSTRUCTOR\n    MAGIC ADD(diger AS Vek) AS Vek\n        RETURN NEW Vek(THIS.x + diger.x, THIS.y + diger.y)\n    END MAGIC\nEND CLASS\nDIM v1 AS Vek = NEW Vek(2, 3)\nDIM v2 AS Vek = NEW Vek(4, 1)\nDIM v3 AS Vek\nv3 = v1 + v2\nPRINT v3.x\nPRINT v3.y\n"
+ },
+ {
+  "ad": "p25b DIM ... = degisken (NEW disi baslangic)",
+  "kod": "CLASS Vek\n    PUBLIC\n    DIM x AS I32\nEND CLASS\nDIM v1 AS Vek = NEW Vek()\nDIM v2 AS Vek = v1\nPRINT 1\n"
+ },
+ {
+  "ad": "p30 USING ne yapar (ad uzayi)",
+  "kod": "NAMESPACE Ng\n    SUB Selam()\n        PRINT 5\n    END SUB\nEND NAMESPACE\nUSING Ng\nSelam()\n"
+ },
+ {
+  "ad": "p31 PROPERTY mevcut bicim",
+  "kod": "CLASS Ogr\n    PRIVATE\n    DIM _n AS I32\n    PUBLIC\n    PROPERTY GET Puan() AS I32\n        RETURN _n\n    END PROPERTY\n    PROPERTY SET Puan(y AS I32)\n        IF y >= 0 ANDALSO y <= 100 THEN\n            _n = y\n        END IF\n    END PROPERTY\nEND CLASS\nDIM o AS Ogr = NEW Ogr()\no.Puan = 95\nPRINT o.Puan\no.Puan = 500\nPRINT o.Puan\n"
+ },
+ {
+  "ad": "p32 Turkce harf yalniz degisken adinda",
+  "kod": "DIM sür AS I32 = 3\nPRINT sür\n"
+ },
+ {
+  "ad": "p33 Turkce harf yalniz yorumda ve metinde",
+  "kod": "' Türkçe yorum: ğüşiöç\nPRINT 1\n"
+ },
+ {
+  "ad": "p34 DELETE sonrasi IF o = NULL",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\n    DESTRUCTOR()\n        PRINT 900\n    END DESTRUCTOR\nEND CLASS\n\nDIM k1 AS Kutu = NEW Kutu(3)\nDELETE k1\nIF k1 = NULL THEN PRINT 1 ELSE PRINT 2\n"
+ },
+ {
+  "ad": "p35 NOTHING yok sayiliyor mu",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nDIM k1 AS Kutu = NEW Kutu()\nk1 = NOTHING\nPRINT 1\n"
+ },
+ {
+  "ad": "p36 yapisal arayuz (IMPLEMENTS yazilmadan)",
+  "kod": "INTERFACE IKonum\n    METHOD GetX() AS I32\nEND INTERFACE\nCLASS Pt\n    PUBLIC\n    METHOD GetX() AS I32\n        RETURN 4\n    END METHOD\nEND CLASS\nSUB Yaz(k AS IKonum)\n    PRINT k.GetX()\nEND SUB\nDIM pp AS Pt = NEW Pt()\nYaz(pp)\n"
+ },
+ {
+  "ad": "p37 arayuz IMPLEMENTS ile olumlu",
+  "kod": "INTERFACE IKonum\n    METHOD GetX() AS I32\nEND INTERFACE\nCLASS Pt IMPLEMENTS IKonum\n    PUBLIC\n    METHOD GetX() AS I32\n        RETURN 4\n    END METHOD\nEND CLASS\nSUB Yaz(k AS IKonum)\n    PRINT k.GetX()\nEND SUB\nDIM pp AS Pt = NEW Pt()\nYaz(pp)\n"
+ },
+ {
+  "ad": "p38 arayuz IMPLEMENTS eksik metot",
+  "kod": "INTERFACE IKonum\n    METHOD GetX() AS I32\n    METHOD GetY() AS I32\nEND INTERFACE\nCLASS Pt IMPLEMENTS IKonum\n    PUBLIC\n    METHOD GetX() AS I32\n        RETURN 4\n    END METHOD\nEND CLASS\nDIM pp AS Pt = NEW Pt()\nPRINT pp.GetX()\n"
+ },
+ {
+  "ad": "p39 iki seviye kurucu zinciri sirasi",
+  "kod": "CLASS Ka\n    PUBLIC\n    CONSTRUCTOR()\n        PRINT 1\n    END CONSTRUCTOR\nEND CLASS\nCLASS Kb EXTENDS Ka\n    PUBLIC\n    CONSTRUCTOR()\n        PRINT 2\n    END CONSTRUCTOR\nEND CLASS\nCLASS Kc EXTENDS Kb\n    PUBLIC\n    CONSTRUCTOR()\n        PRINT 3\n    END CONSTRUCTOR\nEND CLASS\nDIM o AS Kc = NEW Kc()\n"
+ },
+ {
+  "ad": "p40 yikici zinciri sirasi (turemisten tabana)",
+  "kod": "CLASS Ka\n    PUBLIC\n    DESTRUCTOR()\n        PRINT 1\n    END DESTRUCTOR\nEND CLASS\nCLASS Kb EXTENDS Ka\n    PUBLIC\n    DESTRUCTOR()\n        PRINT 2\n    END DESTRUCTOR\nEND CLASS\nCLASS Kc EXTENDS Kb\n    PUBLIC\n    DESTRUCTOR()\n        PRINT 3\n    END DESTRUCTOR\nEND CLASS\nDIM o AS Kc = NEW Kc()\nDELETE o\nPRINT 9\n"
+ },
+ {
+  "ad": "p41 program sonunda canli nesnenin yikicisi",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\n    DESTRUCTOR()\n        PRINT 900\n    END DESTRUCTOR\nEND CLASS\n\nDIM k1 AS Kutu = NEW Kutu(1)\nPRINT 5\n"
+ },
+ {
+  "ad": "p42 NEW ile tek satir ifade nesnesi (atamasiz DELETE degil)",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\nEND CLASS\nFUNCTION Uret(n AS I32) AS Kutu\n    RETURN NEW Kutu(n)\nEND FUNCTION\nDIM a1 AS Kutu = Uret(8)\nPRINT a1.v\n"
+ }
+]

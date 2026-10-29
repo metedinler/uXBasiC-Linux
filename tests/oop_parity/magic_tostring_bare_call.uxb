@@ -1,0 +1,16 @@
+' S-484 follow-up: a bare method call inside MAGIC TOSTRING. WASM has no string printing (explicit rejection), so five engines run it.
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    METHOD Onek() AS STRING
+        RETURN "K"
+    END METHOD
+    MAGIC TOSTRING() AS STRING
+        RETURN Onek() + STR(v)
+    END MAGIC
+END CLASS
+DIM x AS Kutu = NEW Kutu(7)
+PRINT STR(x)

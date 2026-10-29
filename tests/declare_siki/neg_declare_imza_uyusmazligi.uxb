@@ -1,0 +1,6 @@
+' S-544 acceptance 5: a DECLARE whose parameters differ from the definition keeps the existing refusal (same parameter count, different type).
+DECLARE FUNCTION Topla(a AS I32, b AS I32) AS I32
+FUNCTION Topla(a AS I32, b AS F64) AS I32
+    RETURN a
+END FUNCTION
+PRINT Topla(1, 2)

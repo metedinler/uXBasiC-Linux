@@ -1,0 +1,5 @@
+' S-544: the definition comes first, so no DECLARE is needed.
+SUB Selam()
+    PRINT 7
+END SUB
+Selam()

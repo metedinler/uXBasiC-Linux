@@ -1,0 +1,10 @@
+FUNCTION Wrap(value AS STRING) AS STRING
+ RETURN "[" + value + "]"
+END FUNCTION
+PRINT Wrap("uxb")
+PRINT LEFT("abcdef", 3)
+PRINT RIGHT("abcdef", 2)
+PRINT UCASE("Abc")
+PRINT LCASE("AbC")
+PRINT ASC("A")
+PRINT CHR(66)

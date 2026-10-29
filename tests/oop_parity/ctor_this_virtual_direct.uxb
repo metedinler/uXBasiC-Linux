@@ -1,0 +1,20 @@
+' S-576: THIS.m() in a constructor is a direct call of THIS class's own implementation, even when m is virtual and the object is a
+' derived class that overrides it: the override's fields do not exist yet. Printed 1 | 0 (MIR, silently empty) | 2 before.
+CLASS Taban
+    PUBLIC
+    DIM v AS I32
+    VIRTUAL METHOD Deger() AS I32
+        RETURN 1
+    END METHOD
+    CONSTRUCTOR()
+        v = THIS.Deger()
+    END CONSTRUCTOR
+END CLASS
+CLASS Alt EXTENDS Taban
+    PUBLIC
+    OVERRIDE METHOD Deger() AS I32
+        RETURN 2
+    END METHOD
+END CLASS
+DIM x AS Alt = NEW Alt()
+PRINT x.v

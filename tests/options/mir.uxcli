@@ -1,0 +1,3 @@
+--json-out reports/control/current/adim17_mir_from_response.json
+--strict
+--time-passes

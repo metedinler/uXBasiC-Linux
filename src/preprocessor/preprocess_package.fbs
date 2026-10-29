@@ -1,0 +1,1598 @@
+#ifndef UXB_PREPROCESS_PACKAGE_FBS
+#define UXB_PREPROCESS_PACKAGE_FBS
+
+' S-672: package output of the preprocessor.
+'
+' The preprocessor records what a program declares (assets, raw blocks, JSON entries, manifest values). This file turns that
+' record into files and into the nested manifest that the browser backend writes:
+'   - assets are copied (FINGERPRINT_ASSETS adds a content hash to the copy's name), COPY_DIR copies a folder tree,
+'   - JSON blocks, the data JSON, Markdown blocks (rendered to HTML), raw WAT modules, README and expect files are written,
+'   - MINIFY shortens JS / CSS / HTML text, and the flat manifest keys become nested JSON objects.
+' Nothing here changes the program text; it only writes below the package root.
+
+#include once "preprocess_meta_model.fbs"
+#include once "PreproesssorB/preprocess_path_policy.fbs"
+#include once "../common/report_writer.fbs"
+
+Const UXB_PKG_MANIFEST_SECTIONS As String = "|bundle|entries|files|generated|exports|api|routes|capabilities|security|sandbox|hostImports|features|tests|docs|"
+
+' ---------------------------------------------------------------- paths
+Private Function UXBPkgBackslash(ByRef p As String) As String
+    Dim t As String = Trim(p)
+    Dim i As Integer
+    For i = 1 To Len(t)
+        If Mid(t, i, 1) = "/" Then Mid(t, i, 1) = "\"
+    Next i
+    Do While Len(t) > 1 And Right(t, 1) = "\"
+        t = Left(t, Len(t) - 1)
+    Loop
+    Return t
+End Function
+
+Private Function UXBPkgJoin(ByRef a As String, ByRef b As String) As String
+    Dim left1 As String = UXBPkgBackslash(a)
+    Dim right1 As String = UXBPkgBackslash(b)
+    Do While Left(right1, 1) = "\"
+        right1 = Mid(right1, 2)
+    Loop
+    If left1 = "" Then Return right1
+    If right1 = "" Then Return left1
+    Return left1 & "\" & right1
+End Function
+
+Private Function UXBPkgDirOf(ByRef p As String) As String
+    Dim t As String = UXBPkgBackslash(p)
+    Dim i As Integer
+    For i = Len(t) To 1 Step -1
+        If Mid(t, i, 1) = "\" Then Return Left(t, i - 1)
+    Next i
+    Return ""
+End Function
+
+Private Function UXBPkgBaseOf(ByRef p As String) As String
+    Dim t As String = UXBPkgBackslash(p)
+    Dim i As Integer
+    For i = Len(t) To 1 Step -1
+        If Mid(t, i, 1) = "\" Then Return Mid(t, i + 1)
+    Next i
+    Return t
+End Function
+
+Private Function UXBPkgExtOf(ByRef p As String) As String
+    Dim b As String = UXBPkgBaseOf(p)
+    Dim i As Integer
+    For i = Len(b) To 1 Step -1
+        If Mid(b, i, 1) = "." Then Return Mid(b, i)
+    Next i
+    Return ""
+End Function
+
+Private Function UXBPkgDirExists(ByRef p As String) As Integer
+    Dim t As String = UXBPkgBackslash(p)
+    If t = "" Then Return 0
+    ' "<folder>\*" with the directory attribute (&h10) lists "." for a folder and nothing for a file or a missing name
+    Return IIf(Dir(t & "\*", 16) <> "", 1, 0)
+End Function
+
+Private Function UXBPkgFileOnly(ByRef p As String) As Integer
+    Dim t As String = UXBPkgBackslash(p)
+    If t = "" Then Return 0
+    If UXBPkgDirExists(t) <> 0 Then Return 0
+    Return IIf(Dir(t) <> "", 1, 0)
+End Function
+
+Private Function UXBPkgManifestGet(ByRef r As PreprocessResult, ByRef keyText As String, ByRef valueOut As String) As Integer
+    Dim i As Integer
+    valueOut = ""
+    For i = r.manifestCount - 1 To 0 Step -1
+        If r.manifest(i).keyText = keyText Then
+            valueOut = r.manifest(i).valueText
+            Return 1
+        End If
+    Next i
+    Return 0
+End Function
+
+' The one folder tree package inputs may be read from (%%SANDBOX_ROOT, relative to the program's folder); "" = unrestricted.
+Private Function UXBPkgSandboxAbs(ByRef r As PreprocessResult) As String
+    Dim sb As String
+    If UXBPkgManifestGet(r, "sandbox.root", sb) = 0 Then Return ""
+    If Trim(sb) = "" Then Return ""
+    Return LCase(UXBPkgJoin(UXBPkgDirOf(r.mainSourcePath), sb))
+End Function
+
+' Finds a package input (file or folder). Candidates: <program dir>/<asset root>/<rel>, <asset root>/<rel>, <program dir>/<rel>, <rel>.
+' errKind = "" (found), "missing" or "sandbox".
+Private Function UXBPkgResolveSource(ByRef r As PreprocessResult, ByRef relPath As String, ByVal wantDir As Integer, ByRef foundOut As String, ByRef errKind As String) As Integer
+    foundOut = ""
+    errKind = "missing"
+    Dim programDir As String = UXBPkgDirOf(r.mainSourcePath)
+    Dim cands(0 To 3) As String
+    Dim n As Integer = 0
+    If Trim(r.assetRoot) <> "" Then
+        cands(n) = UXBPkgJoin(UXBPkgJoin(programDir, r.assetRoot), relPath): n += 1
+        cands(n) = UXBPkgJoin(r.assetRoot, relPath): n += 1
+    End If
+    cands(n) = UXBPkgJoin(programDir, relPath): n += 1
+    cands(n) = UXBPkgBackslash(relPath): n += 1
+    Dim sandboxAbs As String = UXBPkgSandboxAbs(r)
+    Dim i As Integer
+    For i = 0 To n - 1
+        Dim exists As Integer = IIf(wantDir <> 0, UXBPkgDirExists(cands(i)), UXBPkgFileOnly(cands(i)))
+        If exists <> 0 Then
+            If sandboxAbs <> "" Then
+                Dim cl As String = LCase(cands(i))
+                If cl <> sandboxAbs And Left(cl, Len(sandboxAbs) + 1) <> sandboxAbs & "\" Then
+                    errKind = "sandbox"
+                    Continue For
+                End If
+            End If
+            foundOut = cands(i)
+            errKind = ""
+            Return 1
+        End If
+    Next i
+    Return 0
+End Function
+
+' ---------------------------------------------------------------- file copy
+Private Function UXBPkgCopyBinary(ByRef srcPath As String, ByRef dstPath As String, ByRef errText As String) As Integer
+    errText = ""
+    UXBReportEnsureParentDir dstPath
+    Dim f1 As Integer = FreeFile
+    Open srcPath For Binary Access Read As #f1
+    If Err <> 0 Then
+        errText = "package copy: cannot read " & srcPath
+        Return 0
+    End If
+    Dim f2 As Integer = FreeFile
+    Open dstPath For Binary Access Write As #f2
+    If Err <> 0 Then
+        Close #f1
+        errText = "package copy: cannot write " & dstPath
+        Return 0
+    End If
+    Dim total As LongInt = LOF(f1)
+    Dim done As LongInt = 0
+    Do While done < total
+        Dim chunk As LongInt = total - done
+        If chunk > 65536 Then chunk = 65536
+        Dim buf As String = Space(chunk)
+        Get #f1, done + 1, buf
+        Put #f2, done + 1, buf
+        done += chunk
+    Loop
+    Close #f1
+    Close #f2
+    Return 1
+End Function
+
+Private Function UXBPkgCopyTree(ByRef srcDir As String, ByRef dstDir As String, ByRef errText As String) As Integer
+    errText = ""
+    Dim q As String = Chr(34)
+    Dim cmd As String = "cmd /d /c xcopy " & q & UXBPkgBackslash(srcDir) & q & " " & q & UXBPkgBackslash(dstDir) & "\" & q & " /E /I /Y /Q >nul 2>nul"
+    Dim rc As Integer = Shell(cmd)
+    If rc <> 0 Then
+        errText = "package copy: folder copy failed (" & srcDir & " -> " & dstDir & ")"
+        Return 0
+    End If
+    Return 1
+End Function
+
+Private Function UXBPkgFingerprintName(ByRef targetPath As String, ByRef hashHex As String) As String
+    Dim ext As String = UXBPkgExtOf(targetPath)
+    If ext = "" Then Return targetPath & "." & hashHex
+    Return Left(targetPath, Len(targetPath) - Len(ext)) & "." & hashHex & ext
+End Function
+
+' ---------------------------------------------------------------- minify
+' Conservative: only things that cannot change meaning are removed (comment lines, indentation, blank lines; CSS comments).
+Private Function UXBPkgSplitLines(ByRef t As String, lines() As String) As Integer
+    Dim n As Integer = 0
+    Dim cur As Integer = 1
+    Do While cur <= Len(t)
+        Dim nl As Integer = InStr(cur, t, Chr(10))
+        Dim ln As String
+        If nl = 0 Then
+            ln = Mid(t, cur)
+            cur = Len(t) + 1
+        Else
+            ln = Mid(t, cur, nl - cur)
+            cur = nl + 1
+        End If
+        If Right(ln, 1) = Chr(13) Then ln = Left(ln, Len(ln) - 1)
+        If n = 0 Then
+            ReDim lines(0)
+        Else
+            ReDim Preserve lines(n)
+        End If
+        lines(n) = ln
+        n += 1
+    Loop
+    Return n
+End Function
+
+Private Function UXBPkgMinifyJs(ByRef t As String) As String
+    Dim lines() As String
+    Dim n As Integer = UXBPkgSplitLines(t, lines())
+    Dim outText As String = ""
+    Dim inTemplate As Integer = 0
+    Dim inBlock As Integer = 0
+    Dim continued As Integer = 0
+    Dim i As Integer
+    For i = 0 To n - 1
+        Dim ln As String = lines(i)
+        Dim tr As String = Trim(ln)
+        If inBlock <> 0 Then
+            If InStr(tr, "*/") > 0 Then inBlock = 0
+            Continue For
+        End If
+        ' a line that ends with a backslash continues a string literal: the next line is part of the text and stays untouched
+        If continued <> 0 Then
+            outText &= ln & Chr(10)
+            continued = IIf(Right(ln, 1) = "\", 1, 0)
+            Continue For
+        End If
+        If inTemplate = 0 Then
+            If tr = "" Then Continue For
+            If Left(tr, 2) = "//" Then Continue For
+            If Left(tr, 2) = "/*" Then
+                If InStr(3, tr, "*/") = 0 Then inBlock = 1
+                If InStr(3, tr, "*/") = 0 Or Right(tr, 2) = "*/" Then Continue For
+            End If
+            outText &= tr & Chr(10)
+            If Right(tr, 1) = "\" Then continued = 1
+        Else
+            outText &= ln & Chr(10)
+        End If
+        ' a line with an odd number of backticks opens or closes a template literal
+        Dim ticks As Integer = 0
+        Dim ci As Integer
+        For ci = 1 To Len(ln)
+            If Mid(ln, ci, 1) = "`" Then ticks += 1
+        Next ci
+        If (ticks Mod 2) = 1 Then inTemplate = 1 - inTemplate
+    Next i
+    Return outText
+End Function
+
+Private Function UXBPkgMinifyCss(ByRef t As String) As String
+    ' remove /* ... */ outside strings, then squeeze white space
+    Dim stripped As String = ""
+    Dim i As Integer = 1
+    Dim quoteCh As String = ""
+    Do While i <= Len(t)
+        Dim ch As String = Mid(t, i, 1)
+        If quoteCh <> "" Then
+            stripped &= ch
+            If ch = "\" And i < Len(t) Then
+                i += 1
+                stripped &= Mid(t, i, 1)
+            ElseIf ch = quoteCh Then
+                quoteCh = ""
+            End If
+        ElseIf ch = Chr(34) Or ch = "'" Then
+            quoteCh = ch
+            stripped &= ch
+        ElseIf ch = "/" And Mid(t, i + 1, 1) = "*" Then
+            Dim closeAt As Integer = InStr(i + 2, t, "*/")
+            If closeAt = 0 Then Exit Do
+            i = closeAt + 1
+        Else
+            stripped &= ch
+        End If
+        i += 1
+    Loop
+    Dim outText As String = ""
+    Dim pendingSpace As Integer = 0
+    quoteCh = ""
+    For i = 1 To Len(stripped)
+        Dim c As String = Mid(stripped, i, 1)
+        If quoteCh <> "" Then
+            outText &= c
+            If c = quoteCh Then quoteCh = ""
+        ElseIf c = Chr(34) Or c = "'" Then
+            If pendingSpace <> 0 And outText <> "" Then outText &= " "
+            pendingSpace = 0
+            quoteCh = c
+            outText &= c
+        ElseIf c = " " Or c = Chr(9) Or c = Chr(10) Or c = Chr(13) Then
+            pendingSpace = 1
+        Else
+            If pendingSpace <> 0 And outText <> "" Then
+                Dim last As String = Right(outText, 1)
+                If Not (last = "{" Or last = "}" Or last = ";" Or last = "," Or c = "{" Or c = "}" Or c = ";" Or c = ",") Then outText &= " "
+            End If
+            pendingSpace = 0
+            outText &= c
+        End If
+    Next i
+    Return outText & Chr(10)
+End Function
+
+Private Function UXBPkgMinifyHtml(ByRef t As String) As String
+    Dim lines() As String
+    Dim n As Integer = UXBPkgSplitLines(t, lines())
+    Dim outText As String = ""
+    Dim rawDepth As Integer = 0
+    Dim inComment As Integer = 0
+    Dim i As Integer
+    For i = 0 To n - 1
+        Dim ln As String = lines(i)
+        Dim lw As String = LCase(ln)
+        If inComment <> 0 Then
+            Dim endC As Integer = InStr(ln, "-->")
+            If endC = 0 Then Continue For
+            ln = Mid(ln, endC + 3)
+            lw = LCase(ln)
+            inComment = 0
+        End If
+        Do
+            Dim startC As Integer = InStr(ln, "<!--")
+            If startC = 0 Or rawDepth > 0 Then Exit Do
+            Dim endC2 As Integer = InStr(startC + 4, ln, "-->")
+            If endC2 = 0 Then
+                ln = Left(ln, startC - 1)
+                inComment = 1
+                Exit Do
+            End If
+            ln = Left(ln, startC - 1) & Mid(ln, endC2 + 3)
+        Loop
+        lw = LCase(ln)
+        If rawDepth > 0 Then
+            outText &= ln & Chr(10)
+        Else
+            If Trim(ln) <> "" Then outText &= Trim(ln) & Chr(10)
+        End If
+        Dim opens As Integer = 0
+        Dim closes As Integer = 0
+        If InStr(lw, "<pre") > 0 Or InStr(lw, "<textarea") > 0 Or InStr(lw, "<script") > 0 Or InStr(lw, "<style") > 0 Then opens = 1
+        If InStr(lw, "</pre>") > 0 Or InStr(lw, "</textarea>") > 0 Or InStr(lw, "</script>") > 0 Or InStr(lw, "</style>") > 0 Then closes = 1
+        If opens > closes Then rawDepth = 1
+        If closes > 0 And opens = 0 Then rawDepth = 0
+        If opens > 0 And closes > 0 Then rawDepth = 0
+    Next i
+    Return outText
+End Function
+
+' ---------------------------------------------------------------- JSON
+Private Function UXBPkgJsonSkipWs(ByRef t As String, ByRef p As Integer) As Integer
+    Do While p <= Len(t)
+        Dim c As String = Mid(t, p, 1)
+        If c = " " Or c = Chr(9) Or c = Chr(10) Or c = Chr(13) Then p += 1 Else Exit Do
+    Loop
+    Return 1
+End Function
+
+Private Function UXBPkgJsonValue(ByRef t As String, ByRef p As Integer, ByVal depth As Integer) As Integer
+    If depth > 64 Then Return 0
+    UXBPkgJsonSkipWs t, p
+    If p > Len(t) Then Return 0
+    Dim c As String = Mid(t, p, 1)
+    If c = "{" Then
+        p += 1
+        UXBPkgJsonSkipWs t, p
+        If Mid(t, p, 1) = "}" Then
+            p += 1
+            Return 1
+        End If
+        Do
+            UXBPkgJsonSkipWs t, p
+            If Mid(t, p, 1) <> Chr(34) Then Return 0
+            If UXBPkgJsonValue(t, p, depth + 1) = 0 Then Return 0
+            UXBPkgJsonSkipWs t, p
+            If Mid(t, p, 1) <> ":" Then Return 0
+            p += 1
+            If UXBPkgJsonValue(t, p, depth + 1) = 0 Then Return 0
+            UXBPkgJsonSkipWs t, p
+            Dim d As String = Mid(t, p, 1)
+            p += 1
+            If d = "}" Then Return 1
+            If d <> "," Then Return 0
+        Loop
+    ElseIf c = "[" Then
+        p += 1
+        UXBPkgJsonSkipWs t, p
+        If Mid(t, p, 1) = "]" Then
+            p += 1
+            Return 1
+        End If
+        Do
+            If UXBPkgJsonValue(t, p, depth + 1) = 0 Then Return 0
+            UXBPkgJsonSkipWs t, p
+            Dim e As String = Mid(t, p, 1)
+            p += 1
+            If e = "]" Then Return 1
+            If e <> "," Then Return 0
+        Loop
+    ElseIf c = Chr(34) Then
+        p += 1
+        Do While p <= Len(t)
+            Dim s As String = Mid(t, p, 1)
+            If s = "\" Then
+                p += 2
+            ElseIf s = Chr(34) Then
+                p += 1
+                Return 1
+            ElseIf Asc(s) < 32 Then
+                Return 0
+            Else
+                p += 1
+            End If
+        Loop
+        Return 0
+    ElseIf c = "-" Or (c >= "0" And c <= "9") Then
+        Dim startP As Integer = p
+        If c = "-" Then p += 1
+        Dim digits As Integer = 0
+        Do While p <= Len(t) And Mid(t, p, 1) >= "0" And Mid(t, p, 1) <= "9"
+            p += 1
+            digits += 1
+        Loop
+        If digits = 0 Then Return 0
+        If Mid(t, p, 1) = "." Then
+            p += 1
+            Dim fracDigits As Integer = 0
+            Do While p <= Len(t) And Mid(t, p, 1) >= "0" And Mid(t, p, 1) <= "9"
+                p += 1
+                fracDigits += 1
+            Loop
+            If fracDigits = 0 Then Return 0
+        End If
+        If Mid(t, p, 1) = "e" Or Mid(t, p, 1) = "E" Then
+            p += 1
+            If Mid(t, p, 1) = "+" Or Mid(t, p, 1) = "-" Then p += 1
+            Dim ex As Integer = 0
+            Do While p <= Len(t) And Mid(t, p, 1) >= "0" And Mid(t, p, 1) <= "9"
+                p += 1
+                ex += 1
+            Loop
+            If ex = 0 Then Return 0
+        End If
+        Return IIf(p > startP, 1, 0)
+    ElseIf Mid(t, p, 4) = "true" Then
+        p += 4
+        Return 1
+    ElseIf Mid(t, p, 5) = "false" Then
+        p += 5
+        Return 1
+    ElseIf Mid(t, p, 4) = "null" Then
+        p += 4
+        Return 1
+    End If
+    Return 0
+End Function
+
+Private Function UXBPkgJsonIsValid(ByRef t As String) As Integer
+    Dim p As Integer = 1
+    If UXBPkgJsonValue(t, p, 0) = 0 Then Return 0
+    UXBPkgJsonSkipWs t, p
+    Return IIf(p > Len(t), 1, 0)
+End Function
+
+Private Function UXBPkgJsonQuote(ByRef s As String) As String
+    Return Chr(34) & UXBPreMetaJsonEscape(s) & Chr(34)
+End Function
+
+' A JSON value from directive text: numbers, true/false/null stay as written when unquoted; everything else becomes a string.
+Private Function UXBPkgJsonScalar(ByRef valueRaw As String) As String
+    Dim t As String = Trim(valueRaw)
+    If Len(t) >= 2 And Left(t, 1) = Chr(34) And Right(t, 1) = Chr(34) Then Return UXBPkgJsonQuote(Mid(t, 2, Len(t) - 2))
+    Dim p As Integer = 1
+    If t <> "" Then
+        If UXBPkgJsonValue(t, p, 0) <> 0 AndAlso p > Len(t) AndAlso Left(t, 1) <> "{" AndAlso Left(t, 1) <> "[" Then Return t
+    End If
+    Return UXBPkgJsonQuote(t)
+End Function
+
+' ---------------------------------------------------------------- nested manifest
+' Flat keys ("bundle.name") become nested objects. The last write of a key wins. "true"/"false" become booleans.
+' Keys whose first segment is not one of the canonical sections are gathered under "meta".
+' File names (files.generated.<path>.kind) and host import names (hostImports.<module.name>.alias) contain dots themselves,
+' so below those prefixes the name is everything up to the last dot.
+Private Function UXBPkgKeySegment(ByRef keyText As String, ByRef prefix As String, ByRef segOut As String) As Integer
+    Dim rest As String = Mid(keyText, Len(prefix) + 1)
+    Dim dotAt As Integer = InStr(rest, ".")
+    If dotAt = 0 Then
+        segOut = rest
+        Return 0
+    End If
+    If prefix = "files.generated." Or prefix = "hostImports." Then
+        Dim lastDot As Integer = dotAt
+        Dim ci As Integer
+        For ci = Len(rest) To 1 Step -1
+            If Mid(rest, ci, 1) = "." Then lastDot = ci: Exit For
+        Next ci
+        segOut = Left(rest, lastDot - 1)
+        Return 1
+    End If
+    segOut = Left(rest, dotAt - 1)
+    Return 1
+End Function
+
+Private Function UXBPkgIsAllDigits(ByRef t As String) As Integer
+    If t = "" Then Return 0
+    Dim i As Integer
+    For i = 1 To Len(t)
+        If Mid(t, i, 1) < "0" Or Mid(t, i, 1) > "9" Then Return 0
+    Next i
+    Return 1
+End Function
+
+Private Function UXBPkgManifestScalar(ByRef valueText As String) As String
+    If valueText = "true" Or valueText = "false" Then Return valueText
+    Return UXBPkgJsonQuote(valueText)
+End Function
+
+' Emits {"seg": value, ...} for the keys that start with prefix. mode 1 (prefix "" only) skips the canonical sections, so what is
+' left (target, outDir, profile, minify.JS, ...) can be gathered under "meta".
+Private Function UXBPkgManifestObject(ByRef r As PreprocessResult, ByRef prefix As String, ByVal mode As Integer, ByVal indent As Integer) As String
+    Dim pad As String = Space(indent + 2)
+    Dim segs(0 To 255) As String
+    Dim segCount As Integer = 0
+    Dim i As Integer
+    For i = 0 To r.manifestCount - 1
+        Dim k As String = r.manifest(i).keyText
+        If Left(k, Len(prefix)) <> prefix Then Continue For
+        If Len(k) = Len(prefix) Then Continue For
+        Dim seg As String
+        UXBPkgKeySegment k, prefix, seg
+        If seg = "" Then Continue For
+        If prefix = "" And mode = 1 Then
+            If InStr(UXB_PKG_MANIFEST_SECTIONS, "|" & seg & "|") > 0 Then Continue For
+            ' bookkeeping keys of the preprocessor itself are not package metadata
+            If seg = "asset" Or seg = "artifact" Or seg = "MANIFEST_REQUIRE" Or seg = "required" Then Continue For
+        End If
+        Dim known As Integer = 0
+        Dim j As Integer
+        For j = 0 To segCount - 1
+            If segs(j) = seg Then known = 1: Exit For
+        Next j
+        If known = 0 And segCount <= UBound(segs) Then
+            segs(segCount) = seg
+            segCount += 1
+        End If
+    Next i
+    If segCount = 0 Then Return "{}"
+    ' numbered children (security.note.12, tests.expect.14, ...) form a JSON array in source order
+    Dim allNumbered As Integer = IIf(prefix <> "", 1, 0)
+    Dim ni As Integer
+    For ni = 0 To segCount - 1
+        If UXBPkgIsAllDigits(segs(ni)) = 0 Then allNumbered = 0
+    Next ni
+    If allNumbered <> 0 Then
+        Dim arrText As String = "["
+        For ni = 0 To segCount - 1
+            Dim itemValue As String = ""
+            For i = 0 To r.manifestCount - 1
+                If r.manifest(i).keyText = prefix & segs(ni) Then itemValue = r.manifest(i).valueText
+            Next i
+            If ni > 0 Then arrText &= ", "
+            arrText &= UXBPkgManifestScalar(itemValue)
+        Next ni
+        Return arrText & "]"
+    End If
+    Dim outText As String = "{" & Chr(10)
+    Dim si As Integer
+    For si = 0 To segCount - 1
+        Dim childKey As String = prefix & segs(si)
+        Dim hasLeaf As Integer = 0
+        Dim leafValue As String = ""
+        Dim hasKids As Integer = 0
+        For i = 0 To r.manifestCount - 1
+            Dim kk As String = r.manifest(i).keyText
+            If kk = childKey Then
+                hasLeaf = 1
+                leafValue = r.manifest(i).valueText
+            ElseIf Left(kk, Len(childKey) + 1) = childKey & "." Then
+                hasKids = 1
+            End If
+        Next i
+        If si > 0 Then outText &= "," & Chr(10)
+        outText &= pad & UXBPkgJsonQuote(segs(si)) & ": "
+        If hasKids <> 0 Then
+            Dim inner As String = UXBPkgManifestObject(r, childKey & ".", 0, indent + 2)
+            If hasLeaf <> 0 And inner <> "{}" Then
+                inner = "{" & Chr(10) & Space(indent + 4) & UXBPkgJsonQuote("_value") & ": " & UXBPkgManifestScalar(leafValue) & "," & Mid(inner, 2)
+            End If
+            outText &= inner
+        Else
+            outText &= UXBPkgManifestScalar(leafValue)
+        End If
+    Next si
+    outText &= Chr(10) & Space(indent) & "}"
+    Return outText
+End Function
+
+' The members (without outer braces) that the browser manifest adds: one object per canonical section that has entries, plus "meta".
+Function UXBPkgManifestMembers(ByRef r As PreprocessResult, ByVal indent As Integer) As String
+    Dim sections(0 To 13) As String = {"bundle", "entries", "files", "generated", "exports", "api", "routes", "capabilities", "security", "sandbox", "hostImports", "features", "tests", "docs"}
+    Dim outText As String = ""
+    Dim si As Integer
+    For si = 0 To 13
+        Dim hasAny As Integer = 0
+        Dim i As Integer
+        For i = 0 To r.manifestCount - 1
+            If Left(r.manifest(i).keyText, Len(sections(si)) + 1) = sections(si) & "." Then hasAny = 1: Exit For
+        Next i
+        If hasAny <> 0 Then
+            If outText <> "" Then outText &= "," & Chr(10)
+            outText &= Space(indent) & UXBPkgJsonQuote(sections(si)) & ": " & UXBPkgManifestObject(r, sections(si) & ".", 0, indent)
+        End If
+    Next si
+    Dim meta As String = UXBPkgManifestObject(r, "", 1, indent)
+    If meta <> "{}" Then
+        If outText <> "" Then outText &= "," & Chr(10)
+        outText &= Space(indent) & UXBPkgJsonQuote("meta") & ": " & meta
+    End If
+    Return outText
+End Function
+
+' ---------------------------------------------------------------- HTML text and Markdown
+Private Function UXBPkgHtmlEscape(ByRef s As String) As String
+    Dim outText As String = ""
+    Dim i As Integer
+    For i = 1 To Len(s)
+        Dim ch As String = Mid(s, i, 1)
+        If ch = "&" Then
+            outText &= "&amp;"
+        ElseIf ch = "<" Then
+            outText &= "&lt;"
+        ElseIf ch = ">" Then
+            outText &= "&gt;"
+        ElseIf ch = Chr(34) Then
+            outText &= "&quot;"
+        Else
+            outText &= ch
+        End If
+    Next i
+    Return outText
+End Function
+
+' & < > only (text content); quotes stay readable.
+Private Function UXBPkgHtmlEscapeText(ByRef s As String) As String
+    Dim outText As String = ""
+    Dim i As Integer
+    For i = 1 To Len(s)
+        Dim ch As String = Mid(s, i, 1)
+        If ch = "&" Then
+            outText &= "&amp;"
+        ElseIf ch = "<" Then
+            outText &= "&lt;"
+        ElseIf ch = ">" Then
+            outText &= "&gt;"
+        Else
+            outText &= ch
+        End If
+    Next i
+    Return outText
+End Function
+
+' Inline Markdown: `code`, **bold**, *italic*, [text](url). With safe <> 0 raw HTML in the text is escaped; otherwise it passes through.
+Private Function UXBPkgMdInline(ByRef s As String, ByVal safe As Integer) As String
+    Dim outText As String = ""
+    Dim i As Integer = 1
+    Do While i <= Len(s)
+        Dim ch As String = Mid(s, i, 1)
+        If ch = "`" Then
+            Dim closeTick As Integer = InStr(i + 1, s, "`")
+            If closeTick > 0 Then
+                outText &= "<code>" & UXBPkgHtmlEscapeText(Mid(s, i + 1, closeTick - i - 1)) & "</code>"
+                i = closeTick + 1
+                Continue Do
+            End If
+        ElseIf ch = "*" And Mid(s, i + 1, 1) = "*" Then
+            Dim closeBold As Integer = InStr(i + 2, s, "**")
+            If closeBold > 0 Then
+                outText &= "<strong>" & UXBPkgMdInline(Mid(s, i + 2, closeBold - i - 2), safe) & "</strong>"
+                i = closeBold + 2
+                Continue Do
+            End If
+        ElseIf ch = "*" Then
+            Dim closeEm As Integer = InStr(i + 1, s, "*")
+            If closeEm > i + 1 Then
+                outText &= "<em>" & UXBPkgMdInline(Mid(s, i + 1, closeEm - i - 1), safe) & "</em>"
+                i = closeEm + 1
+                Continue Do
+            End If
+        ElseIf ch = "[" Then
+            Dim closeBracket As Integer = InStr(i + 1, s, "](")
+            If closeBracket > 0 Then
+                Dim closeParen As Integer = InStr(closeBracket + 2, s, ")")
+                If closeParen > 0 Then
+                    Dim linkText As String = Mid(s, i + 1, closeBracket - i - 1)
+                    Dim linkUrl As String = Trim(Mid(s, closeBracket + 2, closeParen - closeBracket - 2))
+                    Dim lowUrl As String = LCase(linkUrl)
+                    ' script URLs are never turned into links
+                    If Left(lowUrl, 11) <> "javascript:" And Left(lowUrl, 5) <> "data:" Then
+                        outText &= "<a href=" & Chr(34) & UXBPkgHtmlEscape(linkUrl) & Chr(34) & ">" & UXBPkgMdInline(linkText, safe) & "</a>"
+                        i = closeParen + 1
+                        Continue Do
+                    End If
+                End If
+            End If
+        End If
+        If safe <> 0 Then
+            If ch = "&" Then
+                outText &= "&amp;"
+            ElseIf ch = "<" Then
+                outText &= "&lt;"
+            ElseIf ch = ">" Then
+                outText &= "&gt;"
+            Else
+                outText &= ch
+            End If
+        Else
+            outText &= ch
+        End If
+        i += 1
+    Loop
+    Return outText
+End Function
+
+' Markdown subset: # headings, paragraphs, - / * / 1. lists, ``` fences, and the inline forms above.
+Private Function UXBPkgMdToHtml(ByRef md As String, ByVal safe As Integer, ByRef cssHref As String, ByRef titleOut As String) As String
+    Dim lines() As String
+    Dim n As Integer = UXBPkgSplitLines(md, lines())
+    Dim body As String = ""
+    Dim para As String = ""
+    Dim listKind As String = ""
+    Dim inFence As Integer = 0
+    titleOut = ""
+    Dim i As Integer
+    For i = 0 To n - 1
+        Dim ln As String = lines(i)
+        Dim tr As String = Trim(ln)
+        If inFence <> 0 Then
+            If Left(tr, 3) = "```" Then
+                body &= "</code></pre>" & Chr(10)
+                inFence = 0
+            Else
+                body &= UXBPkgHtmlEscapeText(ln) & Chr(10)
+            End If
+            Continue For
+        End If
+        If Left(tr, 3) = "```" Then
+            If para <> "" Then body &= "<p>" & para & "</p>" & Chr(10): para = ""
+            If listKind <> "" Then body &= "</" & listKind & ">" & Chr(10): listKind = ""
+            body &= "<pre><code>"
+            inFence = 1
+            Continue For
+        End If
+        If tr = "" Then
+            If para <> "" Then body &= "<p>" & para & "</p>" & Chr(10): para = ""
+            If listKind <> "" Then body &= "</" & listKind & ">" & Chr(10): listKind = ""
+            Continue For
+        End If
+        Dim hashes As Integer = 0
+        Do While hashes < Len(tr) And Mid(tr, hashes + 1, 1) = "#"
+            hashes += 1
+        Loop
+        If hashes >= 1 And hashes <= 6 And Mid(tr, hashes + 1, 1) = " " Then
+            If para <> "" Then body &= "<p>" & para & "</p>" & Chr(10): para = ""
+            If listKind <> "" Then body &= "</" & listKind & ">" & Chr(10): listKind = ""
+            Dim headText As String = Trim(Mid(tr, hashes + 2))
+            If titleOut = "" Then titleOut = headText
+            body &= "<h" & LTrim(Str(hashes)) & ">" & UXBPkgMdInline(headText, safe) & "</h" & LTrim(Str(hashes)) & ">" & Chr(10)
+            Continue For
+        End If
+        Dim itemText As String = ""
+        Dim itemKind As String = ""
+        If (Left(tr, 2) = "- " Or Left(tr, 2) = "* ") Then
+            itemKind = "ul"
+            itemText = Trim(Mid(tr, 3))
+        Else
+            Dim dg As Integer = 0
+            Do While dg < Len(tr) And Mid(tr, dg + 1, 1) >= "0" And Mid(tr, dg + 1, 1) <= "9"
+                dg += 1
+            Loop
+            If dg > 0 And Mid(tr, dg + 1, 2) = ". " Then
+                itemKind = "ol"
+                itemText = Trim(Mid(tr, dg + 3))
+            End If
+        End If
+        If itemKind <> "" Then
+            If para <> "" Then body &= "<p>" & para & "</p>" & Chr(10): para = ""
+            If listKind <> itemKind Then
+                If listKind <> "" Then body &= "</" & listKind & ">" & Chr(10)
+                body &= "<" & itemKind & ">" & Chr(10)
+                listKind = itemKind
+            End If
+            body &= "<li>" & UXBPkgMdInline(itemText, safe) & "</li>" & Chr(10)
+            Continue For
+        End If
+        If listKind <> "" Then body &= "</" & listKind & ">" & Chr(10): listKind = ""
+        If para <> "" Then para &= " "
+        para &= UXBPkgMdInline(tr, safe)
+    Next i
+    If inFence <> 0 Then body &= "</code></pre>" & Chr(10)
+    If para <> "" Then body &= "<p>" & para & "</p>" & Chr(10)
+    If listKind <> "" Then body &= "</" & listKind & ">" & Chr(10)
+    Dim pageTitle As String = titleOut
+    If pageTitle = "" Then pageTitle = "Document"
+    Dim doc As String = "<!doctype html>" & Chr(10) & "<html><head><meta charset=" & Chr(34) & "utf-8" & Chr(34) & ">" & Chr(10)
+    doc &= "<title>" & UXBPkgHtmlEscapeText(pageTitle) & "</title>" & Chr(10)
+    If Trim(cssHref) <> "" Then doc &= "<link rel=" & Chr(34) & "stylesheet" & Chr(34) & " href=" & Chr(34) & UXBPkgHtmlEscape(cssHref) & Chr(34) & ">" & Chr(10)
+    doc &= "</head>" & Chr(10) & "<body>" & Chr(10) & body & "</body></html>" & Chr(10)
+    Return doc
+End Function
+
+' ---------------------------------------------------------------- package files
+Private Sub UXBPkgAddWarn(ByRef warnText As String, ByRef msg As String)
+    If warnText <> "" Then warnText &= Chr(10)
+    warnText &= msg
+End Sub
+
+Private Function UXBPkgSlash(ByRef p As String) As String
+    Dim t As String = Trim(p)
+    Dim i As Integer
+    For i = 1 To Len(t)
+        If Mid(t, i, 1) = "\" Then Mid(t, i, 1) = "/"
+    Next i
+    Do While Left(t, 2) = "./"
+        t = Mid(t, 3)
+    Loop
+    Return t
+End Function
+
+' Copies a file in 64 KiB pieces and hashes it (FNV-1a, 8 hex digits) on the way.
+Private Function UXBPkgCopyHash(ByRef srcPath As String, ByRef dstPath As String, ByRef hashHex As String, ByRef totalBytes As LongInt, ByRef errText As String) As Integer
+    errText = ""
+    hashHex = ""
+    totalBytes = 0
+    UXBReportEnsureParentDir dstPath
+    Dim f1 As Integer = FreeFile
+    Open srcPath For Binary Access Read As #f1
+    If Err <> 0 Then
+        errText = "package copy: cannot read " & srcPath
+        Return 0
+    End If
+    Dim f2 As Integer = FreeFile
+    Open dstPath For Binary Access Write As #f2
+    If Err <> 0 Then
+        Close #f1
+        errText = "package copy: cannot write " & dstPath
+        Return 0
+    End If
+    Dim total As LongInt = LOF(f1)
+    Dim done As LongInt = 0
+    Dim h As UInteger = 2166136261u
+    Do While done < total
+        Dim chunk As LongInt = total - done
+        If chunk > 65536 Then chunk = 65536
+        Dim buf As String = Space(CInt(chunk))
+        Get #f1, done + 1, buf
+        Put #f2, done + 1, buf
+        Dim bp As UByte Ptr = CPtr(UByte Ptr, StrPtr(buf))
+        Dim k As Integer
+        For k = 0 To CInt(chunk) - 1
+            h = (h Xor bp[k]) * 16777619u
+        Next k
+        done += chunk
+    Loop
+    Close #f1
+    Close #f2
+    hashHex = LCase(Hex(h, 8))
+    totalBytes = total
+    Return 1
+End Function
+
+Private Function UXBPkgReadAll(ByRef path As String, ByRef textOut As String) As Integer
+    textOut = ""
+    ' the program is built with runtime error checks: opening a missing file would abort it, so look first
+    If Trim(path) = "" Or Dir(path) = "" Then Return 0
+    Dim f As Integer = FreeFile
+    Open path For Binary Access Read As #f
+    If Err <> 0 Then Return 0
+    Dim n As LongInt = LOF(f)
+    If n > 0 Then
+        textOut = Space(CInt(n))
+        Get #f, 1, textOut
+    End If
+    Close #f
+    Return 1
+End Function
+
+' Copies every asset below the browser folder. A missing source is a warning, or an error for ASSET_REQUIRE / REQUIRE_ASSET / LICENSEFILE.
+Private Function UXBPkgCopyAssets(ByRef r As PreprocessResult, ByRef browserDir As String, ByRef webRoot As String, ByRef errText As String, ByRef warnText As String) As Integer
+    Dim i As Integer
+    For i = 0 To r.assetCount - 1
+        Dim kind As String = r.assets(i).assetKind
+        Dim srcRel As String = r.assets(i).sourcePath
+        If srcRel = "" Then Continue For
+        Dim tgtRel As String = UXBPkgSlash(r.assets(i).targetPath)
+        If tgtRel = "" Then tgtRel = UXBPkgSlash(srcRel)
+        If kind = "LICENSE" Then tgtRel = "LICENSE"
+        If r.safePaths <> 0 And UXBPrePathIsUnsafe(tgtRel) <> 0 Then
+            errText = "ASSET_TARGET_UNSAFE: " & tgtRel
+            Return 0
+        End If
+        Dim wantDir As Integer = IIf(kind = "DIR", 1, 0)
+        Dim foundPath As String, errKind As String
+        If UXBPkgResolveSource(r, srcRel, wantDir, foundPath, errKind) = 0 Then
+            If errKind = "sandbox" Then
+                errText = "ASSET_SANDBOX_ESCAPE: " & srcRel & " is outside the SANDBOX_ROOT folder"
+                Return 0
+            End If
+            If r.assets(i).required <> 0 Then
+                errText = "ASSET_REQUIRED_MISSING: " & srcRel
+                Return 0
+            End If
+            r.assets(i).status = "MISSING"
+            UXBPkgAddWarn warnText, "PREPROCESSOR_ASSET_MISSING: " & srcRel
+            Continue For
+        End If
+        Dim destBase As String = IIf(kind = "LICENSE", webRoot, browserDir)
+        Dim copyErr As String
+        If kind = "DIR" Then
+            If UXBPkgCopyTree(foundPath, UXBPkgJoin(destBase, tgtRel), copyErr) = 0 Then
+                errText = copyErr
+                Return 0
+            End If
+            r.assets(i).status = "COPIED"
+            r.assets(i).finalPath = tgtRel
+        Else
+            Dim hashHex As String, nBytes As LongInt
+            Dim finalRel As String = tgtRel
+            ' the hash is only known after reading the file: copy to the plain name, then rename for FINGERPRINT_ASSETS
+            Dim plainPath As String = UXBPkgJoin(destBase, tgtRel)
+            If UXBPkgCopyHash(foundPath, plainPath, hashHex, nBytes, copyErr) = 0 Then
+                errText = copyErr
+                Return 0
+            End If
+            If r.fingerprintAssets <> 0 And kind <> "LICENSE" Then
+                finalRel = UXBPkgFingerprintName(tgtRel, hashHex)
+                Dim fpPath As String = UXBPkgJoin(destBase, finalRel)
+                If UXBPkgCopyBinary(plainPath, fpPath, copyErr) = 0 Then
+                    errText = copyErr
+                    Return 0
+                End If
+                Kill plainPath
+            End If
+            r.assets(i).status = "COPIED"
+            r.assets(i).finalPath = finalRel
+            r.assets(i).hashHex = hashHex
+            r.assets(i).copiedBytes = nBytes
+        End If
+    Next i
+    Return 1
+End Function
+
+' Data JSON: %%JSON_SET key value entries and %%JSON_ARRAY_BEGIN name blocks become one object.
+Private Function UXBPkgDataJson(ByRef r As PreprocessResult) As String
+    Dim members As String = ""
+    Dim i As Integer
+    For i = 0 To r.jsonEntryCount - 1
+        If r.jsonEntries(i).keyText <> "JSON_SET" Then Continue For
+        Dim raw As String = Trim(r.jsonEntries(i).valueText)
+        Dim keyPart As String, valuePart As String
+        Dim sp As Integer = InStr(raw, " ")
+        Dim eq As Integer = InStr(raw, "=")
+        If eq > 0 And (sp = 0 Or eq < sp + 1) Then
+            keyPart = Trim(Left(raw, eq - 1))
+            valuePart = Trim(Mid(raw, eq + 1))
+        ElseIf sp > 0 Then
+            keyPart = Trim(Left(raw, sp - 1))
+            valuePart = Trim(Mid(raw, sp + 1))
+            If Left(valuePart, 1) = "=" Then valuePart = Trim(Mid(valuePart, 2))
+        Else
+            keyPart = raw
+            valuePart = ""
+        End If
+        keyPart = UXBPreStripQuotes(keyPart)
+        If keyPart = "" Then Continue For
+        If members <> "" Then members &= "," & Chr(10)
+        members &= "  " & UXBPkgJsonQuote(keyPart) & ": " & UXBPkgJsonScalar(valuePart)
+    Next i
+    For i = 0 To r.blockCount - 1
+        If r.blocks(i).target <> "JSON_ARRAY" Then Continue For
+        Dim arrName As String = r.blocks(i).outFile
+        If LCase(Right(arrName, 5)) = ".json" Then arrName = Left(arrName, Len(arrName) - 5)
+        If arrName = "" Or arrName = "data" Then arrName = "items"
+        Dim lines() As String
+        Dim n As Integer = UXBPkgSplitLines(r.blocks(i).content, lines())
+        Dim elems As String = ""
+        Dim li As Integer
+        For li = 0 To n - 1
+            If Trim(lines(li)) = "" Then Continue For
+            If elems <> "" Then elems &= ", "
+            elems &= UXBPkgJsonScalar(lines(li))
+        Next li
+        If members <> "" Then members &= "," & Chr(10)
+        members &= "  " & UXBPkgJsonQuote(arrName) & ": [" & elems & "]"
+    Next i
+    If members = "" Then Return ""
+    Return "{" & Chr(10) & members & Chr(10) & "}" & Chr(10)
+End Function
+
+' The folder that holds the whole package: the parent of "browser" in the standard layout (<web>/browser/index.html);
+' with a custom page path (--html-out some/where/page.html) everything lives beside the page.
+Function UXBPkgPackageRoot(ByRef htmlPath As String) As String
+    Dim browserDir As String = UXBPkgDirOf(htmlPath)
+    If LCase(UXBPkgBaseOf(browserDir)) = "browser" Then Return UXBPkgDirOf(browserDir)
+    Return browserDir
+End Function
+
+' Writes the files a program declares through blocks and package directives. Returns 0 with errText on a hard error.
+Function UXBPkgMaterialize(ByRef r As PreprocessResult, ByRef htmlPath As String, ByRef watPath As String, ByRef errText As String, ByRef warnText As String) As Integer
+    errText = ""
+    warnText = ""
+    Dim browserDir As String = UXBPkgDirOf(htmlPath)
+    Dim webRoot As String = UXBPkgPackageRoot(htmlPath)
+    Dim wasmDir As String = IIf(Trim(watPath) <> "", UXBPkgDirOf(watPath), UXBPkgJoin(webRoot, "wasm"))
+    Dim writeErr As String
+
+    If UXBPkgCopyAssets(r, browserDir, webRoot, errText, warnText) = 0 Then Return 0
+
+    ' data JSON
+    Dim dataText As String = UXBPkgDataJson(r)
+    Dim dataFile As String = ""
+    UXBPkgManifestGet r, "files.dataJson", dataFile
+    If dataText <> "" Then
+        If dataFile = "" Then dataFile = "data.json"
+        If UXBReportWriteText(UXBPkgJoin(browserDir, dataFile), dataText, writeErr) = 0 Then
+            errText = writeErr
+            Return 0
+        End If
+    ElseIf dataFile <> "" Then
+        UXBPkgAddWarn warnText, "PREPROCESSOR_DATA_JSON_EMPTY: DATA_JSON " & dataFile & " has no JSON_SET / JSON_ARRAY data"
+    End If
+
+    ' raw blocks: JSON, Markdown, WAT
+    Dim i As Integer, j As Integer
+    For i = 0 To r.blockCount - 1
+        Dim tgt As String = r.blocks(i).target
+        Dim outFile As String = r.blocks(i).outFile
+        If tgt <> "JSON" And tgt <> "MD" And tgt <> "WAT" Then Continue For
+        If tgt = "WAT" And r.blocks(i).section = "EXPORT" Then Continue For
+        If outFile = "" Then Continue For
+        ' blocks that name the same file are written together, once
+        Dim seen As Integer = 0
+        For j = 0 To i - 1
+            If r.blocks(j).target = tgt And r.blocks(j).outFile = outFile And Not (tgt = "WAT" And r.blocks(j).section = "EXPORT") Then seen = 1: Exit For
+        Next j
+        If seen <> 0 Then Continue For
+        Dim combined As String = ""
+        For j = i To r.blockCount - 1
+            If r.blocks(j).target = tgt And r.blocks(j).outFile = outFile And Not (tgt = "WAT" And r.blocks(j).section = "EXPORT") Then combined &= r.blocks(j).content
+        Next j
+        If tgt = "JSON" Then
+            If UXBPkgJsonIsValid(combined) = 0 Then
+                errText = "JSON_BLOCK_INVALID: " & outFile & " is not valid JSON"
+                Return 0
+            End If
+            If UXBReportWriteText(UXBPkgJoin(browserDir, outFile), combined, writeErr) = 0 Then
+                errText = writeErr
+                Return 0
+            End If
+        ElseIf tgt = "MD" Then
+            If UXBReportWriteText(UXBPkgJoin(browserDir, outFile), combined, writeErr) = 0 Then
+                errText = writeErr
+                Return 0
+            End If
+            Dim htmlName As String = outFile
+            If LCase(Right(htmlName, 3)) = ".md" Then htmlName = Left(htmlName, Len(htmlName) - 3)
+            htmlName &= ".html"
+            Dim mdTitle As String
+            Dim mdHtml As String = UXBPkgMdToHtml(combined, r.mdSafe, r.mdCss, mdTitle)
+            If UXBReportWriteText(UXBPkgJoin(browserDir, htmlName), mdHtml, writeErr) = 0 Then
+                errText = writeErr
+                Return 0
+            End If
+        Else
+            If UXBReportWriteText(UXBPkgJoin(wasmDir, outFile), combined, writeErr) = 0 Then
+                errText = writeErr
+                Return 0
+            End If
+        End If
+    Next i
+
+    ' style sheet linked from Markdown pages: copied beside them when the program ships it
+    If Trim(r.mdCss) <> "" Then
+        Dim cssFound As String, cssKind As String
+        If UXBPkgResolveSource(r, r.mdCss, 0, cssFound, cssKind) <> 0 Then
+            Dim cssCopyErr As String, cssHash As String, cssBytes As LongInt
+            UXBPkgCopyHash cssFound, UXBPkgJoin(browserDir, UXBPkgSlash(r.mdCss)), cssHash, cssBytes, cssCopyErr
+        Else
+            UXBPkgAddWarn warnText, "PREPROCESSOR_MD_CSS_MISSING: " & r.mdCss
+        End If
+    End If
+
+    ' documentation and expected output
+    Dim expectText As String = ""
+    Dim docText As String = ""
+    Dim bundleName As String = ""
+    Dim bundleVersion As String = ""
+    UXBPkgManifestGet r, "bundle.name", bundleName
+    UXBPkgManifestGet r, "bundle.version", bundleVersion
+    Dim mi As Integer
+    For mi = 0 To r.manifestCount - 1
+        Dim mk As String = r.manifest(mi).keyText
+        If Left(mk, 13) = "tests.expect." Then
+            Dim already As Integer = 0
+            For j = 0 To mi - 1
+                If r.manifest(j).keyText = mk Then already = 1: Exit For
+            Next j
+            If already = 0 Then expectText &= UXBPreStripQuotes(r.manifest(mi).valueText) & Chr(10)
+        End If
+    Next mi
+    If expectText <> "" Then
+        If UXBReportWriteText(UXBPkgJoin(webRoot, "expect.txt"), expectText, writeErr) = 0 Then
+            errText = writeErr
+            Return 0
+        End If
+    End If
+    Dim docDescription As String = ""
+    UXBPkgManifestGet r, "docs.description", docDescription
+    Dim docBody As String = ""
+    Dim seenDoc As String = "|"
+    For mi = 0 To r.manifestCount - 1
+        Dim dk As String = r.manifest(mi).keyText
+        If Left(dk, 5) <> "docs." Then Continue For
+        Dim docName As String = Mid(dk, 6)
+        If docName = "description" Or InStr(seenDoc, "|" & docName & "|") > 0 Then Continue For
+        seenDoc &= docName & "|"
+        Dim docValue As String = ""
+        UXBPkgManifestGet r, dk, docValue
+        docBody &= Chr(10) & "## " & docName & Chr(10) & Chr(10) & docValue & Chr(10)
+    Next mi
+    If docDescription <> "" Or docBody <> "" Then
+        ' only a README that an earlier run generated is replaced; one the author keeps beside the package is never overwritten
+        Dim readmePath As String = UXBPkgJoin(webRoot, "README.md")
+        Dim oldReadme As String
+        Dim readmeMark As String = "<!-- uxb package readme -->"
+        If UXBPkgReadAll(readmePath, oldReadme) <> 0 AndAlso Left(oldReadme, Len(readmeMark)) <> readmeMark Then
+            UXBPkgAddWarn warnText, "PREPROCESSOR_README_EXISTS: " & readmePath & " was not generated by uXBasic; it was left as it is"
+        Else
+            docText = readmeMark & Chr(10) & "# " & IIf(bundleName <> "", bundleName, "uXBasic package") & IIf(bundleVersion <> "", " " & bundleVersion, "") & Chr(10)
+            If docDescription <> "" Then docText &= Chr(10) & docDescription & Chr(10)
+            docText &= docBody
+            If UXBReportWriteText(readmePath, docText, writeErr) = 0 Then
+                errText = writeErr
+                Return 0
+            End If
+        End If
+    End If
+    Return 1
+End Function
+
+' ---------------------------------------------------------------- browser page pieces
+Function UXBPkgPageTitle(ByRef r As PreprocessResult) As String
+    Dim nm As String = ""
+    If UXBPkgManifestGet(r, "bundle.name", nm) <> 0 AndAlso Trim(nm) <> "" Then Return nm
+    Return "uXBasic Browser Output"
+End Function
+
+Private Function UXBPkgMetaTag(ByRef nameText As String, ByRef contentText As String) As String
+    Return "<meta name=" & Chr(34) & nameText & Chr(34) & " content=" & Chr(34) & UXBPkgHtmlEscape(contentText) & Chr(34) & ">" & Chr(10)
+End Function
+
+Declare Function UXBPkgNotes(ByRef r As PreprocessResult, ByRef kind As String) As String
+
+' <meta> tags, the content security policy and the style sheet link for the page head.
+Function UXBPkgHeadExtras(ByRef r As PreprocessResult, ByRef styleHref As String) As String
+    Dim v As String = ""
+    Dim s As String = ""
+    If UXBPkgManifestGet(r, "bundle.author", v) <> 0 AndAlso v <> "" Then s &= UXBPkgMetaTag("author", v)
+    If UXBPkgManifestGet(r, "bundle.version", v) <> 0 AndAlso v <> "" Then s &= UXBPkgMetaTag("version", v)
+    If UXBPkgManifestGet(r, "bundle.license", v) <> 0 AndAlso v <> "" Then s &= UXBPkgMetaTag("license", v)
+    If UXBPkgManifestGet(r, "bundle.buildId", v) <> 0 AndAlso v <> "" Then s &= UXBPkgMetaTag("build-id", v)
+    If UXBPkgManifestGet(r, "bundle.id", v) <> 0 AndAlso v <> "" Then s &= UXBPkgMetaTag("bundle-id", v)
+    If UXBPkgManifestGet(r, "docs.description", v) <> 0 AndAlso v <> "" Then s &= UXBPkgMetaTag("description", v)
+    If UXBPkgManifestGet(r, "security.csp", v) <> 0 AndAlso v <> "" Then
+        s &= "<meta http-equiv=" & Chr(34) & "Content-Security-Policy" & Chr(34) & " content=" & Chr(34) & UXBPkgHtmlEscape(v) & Chr(34) & ">" & Chr(10)
+    End If
+    Dim mi As Integer
+    For mi = 0 To r.manifestCount - 1
+        If Left(r.manifest(mi).keyText, 14) = "security.note." Then
+            Dim noteText As String = r.manifest(mi).valueText
+            Dim di As Integer
+            For di = 1 To Len(noteText)
+                If Mid(noteText, di, 2) = "--" Then Mid(noteText, di, 2) = "- "
+            Next di
+            s &= "<!-- security note: " & noteText & " -->" & Chr(10)
+        End If
+    Next mi
+    s &= UXBPkgNotes(r, "HTML")
+    If Trim(styleHref) <> "" Then s &= "<link rel=" & Chr(34) & "stylesheet" & Chr(34) & " href=" & Chr(34) & UXBPkgHtmlEscape(styleHref) & Chr(34) & ">" & Chr(10)
+    Return s
+End Function
+
+Private Function UXBPkgHasSection(ByRef r As PreprocessResult, ByRef sectionName As String) As Integer
+    Dim i As Integer
+    For i = 0 To r.manifestCount - 1
+        If Left(r.manifest(i).keyText, Len(sectionName) + 1) = sectionName & "." Then Return 1
+    Next i
+    Return 0
+End Function
+
+' ---------------------------------------------------------------- signatures, WAT pieces, notes
+' "I32(I32,I32)", "i32,i32->i32" or raw WAT clauses are all accepted for imports; a signature is split into
+' a result type and a comma separated parameter list (both upper case, VOID for no result).
+Function UXBPkgSigParts(ByRef sigRaw As String, ByRef retOut As String, ByRef paramsOut As String) As Integer
+    Dim sig As String = Trim(UXBPreStripQuotes(sigRaw))
+    retOut = "VOID"
+    paramsOut = ""
+    If sig = "" Then Return 0
+    Dim arrow As Integer = InStr(sig, "->")
+    Dim leftPart As String, rightPart As String
+    If arrow > 0 Then
+        leftPart = Trim(Left(sig, arrow - 1))
+        rightPart = Trim(Mid(sig, arrow + 2))
+        If Left(leftPart, 1) = "(" And Right(leftPart, 1) = ")" Then leftPart = Mid(leftPart, 2, Len(leftPart) - 2)
+    Else
+        Dim p1 As Integer = InStr(sig, "(")
+        Dim p2 As Integer = 0
+        Dim ci As Integer
+        For ci = Len(sig) To 1 Step -1
+            If Mid(sig, ci, 1) = ")" Then p2 = ci: Exit For
+        Next ci
+        If p1 = 0 Or p2 < p1 Then Return 0
+        rightPart = Trim(Left(sig, p1 - 1))
+        leftPart = Mid(sig, p1 + 1, p2 - p1 - 1)
+    End If
+    If rightPart <> "" Then retOut = UCase(rightPart)
+    If retOut = "NONE" Or retOut = "" Then retOut = "VOID"
+    Dim cur As Integer = 1
+    Do While cur <= Len(leftPart) + 1
+        Dim comma As Integer = InStr(cur, leftPart, ",")
+        If comma = 0 Then comma = Len(leftPart) + 1
+        Dim tokenText As String = UCase(Trim(Mid(leftPart, cur, comma - cur)))
+        If tokenText <> "" And tokenText <> "VOID" Then
+            If paramsOut <> "" Then paramsOut &= ","
+            paramsOut &= tokenText
+        End If
+        cur = comma + 1
+    Loop
+    Return 1
+End Function
+
+Private Function UXBPkgWatValType(ByRef t As String) As String
+    Select Case LCase(Trim(t))
+    Case "i64", "u64", "int64", "longint", "ulongint"
+        Return "i64"
+    Case "f32", "single"
+        Return "f32"
+    Case "f64", "double"
+        Return "f64"
+    End Select
+    Return "i32"
+End Function
+
+' " (param i32 i32) (result i32)" for a signature; raw WAT clauses ("(param i32)") pass through unchanged.
+Private Function UXBPkgWatSigClause(ByRef sigRaw As String) As String
+    Dim sig As String = Trim(UXBPreStripQuotes(sigRaw))
+    If sig = "" Then Return ""
+    Dim lowSig As String = LCase(sig)
+    If Left(sig, 1) = "(" And (InStr(lowSig, "(param") > 0 Or InStr(lowSig, "(result") > 0) Then Return " " & sig
+    Dim retType As String, paramList As String
+    If UXBPkgSigParts(sig, retType, paramList) = 0 Then Return ""
+    Dim clause As String = ""
+    If paramList <> "" Then
+        clause &= " (param"
+        Dim cur As Integer = 1
+        Do While cur <= Len(paramList) + 1
+            Dim comma As Integer = InStr(cur, paramList, ",")
+            If comma = 0 Then comma = Len(paramList) + 1
+            clause &= " " & UXBPkgWatValType(Mid(paramList, cur, comma - cur))
+            cur = comma + 1
+        Loop
+        clause &= ")"
+    End If
+    If retType <> "VOID" Then clause &= " (result " & UXBPkgWatValType(retType) & ")"
+    Return clause
+End Function
+
+Private Function UXBPkgWatIdent(ByRef t As String) As String
+    Dim outText As String = ""
+    Dim i As Integer
+    For i = 1 To Len(t)
+        Dim ch As String = Mid(t, i, 1)
+        If (ch >= "A" And ch <= "Z") Or (ch >= "a" And ch <= "z") Or (ch >= "0" And ch <= "9") Or ch = "_" Or ch = "." Or ch = "$" Then
+            outText &= ch
+        Else
+            outText &= "_"
+        End If
+    Next i
+    Return outText
+End Function
+
+' (import "module" "name" (func $alias ...)) for every %%WAT_IMPORT / %%HOST_IMPORT, placed right after "(module".
+Function UXBPkgWatImports(ByRef r As PreprocessResult) As String
+    Dim outText As String = ""
+    Dim seen As String = "|"
+    Dim i As Integer
+    For i = 0 To r.watImportCount - 1
+        Dim modName As String = r.watImports(i).moduleName
+        Dim impName As String = r.watImports(i).importName
+        If modName = "" Or impName = "" Then Continue For
+        Dim aliasText As String = r.watImports(i).aliasName
+        If aliasText = "" Then aliasText = modName & "_" & impName
+        aliasText = UXBPkgWatIdent(aliasText)
+        If InStr(seen, "|" & aliasText & "|") > 0 Then Continue For
+        seen &= aliasText & "|"
+        outText &= "  (import " & Chr(34) & modName & Chr(34) & " " & Chr(34) & impName & Chr(34) & " (func $" & aliasText & UXBPkgWatSigClause(r.watImports(i).signatureText) & "))" & Chr(10)
+    Next i
+    Return outText
+End Function
+
+' %%WAT_FUNC_BEGIN blocks (function text) and %%WAT_EXPORT names, placed at the end of the module.
+Function UXBPkgWatFunctions(ByRef r As PreprocessResult, ByRef moduleText As String) As String
+    Dim outText As String = ""
+    Dim i As Integer
+    For i = 0 To r.blockCount - 1
+        If r.blocks(i).target = "WAT_FUNC" Then outText &= r.blocks(i).content
+    Next i
+    For i = 0 To r.blockCount - 1
+        If r.blocks(i).target <> "WAT" Or r.blocks(i).section <> "EXPORT" Then Continue For
+        Dim expName As String = Trim(UXBPreStripQuotes(r.blocks(i).content))
+        If expName = "" Then Continue For
+        If InStr(moduleText & outText, "(export " & Chr(34) & expName & Chr(34)) > 0 Then Continue For
+        outText &= "  (export " & Chr(34) & expName & Chr(34) & " (func $" & UXBPkgWatIdent(expName) & "))" & Chr(10)
+    Next i
+    ' %%EXPORT_BASIC Name: the module already exports the function under its upper case symbol; add the declared spelling too
+    Dim k As Integer
+    For k = 0 To r.manifestCount - 1
+        Dim mk As String = r.manifest(k).keyText
+        If Left(mk, 8) <> "exports." Or Right(mk, 7) <> ".target" Then Continue For
+        Dim declared As String = Mid(mk, 9, Len(mk) - 8 - 7)
+        Dim symbol As String = UCase(declared)
+        If declared = "" Or declared = symbol Then Continue For
+        If InStr(moduleText, "(export " & Chr(34) & symbol & Chr(34) & " (func $" & symbol & "))") = 0 Then Continue For
+        If InStr(moduleText & outText, "(export " & Chr(34) & declared & Chr(34)) > 0 Then Continue For
+        outText &= "  (export " & Chr(34) & declared & Chr(34) & " (func $" & symbol & "))" & Chr(10)
+    Next k
+    Return outText
+End Function
+
+' %%EMITNOTE lines for one output kind ("HTML", "JS" or "WAT") wrapped in that kind's comment syntax.
+Function UXBPkgNotes(ByRef r As PreprocessResult, ByRef kind As String) As String
+    Dim outText As String = ""
+    Dim i As Integer
+    For i = 0 To r.blockCount - 1
+        If r.blocks(i).target <> "NOTE" Then Continue For
+        Dim sc As String = r.blocks(i).section
+        Dim wanted As Integer = 0
+        If sc = "ALL" Or sc = "" Or sc = "WEB" Or sc = "BROWSER" Then wanted = 1
+        If kind = "HTML" And sc = "HTML" Then wanted = 1
+        If kind = "JS" And (sc = "JS" Or sc = "JAVASCRIPT") Then wanted = 1
+        If kind = "WAT" And (sc = "WASM" Or sc = "WAT") Then wanted = 1
+        If wanted = 0 Then Continue For
+        Dim noteText As String = ""
+        Dim ci As Integer
+        For ci = 1 To Len(r.blocks(i).content)
+            Dim ch As String = Mid(r.blocks(i).content, ci, 1)
+            If ch = Chr(10) Or ch = Chr(13) Then noteText &= " " Else noteText &= ch
+        Next ci
+        If kind = "HTML" Then
+            For ci = 1 To Len(noteText)
+                If Mid(noteText, ci, 2) = "--" Then Mid(noteText, ci, 2) = "- "
+            Next ci
+            outText &= "<!-- " & noteText & " -->" & Chr(10)
+        ElseIf kind = "JS" Then
+            outText &= "// " & noteText & Chr(10)
+        Else
+            outText &= ";; " & noteText & Chr(10)
+        End If
+    Next i
+    Return outText
+End Function
+
+' Source tag comment (%%SOURCE_MAP) in front of a block of the given output kind ("HTML", "JS" or "CSS").
+Function UXBPkgSourceTagComment(ByRef tagText As String, ByRef kind As String) As String
+    If Trim(tagText) = "" Then Return ""
+    Dim clean As String = ""
+    Dim i As Integer
+    For i = 1 To Len(tagText)
+        Dim ch As String = Mid(tagText, i, 1)
+        If ch = Chr(10) Or ch = Chr(13) Then
+            clean &= " "
+        ElseIf ch = "-" And Mid(tagText, i + 1, 1) = "-" Then
+            clean &= "- "
+        ElseIf ch = "*" And Mid(tagText, i + 1, 1) = "/" Then
+            clean &= "* "
+        Else
+            clean &= ch
+        End If
+    Next i
+    If kind = "HTML" Then Return "<!-- src: " & clean & " -->" & Chr(10)
+    If kind = "CSS" Then Return "/* src: " & clean & " */" & Chr(10)
+    Return "// src: " & clean & Chr(10)
+End Function
+
+' Puts imports, user functions, exports and notes into an emitted WAT file (called right after the file is written).
+Function UXBPkgDecorateWatFile(ByRef r As PreprocessResult, ByRef watPath As String, ByRef errText As String) As Integer
+    errText = ""
+    Dim imports As String = UXBPkgWatImports(r)
+    Dim wat As String
+    Dim userBlocksNeeded As Integer = 0
+    Dim i As Integer
+    For i = 0 To r.blockCount - 1
+        If r.blocks(i).target = "WAT_FUNC" Or (r.blocks(i).target = "WAT" And r.blocks(i).section = "EXPORT") Or r.blocks(i).target = "NOTE" Then userBlocksNeeded = 1
+    Next i
+    For i = 0 To r.manifestCount - 1
+        If Left(r.manifest(i).keyText, 8) = "exports." Then userBlocksNeeded = 1: Exit For
+    Next i
+    If imports = "" And userBlocksNeeded = 0 Then Return 1
+    If UXBPkgReadAll(watPath, wat) = 0 Then
+        errText = "package: cannot read " & watPath
+        Return 0
+    End If
+    Dim modAt As Integer = InStr(wat, "(module")
+    If modAt = 0 Then Return 1
+    Dim lineEnd As Integer = InStr(modAt, wat, Chr(10))
+    If lineEnd = 0 Then Return 1
+    ' user functions go before the final ")" of the module
+    Dim lastClose As Integer = 0
+    For i = Len(wat) To 1 Step -1
+        If Mid(wat, i, 1) = ")" Then lastClose = i: Exit For
+    Next i
+    If lastClose = 0 Then Return 1
+    Dim funcs As String = UXBPkgWatFunctions(r, wat)
+    Dim result1 As String = UXBPkgNotes(r, "WAT") & Left(wat, lineEnd) & imports & Mid(wat, lineEnd + 1, lastClose - lineEnd - 1) & funcs & Mid(wat, lastClose)
+    Return UXBReportWriteText(watPath, result1, errText)
+End Function
+
+' Notes and the %%EXPORT_BASIC table for an emitted program JS file. The table goes right after the generated one
+' (__uxbUser), so it exists before main starts: globalThis.uxbExports.Name(...) calls the user's function (async).
+Function UXBPkgDecorateJsFile(ByRef r As PreprocessResult, ByRef jsPath As String, ByRef errText As String) As Integer
+    errText = ""
+    Dim notes As String = UXBPkgNotes(r, "JS")
+    Dim exportsText As String = ""
+    Dim seen As String = "|"
+    Dim i As Integer
+    For i = 0 To r.manifestCount - 1
+        Dim k As String = r.manifest(i).keyText
+        If Left(k, 8) <> "exports." Then Continue For
+        Dim nm As String = Mid(k, 9)
+        Dim dotAt As Integer = InStr(nm, ".")
+        If dotAt > 0 Then nm = Left(nm, dotAt - 1)
+        If nm = "" Or InStr(seen, "|" & nm & "|") > 0 Then Continue For
+        seen &= nm & "|"
+        exportsText &= "globalThis.uxbExports[" & UXBPkgJsonQuote(nm) & "] = function () { return __uxbUser[" & UXBPkgJsonQuote(UCase(nm)) & "].apply(null, arguments); };" & Chr(10)
+    Next i
+    If notes = "" And exportsText = "" Then Return 1
+    Dim js As String
+    If UXBPkgReadAll(jsPath, js) = 0 Then
+        errText = "package: cannot read " & jsPath
+        Return 0
+    End If
+    If exportsText <> "" Then
+        exportsText = "globalThis.uxbExports = globalThis.uxbExports || {};" & Chr(10) & exportsText
+        Dim anchor As String = "if (globalThis.uxb) globalThis.uxb.exports = __uxbUser;" & Chr(10)
+        Dim anchorAt As Integer = InStr(js, anchor)
+        If anchorAt > 0 Then
+            js = Left(js, anchorAt + Len(anchor) - 1) & exportsText & Mid(js, anchorAt + Len(anchor))
+        Else
+            js &= exportsText
+        End If
+    End If
+    Return UXBReportWriteText(jsPath, notes & js, errText)
+End Function
+
+' Script that publishes the package declarations to the page: capabilities, features, routes, API helpers, data file.
+Function UXBPkgGlobalsScript(ByRef r As PreprocessResult, ByRef dataHref As String) As String
+    Dim s As String = ""
+    ' host functions the WASM module imports: the page fills globalThis.uxbHostImports["module.name"], the loader passes them in
+    If r.watImportCount > 0 Then
+        Dim spec As String = ""
+        Dim hi As Integer
+        For hi = 0 To r.watImportCount - 1
+            If r.watImports(hi).moduleName = "" Or r.watImports(hi).importName = "" Then Continue For
+            If spec <> "" Then spec &= ", "
+            spec &= UXBPkgJsonQuote(r.watImports(hi).moduleName & "." & r.watImports(hi).importName) & ": {" & Chr(34) & "alias" & Chr(34) & ": " & UXBPkgJsonQuote(r.watImports(hi).aliasName) & ", " & Chr(34) & "signature" & Chr(34) & ": " & UXBPkgJsonQuote(r.watImports(hi).signatureText) & "}"
+        Next hi
+        s &= "globalThis.uxbHostImportSpec = {" & spec & "};" & Chr(10)
+        s &= "globalThis.uxbHostImports = globalThis.uxbHostImports || {};" & Chr(10)
+        s &= "globalThis.uxbBuildWasmImports = function () {" & Chr(10)
+        s &= "  var imports = {};" & Chr(10)
+        s &= "  Object.keys(globalThis.uxbHostImportSpec).forEach(function (key) {" & Chr(10)
+        s &= "    var dot = key.indexOf('.'); var mod = key.slice(0, dot); var nm = key.slice(dot + 1);" & Chr(10)
+        s &= "    imports[mod] = imports[mod] || {};" & Chr(10)
+        s &= "    imports[mod][nm] = globalThis.uxbHostImports[key] || function () { throw new Error('host import not bound: ' + key); };" & Chr(10)
+        s &= "  });" & Chr(10)
+        s &= "  return imports;" & Chr(10)
+        s &= "};" & Chr(10)
+    End If
+    If UXBPkgHasSection(r, "capabilities") <> 0 Then s &= "globalThis.uxbCapabilities = " & UXBPkgManifestObject(r, "capabilities.", 0, 0) & ";" & Chr(10)
+    If UXBPkgHasSection(r, "features") <> 0 Then s &= "globalThis.uxbFeatures = " & UXBPkgManifestObject(r, "features.", 0, 0) & ";" & Chr(10)
+    If UXBPkgHasSection(r, "routes") <> 0 Then
+        s &= "globalThis.uxbRoutes = " & UXBPkgManifestObject(r, "routes.", 0, 0) & ";" & Chr(10)
+        s &= "globalThis.uxbRoute = function (name) { return globalThis.uxbRoutes[name]; };" & Chr(10)
+    End If
+    If UXBPkgHasSection(r, "api") <> 0 Then
+        s &= "globalThis.uxbApiTable = " & UXBPkgManifestObject(r, "api.", 0, 0) & ";" & Chr(10)
+        s &= "globalThis.uxbApi = {};" & Chr(10)
+        s &= "Object.keys(globalThis.uxbApiTable).forEach(function (name) {" & Chr(10)
+        s &= "  var ep = globalThis.uxbApiTable[name];" & Chr(10)
+        s &= "  globalThis.uxbApi[name] = function (data) {" & Chr(10)
+        s &= "    var opts = { method: ep.method || 'GET' };" & Chr(10)
+        s &= "    if (data !== undefined && opts.method !== 'GET') { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(data); }" & Chr(10)
+        s &= "    return fetch(ep.url, opts).then(function (res) { return res.json(); });" & Chr(10)
+        s &= "  };" & Chr(10)
+        s &= "});" & Chr(10)
+    End If
+    If Trim(dataHref) <> "" Then s &= "globalThis.uxbDataPath = " & UXBPkgJsonQuote(dataHref) & ";" & Chr(10)
+    ' the text goes inside a <script> element: "</" would end it early, "<\/" means the same in a JavaScript string
+    Dim closeAt As Integer = InStr(s, "</")
+    Do While closeAt > 0
+        s = Left(s, closeAt) & "\" & Mid(s, closeAt + 1)
+        closeAt = InStr(closeAt + 2, s, "</")
+    Loop
+    Return s
+End Function
+
+' Name of the data JSON file below the browser folder ("" when the program wrote none).
+Function UXBPkgDataHref(ByRef r As PreprocessResult) As String
+    Dim v As String = ""
+    UXBPkgManifestGet r, "files.dataJson", v
+    If v <> "" Then Return UXBPkgSlash(v)
+    Dim i As Integer
+    For i = 0 To r.jsonEntryCount - 1
+        If r.jsonEntries(i).keyText = "JSON_SET" Then Return "data.json"
+    Next i
+    For i = 0 To r.blockCount - 1
+        If r.blocks(i).target = "JSON_ARRAY" Then Return "data.json"
+    Next i
+    Return ""
+End Function
+
+' Page text after the declared minify switches: JS, CSS and the HTML shell are shortened independently.
+Function UXBPkgMinifyFor(ByRef r As PreprocessResult, ByRef kind As String, ByRef t As String) As String
+    If kind = "JS" And r.minifyJs <> 0 Then Return UXBPkgMinifyJs(t)
+    If kind = "CSS" And r.minifyCss <> 0 Then Return UXBPkgMinifyCss(t)
+    If kind = "HTML" And r.minifyHtml <> 0 Then Return UXBPkgMinifyHtml(t)
+    Return t
+End Function
+
+' Shortens an already written output file in place (the generated program JS and the runtime JS follow %%MINIFY JS).
+Function UXBPkgMinifyFile(ByRef r As PreprocessResult, ByRef kind As String, ByRef filePath As String, ByRef errText As String) As Integer
+    errText = ""
+    If Trim(filePath) = "" Then Return 1
+    If (kind = "JS" And r.minifyJs = 0) Or (kind = "CSS" And r.minifyCss = 0) Or (kind = "HTML" And r.minifyHtml = 0) Then Return 1
+    Dim fileText As String
+    If UXBPkgReadAll(filePath, fileText) = 0 Then Return 1
+    Dim shortText As String = UXBPkgMinifyFor(r, kind, fileText)
+    Return UXBReportWriteText(filePath, shortText, errText)
+End Function
+
+' Links to fingerprinted assets: src="img/logo.png" becomes src="img/logo.1a2b3c4d.png" in the page text.
+Function UXBPkgRewriteAssetLinks(ByRef r As PreprocessResult, ByRef htmlText As String) As String
+    Dim outText As String = htmlText
+    Dim i As Integer
+    For i = 0 To r.assetCount - 1
+        If r.assets(i).status <> "COPIED" Then Continue For
+        Dim orig As String = UXBPkgSlash(r.assets(i).targetPath)
+        If orig = "" Then orig = UXBPkgSlash(r.assets(i).sourcePath)
+        If orig = "" Or orig = r.assets(i).finalPath Then Continue For
+        Dim needle As String = "src=" & Chr(34) & orig & Chr(34)
+        Dim repl As String = "src=" & Chr(34) & r.assets(i).finalPath & Chr(34)
+        Dim p As Integer = InStr(outText, needle)
+        Do While p > 0
+            outText = Left(outText, p - 1) & repl & Mid(outText, p + Len(needle))
+            p = InStr(p + Len(repl), outText, needle)
+        Loop
+    Next i
+    Return outText
+End Function
+
+' The asset records for manifest.json: kind, source, target, written name, size, hash and copy status.
+Function UXBPkgAssetsJson(ByRef r As PreprocessResult) As String
+    Dim j As String = ""
+    Dim i As Integer
+    For i = 0 To r.assetCount - 1
+        If i > 0 Then j &= "," & Chr(10)
+        j &= "    {" & Chr(34) & "kind" & Chr(34) & ":" & UXBPkgJsonQuote(r.assets(i).assetKind)
+        j &= "," & Chr(34) & "source" & Chr(34) & ":" & UXBPkgJsonQuote(r.assets(i).sourcePath)
+        j &= "," & Chr(34) & "target" & Chr(34) & ":" & UXBPkgJsonQuote(r.assets(i).targetPath)
+        j &= "," & Chr(34) & "alias" & Chr(34) & ":" & UXBPkgJsonQuote(r.assets(i).aliasName)
+        j &= "," & Chr(34) & "required" & Chr(34) & ":" & LTrim(Str(r.assets(i).required))
+        j &= "," & Chr(34) & "status" & Chr(34) & ":" & UXBPkgJsonQuote(r.assets(i).status)
+        j &= "," & Chr(34) & "final" & Chr(34) & ":" & UXBPkgJsonQuote(r.assets(i).finalPath)
+        j &= "," & Chr(34) & "bytes" & Chr(34) & ":" & LTrim(Str(r.assets(i).copiedBytes))
+        j &= "," & Chr(34) & "hash" & Chr(34) & ":" & UXBPkgJsonQuote(r.assets(i).hashHex) & "}"
+    Next i
+    Return j
+End Function
+
+#endif

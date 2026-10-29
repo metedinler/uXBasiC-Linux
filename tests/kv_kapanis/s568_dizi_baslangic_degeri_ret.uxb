@@ -1,0 +1,4 @@
+' S-568: dizi bildiriminde skaler baslangic degeri sessizce yok sayilmaz (AST/MIR/MIR-x64/JS 0, eski AST-x64 yalniz ilk eleman,
+' WASM calisma aninda dusuyordu): her yolda ayni ACIK derleme hatasi.
+DIM a(2) AS I32 = 7
+PRINT a(0)

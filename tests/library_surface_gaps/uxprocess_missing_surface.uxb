@@ -1,0 +1,18 @@
+INCLUDE "include/modules/uxprocess.uxmh"
+
+MAIN
+    IF FALSE THEN
+        uxprocess.Close(0)
+        PRINT uxprocess.CurrentProcessId()
+        PRINT uxprocess.ErrorText()
+        PRINT uxprocess.ExitCode(0)
+        PRINT uxprocess.IsRunning(0)
+        PRINT uxprocess.Kill(0, 0)
+        PRINT uxprocess.ProcessId(0)
+        PRINT uxprocess.RunWait("", "", 0, 0)
+        PRINT uxprocess.ShellOpen("", "", "", 0)
+        PRINT uxprocess.Start("", "", 0)
+        PRINT uxprocess.Wait(0, 0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXPROCESS"
+END MAIN

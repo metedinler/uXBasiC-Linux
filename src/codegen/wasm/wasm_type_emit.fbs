@@ -31,8 +31,10 @@ End Function
 ' addresses a name as global unless it declares that name itself (parameter or local).
 Dim Shared gUxbWasmGlobalNames As String  ' "|NAME|NAME2|" (safe, upper-cased)
 Dim Shared gUxbWasmLocalNames As String   ' "|NAME|" params/locals of the function being emitted
+Dim Shared gUxbWasmExceptionState As Integer
 
 Public Function UXBWasmNameIsModuleGlobal(ByVal safeName As String) As Integer
+    If gUxbWasmExceptionState <> 0 And (safeName = "__MIR_EXC_ACTIVE" Or safeName = "__MIR_EXC_VALUE") Then Return 1
     If InStr(gUxbWasmLocalNames, "|" & safeName & "|") > 0 Then Return 0
     Return IIf(InStr(gUxbWasmGlobalNames, "|" & safeName & "|") > 0, 1, 0)
 End Function

@@ -1,0 +1,7 @@
+CLASS Box
+    PUBLIC
+    n AS I32
+END CLASS
+DIM a(0 TO 1) AS Box
+DIM old AS I32 = a(0).n++
+PRINT old

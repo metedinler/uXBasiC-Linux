@@ -31,7 +31,7 @@ $gateJson = Join-Path $current "adim28_build_test_gate.json"
 
 $buildExit = 1
 if (Test-Path "build_64.bat") {
-  cmd /c "build_64.bat uxb\compiler\wrappers\uxb_main_wrapper.bas" *> $compileLog
+  cmd /c "build_64.bat" *> $compileLog
   $buildExit = $LASTEXITCODE
 } elseif (Test-Path "uxb/compiler/scripts/build_uxb_main_64.bat") {
   cmd /c "uxb\compiler\scripts\build_uxb_main_64.bat" *> $compileLog

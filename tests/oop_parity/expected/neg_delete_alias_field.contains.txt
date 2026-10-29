@@ -1,0 +1,6 @@
+AST=on a null object reference
+MIR=on a null object reference
+x64=on a null object reference
+AST-x64=on a null object reference
+JS=on a null object reference
+WASM=on a null object reference

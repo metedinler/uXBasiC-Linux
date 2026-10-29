@@ -1,0 +1,14 @@
+TYPE Point
+    n AS I8
+    f AS F64
+END TYPE
+DIM p AS Point
+p.n = I8(127)
+p.f = 0.5
+DIM n AS I32 = ++p.n
+DIM old AS F64 = p.f++
+p.f--
+PRINT n
+PRINT p.n
+PRINT old
+PRINT p.f

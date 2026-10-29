@@ -1,0 +1,37 @@
+P1 uncalled + kosullu cagri ust duzeyde
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Salin(x AS Sayac)
+    DIM y AS Sayac
+    y = x
+    DELETE y
+END SUB
+DIM q AS Sayac = NEW Sayac()
+IF 1 = 2 THEN Salin(q)
+=====
+P2 uncalled, delete parametre kopyasi yerine yeni nesne olusturup siler
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Kapat()
+    DIM y AS Sayac = NEW Sayac()
+    y.n = 1
+    DELETE y
+END SUB
+PRINT "tamam"
+=====
+P3 cagrilan fakat yalniz MAIN yok durumunda
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Salin(x AS Sayac)
+    DIM y AS Sayac
+    y = x
+    DELETE y
+END SUB
+DIM q AS Sayac = NEW Sayac()
+Salin(q)

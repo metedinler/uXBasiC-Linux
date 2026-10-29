@@ -19,7 +19,7 @@ if (Test-Path "build_64.bat") { cmd /c build_64.bat *> $buildLog }
 elseif (Test-Path "compiler\scripts\build_uxb_main_64.bat") { cmd /c compiler\scripts\build_uxb_main_64.bat *> $buildLog }
 else { throw "No build script found" }
 if ($LASTEXITCODE -ne 0) { throw "Build failed; see $buildLog" }
-$wrapperExe = "compiler\\wrappers\\uxb_main_wrapper_64.exe"
+$wrapperExe = "bin\uxb.exe"
 if (-not (Test-Path $wrapperExe)) { throw "Wrapper exe not found: $wrapperExe" }
 
 $results = @()

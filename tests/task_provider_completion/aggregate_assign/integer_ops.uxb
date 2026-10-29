@@ -1,0 +1,19 @@
+DIM a(0 TO 1) AS I64
+DIM calls AS I32 = 0
+FUNCTION Idx() AS I32
+    calls += 1
+    RETURN 0
+END FUNCTION
+a(0) = 20
+a(Idx()) -= 3
+a(Idx()) *= 2
+a(Idx()) \= 3
+a(Idx()) %= 4
+a(Idx()) ^= 1
+a(Idx()) |= 8
+a(Idx()) &= 11
+a(Idx()) <<= 1
+a(Idx()) >>= 1
+a(Idx()) **= 2
+PRINT a(0)
+PRINT calls

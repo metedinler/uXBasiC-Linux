@@ -1,0 +1,9 @@
+DECLARE SUB Increase(BYREF x AS I32)
+SUB Increase(BYREF x AS I32)
+    x = x + 1
+END SUB
+DIM n AS I32
+n = 6
+Increase(n)
+PRINT n
+' FUTURE EXPECT 7 on WASM; currently clean BYREF rejection is acceptable.

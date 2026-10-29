@@ -1,0 +1,10 @@
+CLASS Ic
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT 5
+    END DESTRUCTOR
+END CLASS
+' S-617: historical filename retained; deleting an empty class-array element is now a successful no-op.
+DIM arr(2) AS Ic
+DELETE arr(0)

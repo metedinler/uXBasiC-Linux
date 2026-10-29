@@ -1,0 +1,7 @@
+DIM A AS I32
+A = 3
+IF A > 2 THEN
+    PRINT "GT"
+ELSE
+    PRINT "LE"
+END IF

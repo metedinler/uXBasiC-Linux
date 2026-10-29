@@ -206,12 +206,16 @@ Public Function UXBJsCanonicalOpcode(ByVal opcodeText As String) As String
     Case "ARRAY_SIZEOF": Return "ARRAY_SIZEOF"
     Case "ARRAY_LBOUND": Return "ARRAY_LBOUND"
     Case "ARRAY_UBOUND": Return "ARRAY_UBOUND"
+    Case "ARRAY_FIELD_LOAD", "MIR_ARRAY_FIELD_LOAD": Return "ARRAY_FIELD_LOAD"
+    Case "ARRAY_FIELD_STORE", "MIR_ARRAY_FIELD_STORE": Return "ARRAY_FIELD_STORE"
     Case "ARRAY_NEW": Return "ARRAY_NEW"
     Case "ARRAY_LOAD", "LOAD_INDEXED": Return "ARRAY_LOAD"
     Case "ARRAY_STORE", "STORE_INDEXED": Return "ARRAY_STORE"
     Case "OBJECT_NEW", "NEW": Return "OBJECT_NEW"
     Case "FIELD_LOAD", "LOAD_FIELD": Return "FIELD_LOAD"
     Case "FIELD_STORE", "STORE_FIELD": Return "FIELD_STORE"
+    Case "UNION_FIELD_LOAD", "MIR_UNION_FIELD_LOAD": Return "UNION_FIELD_LOAD"
+    Case "UNION_FIELD_STORE", "MIR_UNION_FIELD_STORE": Return "UNION_FIELD_STORE"
     Case "METHOD_CALL": Return "METHOD_CALL"
     Case "VIRTUAL_CALL": Return "VIRTUAL_CALL"
     Case "CAST", "COERCE", "TYPEOF", "SIZEOF", "OFFSETOF", "CODEPTR", "LPTR", "ADDR_OF": Return op
@@ -228,10 +232,40 @@ Public Function UXBJsVarKey(ByVal nameText As String) As String
     Return UXBJsQuote(n)
 End Function
 
+' S-563 / S-242: &H / &O / &B tamsayi sabitleri MIR'e kaynak metni olarak gecer (S-078; x64 yayici ValULng ile cozer). JS
+' bunlari degisken okuma sanip `vars["&H44"]` (undefined) uretiyordu; sabit bir islemin parcasi olunca on-isleme katlayip
+' ondaliga cevirdigi icin yalniz tek basina duran sabit bozuktu. Gecerli degilse bos metin doner.
+Private Function UXBJsRadixLiteralDecimal(ByRef s As String) As String
+    Dim radixText As String = Trim(s)
+    If Len(radixText) < 3 Or Left(radixText, 1) <> "&" Then Return ""
+    Dim radixKind As String = UCase(Mid(radixText, 2, 1))
+    Dim radixDigitPos As Integer
+    Dim radixDigit As String
+    For radixDigitPos = 3 To Len(radixText)
+        radixDigit = UCase(Mid(radixText, radixDigitPos, 1))
+        Select Case radixKind
+        Case "H": If InStr("0123456789ABCDEF", radixDigit) = 0 Then Return ""
+        Case "O": If InStr("01234567", radixDigit) = 0 Then Return ""
+        Case "B": If InStr("01", radixDigit) = 0 Then Return ""
+        Case Else: Return ""
+        End Select
+    Next radixDigitPos
+    Return LTrim(Str(ValULng(radixText)))
+End Function
+
+' The two MIR exception-state variables (THROW/ASSERT write them, TRY/CATCH and the post-call checks read them).
+Private Function UXBJsIsSharedExceptionVar(ByRef nameText As String) As Integer
+    Dim u As String = UCase(nameText)
+    If u = "__MIR_EXC_ACTIVE" Or u = "__MIR_EXC_VALUE" Then Return 1
+    Return 0
+End Function
+
 Public Function UXBJsOperand(ByVal opText As String) As String
     Dim t As String
     t = Trim(opText)
     If t = "" Then Return "undefined"
+    Dim radixDecimal As String = UXBJsRadixLiteralDecimal(t)
+    If radixDecimal <> "" Then Return radixDecimal
     ' Receiver aliases have one physical object in every method frame.
     ' SUPER affects member ownership during semantic lowering; at runtime it
     ' still denotes the current receiver, just like THIS and ME.
@@ -244,10 +278,14 @@ Public Function UXBJsOperand(ByVal opText As String) As String
     Case "null": Return "null"
     Case "nothing": Return "null"
     End Select
+    ' S-243: the exception state is one per program, not one per routine frame. A routine that returns with __mir_exc_active set hands
+    ' the exception to its caller, whose post-call check (MIR exception pass) reads the same flag; a per-frame vars[] slot lost it.
+    If UXBJsIsSharedExceptionVar(t) <> 0 Then Return "__uxbGlobals[" & UXBJsVarKey(t) & "]"
     Return "vars[" & UXBJsVarKey(t) & "]"
 End Function
 
 Public Function UXBJsAssignTarget(ByVal nameText As String) As String
+    If UXBJsIsSharedExceptionVar(Trim(nameText)) <> 0 Then Return "__uxbGlobals[" & UXBJsVarKey(Trim(nameText)) & "]"
     Return "vars[" & UXBJsVarKey(nameText) & "]"
 End Function
 

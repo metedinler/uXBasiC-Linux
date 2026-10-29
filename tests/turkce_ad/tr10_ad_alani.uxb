@@ -1,0 +1,9 @@
+' S-579: Türkçe harfli NAMESPACE adı ve üyeleri
+NAMESPACE Matematik
+    CONST ÇEVRE_ÇARPANI = 2
+    FUNCTION Çarp(a AS I32, b AS I32) AS I32
+        RETURN a * b
+    END FUNCTION
+END NAMESPACE
+PRINT Matematik.Çarp(6, 7)
+PRINT matematik.çarp(2, 3) + MATEMATİK.ÇEVRE_ÇARPANI

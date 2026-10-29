@@ -1,0 +1,4 @@
+DIM f AS F64 = 2.5
+PRINT STR(f) + "a"
+PRINT "a" + STR(f)
+PRINT VAL("5") + 1

@@ -1,0 +1,13 @@
+' S-571 (2026-10-16): a METHOD that changes a field from its parameter (the book's banka_hesabi case printed
+' nan in JS because the parameter was undefined).
+CLASS Counter
+    PUBLIC
+    DIM n AS I32
+    METHOD Add(d AS I32)
+        n = n + d
+    END METHOD
+END CLASS
+DIM c AS Counter = NEW Counter()
+c.n = 100
+c.Add(50)
+PRINT c.n

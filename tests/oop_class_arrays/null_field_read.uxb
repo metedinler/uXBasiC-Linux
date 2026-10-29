@@ -1,0 +1,8 @@
+CLASS Ic
+    PUBLIC
+    n AS I32
+END CLASS
+DIM arr(2) AS Ic
+DIM sentinel AS Ic = NEW Ic()
+sentinel.n = 42
+PRINT arr(1).n

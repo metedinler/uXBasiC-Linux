@@ -1,0 +1,41 @@
+yikici ve ikinci referans
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    CONSTRUCTOR()
+        n = 5
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT "yikici calisti"
+    END DESTRUCTOR
+END CLASS
+DIM a AS Sayac = NEW Sayac()
+DIM b AS Sayac
+b = a
+DELETE a
+PRINT "delete sonrasi"
+PRINT b.n
+=====
+yikici iki kez
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT "yikici"
+    END DESTRUCTOR
+END CLASS
+DIM a AS Sayac = NEW Sayac()
+DELETE a
+DELETE a
+PRINT "bitti"
+=====
+DELETE olmadan program sonu
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT "yikici"
+    END DESTRUCTOR
+END CLASS
+DIM a AS Sayac = NEW Sayac()
+PRINT "bitti"

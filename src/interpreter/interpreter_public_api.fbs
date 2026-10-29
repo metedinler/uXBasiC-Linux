@@ -15,15 +15,17 @@ Function UXBRunAstInterpreterPublic(ByRef ast As ASTPool, ByVal rootNode As Inte
     Return IIf(UCase(Trim(resultOut.statusText)) = "PASS", 1, 0)
 End Function
 
-Function UXBRunMirInterpreterPublic(ByRef canonicalRun As UXBSemanticToCanonicalMIRBridgeResult, ByRef resultOut As UXBInterpResult, ByRef errText As String) As Integer
+Function UXBRunMirInterpreterPublic(ByRef canonicalRun As UXBSemanticToCanonicalMIRBridgeResult, ByRef resultOut As UXBInterpResult, ByRef errText As String, ByVal liveEcho As Integer = 0, ByVal enableTrace As Integer = 0) As Integer
     Dim ctx As UXBInterpContext
-    UXBInterpContextInit ctx, "native", 1
+    UXBInterpContextInit ctx, "native", enableTrace
+    ctx.runtime.liveEcho = liveEcho
     If canonicalRun.instructionCount <= 0 Then
         UXBInterpResultInit resultOut
         UXBInterpResultFail resultOut, UXB_INTERP_ERR_MIR_OPCODE, "canonical MIR instruction list is empty"
         errText = resultOut.errorText
         Return 0
     End If
+    UXBInterpContextSetOopMetadata ctx, canonicalRun.oopClassNames(), canonicalRun.oopClassBaseNames(), canonicalRun.oopClassCtorNames(), canonicalRun.oopClassCtorParamCounts(), canonicalRun.oopClassCount
     resultOut = UXBMIRInterpRunInstructions(canonicalRun.instructions(), canonicalRun.instructionCount, ctx, errText)
     If Trim(errText) = "" Then errText = resultOut.errorText
     Return IIf(UCase(Trim(resultOut.statusText)) = "PASS", 1, 0)

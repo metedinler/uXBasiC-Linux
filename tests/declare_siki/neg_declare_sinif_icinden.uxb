@@ -1,0 +1,12 @@
+' S-544: a class method that calls a global routine defined after the class needs the DECLARE above the class.
+CLASS Yazici
+    PUBLIC
+    METHOD Yap()
+        Selam()
+    END METHOD
+END CLASS
+SUB Selam()
+    PRINT 7
+END SUB
+DIM y AS Yazici = NEW Yazici()
+y.Yap()

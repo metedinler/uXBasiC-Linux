@@ -1,0 +1,6 @@
+CLASS Tek
+    PUBLIC
+    DIM x AS I32
+END CLASS
+' S-619: a class without a constructor takes no arguments.
+DIM p AS Tek = NEW Tek(5)

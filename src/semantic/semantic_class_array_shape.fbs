@@ -1,0 +1,262 @@
+#ifndef UXB_SEMANTIC_CLASS_ARRAY_SHAPE_FBS
+#define UXB_SEMANTIC_CLASS_ARRAY_SHAPE_FBS
+
+' S-629: retain the source shape, but give every execution engine the same
+' checked row-major reference array. Helpers are ordinary compiled functions;
+' arguments evaluate each source index once, including in DELETE/compound ops.
+Private Function SemClassArrayShape(ByRef ps As ParseState, ByVal decl As Integer) As Integer
+    Dim ch As Integer = ps.ast.nodes(decl).firstChild
+    Do While ch <> -1
+        If ps.ast.nodes(ch).kind = "CLASS_ARRAY_SHAPE" Then Return ch
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return -1
+End Function
+
+Private Function SemClassArraySourceDecl(ByRef ps As ParseState, ByVal expr As Integer, ByVal nameText As String, ByVal sourceCount As Integer) As Integer
+    Dim owner As Integer = SemStaticRoutineOwner(ps, expr)
+    For pass As Integer = 0 To 1
+        For d As Integer = sourceCount - 1 To 0 Step -1
+            If ps.ast.nodes(d).kind <> "DIM_DECL" Then Continue For
+            If UCase(ps.ast.nodes(d).value) <> UCase(nameText) Then Continue For
+            Dim declOwner As Integer = SemStaticRoutineOwner(ps, d)
+            If (pass = 0 And declOwner <> owner) Or (pass = 1 And declOwner <> -1) Then Continue For
+            If SemClassArrayShape(ps, d) >= 0 Then Return d
+            Return -1
+        Next d
+    Next pass
+    Return -1
+End Function
+
+Private Function SemClassArrayBoundInt(ByRef ps As ParseState, ByVal expr As Integer, ByRef valueOut As LongInt) As Integer
+    If expr < 0 Then Return 0
+    Dim numberValue As Double, isInteger As Integer
+    If SemTryEvalConstNumber(ps, expr, numberValue, isInteger) = 0 Then Return 0
+    If numberValue < -2147483648.0 Or numberValue > 2147483647.0 Then Return 0
+    valueOut = CLngInt(numberValue)
+    Return IIf(CDbl(valueOut) = numberValue, 1, 0)
+End Function
+
+Private Function SemClassArrayReadBound(ByRef ps As ParseState, ByVal bound As Integer, ByRef lo As LongInt, ByRef hi As LongInt) As Integer
+    lo = 0
+    If ps.ast.nodes(bound).kind = "RANGE_EXPR" Then
+        If SemClassArrayBoundInt(ps, ps.ast.nodes(bound).left, lo) = 0 Then Return 0
+        If SemClassArrayBoundInt(ps, ps.ast.nodes(bound).right, hi) = 0 Then Return 0
+    Else
+        If SemClassArrayBoundInt(ps, bound, hi) = 0 Then Return 0
+    End If
+    Return IIf(hi >= lo, 1, 0)
+End Function
+
+Private Function SemClassArrayAppendHelpers(ByRef ps As ParseState, ByVal axisName As String, ByVal foldName As String, ByRef errText As String) As Integer
+    Dim code As String
+    code = "FUNCTION " & axisName & "(ix AS I32, lowIndex AS I32, highIndex AS I32) AS I32" & Chr(10)
+    code &= "IF ix < lowIndex OR ix > highIndex THEN RETURN -1" & Chr(10)
+    code &= "RETURN ix - lowIndex" & Chr(10) & "END FUNCTION" & Chr(10)
+    code &= "FUNCTION " & foldName & "(acc AS I32, axisIndex AS I32, extent AS I32) AS I32" & Chr(10)
+    code &= "IF acc < 0 OR axisIndex < 0 THEN RETURN -1" & Chr(10)
+    code &= "RETURN acc * extent + axisIndex" & Chr(10) & "END FUNCTION" & Chr(10)
+    Dim lx As LexerState, helper As ParseState
+    Dim declaredCount As Integer = gDeclaredTypeCount, referencedCount As Integer = gReferencedTypeCount
+    Dim declaredNames(Any) As String, referencedNames(Any) As String
+    If declaredCount > 0 Then ReDim declaredNames(declaredCount - 1)
+    If referencedCount > 0 Then ReDim referencedNames(referencedCount - 1)
+    For i As Integer = 0 To declaredCount - 1: declaredNames(i) = gDeclaredTypeNames(i): Next i
+    For i As Integer = 0 To referencedCount - 1: referencedNames(i) = gReferencedTypeNames(i): Next i
+    LexerInit lx, code
+    ParserInit helper, lx
+    Dim parsed As Integer = ParseProgram(helper)
+    gDeclaredTypeCount = declaredCount: gReferencedTypeCount = referencedCount
+    If declaredCount > 0 Then ReDim gDeclaredTypeNames(declaredCount - 1)
+    If referencedCount > 0 Then ReDim gReferencedTypeNames(referencedCount - 1)
+    For i As Integer = 0 To declaredCount - 1: gDeclaredTypeNames(i) = declaredNames(i): Next i
+    For i As Integer = 0 To referencedCount - 1: gReferencedTypeNames(i) = referencedNames(i): Next i
+    If parsed = 0 Then errText = "semantic: class array shape helper: " & helper.lastError: Return 0
+    Dim offset As Integer = ps.ast.count - 1
+    For i As Integer = 1 To helper.ast.count - 1
+        Dim result As Integer = ASTNewNode(ps.ast, helper.ast.nodes(i).kind, "", "", 0, 0)
+        ps.ast.nodes(result) = helper.ast.nodes(i)
+        With ps.ast.nodes(result)
+            If .left >= 0 Then .left += offset
+            If .right >= 0 Then .right += offset
+            If .firstChild >= 0 Then .firstChild += offset
+            If .nextSibling >= 0 Then .nextSibling += offset
+            If .parent >= 0 Then .parent += offset
+            .lineNo = 0: .colNo = 0: .sourceFile = ""
+        End With
+    Next i
+    Dim routine As Integer = helper.ast.nodes(helper.rootNode).firstChild
+    Do While routine <> -1
+        Dim nextRoutine As Integer = helper.ast.nodes(routine).nextSibling
+        ' ASTAddChild links one detached node; retaining the parsed sibling
+        ' chain would attach the second routine twice and create a cycle.
+        ps.ast.nodes(routine + offset).nextSibling = -1
+        ASTAddChild ps.ast, ps.rootNode, routine + offset
+        routine = nextRoutine
+    Loop
+    Return 1
+End Function
+
+Private Function SemNormalizeMultidimClassArrays(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim sourceCount As Integer = ps.ast.count
+    Dim hasShapes As Integer = 0
+    For d As Integer = 0 To sourceCount - 1
+        If ps.ast.nodes(d).kind <> "DIM_DECL" Then Continue For
+        Dim bound As Integer = -1, declaredType As String = ""
+        Dim ch As Integer = ps.ast.nodes(d).firstChild
+        Do While ch <> -1
+            If ps.ast.nodes(ch).kind = "DIM_BOUNDS" Then bound = ch
+            If ps.ast.nodes(ch).kind = "TYPE_REF" Then declaredType = ps.ast.nodes(ch).value
+            ch = ps.ast.nodes(ch).nextSibling
+        Loop
+        If bound < 0 Then Continue For
+        If SemChildCount(ps, bound) < 2 Or SemHasClassName(ps, declaredType) = 0 Then Continue For
+        ' Mutable shapes need runtime per-axis state. Preserve their existing
+        ' path until that implementation is available; never freeze REDIM into
+        ' the initial DIM shape, which would regress working AST programs.
+        Dim mutableShape As Integer = 0
+        For redimNode As Integer = 0 To sourceCount - 1
+            If ps.ast.nodes(redimNode).kind <> "REDIM_DECL" Then Continue For
+            If UCase(ps.ast.nodes(redimNode).value) <> UCase(ps.ast.nodes(d).value) Then Continue For
+            If SemStaticRoutineOwner(ps, redimNode) = SemStaticRoutineOwner(ps, d) Then mutableShape = 1: Exit For
+        Next redimNode
+        If mutableShape <> 0 Then Continue For
+        Dim total As LongInt = 1
+        ch = ps.ast.nodes(bound).firstChild
+        Do While ch <> -1
+            Dim lo As LongInt, hi As LongInt
+            If SemClassArrayReadBound(ps, ch, lo, hi) = 0 Then
+                ' Keep the existing runtime-shaped path until per-axis
+                ' runtime metadata is shared by all engines.
+                mutableShape = 1: Exit Do
+            End If
+            Dim extent As LongInt = hi - lo + 1
+            If extent > 268435455LL \ total Then
+                errText = "semantic: class array byte size overflow: " & ps.ast.nodes(d).value
+                Return 0
+            End If
+            total *= extent
+            ch = ps.ast.nodes(ch).nextSibling
+        Loop
+        If mutableShape <> 0 Then Continue For
+        ' Give routine-local array storage its own identity before MIR/backend
+        ' global-name discovery. A local DIM must not resize an identically
+        ' named global array in JS/WASM/native storage tables.
+        Dim routineOwner As Integer = SemStaticRoutineOwner(ps, d)
+        If routineOwner >= 0 Then
+            Dim oldName As String = UCase(ps.ast.nodes(d).value)
+            Dim storageName As String = "_UXB_CA_LOCAL_" & LTrim(Str(d)) & "_" & oldName
+            Dim collision As Integer
+            Do
+                collision = 0
+                For namedDecl As Integer = 0 To sourceCount - 1
+                    Dim namedKind As String = ps.ast.nodes(namedDecl).kind
+                    If namedKind <> "DIM_DECL" And namedKind <> "PARAM_DECL" And namedKind <> "CONST_DECL" Then Continue For
+                    If UCase(ps.ast.nodes(namedDecl).value) = storageName Then collision = 1: Exit For
+                Next namedDecl
+                If collision <> 0 Then storageName &= "_G"
+            Loop While collision <> 0
+            If SemStaticRename(ps, routineOwner, oldName, storageName, d, errText) = 0 Then Return 0
+            ps.ast.nodes(d).value = storageName
+            For memberCall As Integer = 0 To sourceCount - 1
+                If ps.ast.nodes(memberCall).kind <> "CALL_EXPR" Then Continue For
+                If SemStaticRoutineOwner(ps, memberCall) <> routineOwner Then Continue For
+                If Left(UCase(ps.ast.nodes(memberCall).value), Len(oldName) + 1) = oldName & "." Then
+                    ps.ast.nodes(memberCall).value = storageName & Mid(ps.ast.nodes(memberCall).value, Len(oldName) + 1)
+                End If
+            Next memberCall
+        End If
+        ps.ast.nodes(bound).kind = "CLASS_ARRAY_SHAPE"
+        Dim flatBounds As Integer = SemStaticNode(ps, d, "DIM_BOUNDS")
+        Dim flatRange As Integer = SemStaticNode(ps, d, "RANGE_EXPR")
+        ASTSetLeft ps.ast, flatRange, SemStaticNode(ps, d, "NUMBER", "0")
+        ASTSetRight ps.ast, flatRange, SemStaticNode(ps, d, "NUMBER", LTrim(Str(total - 1)))
+        ASTAddChild ps.ast, flatBounds, flatRange
+        ASTAddChild ps.ast, d, flatBounds
+        hasShapes = 1
+    Next d
+    If hasShapes = 0 Then Return 1
+    Dim axisName As String = "_UXB_CA_AXIS_" & LTrim(Str(sourceCount))
+    Dim foldName As String = "_UXB_CA_FOLD_" & LTrim(Str(sourceCount))
+    Do While SemHasRoutineByName(ps, axisName) <> 0 Or SemHasRoutineByName(ps, foldName) <> 0
+        axisName &= "_G": foldName &= "_G"
+    Loop
+    Dim helpersUsed As Integer = 0
+    For expr As Integer = 0 To sourceCount - 1
+        If ps.ast.nodes(expr).kind <> "CALL_EXPR" Then Continue For
+        Dim callName As String = UCase(ps.ast.nodes(expr).value)
+        If callName = "LBOUND" Or callName = "UBOUND" Or callName = "SIZEOF" Then
+            Dim arrayArg As Integer = SemChildAt(ps, expr, 0)
+            If arrayArg < 0 Then Continue For
+            If ps.ast.nodes(arrayArg).kind <> "IDENT" Then Continue For
+            Dim queryDecl As Integer = SemClassArraySourceDecl(ps, expr, ps.ast.nodes(arrayArg).value, sourceCount)
+            If queryDecl < 0 Then Continue For
+            Dim shape As Integer = SemClassArrayShape(ps, queryDecl)
+            Dim answer As LongInt = 8
+            If callName = "SIZEOF" Then
+                If SemChildCount(ps, expr) <> 1 Then errText = "semantic: SIZEOF expects one argument": Return 0
+                Dim b As Integer = ps.ast.nodes(shape).firstChild
+                Do While b <> -1
+                    Dim lo As LongInt, hi As LongInt
+                    SemClassArrayReadBound ps, b, lo, hi
+                    answer *= hi - lo + 1
+                    b = ps.ast.nodes(b).nextSibling
+                Loop
+            Else
+                Dim axis As LongInt = 1
+                Dim axisArg As Integer = SemChildAt(ps, expr, 1)
+                If axisArg >= 0 Then
+                    If SemClassArrayBoundInt(ps, axisArg, axis) = 0 Then errText = "semantic: array dimension must be a compile-time integer": Return 0
+                End If
+                If axis < 1 Or axis > SemChildCount(ps, shape) Or SemChildCount(ps, expr) > 2 Then
+                    errText = "semantic: array dimension out of range: " & ps.ast.nodes(arrayArg).value
+                    Return 0
+                End If
+                Dim lo As LongInt, hi As LongInt
+                SemClassArrayReadBound ps, SemChildAt(ps, shape, CInt(axis) - 1), lo, hi
+                answer = IIf(callName = "LBOUND", lo, hi)
+            End If
+            ps.ast.nodes(expr).kind = "NUMBER": ps.ast.nodes(expr).value = LTrim(Str(answer))
+            ps.ast.nodes(expr).firstChild = -1: ps.ast.nodes(expr).left = -1: ps.ast.nodes(expr).right = -1
+            Continue For
+        End If
+        Dim decl As Integer = SemClassArraySourceDecl(ps, expr, callName, sourceCount)
+        If decl < 0 Then Continue For
+        Dim shape As Integer = SemClassArrayShape(ps, decl)
+        If SemChildCount(ps, expr) <> SemChildCount(ps, shape) Then
+            errText = "semantic: " & callName & " was declared with " & LTrim(Str(SemChildCount(ps, shape))) & " dimension(s) but indexed with " & LTrim(Str(SemChildCount(ps, expr)))
+            Return 0
+        End If
+        Dim indexNode As Integer = ps.ast.nodes(expr).firstChild
+        Dim boundNode As Integer = ps.ast.nodes(shape).firstChild
+        ps.ast.nodes(expr).firstChild = -1
+        Dim flatIndex As Integer = -1
+        Do While indexNode <> -1
+            Dim nextIndex As Integer = ps.ast.nodes(indexNode).nextSibling
+            ps.ast.nodes(indexNode).nextSibling = -1
+            Dim lo As LongInt, hi As LongInt
+            SemClassArrayReadBound ps, boundNode, lo, hi
+            Dim axisCall As Integer = SemStaticNode(ps, expr, "CALL_EXPR", axisName)
+            ASTAddChild ps.ast, axisCall, indexNode
+            ASTAddChild ps.ast, axisCall, SemStaticNode(ps, expr, "NUMBER", LTrim(Str(lo)))
+            ASTAddChild ps.ast, axisCall, SemStaticNode(ps, expr, "NUMBER", LTrim(Str(hi)))
+            If flatIndex < 0 Then
+                flatIndex = axisCall
+            Else
+                Dim foldCall As Integer = SemStaticNode(ps, expr, "CALL_EXPR", foldName)
+                ASTAddChild ps.ast, foldCall, flatIndex
+                ASTAddChild ps.ast, foldCall, axisCall
+                ASTAddChild ps.ast, foldCall, SemStaticNode(ps, expr, "NUMBER", LTrim(Str(hi - lo + 1)))
+                flatIndex = foldCall
+            End If
+            indexNode = nextIndex
+            boundNode = ps.ast.nodes(boundNode).nextSibling
+        Loop
+        ASTAddChild ps.ast, expr, flatIndex
+        helpersUsed = 1
+    Next expr
+    If helpersUsed <> 0 Then Return SemClassArrayAppendHelpers(ps, axisName, foldName, errText)
+    Return 1
+End Function
+
+#endif

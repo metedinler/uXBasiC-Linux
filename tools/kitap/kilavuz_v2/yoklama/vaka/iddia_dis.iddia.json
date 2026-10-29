@@ -1,0 +1,15 @@
+[
+ {"ad": "abs kucuk harf", "kod": "DIM r AS I32\nr = CALL(DLL, \"ucrtbase.dll\", \"abs\", I32, CDECL, \"I32\", -5)\nPRINT r", "beklenen": "5", "yoksay": ["JS"]},
+ {"ad": "dll adi buyuk harf uzantisiz", "kod": "DIM r AS I32\nr = CALL(DLL, \"UCRTBASE\", \"abs\", I32, CDECL, \"I32\", -6)\nPRINT r", "beklenen": "6", "yoksay": ["JS"]},
+ {"ad": "islev adi buyuk harf yok", "kod": "DIM r AS I32\nr = CALL(DLL, \"ucrtbase.dll\", \"ABS\", I32, CDECL, \"I32\", -5)\nPRINT r", "beklenen": "HATA", "yoksay": ["JS"]},
+ {"ad": "tip listesi sayi uyusmaz", "kod": "DIM r AS I32\nr = CALL(DLL, \"ucrtbase.dll\", \"abs\", I32, CDECL, \"I32,I32\", -5)\nPRINT r", "beklenen": "HATA", "yoksay": ["JS"]},
+ {"ad": "bilinmeyen tip", "kod": "DIM r AS I32\nr = CALL(DLL, \"ucrtbase.dll\", \"abs\", I32, CDECL, \"BILINMEZ\", -5)\nPRINT r", "beklenen": "HATA", "yoksay": ["JS"]},
+ {"ad": "DLL yok", "kod": "DIM r AS I32\nr = CALL(DLL, \"yok_dll_xyz.dll\", \"abs\", I32, CDECL, \"I32\", -5)\nPRINT r", "beklenen": "HATA", "yoksay": ["JS"]},
+ {"ad": "argumansiz islev", "kod": "DIM r AS I32\nr = CALL(DLL, \"kernel32.dll\", \"GetCurrentProcessId\", I32, STDCALL)\nPRINT r > 0", "beklenen": "-1", "yoksay": ["JS"]},
+ {"ad": "CALL API Sleep", "kod": "DIM r AS I32\nr = CALL(API, \"kernel32\", \"GetCurrentProcessId\", I32)\nPRINT r > 0", "beklenen": "-1", "yoksay": ["JS"]},
+ {"ad": "MODULE degisken ilk deger ve disaridan atama", "kod": "MODULE Sayac\n    DIM adet AS I32 = 7\n    FUNCTION Say() AS I32\n        adet = adet + 1\n        RETURN adet\n    END FUNCTION\nEND MODULE\nPRINT Sayac.Say()\nSayac.adet = 5\nPRINT Sayac.Say()", "beklenen": ["8", "6"]},
+ {"ad": "MODULE ici TYPE USING", "kod": "MODULE Geo\n    TYPE Nokta\n        x AS I32\n        y AS I32\n    END TYPE\nEND MODULE\nUSING Geo\nDIM p AS Nokta\np.x = 3\np.y = 4\nPRINT p.x + p.y", "beklenen": "7", "yoksay": ["x64"]},
+ {"ad": "NAMESPACE iki kez acilir", "kod": "NAMESPACE A\n    DIM n AS I32 = 2\nEND NAMESPACE\nNAMESPACE A\n    FUNCTION F() AS I32\n        RETURN n * 5\n    END FUNCTION\nEND NAMESPACE\nPRINT A.F()", "beklenen": "10"},
+ {"ad": "ALIAS metin degisimi", "kod": "NAMESPACE Cok_Uzun_Ad\n    FUNCTION F() AS I32\n        RETURN 9\n    END FUNCTION\nEND NAMESPACE\nALIAS KA = Cok_Uzun_Ad\nPRINT KA.F()", "beklenen": "9"},
+ {"ad": "MODULE NAMESPACE ayni ad", "kod": "MODULE M\n    FUNCTION F() AS I32\n        RETURN 1\n    END FUNCTION\nEND MODULE\nNAMESPACE M\n    FUNCTION G() AS I32\n        RETURN 2\n    END FUNCTION\nEND NAMESPACE\nPRINT M.F() + M.G()", "beklenen": "3"}
+]

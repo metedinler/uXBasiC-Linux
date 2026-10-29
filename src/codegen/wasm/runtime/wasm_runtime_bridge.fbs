@@ -1,5 +1,6 @@
 #ifndef UXB_WASM_RUNTIME_BRIDGE_FBS
 #define UXB_WASM_RUNTIME_BRIDGE_FBS
+#include once "wasm_value_runtime_generated.fbs"
 
 Function UXBWasmRuntimeBridgeJs(ByRef moduleValue As MIRModule) As String
     Dim s As String
@@ -11,35 +12,46 @@ Function UXBWasmRuntimeBridgeJs(ByRef moduleValue As MIRModule) As String
     ' S-142b: the language's floating text rule (16 significant digits, no padding zeros, exponent >= 2 digits);
     ' identical to formatNumber in runtime/js/common/ux_runtime_core.js.
     s &= "const fmtNum = (v) => { if(typeof v!=='number') return String(v); if(v===0) return '0'; if(Number.isNaN(v)) return 'nan'; if(!Number.isFinite(v)) return v<0?'-inf':'inf'; if(Number.isSafeInteger(v)) return String(v); const d=16; const p=v.toExponential(d-1).split('e'); const x=Number(p[1]); if(x<-4||x>=d){ const m=p[0].indexOf('.')>=0?p[0].replace(/\.?0+$/,''):p[0]; const e=String(Math.abs(x)); return m+'e'+(x<0?'-':'+')+(e.length<2?'0'+e:e); } const f=v.toFixed(Math.max(0,d-1-x)); return f.indexOf('.')>=0?f.replace(/\.?0+$/,''):f; };" & Chr(10)
-    s &= "const write = (v) => { const t=fmtNum(v); if(typeof process!=='undefined'&&process.stdout) process.stdout.write(t); else if(globalThis.ux) globalThis.ux.print(t); else console.log(t); };" & Chr(10)
+    s &= "let printColumn=0, printRow=1;" & Chr(10)
+    s &= "const write = (v) => { const t=fmtNum(v); advanceWasmCursor(t); if(typeof process!=='undefined'&&process.stdout) process.stdout.write(t); else if(globalThis.ux) globalThis.ux.print(t); else console.log(t); };" & Chr(10)
     s &= "const hashField = (v) => { let h=0x811c9dc5; for(const c of String(v).toUpperCase()){ h ^= c.charCodeAt(0); h = Math.imul(h,0x01000193); } return h|0; };" & Chr(10)
     s &= "const hostCall4 = (id,a,b,c,d) => {" & Chr(10)
     s &= "  switch(id|0) {" & Chr(10)
-    s &= "    case 1: write(a|0); return a|0; case 1000: if(globalThis.ux&&globalThis.ux.println) globalThis.ux.println(); else write('\n'); return 0;" & Chr(10)
-    s &= "    case 3: return (Date.now()/1000)|0; case 4: return (Math.random()*2147483647)|0; case 5: return a|0;" & Chr(10)
+    s &= "    case 1: write(a|0); return a|0; case 1000: if(globalThis.ux&&globalThis.ux.println) { globalThis.ux.println(); advanceWasmCursor('\n'); } else write('\n'); return 0;" & Chr(10)
+    s &= "    case 1001: write(' '.repeat(14-(printColumn%14))); return 0; case 1002: write(' '); return 0;" & Chr(10)
+    s &= "    case 3: { const d=new Date(); return (d.getHours()*3600+d.getMinutes()*60+d.getSeconds())|0; } case 4: return (Math.random()*2147483647)|0; case 5: return a|0;" & Chr(10)
+    s &= "    case 6: return printRow; case 7: return printColumn+1;" & Chr(10)
+    s &= "    case 8: printRow=1; printColumn=0; if(typeof process!=='undefined'&&process.stdout?.isTTY) process.stdout.write('\x1b[2J\x1b[H'); else if(globalThis.ux?.cls) globalThis.ux.cls(); return 0;" & Chr(10)
+    s &= "    case 9: printRow=Math.max(1,a|0); printColumn=Math.max(1,b|0)-1; if(typeof process!=='undefined'&&process.stdout?.isTTY) process.stdout.write('\x1b['+printRow+';'+(printColumn+1)+'H'); else if(globalThis.ux?.locate) globalThis.ux.locate(printRow,printColumn+1); return 0;" & Chr(10)
     s &= "    case 10: return Math.abs(a|0)|0; case 11: return Math.sqrt(a|0)|0; case 12: return Math.sin(a|0)|0; case 13: return Math.cos(a|0)|0;" & Chr(10)
     s &= "    case 14: return Math.tan(a|0)|0; case 15: return Math.atan(a|0)|0; case 16: return Math.log(a|0)|0; case 17: return Math.exp(a|0)|0;" & Chr(10)
     s &= "    case 80: { const h=nextHandle++; const n=Math.max(0,a|0); arrays.set(h,{lower:c|0,data:new Array(n).fill(b|0)}); return h|0; }" & Chr(10)
-    s &= "    case 81: { const r=arrays.get(a|0); if(!r) throw new Error('UXB_WASM_ARRAY_MISSING:'+a); const i=(b|0)-(r.lower|0); return Number(r.data[i]||0)|0; }" & Chr(10)
-    s &= "    case 82: { const r=arrays.get(a|0); if(!r) throw new Error('UXB_WASM_ARRAY_MISSING:'+a); const i=(b|0)-(r.lower|0); r.data[i]=c|0; return c|0; }" & Chr(10)
+    s &= "    case 81: { const r=arrays.get(a|0); if(!r) throw new Error('UXB_WASM_ARRAY_MISSING:'+a); const i=(b|0)-(r.lower|0); if(i<0||i>=r.data.length) throw new Error('array index out of bounds'); return Number(r.data[i]||0)|0; }" & Chr(10)
+    s &= "    case 82: { const r=arrays.get(a|0); if(!r) throw new Error('UXB_WASM_ARRAY_MISSING:'+a); const i=(b|0)-(r.lower|0); if(i<0||i>=r.data.length) throw new Error('array index out of bounds'); r.data[i]=c|0; return c|0; }" & Chr(10)
     s &= "    case 83: { const r=arrays.get(a|0); if(!r) throw new Error('UXB_WASM_ARRAY_MISSING:'+a); return r.lower|0; }" & Chr(10)
     s &= "    case 84: { const r=arrays.get(a|0); if(!r) throw new Error('UXB_WASM_ARRAY_MISSING:'+a); return ((r.lower|0)+r.data.length-1)|0; }" & Chr(10)
+    s &= "    case 85: { const r=arrays.get(a|0); if(!r) throw new Error('UXB_WASM_ARRAY_MISSING:'+a); const lo=b|0, hi=c|0, n=hi-lo+1; if(n<1||n>268435455) throw new Error('array invalid bounds or byte size overflow'); const data=new Array(n).fill(0); if(d){const start=Math.max(lo,r.lower),end=Math.min(hi,r.lower+r.data.length-1); for(let i=start;i<=end;i++) data[i-lo]=r.data[i-r.lower];} r.data=data; r.lower=lo; return a|0; }" & Chr(10)
+    s &= "    case 96: { if(!objects.has(a|0)) throw new Error('UXB_OBJECT_TARGET_MISSING: method call on a null object reference'); return a|0; }" & Chr(10)
+    ' S-538: END inside a routine ends the whole program: the signal unwinds the WASM frames to the runner's catch, which treats it as a normal end.
+    s &= "    case 97: { const e=new Error('UXB_PROGRAM_END'); e.uxbProgramEnd=true; throw e; }" & Chr(10)
     s &= "  }" & Chr(10)
     s &= "  if(typeof globalThis.uxbHostCall4==='function') return globalThis.uxbHostCall4(id,a,b,c,d)|0;" & Chr(10)
     s &= "  throw new Error('uXBasic WASM host import is not bound: id='+id);" & Chr(10)
     s &= "};" & Chr(10)
     s &= "const hostCall16 = (id,...a) => {" & Chr(10)
-    s &= "  const x = a.concat(new Array(16).fill(0)).slice(0,16).map(v=>Number(v)|0);" & Chr(10)
+    s &= "  const x = a.concat(new Array(16).fill(0)).slice(0,16).map(Number);" & Chr(10)
+    s &= "  if(id>=50&&id<=60) return wasmFileCall(id,x);" & Chr(10)
     s &= "  switch(id|0) {" & Chr(10)
-    s &= "    case 90: { const classId=x[0]; const spec=classes.get(classId); if(!spec) throw new Error('UXB_CLASS_NOT_REGISTERED:'+classId); const obj={__uxbClassId:classId,__uxbFields:new Map()}; const h=nextHandle++; objects.set(h,obj); const inst=globalThis.uxbWasmInstance; const construct=(id)=>{ const cur=classes.get(id); if(!cur) throw new Error('UXB_CLASS_NOT_REGISTERED:'+id); if(cur.base>=0) construct(cur.base); if(cur.ctor){ const fn=inst&&inst.exports&&inst.exports[cur.ctor]; if(typeof fn!=='function') throw new Error('UXB_CONSTRUCTOR_NOT_FOUND:'+cur.ctor); fn(h,...Array.from({length:cur.ctorParamCount},(_,i)=>x[2+i])); } }; construct(classId); return h|0; }" & Chr(10)
-    s &= "    case 91: { const o=objects.get(x[0]); if(!o) throw new Error('UXB_OBJECT_TARGET_MISSING'); return Number(o.__uxbFields.get(x[1])||0)|0; }" & Chr(10)
-    s &= "    case 92: { const o=objects.get(x[0]); if(!o) throw new Error('UXB_OBJECT_TARGET_MISSING'); o.__uxbFields.set(x[1],x[2]); return x[2]|0; }" & Chr(10)
-    s &= "    case 94: { const o=objects.get(x[0]); if(!o) throw new Error('UXB_OBJECT_TARGET_MISSING'); const slot=x[1]; const spec=classes.get(o.__uxbClassId); const fnName=spec&&spec.slots&&spec.slots[slot]; if(!fnName) throw new Error('UXB_VTABLE_SLOT_MISSING:'+slot); const inst=globalThis.uxbWasmInstance; const fn=inst&&inst.exports&&inst.exports[fnName]; if(typeof fn!=='function') throw new Error('UXB_METHOD_NOT_FOUND:'+fnName); return Number(fn(x[0],x[2],x[3],x[4],x[5],x[6],x[7],x[8],x[9],x[10],x[11],x[12],x[13],x[14],x[15])||0)|0; }" & Chr(10)
-    s &= "    case 95: { const o=objects.get(x[0]); if(!o) return 0; const inst=globalThis.uxbWasmInstance; const destroy=(id)=>{ const cur=classes.get(id); if(!cur) throw new Error('UXB_CLASS_NOT_REGISTERED:'+id); if(cur.dtor){ const fn=inst&&inst.exports&&inst.exports[cur.dtor]; if(typeof fn!=='function') throw new Error('UXB_DESTRUCTOR_NOT_FOUND:'+cur.dtor); fn(x[0]); } if(cur.base>=0) destroy(cur.base); }; destroy(o.__uxbClassId); objects.delete(x[0]); return 0; }" & Chr(10)
+    s &= "    case 90: { const classId=x[0]; const spec=classes.get(classId); if(!spec) throw new Error('UXB_CLASS_NOT_REGISTERED:'+classId); const obj={__uxbClassId:classId,__uxbFields:new Map()}; const h=nextHandle++; objects.set(h,obj); const inst=globalThis.uxbWasmInstance; const construct=(id)=>{ const cur=classes.get(id); if(!cur) throw new Error('UXB_CLASS_NOT_REGISTERED:'+id); if(cur.ctor){ const fn=inst&&inst.exports&&inst.exports[cur.ctor]; if(typeof fn!=='function') throw new Error('UXB_CONSTRUCTOR_NOT_FOUND:'+cur.ctor); fn(h,...Array.from({length:cur.ctorParamCount},(_,i)=>x[2+i])); } }; construct(classId); return h|0; }" & Chr(10)
+    s &= "    case 91: { const o=objects.get(x[0]); if(!o) throw new Error('UXB_OBJECT_TARGET_MISSING: field access on a null object reference'); return Number(o.__uxbFields.get(x[1])||0); }" & Chr(10)
+    s &= "    case 92: { const o=objects.get(x[0]); if(!o) throw new Error('UXB_OBJECT_TARGET_MISSING: field access on a null object reference'); o.__uxbFields.set(x[1],x[2]); return x[2]; }" & Chr(10)
+    s &= "    case 94: { const o=objects.get(x[0]); if(!o) throw new Error('UXB_OBJECT_TARGET_MISSING: method call on a null object reference'); const slot=x[1]; const spec=classes.get(o.__uxbClassId); const fnName=spec&&spec.slots&&spec.slots[slot]; if(!fnName) throw new Error('UXB_VTABLE_SLOT_MISSING:'+slot); const inst=globalThis.uxbWasmInstance; const fn=inst&&inst.exports&&inst.exports[fnName]; if(typeof fn!=='function') throw new Error('UXB_METHOD_NOT_FOUND:'+fnName); return Number(fn(x[0],x[2],x[3],x[4],x[5],x[6],x[7],x[8],x[9],x[10],x[11],x[12],x[13],x[14],x[15])||0); }" & Chr(10)
+    s &= "    case 95: { const o=objects.get(x[0]); if(!o||o.__uxbDestroying) return 0; o.__uxbDestroying=true; const inst=globalThis.uxbWasmInstance; const destroy=(id)=>{ const cur=classes.get(id); if(!cur) throw new Error('UXB_CLASS_NOT_REGISTERED:'+id); if(cur.dtor){ const fn=inst&&inst.exports&&inst.exports[cur.dtor]; if(typeof fn!=='function') throw new Error('UXB_DESTRUCTOR_NOT_FOUND:'+cur.dtor); fn(x[0]); } if(cur.base>=0) destroy(cur.base); }; destroy(o.__uxbClassId); objects.delete(x[0]); return 0; }" & Chr(10)
     s &= "  }" & Chr(10)
     s &= "  if(typeof globalThis.uxbHostCall16==='function') return globalThis.uxbHostCall16(id,...x)|0;" & Chr(10)
     s &= "  throw new Error('uXBasic WASM host_call16 is not bound: id='+id);" & Chr(10)
     s &= "};" & Chr(10)
+    s &= UXBWasmValueRuntimeJs()
     Dim ci As Integer
     Dim si As Integer
     Dim ei As Integer
@@ -84,7 +96,7 @@ Function UXBWasmRuntimeBridgeJs(ByRef moduleValue As MIRModule) As String
         Next si
         s &= "],ctor:" & Chr(34) & ctorName & Chr(34) & ",dtor:" & Chr(34) & dtorName & Chr(34) & ",ctorParamCount:" & Trim(Str(ctorParamCount)) & ",base:" & Trim(Str(baseIdx)) & "});" & Chr(10)
     Next ci
-    s &= "globalThis.uxbWasmImports = { ux: { host_call4: hostCall4, host_call16: hostCall16, print_i32: (v)=>write(v|0), print_f64:(v)=>write(Number(v)), timer:()=>Math.floor(Date.now())|0, rnd:()=>Math.floor(Math.random()*2147483647)|0 } };" & Chr(10)
+    s &= "globalThis.uxbWasmImports = { ux: { host_call4: hostCall4, host_call16: hostCall16, host_number4: hostNumber4, host_number16: hostCall16, string_op: stringOp, print_string:(v)=>write(text(v)), print_i32: (v)=>write(v|0), print_f64:(v)=>write(Number(v)), print_f32:(v)=>write(formatWasmNumber(Math.fround(v),7)), timer:()=>{ const d=new Date(); return (d.getHours()*3600+d.getMinutes()*60+d.getSeconds())|0; }, rnd:()=>Math.floor(Math.random()*2147483647)|0 } };" & Chr(10)
     s &= "})();" & Chr(10)
     Return s
 End Function

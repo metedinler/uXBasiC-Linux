@@ -1,0 +1,20 @@
+CLASS A
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 1
+    END DESTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 2
+    END DESTRUCTOR
+END CLASS
+
+' S-574 / S-486: the same through a parameter typed with the base class (the callee knows only the base class).
+SUB Kapat(p AS A)
+    DELETE p
+END SUB
+DIM x AS A = NEW B()
+Kapat(x)
+PRINT 9

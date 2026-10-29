@@ -1,0 +1,62 @@
+M1 DELETE yerel nesne, SUB icinde
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Yap()
+    DIM s AS Sayac = NEW Sayac()
+    s.n = 3
+    PRINT s.n
+    DELETE s
+END SUB
+Yap()
+=====
+M2 DELETE parametre, SUB icinde
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Sil(x AS Sayac)
+    DELETE x
+END SUB
+DIM a AS Sayac = NEW Sayac()
+a.n = 4
+PRINT a.n
+Sil(a)
+=====
+M3 DELETE yerel kopya, SUB icinde (uxoop deseni)
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Sil(x AS Sayac)
+    DIM y AS Sayac
+    y = x
+    DELETE y
+END SUB
+DIM a AS Sayac = NEW Sayac()
+a.n = 4
+PRINT a.n
+Sil(a)
+=====
+M4 DELETE ust duzey
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+DIM a AS Sayac = NEW Sayac()
+a.n = 5
+PRINT a.n
+DELETE a
+=====
+M5 DELETE MAIN icinde
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+MAIN
+    DIM a AS Sayac = NEW Sayac()
+    a.n = 6
+    PRINT a.n
+    DELETE a
+END MAIN

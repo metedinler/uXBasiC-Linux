@@ -1,0 +1,1207 @@
+' =====================================================================
+' PRISM QUEST - uXBasic surumu
+' Kaynak: QBasic/FreeBASIC "Prism Quest" (Mindless) - kullanici FB
+'         kodunu ceviri icin verdi; oyun mantigi 1:1 korunmustur.
+' Hedef: uXBasic v1.06 (src 27.10 anlik goruntusu); yalnizca kaynak
+'         kodda satir satir dogrulanmis ifadeler kullanilmistir.
+' Calistirma: uxbasic run prism_quest.uxb
+'             uxbasic bld prism_quest.uxb --build-x64-out bin
+'
+' FB -> uXBasic ceviri kararlarinin tam listesi:
+'  1. Tip sonekleri ($ % ! &) kaldirildi; uXBasic sonek kabul etmez.
+'     itemn$->itemn, clr$->clr, nic$->nic, wdo$->wdo, pname$->pname.
+'  2. AS INTEGER -> AS I32 (uXBasic kanonik tip adi).
+'  3. DECLARE bloklari atildi (cok gecisli derleyicide one bildirim
+'     gerekmez); bildirilip tanimsiz birakilan rollup atildi.
+'  4. SCREENres/PALETTE/LINE...BF grafikleri ve DATA/READ uXBasic
+'     konsol dilinde yok: intro'daki 22x20 prizma bitmap'i ve wipe
+'     animasyonu cikarildi; intro metin banner ile acilir.
+'  5. VIEW PRINT 2 TO 49 ve PALETTE 6,38 atildi (karsiligi yok).
+'  6. COMMAND$ yok: intro her calismada acilir. TIME$/DATE$ yok:
+'     hs.txt kaydinda TIMER() saniyesi kullanilir. SLEEP yok:
+'     beklemeler INPUT ile yapilir.
+'  7. INKEY$ donguleri INPUT beklemesine cevrildi; uXBasic'te
+'     INKEY(n) hata ayiklama tus kuyrugu okur, terminal beklemesi
+'     degildir.
+'  8. Tek argumanli LOCATE ve CSRLIN yok: cprint merkezleme/saga
+'     yaslamayi on bosluklarla yapar; LOCATE hep "satir, sutun".
+'  9. COLOR iki argumanlidir: COLOR onplan, arkaplan (0 = siyah).
+' 10. QB ":" deyim ayiraci kullanilmadi; her deyim kendi satirinda.
+' 11. uXBasic'te ^ operatoru yoktur: 2^0..2^3 bit maskeleri 1/2/4/8
+'     olarak yazildi. EXIT SUB olmadigi icin akis IF/ELSE ile
+'     yeniden kuruldu. Fonksiyon degeri RETURN ile doner.
+' 12. NEXT degiskeni zorunludur: NEXT i bicimi kullanildi.
+' 13. QB statik yerel degisken birikimi (viewroom/wtd sayaclari
+'     cagri between deger tasiyordu) her giriste acik sifirlama ile
+'     giderildi; bu bilincli bir duzeltmedir, oyun kurallari aynidir.
+' 14. Sus susleri aynen korundu: CHR(174)/CHR(175) << >> basar;
+'     128..143 araligi cprint icinde renk kodu olarak harcanir
+'     (ekrana cikmaz). CP437'ye ozgu 254 ve 247 karakerleri Unicode
+'     konsolda baska gorunecegi icin "*" ve "/" ile degistirildi.
+' 15. titem alanlari acik adlara tasindi; GET ayirtci sozcuk
+'     oldugu icin karismayi onler: r=oda c=renk atk=saldiri
+'     get=alinir use=kullanir exa=incelenir tlk=konusur wpn=silah
+'     inv=cantada. troom yon harflerini korur: n kuzey s guney
+'     e dogu w bati v goruldu.
+' Kullanilan ve dogrulanan yuzey (kaynak: src2710 derin taramasi):
+'   ' yorum; CONST ad AS I32 = ...; TYPE/END TYPE; DIM dizi(sinir)
+'   (tek sinir = dahil ust sinir, alt sinir 0, sinir ifadesi
+'   calisma zamaninda degerlendirilir); MAIN/END MAIN; SUB/END SUB;
+'   FUNCTION ... AS tip + RETURN; IF/ELSEIF/ELSE/END IF;
+'   SELECT CASE/CASE a,b/CASE ELSE/END SELECT; FOR/NEXT;
+'   DO WHILE/LOOP; LOOP WHILE; EXIT DO; PRINT (== bitistirir,
+'   sondaki ; satir atlatmaz); PRINT # (sondaki ; CRLF basmaz);
+'   INPUT [istem,] hedef (sayisal hedef ValInt ile okunur);
+'   OPEN yol FOR APPEND AS #1; CLOSE #1; CLS; COLOR on,arka;
+'   LOCATE satir,sutun; LEN MID ASC CHR LEFT RIGHT INSTR LTRIM
+'   RTRIM LCASE UCASE STR SPACE STRING HEX TIMER; TRUE/FALSE (-1/0);
+'   AND OR; = <> < >; \ tamsayi bolme; + dizge birlestirme.
+' =====================================================================
+' Olay sabitleri: esya alanlarina yazilan ozel degerler.
+' KILITLI - renk kodu biciminde kilitli cikis saklanir.
+CONST KILITLI AS I32 = -2
+CONST OLAY_X AS I32 = -2
+CONST OLAY_A AS I32 = -3
+CONST ODA_SAYISI AS I32 = 26
+CONST ESYA_SAYISI AS I32 = 30
+' cprint kip bitleri (orijinal bitmask'in aynisi):
+' 1 = ortala, 2 = saga yasla, 4 = satir atla, 8 = on bosluk koyma.
+TYPE troom
+    n AS I32
+    s AS I32
+    e AS I32
+    w AS I32
+    v AS I32
+END TYPE
+TYPE titem
+    oda AS I32
+    renk AS I32
+    saldiri AS I32
+    alinir AS I32
+    kullanir AS I32
+    incelenir AS I32
+    konusur AS I32
+    silah AS I32
+    cantada AS I32
+END TYPE
+DIM room(ODA_SAYISI) AS troom
+DIM item(ESYA_SAYISI) AS titem
+DIM itemn(ESYA_SAYISI) AS STRING
+DIM inroom AS I32
+DIM wpn AS I32
+DIM prism AS I32
+DIM move AS I32
+DIM cheat AS I32
+DIM bitti AS I32
+DIM pname AS STRING
+' ---------------------------------------------------------------------
+' cprint: renk gomulu metin yazici. 127+k (128..143) karakterleri
+' ekrana cikmaz; COLOR k, 0 kurar. Orijinalin mekanizmasinin aynisi.
+SUB cprint(metin AS STRING, a AS I32)
+    DIM s AS STRING
+    DIM i AS I32
+    DIM l AS I32
+    DIM k AS I32
+    DIM bosluk AS I32
+    s = metin
+    l = 0
+    k = 0
+    bosluk = 0
+    FOR i = 1 TO LEN(s)
+        k = ASC(MID(s, i, 1))
+        IF k <= 127 OR k > 143 THEN
+            l = l + 1
+        END IF
+    NEXT i
+    IF (a AND 1) <> 0 THEN
+        IF (a AND 2) <> 0 THEN
+            bosluk = 80 - l
+        ELSE
+            bosluk = (80 - l) \ 2
+        END IF
+        IF bosluk > 0 THEN
+            s = SPACE(bosluk) + s
+        END IF
+    ELSE
+        IF (a AND 8) = 0 THEN
+            s = " " + s
+        END IF
+    END IF
+    FOR i = 1 TO LEN(s)
+        k = ASC(MID(s, i, 1))
+        IF k > 127 AND k < 143 THEN
+            COLOR k - 127, 0
+        ELSE
+            PRINT MID(s, i, 1);
+        END IF
+    NEXT i
+    IF (a AND 4) <> 0 THEN
+        PRINT
+    END IF
+END SUB
+' clr: renk kodu karakterini uretir (127 + k gomulu renk duzeni).
+FUNCTION clr(c AS I32) AS STRING
+    RETURN CHR(127 + c)
+END FUNCTION
+' nic: esyanin renkli, buyuk harfli adini uretir.
+FUNCTION nic(i AS I32) AS STRING
+    DIM j AS I32
+    j = i
+    IF j < 0 THEN
+        j = 0
+    END IF
+    RETURN clr(item(j).renk) + UCASE(itemn(j)) + clr(7)
+END FUNCTION
+' intro: acilis ekrani. Orijinaldeki grafik prizma ve wipe yok;
+' renkli metin banner aynen korunur (128..143 kodlari renk verir).
+SUB intro()
+    DIM beklet AS STRING
+    LOCATE 10, 1
+    cprint " " + CHR(&H8E) + CHR(&HAE) + CHR(&H86) + CHR(&HAE) + CHR(&H8E) + CHR(&HAE) + " " + CHR(&H8B) + "P" + CHR(&H8D) + "r" + CHR(&H89) + "i" + CHR(&H88) + "s" + CHR(&H84) + "m  " + CHR(&H8E) + "Quest " + CHR(&HAF) + CHR(&H86) + CHR(&HAF) + CHR(&H8E) + CHR(&HAF), 1 + 4
+    cprint CHR(&H86) + " by Mindless - uXBasic surumu *", 1 + 4
+    LOCATE 23, 1
+    cprint CHR(&H87) + "programmed entirely   ", 1 + 2 + 4
+    cprint "in mom's basement    " + CHR(&H86), 1 + 2
+    LOCATE 15, 1
+    cprint clr(8) + "Disclaimer: 'Anything contained in this game may or may not be true;", 1 + 4
+    cprint "     in either case, we cannot be held responsible.'" + CHR(&H86), 1 + 4
+    LOCATE 13, 1
+    cprint " press enter to start ", 1
+    INPUT beklet
+END SUB
+' gameover: dolaba gonderildiginde oyun biter.
+' Orijinalin INKEY$ ile yanan blink dongusu yerine tek cerceve +
+' INPUT beklemesi kullanilir; bitis bitti bayragiyla MAIN'e bildirilir.
+SUB gameover()
+    DIM beklet AS STRING
+    LOCATE 11, 1
+    cprint SPACE(21), 1
+    LOCATE 13, 1
+    cprint SPACE(21), 1
+    LOCATE 12, 1
+    cprint "  " + CHR(&H8E) + CHR(&HAE) + CHR(&H86) + CHR(&HAE) + CHR(&H8B) + CHR(&HAE) + " game over " + CHR(&HAF) + CHR(&H86) + CHR(&HAF) + CHR(&H8E) + CHR(&HAF) + "  ", 1
+    PRINT
+    PRINT
+    cprint "press enter...", 4
+    INPUT beklet
+    bitti = TRUE
+END SUB
+' roomsitems: esya ve oda tablolarini kurar. Degerler orijinalle
+' birebir aynidir; anahtarlar kapidaki renk numarasini tasiyor.
+SUB roomsitems()
+    DIM i AS I32
+    FOR i = 0 TO ESYA_SAYISI
+        itemn(i) = STR(i)
+    NEXT i
+    i = 0
+    itemn(i) = "yourself"
+    item(i).oda = -1
+    item(i).renk = 15
+    item(i).saldiri = OLAY_A
+    item(i).incelenir = OLAY_X
+    item(i).konusur = OLAY_X
+    item(i).cantada = TRUE
+    i = 1
+    itemn(i) = "red key"
+    item(i).oda = 10
+    item(i).renk = 12
+    item(i).kullanir = OLAY_X
+    item(i).cantada = TRUE
+    i = 2
+    itemn(i) = "orange key"
+    item(i).oda = 20
+    item(i).renk = 6
+    item(i).kullanir = OLAY_X
+    item(i).cantada = TRUE
+    i = 3
+    itemn(i) = "yellow key"
+    item(i).oda = 14
+    item(i).renk = 14
+    item(i).kullanir = OLAY_X
+    item(i).cantada = TRUE
+    i = 4
+    itemn(i) = "green key"
+    item(i).oda = 1
+    item(i).renk = 10
+    item(i).kullanir = OLAY_X
+    item(i).cantada = TRUE
+    i = 5
+    itemn(i) = "blue key"
+    item(i).oda = 12
+    item(i).renk = 9
+    item(i).kullanir = OLAY_X
+    item(i).cantada = TRUE
+    i = 6
+    itemn(i) = "indigo key"
+    item(i).oda = 24
+    item(i).renk = 1
+    item(i).kullanir = OLAY_X
+    item(i).cantada = TRUE
+    i = 7
+    itemn(i) = "violet key"
+    item(i).oda = 8
+    item(i).renk = 5
+    item(i).kullanir = OLAY_X
+    item(i).cantada = TRUE
+    i = 8
+    itemn(i) = "troll"
+    item(i).oda = 10
+    item(i).renk = 12
+    item(i).saldiri = OLAY_X
+    item(i).incelenir = OLAY_X
+    i = 9
+    itemn(i) = "troll"
+    item(i).oda = 20
+    item(i).renk = 6
+    item(i).saldiri = OLAY_X
+    item(i).incelenir = OLAY_X
+    i = 10
+    itemn(i) = "troll"
+    item(i).oda = 14
+    item(i).renk = 14
+    item(i).saldiri = OLAY_X
+    item(i).incelenir = OLAY_X
+    i = 11
+    itemn(i) = "troll"
+    item(i).oda = 1
+    item(i).renk = 10
+    item(i).saldiri = OLAY_X
+    item(i).incelenir = OLAY_X
+    i = 12
+    itemn(i) = "troll"
+    item(i).oda = 12
+    item(i).renk = 9
+    item(i).saldiri = OLAY_X
+    item(i).incelenir = OLAY_X
+    i = 13
+    itemn(i) = "troll"
+    item(i).oda = 24
+    item(i).renk = 1
+    item(i).saldiri = OLAY_X
+    item(i).incelenir = OLAY_X
+    i = 14
+    itemn(i) = "troll"
+    item(i).oda = 8
+    item(i).renk = 5
+    item(i).saldiri = OLAY_X
+    item(i).incelenir = OLAY_X
+    i = 15
+    itemn(i) = "laser pointer"
+    item(i).oda = 6
+    item(i).renk = 12
+    item(i).alinir = OLAY_X
+    item(i).kullanir = OLAY_X
+    item(i).silah = TRUE
+    i = 16
+    itemn(i) = "gamma knife"
+    item(i).oda = 5
+    item(i).renk = 13
+    item(i).alinir = OLAY_X
+    item(i).kullanir = OLAY_X
+    item(i).silah = TRUE
+    i = 17
+    itemn(i) = "photon gun"
+    item(i).oda = 24
+    item(i).renk = 11
+    item(i).alinir = OLAY_X
+    item(i).kullanir = OLAY_X
+    item(i).silah = TRUE
+    i = 18
+    itemn(i) = "p" + clr(14) + "r" + clr(10) + "i" + clr(9) + "s" + clr(5) + "m"
+    item(i).oda = 16
+    item(i).renk = 12
+    i = 19
+    itemn(i) = "prism"
+    item(i).oda = 16
+    item(i).renk = 15
+    item(i).alinir = TRUE
+    item(i).cantada = TRUE
+    i = 20
+    itemn(i) = "alex"
+    item(i).oda = 2
+    item(i).renk = 12
+    item(i).saldiri = TRUE
+    item(i).alinir = OLAY_X
+    item(i).incelenir = OLAY_X
+    item(i).konusur = OLAY_X
+    i = 21
+    itemn(i) = "mirror"
+    item(i).oda = 17
+    item(i).renk = 15
+    item(i).alinir = TRUE
+    item(i).incelenir = OLAY_X
+    item(i).cantada = FALSE
+    i = 22
+    itemn(i) = "sun"
+    item(i).oda = 7
+    item(i).renk = 14
+    item(i).alinir = OLAY_A
+    item(i).kullanir = FALSE
+    item(i).silah = TRUE
+    item(i).cantada = TRUE
+    i = 23
+    itemn(i) = "flask"
+    item(i).oda = 7
+    item(i).renk = 13
+    item(i).alinir = OLAY_X
+    i = 24
+    itemn(i) = "keys"
+    item(i).oda = 9
+    item(i).renk = 14
+    item(i).alinir = TRUE
+    item(i).incelenir = OLAY_X
+    i = 25
+    itemn(i) = "skeleton key"
+    item(i).oda = 4
+    item(i).renk = 8
+    item(i).alinir = TRUE
+    item(i).incelenir = OLAY_X
+    item(i).kullanir = OLAY_X
+    ' Oda baglantileri. Kilitli cikislar KILITLI - renk olarak saklanir;
+    ' ayni renkli anahtar o cikisi acar.
+    '   [01]  [02]==[03]  [04]==[05]
+    '    :O    ||    ||          :Y
+    '   [06]=={07}  [08]==[09]==[10]
+    '    ||
+    '   [11]==[12]  #13#  [14]  #15#  E
+    '          ||          :R
+    '   <16>  [17]==[18]==[19]==[20]
+    '    :V                       :G
+    '   [21]:I[22]:B[23]==[24]==[25]
+    room(1).s = TRUE
+    room(2).s = TRUE
+    room(2).e = TRUE
+    room(3).s = TRUE
+    room(3).w = TRUE
+    room(4).e = TRUE
+    room(5).s = TRUE
+    room(5).w = TRUE
+    room(6).n = KILITLI - 6
+    room(6).e = TRUE
+    room(6).s = TRUE
+    room(7).n = TRUE
+    room(7).w = TRUE
+    room(8).n = TRUE
+    room(8).e = TRUE
+    room(9).w = TRUE
+    room(9).e = TRUE
+    room(10).n = KILITLI - 14
+    room(10).w = TRUE
+    room(11).n = TRUE
+    room(11).e = TRUE
+    room(12).s = TRUE
+    room(12).w = TRUE
+    room(13).s = KILITLI - 8
+    room(14).s = TRUE
+    room(15).s = KILITLI - 8
+    room(16).s = TRUE
+    room(17).n = TRUE
+    room(17).e = TRUE
+    room(18).w = TRUE
+    room(18).e = TRUE
+    room(19).n = KILITLI - 12
+    room(19).w = TRUE
+    room(19).e = TRUE
+    room(20).s = KILITLI - 10
+    room(20).w = TRUE
+    room(21).n = KILITLI - 5
+    room(21).e = TRUE
+    room(22).w = KILITLI - 1
+    room(22).e = TRUE
+    room(23).w = KILITLI - 9
+    room(23).e = TRUE
+    room(24).w = TRUE
+    room(24).e = TRUE
+    room(25).n = TRUE
+    room(25).w = TRUE
+END SUB
+' map: 5x5 labirent haritasi. Ziyaret edilen odalar ve kilitli
+' cikislar kendi renkleriyle cizilir. Orijinaldeki boole-aritmetigi
+' (r - 5) * -(r >= 5) acik IF ile komsu hesabina cevrildi.
+SUB map()
+    DIM y AS I32
+    DIM x AS I32
+    DIM r AS I32
+    DIM kn AS I32
+    DIM dg AS I32
+    cprint CHR(&H87), 8
+    FOR y = 0 TO 4
+        FOR x = 1 TO 5
+            r = x + y * 5
+            IF r >= 5 THEN
+                kn = r - 5
+            ELSE
+                kn = 0
+            END IF
+            IF room(r).n = TRUE AND room(kn).s = TRUE AND (room(r).v = TRUE OR room(kn).v = TRUE) THEN
+                cprint "  " + CHR(&H87) + "||  ", 8
+            ELSEIF room(r).n <= KILITLI AND room(r).v = TRUE THEN
+                cprint "  " + clr(-room(r).n - 2) + "||  ", 8
+            ELSEIF room(kn).s <= KILITLI AND room(kn).v = TRUE THEN
+                cprint "  " + clr(-room(kn).s - 2) + "||  ", 8
+            ELSE
+                cprint "      ", 8
+            END IF
+        NEXT x
+        PRINT
+        cprint " ", 8
+        FOR x = 1 TO 5
+            r = x + y * 5
+            IF r < 25 THEN
+                dg = r + 1
+            ELSE
+                dg = 0
+            END IF
+            IF r = inroom THEN
+                cprint clr(15), 8
+            ELSEIF room(r).v = TRUE THEN
+                cprint clr(7), 8
+            ELSE
+                cprint CHR(&H87), 8
+            END IF
+            cprint "[", 8
+            IF r < 10 THEN
+                cprint "0", 8
+            END IF
+            cprint LTRIM(STR(r)) + "]" + CHR(&H87), 8
+            IF room(r).e = TRUE AND room(dg).w = TRUE AND (room(r).v = TRUE OR room(dg).v = TRUE) THEN
+                cprint CHR(&H87) + "==", 8
+            ELSEIF room(r).e <= KILITLI AND room(r).v = TRUE THEN
+                cprint clr(-room(r).e - 2) + "==", 8
+            ELSEIF room(dg).w <= KILITLI AND room(dg).v = TRUE THEN
+                cprint clr(-room(dg).w - 2) + "==", 8
+            ELSE
+                cprint "  ", 8
+            END IF
+        NEXT x
+        PRINT
+    NEXT y
+    cprint CHR(&H86), 8
+END SUB
+' ievent: esya olaylari. Olay numarasi e: 0 vur, 1 incele, 2 al,
+' 3 konus, 4 kullan. Anahtar dogrulanmis "CASE deger[, deger]"
+' listesiyle yinelenen unlocke satirlari tek case'e toplandi.
+SUB ievent(e AS I32, i AS I32)
+    SELECT CASE (i * 10) + e
+        CASE 0
+            cprint "** You attacked and killed " + nic(i) + ".", 4
+            cprint "Well, that was stupid of you, wasn't it.", 4
+            inroom = 0
+        CASE 1
+            IF item(21).oda = -1 THEN
+                cprint "You look beautiful today.", 4
+            ELSE
+                cprint "You could look at " + nic(i) + " if you had a " + clr(15) + "MIRROR" + clr(7) + ".", 4
+            END IF
+        CASE 3
+            cprint "Talking to " + nic(i) + " is the first sign of insanity...", 4
+        CASE 14, 24, 34, 44, 54, 64, 74
+            unlocke(i)
+        CASE 80
+            IF wpn < 0 THEN
+                cprint "** You attacked " + nic(i) + " with " + nic(wpn) + ".", 4
+                cprint "It easily over-powers you and banishes you to the " + clr(15) + "CLOSET" + clr(7) + ".", 4
+                inroom = 13
+                move = TRUE
+            ELSE
+                IF trollquest(e, i) THEN
+                    cprint "** You attack " + nic(i) + ", and it disintigrates, leaving behind " + nic(i - 7) + ".", 4
+                    item(i - 7).cantada = FALSE
+                    item(i - 7).alinir = TRUE
+                    item(i).oda = 0
+                END IF
+            END IF
+        CASE 81
+            cprint nic(i) + " appears to be holding " + nic(i - 7) + ".", 4
+            IF wpn < 0 THEN
+                cprint "You won't be able to defeat " + nic(i) + " with " + nic(wpn) + ".", 4
+            END IF
+        CASE 90
+            IF wpn < 15 THEN
+                cprint "** You attacked " + nic(i) + " with " + nic(wpn) + ".", 4
+                cprint "It easily over-powers you and banishes you to the " + clr(15) + "CLOSET" + clr(7) + ".", 4
+                inroom = 13
+                move = TRUE
+            ELSE
+                IF trollquest(e, i) THEN
+                    cprint "** You attack " + nic(i) + ", and it disintigrates, leaving behind " + nic(i - 7) + ".", 4
+                    item(i - 7).cantada = FALSE
+                    item(i - 7).alinir = TRUE
+                    item(i).oda = 0
+                END IF
+            END IF
+        CASE 91
+            cprint nic(i) + " appears to be holding " + nic(i - 7) + ".", 4
+            IF wpn < 15 THEN
+                cprint "You won't be able to defeat " + nic(i) + " with " + nic(wpn) + ".", 4
+            END IF
+        CASE 100
+            IF wpn < 15 THEN
+                cprint "** You attacked " + nic(i) + " with " + nic(wpn) + ".", 4
+                cprint "It easily over-powers you and banishes you to the " + clr(15) + "CLOSET" + clr(7) + ".", 4
+                inroom = 13
+                move = TRUE
+            ELSE
+                IF trollquest(e, i) THEN
+                    cprint "** You attack " + nic(i) + ", and it disintigrates, leaving behind " + nic(i - 7) + ".", 4
+                    item(i - 7).cantada = FALSE
+                    item(i - 7).alinir = TRUE
+                    item(i).oda = 0
+                END IF
+            END IF
+        CASE 101
+            cprint nic(i) + " appears to be holding " + nic(i - 7) + ".", 4
+            IF wpn < 15 THEN
+                cprint "You won't be able to defeat " + nic(i) + " with " + nic(wpn) + ".", 4
+            END IF
+        CASE 110
+            IF wpn < 16 THEN
+                cprint "** You attacked " + nic(i) + " with " + nic(wpn) + ".", 4
+                cprint "It easily over-powers you and banishes you to the " + clr(15) + "CLOSET" + clr(7) + ".", 4
+                inroom = 13
+                move = TRUE
+            ELSE
+                IF trollquest(e, i) THEN
+                    cprint "** You attack " + nic(i) + ", and it disintigrates, leaving behind " + nic(i - 7) + ".", 4
+                    item(i - 7).cantada = FALSE
+                    item(i - 7).alinir = TRUE
+                    item(i).oda = 0
+                END IF
+            END IF
+        CASE 111
+            cprint nic(i) + " appears to be holding " + nic(i - 7) + ".", 4
+            IF wpn < 16 THEN
+                cprint "You won't be able to defeat " + nic(i) + " with " + nic(wpn) + ".", 4
+            END IF
+        CASE 120
+            IF wpn < 16 THEN
+                cprint "** You attacked " + nic(i) + " with " + nic(wpn) + ".", 4
+                cprint "It easily over-powers you and banishes you to the " + clr(15) + "CLOSET" + clr(7) + ".", 4
+                inroom = 13
+                move = TRUE
+            ELSE
+                IF trollquest(e, i) THEN
+                    cprint "** You attack " + nic(i) + ", and it disintigrates, leaving behind " + nic(i - 7) + ".", 4
+                    item(i - 7).cantada = FALSE
+                    item(i - 7).alinir = TRUE
+                    item(i).oda = 0
+                END IF
+            END IF
+        CASE 121
+            cprint nic(i) + " appears to be holding " + nic(i - 7) + ".", 4
+            IF wpn < 16 THEN
+                cprint "You won't be able to defeat " + nic(i) + " with " + nic(wpn) + ".", 4
+            END IF
+        CASE 130
+            IF wpn < 17 THEN
+                cprint "** You attacked " + nic(i) + " with " + nic(wpn) + ".", 4
+                cprint "It easily over-powers you and banishes you to the " + clr(15) + "CLOSET" + clr(7) + ".", 4
+                inroom = 13
+                move = TRUE
+            ELSE
+                IF trollquest(e, i) THEN
+                    cprint "** You attack " + nic(i) + ", and it disintigrates, leaving behind " + nic(i - 7) + ".", 4
+                    item(i - 7).cantada = FALSE
+                    item(i - 7).alinir = TRUE
+                    item(i).oda = 0
+                END IF
+            END IF
+        CASE 131
+            cprint nic(i) + " appears to be holding " + nic(i - 7) + ".", 4
+            IF wpn < 17 THEN
+                cprint "You won't be able to defeat " + nic(i) + " with " + nic(wpn) + ".", 4
+            END IF
+        CASE 140
+            IF wpn < 17 THEN
+                cprint "** You attacked " + nic(i) + " with " + nic(wpn) + ".", 4
+                cprint "It easily over-powers you and banishes you to the " + clr(15) + "CLOSET" + clr(7) + ".", 4
+                inroom = 13
+                move = TRUE
+            ELSE
+                IF trollquest(e, i) THEN
+                    cprint "** You attack " + nic(i) + ", and it disintigrates, leaving behind " + nic(i - 7) + ".", 4
+                    item(i - 7).cantada = FALSE
+                    item(i - 7).alinir = TRUE
+                    item(i).oda = 0
+                END IF
+            END IF
+        CASE 141
+            cprint nic(i) + " appears to be holding " + nic(i - 7) + ".", 4
+            IF wpn < 17 THEN
+                cprint "You won't be able to defeat " + nic(i) + " with " + nic(wpn) + ".", 4
+            END IF
+        CASE 152
+            IF wpn = 0 THEN
+                cprint "** You got a " + nic(i) + ".", 4
+                cprint "You finally have a weapon!", 4
+                item(i).oda = -1
+            ELSE
+                cprint "You can only carry one weapon.", 4
+            END IF
+        CASE 154
+            cprint "** You shine your " + nic(i) + ".", 4
+        CASE 162
+            IF wpn = 0 THEN
+                cprint "You got a " + nic(i) + ".", 4
+                cprint "You now have a more powerful weapon!", 4
+                item(i).oda = -1
+            ELSE
+                cprint "You can only carry one weapon.", 4
+            END IF
+        CASE 164
+            cprint "** You swing your " + nic(i) + " at the air.", 4
+        CASE 172
+            IF wpn = 0 THEN
+                cprint "** You got a " + nic(i) + ".", 4
+                cprint "You now have the ultimate weapon!", 4
+                item(i).oda = -1
+            ELSE
+                cprint "You can only carry one weapon.", 4
+            END IF
+        CASE 174
+            cprint "** You shoot your " + nic(i) + " at the wall.", 4
+            cprint "You made a large hole in the wall!", 4
+        CASE 201
+            cprint nic(i) + " is redheaded and Irish, and appears to be a normal human being.  He", 4
+            cprint "claims to be a lepricon and allegedly has a pot of gold waiting for you at", 4
+            cprint "the end of a " + clr(12) + "r" + clr(6) + "a" + clr(14) + "i" + clr(10) + "n" + clr(9) + "b" + clr(1) + "o" + clr(5) + "w" + clr(7) + ".", 4
+        CASE 202
+            cprint "** " + nic(i) + " kicks you in the shins", 4
+            cprint "@#&%! That hurts!", 4
+        CASE 203
+            cprint nic(i) + ": The TROLLS stole my keys!!! Help me get them back, please!", 4
+        CASE 211
+            cprint "It's a nice shiney " + nic(i) + ".  You see " + nic(0) + " in the " + clr(15) + "reflection" + clr(7) + ".", 4
+        CASE 222
+            cprint "** You got " + nic(i), 4
+            cprint "** You cheated", 4
+            cheat = TRUE
+        CASE 232
+            cprint "You can't get ye " + nic(i) + ".", 4
+            cprint "And you'll just have to sit there and imagine why on Earth you can't get ye", 4
+            cprint nic(i) + "! Because this game's certainly not going to tell you.", 4
+            cprint "And there's no precious graphics to help you out, either.", 4
+            cprint "Graphics, shmaphics...", 4
+        CASE 241
+            cprint "These are probably the " + nic(i) + " that " + nic(20) + " is looking for.", 4
+        CASE 251
+            cprint "This looks like a " + clr(8) + "KEY" + clr(7) + " to a " + clr(15) + "CLOSET" + clr(7) + ".", 4
+        CASE 254
+            unlocke(i)
+            item(i).oda = -1
+        CASE ELSE
+            PRINT "error", (e * 10) + i
+    END SELECT
+END SUB
+' trollquest: troll bilgmece sorusu. Dogru cevap TRUE dondurur;
+' yanlis cevap oyuncuyu dolaba gonderir (orijinal akisin aynisi).
+' Fonksiyon degeri RETURN ile dondurulur; cevap/dogru ayri
+' degiskenlerdir (QB'daki dizeye -1 atama hilesi turgu dikkate
+' almadan acik IF bicimine tasindi).
+FUNCTION trollquest(e AS I32, i AS I32) AS I32
+    DIM cevap AS STRING
+    DIM dogru AS I32
+    cevap = ""
+    dogru = FALSE
+    SELECT CASE (i * 10) + e
+        CASE 80
+            cprint " a) red, yellow, blue", 4
+            cprint " b) red, green, blue", 4
+            cprint " c) red, white, blue", 4
+            cprint " d) cyan, magenta, yellow", 4
+            cprint "Which of the above are the primary colors of light? ", 0
+            DO WHILE LTRIM(RTRIM(cevap)) = ""
+                INPUT cevap
+                IF LTRIM(RTRIM(LCASE(cevap))) = "b" THEN
+                    dogru = TRUE
+                END IF
+            LOOP
+        CASE 90
+            cprint " a) radio waves", 4
+            cprint " b) infrared light", 4
+            cprint " c) ultraviolet light", 4
+            cprint " d) gamma rays", 4
+            cprint "Which of the above can cause sunburn? ", 0
+            DO WHILE LTRIM(RTRIM(cevap)) = ""
+                INPUT cevap
+                IF LTRIM(RTRIM(LCASE(cevap))) = "c" THEN
+                    dogru = TRUE
+                END IF
+            LOOP
+        CASE 100
+            cprint " a) red light", 4
+            cprint " b) green light", 4
+            cprint " c) yellow light", 4
+            cprint " d) blue light", 4
+            cprint "Which of the above has a longer wavelength than orange light? ", 0
+            DO WHILE LTRIM(RTRIM(cevap)) = ""
+                INPUT cevap
+                IF LTRIM(RTRIM(LCASE(cevap))) = "a" THEN
+                    dogru = TRUE
+                END IF
+            LOOP
+        CASE 110
+            cprint " a) radio waves", 4
+            cprint " b) microwaves", 4
+            cprint " c) visible light", 4
+            cprint " d) x-rays", 4
+            cprint "Which of the above is used in microwaves to cook food? ", 0
+            DO WHILE LTRIM(RTRIM(cevap)) = ""
+                INPUT cevap
+                IF LTRIM(RTRIM(LCASE(cevap))) = "b" THEN
+                    dogru = TRUE
+                END IF
+            LOOP
+        CASE 120
+            cprint " a) microwaves", 4
+            cprint " b) gamma rays", 4
+            cprint " c) visible light", 4
+            cprint " d) infrared light", 4
+            cprint "Which of the above is used for 'night vision'? ", 0
+            DO WHILE LTRIM(RTRIM(cevap)) = ""
+                INPUT cevap
+                IF LTRIM(RTRIM(LCASE(cevap))) = "d" THEN
+                    dogru = TRUE
+                END IF
+            LOOP
+        CASE 130
+            cprint " a) total internal refraction", 4
+            cprint " b) total internal confusion", 4
+            cprint " c) total internal reflection", 4
+            cprint " d) your mom", 4
+            cprint "Which of the above are used in fiber optics? ", 0
+            DO WHILE LTRIM(RTRIM(cevap)) = ""
+                INPUT cevap
+                IF LTRIM(RTRIM(LCASE(cevap))) = "c" THEN
+                    dogru = TRUE
+                END IF
+            LOOP
+        CASE 140
+            cprint " a) 186,282.4 miles per second", 4
+            cprint " b) 136646 miles per second", 4
+            cprint " c) 670.57 million miles per hour", 4
+            cprint " d) 299,792,458 meters per second", 4
+            cprint "Which of the above is the speed of light in a vacuum? ", 0
+            DO WHILE LTRIM(RTRIM(cevap)) = ""
+                INPUT cevap
+                IF LTRIM(RTRIM(LCASE(cevap))) = "d" OR LTRIM(RTRIM(LCASE(cevap))) = "a" THEN
+                    dogru = TRUE
+                END IF
+            LOOP
+        CASE ELSE
+            cprint "missing question" + STR(e), 4
+    END SELECT
+    IF dogru = FALSE THEN
+        PRINT
+        PRINT
+        cprint "** You attacked " + nic(i) + " with " + nic(wpn) + ".", 4
+        cprint "Since you could not correctly answer the queston, it easily over-powers", 4
+        cprint "you and banishes you to the " + clr(15) + "CLOSET" + clr(7) + ".", 4
+        inroom = 13
+        move = TRUE
+        RETURN FALSE
+    END IF
+    PRINT
+    PRINT
+    RETURN TRUE
+END FUNCTION
+' unlocke: eldeki anahtar, ayni renkteki kilitli cikisi acar.
+SUB unlocke(i AS I32)
+    IF item(i).oda = -1 THEN
+        IF room(inroom).n = KILITLI - item(i).renk THEN
+            cprint "** You used " + nic(i) + " to unlock " + clr(-room(inroom).n - 2) + "NORTH" + clr(7) + " exit.", 4
+            room(inroom).n = TRUE
+            item(i).oda = 0
+        ELSEIF room(inroom).s = KILITLI - item(i).renk THEN
+            cprint "** You used " + nic(i) + " to unlock " + clr(-room(inroom).s - 2) + "SOUTH" + clr(7) + " exit.", 4
+            room(inroom).s = TRUE
+            item(i).oda = 0
+        ELSEIF room(inroom).w = KILITLI - item(i).renk THEN
+            cprint "** You used " + nic(i) + " to unlock " + clr(-room(inroom).w - 2) + "WEST" + clr(7) + " exit.", 4
+            room(inroom).w = TRUE
+            item(i).oda = 0
+        ELSEIF room(inroom).e = KILITLI - item(i).renk THEN
+            cprint "** You used " + nic(i) + " to unlock " + clr(-room(inroom).e - 2) + "EAST" + clr(7) + " exit.", 4
+            room(inroom).e = TRUE
+            item(i).oda = 0
+        ELSE
+            cprint nic(i) + " won't open any of these exits.", 4
+        END IF
+    END IF
+END SUB
+' viewroom: oda icergi, gorunur cikislar ve kilitli yonler.
+' QB statik yerel birikimine karsi sayaclari her giriste sifirlar.
+SUB viewroom()
+    DIM i AS I32
+    DIM nitems AS I32
+    DIM litems AS I32
+    DIM exits AS I32
+    DIM ld AS STRING
+    item(0).oda = inroom
+    PRINT
+    IF inroom = 13 THEN
+        cprint "You are in the " + clr(15) + "CLOSET" + clr(7) + ".", 4
+        cprint "You'll probably be here a while since there's almost no way out.", 4
+    ELSE
+        cprint "You are in room " + STR(inroom) + ".", 4
+    END IF
+    nitems = 0
+    litems = 0
+    exits = 0
+    ld = ""
+    FOR i = 0 TO ESYA_SAYISI
+        IF item(i).oda = inroom AND item(i).cantada = FALSE THEN
+            nitems = nitems + 1
+        END IF
+    NEXT i
+    IF nitems > 0 THEN
+        cprint "In the room you see", 0
+        FOR i = 0 TO ESYA_SAYISI
+            IF item(i).oda = inroom AND item(i).cantada = FALSE THEN
+                cprint clr(item(i).renk) + UCASE(itemn(i)), 0
+                litems = litems + 1
+                IF litems <> nitems THEN
+                    PRINT ",";
+                END IF
+            END IF
+        NEXT i
+        cprint ".", 4 + 8
+    END IF
+    cprint "Obvious exits are" + clr(15), 0
+    IF room(inroom).n = TRUE THEN
+        cprint "NORTH", 0
+        exits = exits + 1
+    END IF
+    IF room(inroom).s = TRUE THEN
+        cprint "SOUTH", 0
+        exits = exits + 1
+    END IF
+    IF room(inroom).e = TRUE THEN
+        cprint "EAST", 0
+        exits = exits + 1
+    END IF
+    IF room(inroom).w = TRUE THEN
+        cprint "WEST", 0
+        exits = exits + 1
+    END IF
+    cprint clr(7), 8
+    IF exits = 0 THEN
+        cprint "none", 0
+    END IF
+    cprint ".", 4 + 8
+    IF room(inroom).n <= KILITLI THEN
+        ld = ld + clr(-room(inroom).n - 2) + "NORTH "
+    END IF
+    IF room(inroom).s <= KILITLI THEN
+        ld = ld + clr(-room(inroom).s - 2) + "SOUTH "
+    END IF
+    IF room(inroom).w <= KILITLI THEN
+        ld = ld + clr(-room(inroom).w - 2) + "WEST "
+    END IF
+    IF room(inroom).e <= KILITLI THEN
+        ld = ld + clr(-room(inroom).e - 2) + "EAST "
+    END IF
+    IF ld <> "" THEN
+        cprint "The " + ld + clr(7) + "exit is locked.", 4
+    END IF
+END SUB
+' wtd: "what to do" komut cozumleyici. Orijinaldeki oz-yinelemeli
+' bos giris dalgasi DO/LOOP WHILE bicimine cevrildi; kelime esleme
+' (LEFT/RIGHT/INSTR), hile komutlari ve olay sevkleri aynen kalir.
+SUB wtd()
+    DIM wdo AS STRING
+    DIM want AS STRING
+    DIM act AS I32
+    DIM ld AS STRING
+    DIM nitems AS I32
+    DIM inv AS I32
+    DIM i AS I32
+    act = FALSE
+    ld = ""
+    move = FALSE
+    DO
+        PRINT
+        INPUT " >", wdo
+        wdo = LTRIM(RTRIM(LCASE(wdo)))
+    LOOP WHILE wdo = ""
+    IF wdo = "warp" THEN
+        INPUT " to", inroom
+        move = TRUE
+        cprint "** You cheated", 4
+        cheat = TRUE
+    END IF
+    IF wdo = "warp here" THEN
+        FOR i = 0 TO ESYA_SAYISI
+            IF item(i).oda > 0 THEN
+                item(i).oda = inroom
+            END IF
+        NEXT i
+        act = TRUE
+        cprint "** You cheated", 4
+        cheat = TRUE
+        cprint "All items warped.", 4
+    END IF
+    IF wdo = "give me" THEN
+        INPUT " what? ", want
+        FOR i = 0 TO ESYA_SAYISI
+            IF itemn(i) = want THEN
+                item(i).oda = -1
+                cprint nic(i) + " given.", 4
+                IF item(i).silah = TRUE THEN
+                    wpn = i
+                END IF
+            END IF
+        NEXT i
+        act = TRUE
+        cprint "** You cheated", 4
+        cheat = TRUE
+    END IF
+    IF wdo = "see all" THEN
+        FOR i = 1 TO ODA_SAYISI
+            room(i).v = TRUE
+        NEXT i
+        act = TRUE
+        cprint "** You cheated", 4
+        cheat = TRUE
+    END IF
+    IF wdo = "help" THEN
+        cprint clr(15) + "  attack          examine", 4
+        cprint "  get " + clr(7) + "/" + clr(15) + " drop      inventory", 4
+        cprint "  talk to         use", 4
+        cprint "  go " + clr(7) + "[direction]" + clr(15) + "  look", 4
+        cprint "  map             quit" + clr(7), 4
+        act = TRUE
+    END IF
+    IF wdo = "map" THEN
+        map()
+        act = TRUE
+    END IF
+    IF wdo = "look" THEN
+        move = TRUE
+    END IF
+    IF LEFT(wdo, 4) = "quit" THEN
+        cprint "You are a coward to shy away from such a simple task.", 4
+        act = TRUE
+        bitti = TRUE
+    END IF
+    IF INSTR(wdo, "inventory") > 0 THEN
+        nitems = 0
+        inv = 0
+        cprint "You are currently carrying", 0
+        FOR i = 0 TO ESYA_SAYISI
+            IF item(i).oda = -1 THEN
+                nitems = nitems + 1
+            END IF
+        NEXT i
+        FOR i = 0 TO ESYA_SAYISI
+            IF item(i).oda = -1 THEN
+                cprint nic(i), 0
+                inv = inv + 1
+                IF inv <> nitems THEN
+                    PRINT ",";
+                END IF
+            END IF
+        NEXT i
+        IF inv = 0 THEN
+            cprint "nothing", 0
+        END IF
+        cprint ".", 4 + 8
+        act = TRUE
+    END IF
+    IF LEFT(wdo, 4) = "drop" THEN
+        FOR i = 0 TO ESYA_SAYISI
+            IF item(i).silah = TRUE THEN
+                wpn = 0
+            END IF
+            IF RIGHT(wdo, LEN(itemn(i))) = itemn(i) AND item(i).oda = -1 THEN
+                cprint "** You dropped " + nic(i) + ".", 4
+                item(i).oda = inroom
+                item(i).alinir = 1
+                act = TRUE
+            END IF
+        NEXT i
+    END IF
+    IF LEFT(wdo, 7) = "pick up" OR LEFT(wdo, 3) = "get" OR LEFT(wdo, 4) = "take" THEN
+        FOR i = 0 TO ESYA_SAYISI
+            IF RIGHT(wdo, LEN(itemn(i))) = itemn(i) AND item(i).oda = inroom THEN
+                IF item(i).alinir = TRUE THEN
+                    cprint "You got " + nic(i) + ".", 4
+                    item(i).oda = -1
+                END IF
+                IF item(i).alinir = FALSE THEN
+                    cprint "You can't get " + nic(i) + ".", 4
+                END IF
+                IF item(i).alinir <= OLAY_X THEN
+                    ievent(2, i)
+                END IF
+                IF item(i).alinir = OLAY_A THEN
+                    item(i).oda = -1
+                END IF
+                IF item(i).silah = TRUE AND wpn = 0 THEN
+                    wpn = i
+                END IF
+                act = TRUE
+            END IF
+        NEXT i
+    END IF
+    IF LEFT(wdo, 6) = "attack" THEN
+        FOR i = 0 TO ESYA_SAYISI
+            IF RIGHT(wdo, LEN(itemn(i))) = itemn(i) AND item(i).oda = inroom THEN
+                IF item(i).saldiri = TRUE THEN
+                    cprint "You attacked " + nic(i) + ", but nothing happened.", 4
+                END IF
+                IF item(i).saldiri = FALSE THEN
+                    cprint "You can't attack " + nic(i) + ".", 4
+                END IF
+                IF item(i).saldiri <= OLAY_X THEN
+                    ievent(0, i)
+                END IF
+                act = TRUE
+            END IF
+        NEXT i
+    END IF
+    IF LEFT(wdo, 3) = "use" THEN
+        FOR i = 0 TO ESYA_SAYISI
+            IF RIGHT(wdo, LEN(itemn(i))) = itemn(i) AND item(i).oda = -1 THEN
+                IF item(i).kullanir = TRUE THEN
+                    cprint "You used " + nic(i) + ", but nothing happened.", 4
+                END IF
+                IF item(i).kullanir = FALSE THEN
+                    cprint "You can't use " + nic(i) + ".", 4
+                END IF
+                IF item(i).kullanir <= OLAY_X THEN
+                    ievent(4, i)
+                END IF
+                act = TRUE
+            END IF
+            IF act = FALSE AND RIGHT(wdo, LEN(itemn(i))) = itemn(i) AND item(i).oda <> -1 THEN
+                cprint "You have no " + nic(i) + " to use.", 4
+                act = TRUE
+            END IF
+        NEXT i
+    END IF
+    IF LEFT(wdo, 7) = "look at" OR LEFT(wdo, 7) = "examine" THEN
+        FOR i = 0 TO ESYA_SAYISI
+            IF RIGHT(wdo, LEN(itemn(i))) = itemn(i) AND (item(i).oda = inroom OR item(i).oda = -1) THEN
+                IF item(i).incelenir = FALSE THEN
+                    cprint "It looks like every other " + nic(i) + ".", 4
+                END IF
+                IF item(i).incelenir <= OLAY_X THEN
+                    ievent(1, i)
+                END IF
+                act = TRUE
+            END IF
+        NEXT i
+    END IF
+    IF LEFT(wdo, 7) = "talk to" OR LEFT(wdo, 10) = "speak with" THEN
+        FOR i = 0 TO ESYA_SAYISI
+            IF RIGHT(wdo, LEN(itemn(i))) = itemn(i) AND (item(i).oda = inroom OR item(i).oda = -1) THEN
+                IF item(i).konusur = TRUE THEN
+                    cprint nic(i) + " talks to you.", 4
+                END IF
+                IF item(i).konusur = FALSE THEN
+                    cprint nic(i) + " won't talk to you.", 4
+                END IF
+                IF item(i).konusur <= OLAY_X THEN
+                    ievent(3, i)
+                END IF
+                act = TRUE
+            END IF
+        NEXT i
+    END IF
+    IF RIGHT(wdo, 5) = "north" AND room(inroom).n <= KILITLI THEN
+        ld = clr(-room(inroom).n - 2) + "NORTH"
+        act = TRUE
+    END IF
+    IF RIGHT(wdo, 5) = "south" AND room(inroom).s <= KILITLI THEN
+        ld = clr(-room(inroom).s - 2) + "SOUTH"
+        act = TRUE
+    END IF
+    IF RIGHT(wdo, 4) = "west" AND room(inroom).w <= KILITLI THEN
+        ld = clr(-room(inroom).w - 2) + "WEST"
+        act = TRUE
+    END IF
+    IF RIGHT(wdo, 4) = "east" AND room(inroom).e <= KILITLI THEN
+        ld = clr(-room(inroom).e - 2) + "EAST"
+        act = TRUE
+    END IF
+    IF ld <> "" THEN
+        cprint "You can't go " + ld + clr(7) + ", because the exit is locked.", 4
+    END IF
+    IF RIGHT(wdo, 5) = "north" AND room(inroom).n = TRUE THEN
+        inroom = inroom - 5
+        move = TRUE
+    END IF
+    IF RIGHT(wdo, 5) = "south" AND room(inroom).s = TRUE THEN
+        inroom = inroom + 5
+        move = TRUE
+    END IF
+    IF RIGHT(wdo, 4) = "east" AND room(inroom).e = TRUE THEN
+        inroom = inroom + 1
+        move = TRUE
+    END IF
+    IF RIGHT(wdo, 4) = "west" AND room(inroom).w = TRUE THEN
+        inroom = inroom - 1
+        move = TRUE
+    END IF
+    IF item(24).oda = 2 THEN
+        item(24).oda = 0
+        cprint nic(20) + ": Thanks!", 4
+    END IF
+    IF act = FALSE AND move = FALSE THEN
+        cprint "You can't " + wdo + ".", 4
+    END IF
+    IF move = TRUE THEN
+        viewroom()
+    END IF
+END SUB
+' ---------------------------------------------------------------------
+' Ana akis. QB'daki COMMAND$/PALETTE/VIEW PRINT satirlarinin karsiligi
+' yoktur: intro her calismada acilir, oyun dogrudan baslar.
+MAIN
+    DIM i AS I32
+    DIM metin AS STRING
+    inroom = 7
+    intro()
+    CLS
+    roomsitems()
+    cprint "Welcome to " + nic(18) + " " + CHR(&H8E) + "Quest" + CHR(&H86) + "!", 4
+    cprint "As you can probably guess, you are on the quest for the " + nic(18) + ".", 4
+    PRINT
+    cprint "You are in a 5x5 maze which you will need to navigate to find the", 4
+    cprint nic(18) + ".  Along the way you will encounter " + clr(15) + "TROLLS" + clr(7) + " which will question", 4
+    cprint "your knowledge of " + clr(4) + "/" + clr(9) + "S" + clr(1) + "/" + clr(9) + "C" + clr(1) + "/" + clr(9) + "I" + clr(1) + "/" + clr(9) + "E" + clr(1) + "/" + clr(9) + "N" + clr(1) + "/" + clr(9) + "C" + clr(1) + "/" + clr(9) + "E" + clr(4) + "/" + clr(7), 4
+    PRINT
+    cprint "Your quest begins now...", 4
+    PRINT
+    cprint "You awake to find yourself in a dark room.", 4
+    viewroom()
+    DO WHILE item(19).oda <> -1 AND bitti = FALSE
+        room(inroom).v = TRUE
+        wtd()
+        IF inroom = 0 AND bitti = FALSE THEN
+            gameover()
+        END IF
+    LOOP
+    IF bitti = FALSE THEN
+        PRINT
+        cprint "Congrats! You won the game!", 4
+        INPUT " What is your name", pname
+        OPEN "hs.txt" FOR APPEND AS #1
+        FOR i = 1 TO LEN(pname)
+            PRINT #1, HEX(ASC(MID(pname, i, 1)));
+        NEXT i
+        IF cheat = TRUE THEN
+            metin = " (cheater)"
+            FOR i = 1 TO LEN(metin)
+                PRINT #1, HEX(ASC(MID(metin, i, 1)));
+            NEXT i
+        END IF
+        metin = " won the game @ " + STR(TIMER()) + " saniye."
+        FOR i = 1 TO LEN(metin)
+            PRINT #1, HEX(ASC(MID(metin, i, 1)));
+        NEXT i
+        PRINT #1, "0D0A";
+        CLOSE #1
+    END IF
+END MAIN

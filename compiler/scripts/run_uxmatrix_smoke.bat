@@ -12,7 +12,7 @@ if exist build_compiler_64.bat (
   if errorlevel 1 exit /b 1
 )
 
-set "UXB=uxb\compiler\wrappers\uxb_main_wrapper_64.exe"
+set "UXB=uxb\bin\uxb.exe"
 if exist "%UXB%" (
   echo === uXBasic uxmatrix include smoke ===
   "%UXB%" uxb\tests\uxmatrix\uxmatrix_include_smoke.bas --execmem --interpreter-backend AST --debug

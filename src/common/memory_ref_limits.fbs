@@ -1,0 +1,5 @@
+#ifndef UXB_MEMORY_REF_LIMITS_FBS
+#define UXB_MEMORY_REF_LIMITS_FBS
+Const UXB_MEMREF_MAX As Integer = 4096
+Const UXB_MEMREF_HARD_MAX As Integer = 65536
+#endif

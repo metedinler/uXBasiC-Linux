@@ -1,0 +1,22 @@
+DIM total AS I64 = 0
+DIM calls AS I64 = 0
+FUNCTION Unit() AS I64
+ calls = calls + 1
+ RETURN 1
+END FUNCTION
+FUNCTION Twice(n AS I64) AS I64
+ RETURN n * 2
+END FUNCTION
+THREAD Work() AS I64
+ DIM i AS I64
+ FOR i = 1 TO 1000
+ total = total + Twice(Unit()) + Unit()
+ NEXT
+ RETURN 0
+END THREAD
+DIM a AS TASK OF I64 = SPAWN Work()
+DIM b AS TASK OF I64 = SPAWN Work()
+a.JOIN()
+b.JOIN()
+PRINT total
+PRINT calls

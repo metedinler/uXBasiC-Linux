@@ -15,7 +15,7 @@ call build_compiler_64.bat
 if errorlevel 1 exit /b 1
 
 echo === uXBasiC policy JSON ===
-uxb\compiler\wrappers\uxb_main_wrapper_64.exe uxb\tests\fp_ext\bigf_runtime_policy.bas --enable-extfp-runtime --extfp-runtime-dir uxb\dist\runtime_ext --extfp-policy-json-out uxb\dist\extfp_policy_bigf.json --extfp-diagnostics --debug
+uxb\bin\uxb.exe uxb\tests\fp_ext\bigf_runtime_policy.bas --enable-extfp-runtime --extfp-runtime-dir uxb\dist\runtime_ext --extfp-policy-json-out uxb\dist\extfp_policy_bigf.json --extfp-diagnostics --debug
 if errorlevel 1 exit /b 1
 
 python -c "import json,pathlib; p=pathlib.Path('uxb/dist/extfp_policy_bigf.json'); d=json.loads(p.read_text(encoding='utf-8')); print('POLICY_JSON_OK', d.get('schema_version'))"

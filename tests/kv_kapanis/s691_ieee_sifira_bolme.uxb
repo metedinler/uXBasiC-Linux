@@ -1,0 +1,26 @@
+' S-691 (Mete: IEEE her yolda): kayan nokta sifira bolme hata degildir; 1 / 0 = inf, -1 / 0 = -inf, 0 / 0 = nan.
+' (Tamsayi \ ve MOD sifira hala acik calisma ani hatasidir.)
+DIM z AS F64 = 0
+DIM a AS F64 = 1
+DIM b AS F64 = -1
+PRINT a / z
+PRINT b / z
+PRINT z / z
+DIM s AS F64
+s = a / z
+PRINT s + 1
+PRINT s > 1000000
+PRINT s = s
+DIM n AS F64
+n = z / z
+PRINT n = n
+PRINT n + 1
+DIM f AS F32 = 0
+DIM g AS F32 = 1
+PRINT g / f
+DIM c AS F64 = 3
+c /= z
+PRINT c
+PRINT 1 / 0
+PRINT -1 / 0
+PRINT 0 / 0

@@ -1,7 +1,7 @@
 # S-030 motor durumu (tek yer). Faz 1B (2026-09-25): canonical-MIR senkron referans = run.
 # Faz 2A (2026-09-25): native x64 gercek eszamanli (gorev ABI v2, isci havuzu) = run.
-# legacy AST-x64: kalici ACIK red (K7).
+# S-030 native v2: legacy AST-x64 also executes real tasks; rejection is not support.
 AST=run
 MIR=run
 x64=run
-AST-x64=reject:legacy AST-x64: SPAWN/TASK/TASKGROUP desteklenmiyor
+AST-x64=run

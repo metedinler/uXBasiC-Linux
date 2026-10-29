@@ -1,0 +1,4 @@
+FUNCTION Bad() AS I32
+  RETURN "bad"
+END FUNCTION
+PRINT Bad()

@@ -20,10 +20,42 @@ Private Sub UXBStep3SymbolEnsure(ByVal minCount As Integer)
     ReDim Preserve gUXBStep3Symbols(gUXBStep3SymbolCap - 1)
 End Sub
 
+' S-611 (2026-10-17): lexical parent of a semantic (sparse) scope. A semantic scope id is the AST node index + 1 of its owner and, unless
+' a parent is registered here, chains straight to the global scope. The scope of a class MEMBER routine (method, constructor, destructor,
+' operator, property accessor) is registered as nested in its class scope: the member's parameters and locals are private to that member,
+' while the class's fields and method names stay visible from inside it. Before, every member body of a class shared the class scope, so
+' a parameter / local of one method collided with the same name in another method (different types: "assignment requires explicit cast",
+' G-NESNE-16) and with a METHOD name (the method symbol won, or the parameter did, depending on declaration order).
+Dim Shared gUXBStep3ScopeParentTab(Any) As Integer
+Dim Shared gUXBStep3ScopeParentCap As Integer
+
+Sub UXBStep3ScopeParentSet(ByVal scopeId As Integer, ByVal parentScopeId As Integer)
+    If scopeId <= 0 Then Exit Sub
+    If scopeId >= gUXBStep3ScopeParentCap Then
+        Dim newCap As Integer
+        newCap = gUXBStep3ScopeParentCap
+        If newCap < 64 Then newCap = 64
+        Do While newCap <= scopeId
+            newCap *= 2
+        Loop
+        ReDim Preserve gUXBStep3ScopeParentTab(newCap - 1)
+        gUXBStep3ScopeParentCap = newCap
+    End If
+    gUXBStep3ScopeParentTab(scopeId) = parentScopeId + 1
+End Sub
+
+' -1 = no parent registered
+Function UXBStep3ScopeParentGet(ByVal scopeId As Integer) As Integer
+    If scopeId <= 0 Or scopeId >= gUXBStep3ScopeParentCap Then Return -1
+    Return gUXBStep3ScopeParentTab(scopeId) - 1
+End Function
+
 Sub UXBStep3SymbolReset()
     gUXBStep3SymbolCount = 0
     gUXBStep3SymbolCap = 0
     ReDim gUXBStep3Symbols(0)
+    gUXBStep3ScopeParentCap = 0
+    ReDim gUXBStep3ScopeParentTab(0)
     UXBSymHashReset
 End Sub
 
@@ -59,10 +91,17 @@ End Function
 
 Function UXBStep3SymbolFind(ByVal nameText As String, ByVal kindText As String, ByVal scopeId As Integer) As Integer
     Dim cur As Integer = scopeId
+    Dim hopGuard As Integer = 0
     Do While cur >= 0
         Dim idx As Integer = UXBStep3SymbolFindExact(nameText, kindText, cur)
         If idx <> -1 Then Return idx
-        If cur <> 0 And UXBScopeIsValid(cur) = 0 Then
+        hopGuard += 1
+        If hopGuard > 64 Then Exit Do
+        Dim registeredParent As Integer = UXBStep3ScopeParentGet(cur)
+        If registeredParent >= 0 Then
+            ' S-611: a class member routine's scope nests in its class scope
+            cur = registeredParent
+        ElseIf cur <> 0 And UXBScopeIsValid(cur) = 0 Then
             ' Semantic scopes use AST node index + 1 as a stable scope id.
             ' Those ids are intentionally sparse and are not all pushed onto
             ' the runtime scope stack. They still have the global scope as

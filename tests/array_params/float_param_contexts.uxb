@@ -1,0 +1,26 @@
+FUNCTION UpdateF32(a AS F32[]) AS F64
+    PRINT a(0)
+    a(1) = CSNG(a(1) + CSNG(1))
+    RETURN CDBL(a(0)) + CDBL(a(1))
+END FUNCTION
+FUNCTION UpdateF64(a AS F64[]) AS F64
+    a(1) = a(1) + 0.5
+    RETURN a(0) + a(1)
+END FUNCTION
+FUNCTION WidenInts(a AS I32[]) AS F64
+    RETURN a(0) + CDBL(a(1))
+END FUNCTION
+DIM singles(1) AS F32
+singles(0) = CSNG(1.25)
+singles(1) = CSNG(2.5)
+PRINT UpdateF32(singles)
+PRINT singles(1)
+DIM doubles(1) AS F64
+doubles(0) = 1.5
+doubles(1) = 2.25
+PRINT UpdateF64(doubles)
+PRINT doubles(1)
+DIM integers(1) AS I32
+integers(0) = -7
+integers(1) = 12
+PRINT WidenInts(integers)

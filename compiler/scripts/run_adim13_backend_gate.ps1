@@ -29,7 +29,7 @@ if ($LASTEXITCODE -ne 0) { throw "FreeBASIC compiler build failed" }
 
 $exeCandidates = @(
     "build/uxb_main_64.exe",
-    "compiler/wrappers/uxb_main_wrapper_64.exe"
+    "bin/uxb.exe"
 )
 $uxbExe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $uxbExe) { throw "uxb executable bulunamadi" }
@@ -49,9 +49,10 @@ Run-Test "x64_i32" @("tests/adim13/positive/adim13_i32_backend.bas", "--emit-x64
 Run-Test "x64_f64" @("tests/adim13/positive/adim13_f64_backend.bas", "--emit-x64-nasm", "--codegen-source", "MIR") $true
 Run-Test "x64_runtime" @("tests/adim13/positive/adim13_call_runtime.bas", "--emit-x64-nasm", "--codegen-source", "MIR") $true
 
-# x86 gecis hedefi: basit I32 icin emit olabilir; desteklenmeyen opcode icin fail diagnostic beklenir.
-Run-Test "x86_i32" @("tests/adim13/positive/adim13_i32_backend.bas", "--emit-x86", "--codegen-source", "MIR") $true
-Run-Test "x86_unsupported" @("tests/adim13/negative/adim13_x86_unsupported.bas", "--emit-x86", "--codegen-source", "MIR") $false
+# x86 hedefi emekli (S-666, Asama 3): --emit-x86 her program icin CLI_TARGET_RETIRED ile reddedilir (cikis kodu != 0).
+# Ayrintili sinama: tests/x86_emeklilik. Basit I32 de desteklenmeyen opcode da basarisiz olmali.
+Run-Test "x86_i32_retired" @("tests/adim13/positive/adim13_i32_backend.bas", "--emit-x86", "--codegen-source", "MIR") $false
+Run-Test "x86_unsupported_retired" @("tests/adim13/negative/adim13_x86_unsupported.bas", "--emit-x86", "--codegen-source", "MIR") $false
 
 $results | Export-Csv -NoTypeInformation -Encoding UTF8 "reports/control/current/adim8_positive_negative_tests.csv"
 
@@ -62,7 +63,7 @@ $gate = [ordered]@{
     status = $status
     failed_tests = $failCount
     test_count = $results.Count
-    note = "Adim13 native backend x64/x86 gate"
+    note = "Adim13 native backend x64 gate (x86 retired: S-666)"
 }
 $gate | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 "reports/control/current/adim8_gate.json"
 

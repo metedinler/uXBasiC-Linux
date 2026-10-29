@@ -1,0 +1,11 @@
+FUNCTION Deger() AS STRING
+    Deger = "A" + CHR(0) + "B"
+    TRY
+        EXIT FUNCTION
+    FINALLY
+        Deger = "X"
+    END TRY
+END FUNCTION
+DIM s AS STRING = Deger()
+PRINT LEN(s)
+PRINT ASC(MID(s, 2, 1))

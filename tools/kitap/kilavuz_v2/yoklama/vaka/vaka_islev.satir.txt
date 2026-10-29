@@ -1,0 +1,74 @@
+# ad | kurulum | ifade
+abs_tam | | PRINT ABS(-5)
+abs_ond | | PRINT ABS(-2.5)
+sgn | | PRINT SGN(-3); SGN(0); SGN(2.5)
+int_pozitif | | PRINT INT(2.7); " "; INT(-2.7)
+fix | | PRINT FIX(2.7); " "; FIX(-2.7)
+sqr | | PRINT SQR(16); " "; SQR(2)
+sqrt | | PRINT SQRT(2)
+trig | | PRINT SIN(0); " "; COS(0); " "; TAN(0)
+atn | | PRINT ATN(1) * 4
+exp_log | | PRINT EXP(0); " "; LOG(1); " "; LOG(EXP(2))
+rnd_aralik | RANDOMIZE 7 | DIM r AS F64 = RND\nPRINT (r >= 0) AND (r < 1)
+timer | | PRINT TIMER >= 0
+round_dene | | PRINT ROUND(2.5)
+floor_dene | | PRINT FLOOR(2.7)
+ceil_dene | | PRINT CEIL(2.1)
+min_dene | | PRINT MIN(3, 5)
+max_dene | | PRINT MAX(3, 5)
+pow_dene | | PRINT POW(2, 3)
+log10_dene | | PRINT LOG10(100)
+atan2_dene | | PRINT ATAN2(1, 1)
+pi_dene | | PRINT PI
+cint | | PRINT CINT(2.6); " "; CLNG(2.4); " "; CSNG(1.5); " "; CDBL(1)
+val_str | | PRINT VAL("12.5") + 1; " "; VAL("abc"); " "; STR(7); "|"; STR(-7)
+valint | | PRINT VALINT("42") + 1
+hex_oct_bin | | PRINT HEX(255); " "; OCT(8); " "; BIN(5)
+chr_asc | | PRINT CHR(72); CHR(105); " "; ASC("A"); " "; ASC("ab")
+len | | PRINT LEN("merhaba"); " "; LEN("")
+left_right | | PRINT LEFT("merhaba", 3); " "; RIGHT("merhaba", 3); " "; LEFT("ab", 5); " "; RIGHT("ab", 0)
+mid2 | | PRINT MID("merhaba", 4)
+mid3 | | PRINT MID("merhaba", 2, 3)
+mid_sinir | | PRINT "["; MID("abc", 5, 2); "]"; "["; MID("abc", 0, 2); "]"
+instr2 | | PRINT INSTR("merhaba", "ha"); " "; INSTR("merhaba", "z")
+instr3 | | PRINT INSTR(3, "abcabc", "b"); " "; INSTR("abcabc", "b", 3)
+ucase_lcase | | PRINT UCASE("aBc"); " "; LCASE("aBc")
+trim_ailesi | | PRINT "["; TRIM("  a b  "); "]["; LTRIM("  a "); "]["; RTRIM("  a "); "]"
+space_string | | PRINT "["; SPACE(3); "]["; STRING(3, "xy"); "]["; STRING(2, 65); "]"
+replace_dene | | PRINT REPLACE("aXbXc", "X", "-")
+reverse_dene | | PRINT REVERSE("abc")
+repeat_dene | | PRINT REPEAT("ab", 3)
+startswith_dene | | PRINT STARTSWITH("abc", "ab")
+contains_dene | | PRINT CONTAINS("abc", "b")
+split_dene | | PRINT SPLIT("a,b", ",")
+format_dene | | PRINT FORMAT(3.14159, "0.00")
+lbound_ubound | DIM a(2 TO 5) AS I32 | PRINT LBOUND(a); " "; UBOUND(a)
+lbound_boyut | DIM m(1 TO 3, 0 TO 4) AS I32 | PRINT LBOUND(m, 1); UBOUND(m, 1); LBOUND(m, 2); UBOUND(m, 2)
+sizeof_tip | TYPE P\n    a AS I32\n    b AS F64\nEND TYPE | PRINT SIZEOF(P); " "; OFFSETOF(P, "b")
+list_islev | DIM l AS LIST | LISTADD(l, 5)\nLISTADD(l, 7)\nLISTSET(l, 0, 9)\nPRINT LISTLEN(l); LISTGET(l, 0); LISTGET(l, 1)\nLISTREMOVE(l, 0)\nPRINT LISTLEN(l)\nLISTCLEAR(l)\nPRINT LISTLEN(l)
+list_new | | DIM l AS LIST = LIST_NEW()\nLISTADD(l, 1)\nPRINT LISTLEN(l)
+dict_islev | DIM d AS DICT | DICTSET(d, "a", 1)\nDICTSET(d, "b", 2)\nPRINT DICTLEN(d); DICTGET(d, "b"); DICTHAS(d, "a"); DICTHAS(d, "z")\nDICTCLEAR(d)\nPRINT DICTLEN(d)
+set_islev | DIM s AS SET | SETADD(s, "x")\nSETADD(s, "y")\nSETADD(s, "x")\nPRINT SETLEN(s); SETHAS(s, "y"); SETHAS(s, "q")\nSETREMOVE(s, "x")\nPRINT SETLEN(s)\nSETCLEAR(s)\nPRINT SETLEN(s)
+list_metin | DIM l AS LIST | LISTADD(l, "elma")\nLISTADD(l, "armut")\nPRINT LISTGET(l, 1)
+dict_tamsayi_anahtar | DIM d AS DICT | DICTSET(d, 7, "yedi")\nPRINT DICTGET(d, 7)
+varptr_peek | DIM x AS I32 = 258 | DIM p AS PTR = VARPTR(x)\nPRINT PEEKB(p); " "; PEEKW(p); " "; PEEKD(p); " "; PEEK(p)
+sadd_strptr | DIM s AS STRING = "AB" | DIM p AS PTR = SADD(s)\nPRINT PEEKB(p); " "; PEEKB(p + 1)
+castptr | DIM x AS I64 = 5 | DIM p AS PTR = CASTPTR(I64, 6000)\nPRINT p
+sizeof_ifade | DIM a AS I32 | PRINT SIZEOF(a); " "; SIZEOF(I16)
+swap_dene | DIM a AS I32 = 1\nDIM b AS I32 = 2 | SWAP a, b\nPRINT a; b
+sleep_dene | | SLEEP 1\nPRINT "ok"
+beep_dene | | PRINT "x"
+erase_dene | DIM a(2) AS I32 | ERASE a\nPRINT "ok"
+fre_dene | | PRINT FRE(0) > 0
+date_dene | | PRINT LEN(DATE) > 0
+time_dene | | PRINT LEN(TIME) > 0
+environ_dene | | PRINT LEN(ENVIRON("PATH")) > 0
+command_dene | | PRINT LEN(COMMAND) >= 0
+exec_dene | | PRINT EXEC("cmd /c echo a")
+tab_dene | | PRINT "a"; TAB(5); "b"
+spc_dene | | PRINT "a"; SPC(3); "b"
+val_hex | | PRINT VAL("&HFF")
+str_ondalik | | PRINT STR(2.50); "|"; STR(1E20); "|"; STR(1/3)
+lcase_tr | | PRINT LCASE("ABC123")
+chr_dizi | | PRINT CHR(65) + CHR(66) + CHR(67)
+mid_atama | DIM s AS STRING = "abcdef" | MID(s, 2, 2) = "XY"\nPRINT s

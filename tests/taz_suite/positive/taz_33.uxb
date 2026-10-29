@@ -1,0 +1,18 @@
+%%DEFINE CASE_ID 33
+%%IF CASE_ID
+PRINT "PP_OK"
+%%ENDIF
+DIM a AS I32
+DIM b AS I64
+DIM c AS F64
+DIM s AS STRING
+a = CASE_ID
+b = 100
+c = 3.14
+s = "taz"
+IMPORT(C, "native/uxb_probe.c")
+PRINT ABS(-5)
+PRINT LEN(s)
+PRINT UCASE(s)
+PRINT STR(a)
+PRINT VAL("12")

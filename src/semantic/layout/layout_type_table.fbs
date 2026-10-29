@@ -289,6 +289,19 @@ Private Function ResolveTypeLayout(ByRef ps As ParseState, ByRef rawTypeName As 
     If normalizedTypeName = "PTR" Then normalizedTypeName = "POINTER"
     If normalizedTypeName = "BIGI" Then normalizedTypeName = "BIGINT"
 
+    ' ENUM names retain nominal identity, while storage follows their integer base.
+    ' SIZEOF also runs while parsing, before the semantic binding registry exists.
+    For enumNode As Integer = 0 To ps.ast.count - 1
+        If UCase(ps.ast.nodes(enumNode).kind) <> "ENUM_STMT" Or UCase(ps.ast.nodes(enumNode).value) <> normalizedTypeName Then Continue For
+        Dim enumBaseType As String = "I32"
+        Dim enumChild As Integer = ps.ast.nodes(enumNode).firstChild
+        Do While enumChild <> -1
+            If UCase(ps.ast.nodes(enumChild).kind) = "ENUM_BASE_TYPE" Then enumBaseType = ps.ast.nodes(enumChild).value
+            enumChild = ps.ast.nodes(enumChild).nextSibling
+        Loop
+        If IsBuiltinLayoutType(enumBaseType, sizeOut, alignOut) <> 0 Then Return 1
+    Next enumNode
+
     If IsBuiltinLayoutType(normalizedTypeName, builtinSize, builtinAlign) Then
         sizeOut = builtinSize
         alignOut = builtinAlign
@@ -557,6 +570,7 @@ Function BuildTypeLayoutTable(ByRef ps As ParseState) As Integer
     Dim ignoreAlign As Integer
 
     LayoutResetState
+    UXBLibraryTypeUsageReset
 
     If LoadLibraryTypeManifestsForLayout(ps, errText) = 0 Then
         ps.lastError = errText
@@ -613,6 +627,15 @@ Function TypeLayoutStrideOf(ByRef ps As ParseState, ByRef rawTypeName As String,
         End If
     End If
     If ResolveTypeLayout(ps, rawTypeName, payloadBytes, alignBytes, errOut) = 0 Then Return 0
+    ' S-617: CLASS array cells hold references. Object allocation and SIZEOF
+    ' still use the complete layout; only array storage uses pointer width.
+    Dim arrayTypeIdx As Integer = FindTypeLayoutIndex(rawTypeName)
+    If arrayTypeIdx >= 0 Then
+        If UCase(gTypeLayouts(arrayTypeIdx).recordKind) = "CLASS" Then
+            strideOut = 8
+            Return 1
+        End If
+    End If
     If alignBytes < 1 Then alignBytes = 1
     strideOut = ((payloadBytes + alignBytes - 1) \ alignBytes) * alignBytes
     Return 1
@@ -640,6 +663,30 @@ Function TypeLayoutDescribeGlobal(ByRef rawTypeName As String, ByRef sizeOut As 
     Return 1
 End Function
 
+
+' TUR6/TUR8, S-103: code generators without a ParseState use the already
+' built layout. One stride source for MIR-x64 and legacy array parameters.
+' Missing layout stays unsupported; it must never become an assumed pointer.
+Function TypeLayoutStrideOfGlobal(ByRef rawTypeName As String, ByRef strideOut As Integer) As Integer
+    strideOut = 0
+    Dim payloadBytes As Integer, alignBytes As Integer, abiStride As Integer
+    If UXBTypeAbi(rawTypeName, payloadBytes, alignBytes, abiStride) <> 0 Then
+        strideOut = abiStride
+        Return 1
+    End If
+    Dim recordKind As String, abiKind As String
+    Dim packBytes As Integer, explicitAlign As Integer
+    If TypeLayoutDescribeGlobal(rawTypeName, payloadBytes, alignBytes, recordKind, abiKind, packBytes, explicitAlign) = 0 Then Return 0
+    If UCase(Trim(recordKind)) = "CLASS" Then
+        strideOut = 8
+        Return 1
+    End If
+    If payloadBytes <= 0 Or alignBytes <= 0 Then Return 0
+    Dim stride64 As LongInt = ((CLngInt(payloadBytes) + CLngInt(alignBytes) - 1) \ CLngInt(alignBytes)) * CLngInt(alignBytes)
+    If stride64 <= 0 Or stride64 > &H7FFFFFFF Then Return 0
+    strideOut = CInt(stride64)
+    Return 1
+End Function
 
 Private Function TypeLayoutJsonEscape(ByRef rawText As String) As String
     Dim outText As String

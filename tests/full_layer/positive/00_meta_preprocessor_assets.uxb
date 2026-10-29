@@ -1,0 +1,27 @@
+%%DEFINE BUILD_KIND DEV
+%%DEFINE USE_EXTRA 1
+%%EXPANDLIMIT 32
+%%IF USE_EXTRA
+PRINT "META_IF_OK"
+%%ELSE
+PRINT "META_IF_FAIL"
+%%ENDIF
+%%MACRO TWICE(X) X + X
+DIM metaValue AS I32
+metaValue = TWICE(21)
+PRINT metaValue
+%%JS_BEGIN dist/web/meta_embed.js
+console.log("uxb meta js block");
+%%JS_END
+%%WAT_BEGIN dist/wasm/meta_embed.wat
+(module (func (export "answer") (result i32) i32.const 42))
+%%WAT_END
+%%HTML_BEGIN dist/web/index.html
+<div id="uxb-root">uXBasic</div>
+%%HTML_END
+%%CSS_BEGIN dist/web/style.css
+#uxb-root { display: block; }
+%%CSS_END
+%%JSON_SET build.kind DEV
+%%MANIFEST_SET app.name uxb-full-layer-test
+%%ASSET_IMAGE assets/logo.png dist/assets/logo.png

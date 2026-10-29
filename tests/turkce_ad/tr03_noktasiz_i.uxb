@@ -1,0 +1,17 @@
+' S-579: noktasız ı kendi harfidir, ASCII I ise i harfinin büyüğüdür — kisa ile kısa, isik ile ışık farklı adlardır
+DIM kisa AS I32 = 1
+DIM kısa AS I32 = 2
+DIM KISA2 AS I32 = 3
+DIM kısa2 AS I32 = 4
+PRINT kisa
+PRINT kısa
+PRINT kisa2
+PRINT kısa2
+PRINT kisa * 10 + kısa
+DIM isik AS I32 = 5
+DIM ışık AS I32 = 6
+DIM işik AS I32 = 7
+PRINT ISIK
+PRINT ışık
+PRINT IŞIK
+PRINT işik * 100 + ışık * 10 + isik

@@ -21,6 +21,13 @@ Function UXBNormalizeCliArgAdim41(ByRef argText As String, ByRef normalizedOut A
         inlineSuffix = Mid(argText, eqPos)
     End If
 
+    ' Removed selector aliases must not become ignored positional arguments.
+    Select Case LCase(optionKey)
+    Case "b28", "b30", "-b28", "-b30"
+        errText = "Preprocessor selector CLI option removed: " & argText
+        Return 0
+    End Select
+
     Dim canonical As String
     If UXBCliRemovedTurkishAliasAdim41(optionKey, canonical) <> 0 Then
         errText = "Turkce CLI alias kaldirildi: " & argText & ". Kullan: " & canonical

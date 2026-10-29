@@ -1,0 +1,4 @@
+DIM kod AS I32
+SHELL "cmd /c echo UXB_SHELL_SYNC_OUT" OUTPATH("reports\\uxb_shell_sync_out.txt") ERRPATH("reports\\uxb_shell_sync_err.txt") CODEVAR kod
+PRINT kod
+PRINT "SHELL_SYNC_PATHS_DONE"

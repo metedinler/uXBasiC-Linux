@@ -1,0 +1,3 @@
+' S-579: ASCII I, i harfinin büyüğüdür — IŞIK, işik demektir ve noktasız ı'lı ışık'tan farklıdır; hata bunu açıkça gösterir
+DIM ışık AS I32 = 1
+PRINT IŞIK

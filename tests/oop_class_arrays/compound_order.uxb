@@ -1,0 +1,18 @@
+DIM orderCode AS I32 = 0
+FUNCTION Pick() AS I32
+    orderCode = orderCode * 10 + 2
+    RETURN 0
+END FUNCTION
+FUNCTION Rhs() AS I32
+    orderCode = orderCode * 10 + 1
+    RETURN 3
+END FUNCTION
+CLASS Ic
+    PUBLIC
+    n AS I32
+END CLASS
+DIM arr(1) AS Ic
+arr(0) = NEW Ic()
+arr(Pick()).n += Rhs()
+PRINT arr(0).n
+PRINT orderCode

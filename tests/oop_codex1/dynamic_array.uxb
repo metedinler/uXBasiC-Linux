@@ -1,0 +1,5 @@
+DIM n AS I32
+n = 5
+DIM arr(n) AS I32
+arr(0) = 11
+PRINT arr(0)

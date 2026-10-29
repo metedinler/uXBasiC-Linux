@@ -1,0 +1,9 @@
+DIM I AS INTEGER
+DIM S AS INTEGER
+
+S = 0
+FOR I = 1 TO 5
+    S = S + I
+NEXT I
+
+PRINT S

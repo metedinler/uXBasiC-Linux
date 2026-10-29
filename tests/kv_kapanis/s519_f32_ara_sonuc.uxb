@@ -1,0 +1,13 @@
+' S-519: F32 aritmetiginde ara sonuc de her adimda tek duyarliga (24 bit) yuvarlanir; AST eskiden ara sonucu double
+' tutuyordu: (u + 1) - 16777216 -> AST 1, oysa 16777216 + 1 tek duyarlikta 16777216'ya yuvarlanir ve sonuc 0'dir.
+DIM u AS F32 = 16777216
+PRINT (u + 1) - 16777216
+PRINT (u + 2) - 16777216
+DIM m AS F32 = 4097
+PRINT (m * m) - 16785408
+DIM a AS F32 = 16777216
+DIM b AS F32 = 1
+DIM c AS F32 = (a + b) - a
+PRINT c
+DIM e AS F64 = 16777216
+PRINT (e + 1) - 16777216

@@ -1,0 +1,22 @@
+' S-601 (2026-10-17): the CALL statement with a method of the current class. `CALL Yaz()` (bare, = CALL ME.Yaz()), `CALL ME.Yaz()`,
+' `CALL THIS.Yaz()` and `CALL x.Yaz()` are the same call as `Yaz()` / `ME.Yaz()` / `x.Yaz()`. The parser used to take the bare form for a
+' global SUB (AST "unsupported call YAZ", MIR "no bound implementation", native "neither a known runtime call nor a function").
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    METHOD Yaz()
+        PRINT v
+    END METHOD
+    METHOD Ac()
+        v = 4
+        CALL Yaz()
+        Yaz()
+        CALL ME.Yaz()
+        CALL THIS.Yaz()
+        ME.Yaz()
+    END METHOD
+END CLASS
+DIM x AS Kutu = NEW Kutu()
+x.Ac()
+CALL x.Yaz()
+x.Yaz()

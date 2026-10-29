@@ -1,6 +1,7 @@
 ' parser.fbs: see the removal note in inline_backend.fbs (found 2026-09-06).
 
 Type FfiX64CallPlanEntry
+    astNodeIndex As Integer
     lineNo As Integer
     dllName As String
     symbolName As String
@@ -305,6 +306,7 @@ Private Function FfiCallReadDllEntry(ByRef ps As ParseState, ByVal nodeIdx As In
         End If
     End If
 
+    entryOut.astNodeIndex = nodeIdx
     entryOut.lineNo = ps.ast.nodes(nodeIdx).lineNo
     entryOut.dllName = Trim(ps.ast.nodes(libNode).value)
     If resolvedCallKind = "API" And InStr(entryOut.dllName, ".") = 0 Then entryOut.dllName &= ".dll"
@@ -316,7 +318,16 @@ Private Function FfiCallReadDllEntry(ByRef ps As ParseState, ByVal nodeIdx As In
     typeListNode = FfiCallChildAt(ps, nodeIdx, argStartPos)
     If FfiCallNodeIndexValid(ps, typeListNode) <> 0 Then
         If UCase(ps.ast.nodes(typeListNode).kind) = "STRING" Then
-            If FfiCallLooksLikeArgTypeList(ps.ast.nodes(typeListNode).value) <> 0 Then argStartPos += 1
+            If FfiCallLooksLikeArgTypeList(ps.ast.nodes(typeListNode).value) <> 0 Then
+                argStartPos += 1
+            ElseIf argc > argStartPos + 1 Then
+                ' Parser validation is the normal gate. Keep the x64 FFI plan
+                ' safe when a prebuilt or alternate AST reaches this backend:
+                ' unknown metadata may not become a string-pointer argument.
+                errText = "UXB_FFI_ARGUMENT_TYPE_LIST: CALL(DLL) invalid argument type-list token: " & _
+                    Trim(ps.ast.nodes(typeListNode).value)
+                Return -1
+            End If
         End If
     End If
 
@@ -338,6 +349,9 @@ Private Function FfiCallCollectNode(ByRef ps As ParseState, ByVal nodeIdx As Int
     readStatus = FfiCallReadDllEntry(ps, nodeIdx, entry, errText)
     If readStatus < 0 Then Return 0
     If readStatus > 0 Then
+        For seen As Integer = 0 To entryCount - 1
+            If entries(seen).astNodeIndex = nodeIdx Then Return 1
+        Next
         FfiCallPushEntry entries(), entryCount, entry
     End If
 

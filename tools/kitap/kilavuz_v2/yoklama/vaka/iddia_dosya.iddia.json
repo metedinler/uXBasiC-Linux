@@ -1,0 +1,13 @@
+[
+ {"ad": "OUTPUT yaz oku", "kod": "OPEN \"dene_dosya_1.txt\" FOR OUTPUT AS #1\nPRINT #1, \"merhaba\"\nPRINT #1, \"dunya\"\nCLOSE #1\nDIM s AS STRING\nOPEN \"dene_dosya_1.txt\" FOR INPUT AS #1\nDO WHILE NOT EOF(1)\n    INPUT #1, s\n    PRINT s\nLOOP\nCLOSE #1", "beklenen": ["merhaba", "dunya"], "yoksay": ["JS"]},
+ {"ad": "APPEND", "kod": "OPEN \"dene_dosya_2.txt\" FOR OUTPUT AS #1\nPRINT #1, \"a\"\nCLOSE #1\nOPEN \"dene_dosya_2.txt\" FOR APPEND AS #1\nPRINT #1, \"b\"\nCLOSE #1\nDIM s AS STRING\nOPEN \"dene_dosya_2.txt\" FOR INPUT AS #1\nDO WHILE NOT EOF(1)\n    INPUT #1, s\n    PRINT s\nLOOP\nCLOSE #1", "beklenen": ["a", "b"], "yoksay": ["JS"]},
+ {"ad": "OUTPUT sifirlar", "kod": "OPEN \"dene_dosya_3.txt\" FOR OUTPUT AS #1\nPRINT #1, \"eski\"\nCLOSE #1\nOPEN \"dene_dosya_3.txt\" FOR OUTPUT AS #1\nPRINT #1, \"yeni\"\nCLOSE #1\nDIM s AS STRING\nOPEN \"dene_dosya_3.txt\" FOR INPUT AS #1\nINPUT #1, s\nPRINT s\nPRINT EOF(1)\nCLOSE #1", "beklenen": ["yeni", "-1"], "yoksay": ["JS"]},
+ {"ad": "LOF bayt", "kod": "OPEN \"dene_dosya_4.txt\" FOR OUTPUT AS #1\nPRINT #1, \"abc\"\nCLOSE #1\nOPEN \"dene_dosya_4.txt\" FOR INPUT AS #1\nPRINT LOF(1)\nCLOSE #1", "beklenen": "5", "yoksay": ["JS"]},
+ {"ad": "kanal degiskenle", "kod": "DIM f AS I32 = 2\nOPEN \"dene_dosya_5.txt\" FOR OUTPUT AS #f\nPRINT #f, \"x\"\nCLOSE #f\nPRINT \"tamam\"", "beklenen": "tamam", "yoksay": ["JS"]},
+ {"ad": "dosyadan okunan metin", "kod": "OPEN \"dene_dosya_6.txt\" FOR OUTPUT AS #1\nPRINT #1, \"12\"\nCLOSE #1\nDIM s AS STRING\nOPEN \"dene_dosya_6.txt\" FOR INPUT AS #1\nINPUT #1, s\nCLOSE #1\nPRINT CINT(VAL(s)) + 1", "beklenen": "13", "yoksay": ["JS"]},
+ {"ad": "PRINT virgul bolgesi", "kod": "PRINT \"a\", \"b\"", "beklenen": "a             b", "yoksay": ["JS"], "not": "14 karakterlik bolge: 'a' + 13 bosluk + 'b' (kitap ornegi 11_io/print_virgul ile ayni); onceki beklenen 14 bosluktu, sayim hatasiydi"},
+ {"ad": "PRINT noktalivirgul bitisik", "kod": "PRINT \"a\"; \"b\"", "beklenen": "ab"},
+ {"ad": "PRINT sondaki noktalivirgul", "kod": "PRINT \"a\";\nPRINT \"b\"", "beklenen": "ab"},
+ {"ad": "SHELL OUTVAR", "kod": "DIM c AS STRING\nSHELL \"echo selam\" OUTVAR c\nPRINT LEN(c) > 4", "beklenen": "-1", "yoksay": ["JS"]},
+ {"ad": "SHELL CODEVAR", "kod": "DIM k AS I32\nSHELL \"exit 3\" CODEVAR k\nPRINT k", "beklenen": "3", "yoksay": ["JS"]}
+]

@@ -1,0 +1,49 @@
+IFF yalniz secilen dal mi
+FUNCTION Yan(a AS I32) AS I32
+    PRINT "yan "; a
+    RETURN a
+END FUNCTION
+
+MAIN
+    DIM r AS I32
+    r = IFF(1 = 1, Yan(1), Yan(2))
+    PRINT "r="; r
+END MAIN
+=====
+Uclu secim yalniz secilen dal mi
+FUNCTION Yan(a AS I32) AS I32
+    PRINT "yan "; a
+    RETURN a
+END FUNCTION
+
+MAIN
+    DIM r AS I32
+    r = (1 = 1) ? Yan(1) : Yan(2)
+    PRINT "r="; r
+END MAIN
+=====
+IFF metin dali
+FUNCTION Yan(a AS I32) AS STRING
+    PRINT "yan "; a
+    RETURN "m" + STR(a)
+END FUNCTION
+
+MAIN
+    DIM s AS STRING
+    s = IFF(1 = 2, Yan(1), Yan(2))
+    PRINT "s="; s
+END MAIN
+=====
+ANDALSO sag taraf atlanir
+FUNCTION Yan(a AS I32) AS I32
+    PRINT "yan "; a
+    RETURN a
+END FUNCTION
+
+MAIN
+    DIM r AS I32
+    r = (0 ANDALSO Yan(1))
+    PRINT "r="; r
+    r = (0 AND Yan(2))
+    PRINT "r="; r
+END MAIN

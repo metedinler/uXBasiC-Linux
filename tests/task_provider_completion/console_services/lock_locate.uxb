@@ -1,0 +1,9 @@
+THREAD ChangeConsole() AS I32
+    LOCATE 1, 1
+    RETURN 1
+END THREAD
+DIM consoleTask AS TASK OF I32
+LOCK CONSOLE
+    consoleTask = SPAWN ChangeConsole()
+    PRINT consoleTask.JOIN()
+END LOCK

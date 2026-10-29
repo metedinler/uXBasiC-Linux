@@ -1,0 +1,11 @@
+FUNCTION Bump(values AS F32[]) AS F64
+    DIM old AS F64 = values(1)++
+    RETURN old
+END FUNCTION
+FUNCTION LocalRun() AS F64
+    DIM a(1 TO 2) AS F32
+    a(1) = 0.25
+    DIM old AS F64 = Bump(a)
+    RETURN old + a(1)
+END FUNCTION
+PRINT LocalRun()

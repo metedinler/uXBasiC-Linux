@@ -1,0 +1,6 @@
+' S-544: a DECLARE with another parameter count is a different routine; here nothing defines the two-parameter Topla.
+DECLARE FUNCTION Topla(a AS I32, b AS I32) AS I32
+FUNCTION Topla(a AS I32) AS I32
+    RETURN a
+END FUNCTION
+PRINT Topla(1)

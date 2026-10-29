@@ -1,0 +1,16 @@
+CLASS Sayi
+    DIM value AS I32
+
+    MAGIC ADD(other AS Sayi) AS Sayi
+        DIM r AS Sayi
+        RETURN r
+    END MAGIC
+
+    MAGIC GE(other AS Sayi) AS I32
+        RETURN 1
+    END MAGIC
+
+    MAGIC HASH(seed AS I32) AS I32
+        RETURN seed + 7
+    END MAGIC
+END CLASS

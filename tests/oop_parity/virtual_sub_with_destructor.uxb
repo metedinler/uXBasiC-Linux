@@ -1,0 +1,20 @@
+' S-600: the same virtual SUB next to a destructor; the destructor runs after the virtual call finished.
+CLASS Taban
+    PUBLIC
+    VIRTUAL METHOD San()
+        PRINT 2
+    END METHOD
+    DESTRUCTOR()
+        PRINT 7
+    END DESTRUCTOR
+END CLASS
+CLASS Alt EXTENDS Taban
+    PUBLIC
+    OVERRIDE METHOD San()
+        PRINT 3
+    END METHOD
+END CLASS
+DIM x AS Alt = NEW Alt()
+x.San()
+DELETE x
+PRINT 9

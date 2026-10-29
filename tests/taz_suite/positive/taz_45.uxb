@@ -1,0 +1,21 @@
+%%DEFINE CASE_ID 45
+%%IF CASE_ID
+PRINT "PP_OK"
+%%ENDIF
+%%JS_BEGIN dist/web/taz_embed.js
+console.log("taz");
+%%JS_END
+DIM a AS I32
+DIM b AS I64
+DIM c AS F64
+DIM s AS STRING
+a = CASE_ID
+b = 100
+c = 3.14
+s = "taz"
+DECLARE FUNCTION puts CDECL LIB "msvcrt.dll" ALIAS "puts" (BYVAL x AS STRPTR) AS I32
+PRINT ABS(-5)
+PRINT LEN(s)
+PRINT UCASE(s)
+PRINT STR(a)
+PRINT VAL("12")

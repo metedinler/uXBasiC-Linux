@@ -1,0 +1,6 @@
+' S-624: TIMER dogrudan ifadede (atamasiz) da ayni tanimi verir.
+PRINT TIMER >= 0
+PRINT TIMER < 86400
+PRINT (TIMER >= 0) AND (TIMER < 86400)
+DIM x AS F64 = TIMER * 1.0
+PRINT x >= 0

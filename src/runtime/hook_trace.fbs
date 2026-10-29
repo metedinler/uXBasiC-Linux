@@ -170,6 +170,9 @@ Private Function UxbTraceWriteText(ByRef filePath As String, ByRef textValue As 
 
     Dim f As Integer
     f = FreeFile
+    ' S-623: when the program under test holds every file number (the MIR interpreter maps user channels onto the same pool), FreeFile is 0 and
+    ' `Open ... As #0` was a runtime abort ("illegal function call") that replaced the program's own error report.
+    If f = 0 Then Return 0
     Open filePath For Output As #f
     If Err <> 0 Then Return 0
     Print #f, textValue;

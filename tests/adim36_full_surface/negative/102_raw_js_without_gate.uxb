@@ -1,0 +1,4 @@
+%%JS_BEGIN "bad.js"
+alert(1);
+%%JS_END
+PRINT "x"

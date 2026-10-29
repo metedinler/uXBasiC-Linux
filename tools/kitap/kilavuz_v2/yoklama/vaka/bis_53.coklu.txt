@@ -1,0 +1,46 @@
+F128 degisken ondalik
+DIM a AS F128
+a = 1.5
+PRINT a
+a = a * 2
+PRINT a
+DIM c AS F128
+c = 7
+c = c / 2
+PRINT c
+PRINT SIZEOF(F128)
+=====
+F80 degisken ondalik
+DIM a AS F80
+a = 1.5
+PRINT a
+a = a * 2
+PRINT a
+DIM c AS F80
+c = 7
+c = c / 2
+PRINT c
+=====
+F128 sabit gecirme
+DIM a AS F128
+a = 0.1
+PRINT a + 0.2
+DIM f AS F64
+f = 0.1
+PRINT f + 0.2
+=====
+F128 karsilastirma
+DIM a AS F128
+a = 2.5
+IF a > 2 THEN PRINT "buyuk" ELSE PRINT "kucuk"
+IF a < 3 THEN PRINT "alt" ELSE PRINT "ust"
+=====
+BIGD degisken
+DIM a AS BIGD
+a = 5
+PRINT a
+=====
+BALL degisken
+DIM a AS BALL
+a = 5
+PRINT a

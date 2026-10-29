@@ -1,0 +1,8 @@
+{
+  "console_effects":{"engines":["x64","AST-x64"],"new_console":true,"output":"1\n6\n3\n66\n0\n0\n32\n65\n0\n66"},
+  "lock_cls":{"engines":["x64","AST-x64"],"error":"LOCK_DEADLOCK"},
+  "lock_locate":{"engines":["x64","AST-x64"],"error":"LOCK_DEADLOCK"},
+  "lock_color":{"engines":["x64","AST-x64"],"error":"LOCK_DEADLOCK"},
+  "lock_inkey":{"engines":["x64","AST-x64"],"error":"LOCK_DEADLOCK"},
+  "lock_getkey":{"engines":["x64","AST-x64"],"error":"LOCK_DEADLOCK"}
+}

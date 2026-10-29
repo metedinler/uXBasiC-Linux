@@ -1,2 +1,2 @@
-x64=array parameter ARR has unsupported element type PT
-AST-x64=OFFSETOF path enters non-aggregate type: PT[]
+# S-103 native TYPE[] now executes. Require exact type_elem_param.txt output.
+# Previous native rejection evidence remains in round59_models29.md/log.

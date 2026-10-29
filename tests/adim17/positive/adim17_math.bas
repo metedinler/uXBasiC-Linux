@@ -1,0 +1,3 @@
+DIM A AS I32
+A = 2 + 3
+PRINT A

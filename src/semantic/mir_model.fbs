@@ -14,6 +14,7 @@ Type MIRIRInstruction
     ffiStubId As Integer
     ffiArgStart As Integer
     stmtSeq As Integer  ' S-146 Model D: ureten deyimin sira numarasi (senkron gecisi deyim sinirini buradan bilir)
+    bareReturn As Integer  ' Source RETURN without expression: may resume this activation's GOSUB.
     tryTargetPlus1 As Integer  ' S-160: buyruk uretilirken etkin TRY'nin CATCH/FINALLY blogu + 1 (0 = TRY disi)
 End Type
 
@@ -235,8 +236,12 @@ Const MIR_OP_CALL As String = "CALL"
 Const MIR_OP_METHOD_CALL As String = "METHOD_CALL"  ' legacy/internal method call spelling
 Const MIR_OP_VIRTUAL_CALL As String = "MIR_VIRTUAL_CALL"  ' canonical dynamic vtable dispatch
 Const MIR_OP_OBJECT_NEW As String = "MIR_OBJECT_NEW"
+' S-574 (2026-10-17): DELETE = destroy the object (real-class destructor chain, once; empty / already destroyed = nothing) then empty the variable
+Const MIR_OP_DELETE_OBJECT As String = "MIR_DELETE_OBJECT"
 Const MIR_OP_FIELD_LOAD As String = "MIR_FIELD_LOAD"
 Const MIR_OP_FIELD_STORE As String = "MIR_FIELD_STORE"
+Const MIR_OP_UNION_FIELD_LOAD As String = "MIR_UNION_FIELD_LOAD"
+Const MIR_OP_UNION_FIELD_STORE As String = "MIR_UNION_FIELD_STORE"
 Const MIR_OP_FIELD_GET As String = "FIELD_GET"        ' legacy chained field load alias
 Const MIR_OP_RET As String = "RET"
 Const MIR_OP_JMP As String = "JMP"
@@ -254,7 +259,7 @@ Const MIR_OP_SETSTRINGSIZE As String = "SETSTRINGSIZE"
 
 Declare Function MIRGetVarValue(ByRef state As MIREvaluatorState, ByRef varName As String, ByRef value As MIRValue) As Integer
 Declare Function MIRSetVarValue(ByRef state As MIREvaluatorState, ByRef varName As String, ByRef value As MIRValue) As Integer
-Declare Function MIRBinaryOp(ByRef op As String, ByRef lhs As MIRValue, ByRef rhs As MIRValue, ByRef result As MIRValue, ByRef errMsg As String) As Integer
+Declare Function MIRBinaryOp(ByRef op As String, ByRef lhs As MIRValue, ByRef rhs As MIRValue, ByRef result As MIRValue, ByRef errMsg As String, ByRef declaredType As String) As Integer
 Declare Function MIRCompareOp(ByRef op As String, ByRef lhs As MIRValue, ByRef rhs As MIRValue, ByRef result As Integer, ByRef errMsg As String) As Integer
 Declare Function MIRValueFromString(ByRef sourceText As String, ByRef valueOut As MIRValue) As Integer
 Declare Function MIRLowerTopLevelStmt(ByRef ps As ParseState, ByVal stmtIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer

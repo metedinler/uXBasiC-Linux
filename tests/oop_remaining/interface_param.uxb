@@ -1,0 +1,14 @@
+INTERFACE IKonum
+    METHOD GetX() AS I32
+END INTERFACE
+CLASS Nokta IMPLEMENTS IKonum
+    PUBLIC
+    METHOD GetX() AS I32
+        RETURN 4
+    END METHOD
+END CLASS
+SUB Yaz(k AS IKonum)
+    PRINT k.GetX()
+END SUB
+DIM n AS Nokta = NEW Nokta()
+Yaz(n)

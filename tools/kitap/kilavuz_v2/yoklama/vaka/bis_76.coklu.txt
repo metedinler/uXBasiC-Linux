@@ -1,0 +1,24 @@
+bilinmeyen tip simgesi
+DIM r AS I32
+r = CALL(DLL, "ucrtbase.dll", "abs", I32, CDECL, "BILINMEZ", -5)
+PRINT r
+=====
+tip listesi sayi uyusmaz fazla
+DIM r AS I32
+r = CALL(DLL, "ucrtbase.dll", "abs", I32, CDECL, "I32,I32", -5)
+PRINT r
+=====
+tip listesi sayi uyusmaz eksik
+DIM r AS I32
+r = CALL(DLL, "ucrtbase.dll", "labs", I32, CDECL, "I32", -5, 7)
+PRINT r
+=====
+dar tip kucuk harf
+DIM r AS I32
+r = CALL(DLL, "ucrtbase.dll", "abs", I32, CDECL, "i32", -5)
+PRINT r
+=====
+tip listesi bosluklu
+DIM r AS I32
+r = CALL(DLL, "ucrtbase.dll", "abs", I32, CDECL, " I32 ", -5)
+PRINT r

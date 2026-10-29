@@ -12,7 +12,15 @@ Declare Function MIRLowerFlatArrayIndex(ByRef ps As ParseState, ByVal callNode A
 
 ' S-130: MIR_FIELD_STORE emission for class-field targets lives in mir_lower_stmt.fbs; the INCDEC expression
 ' lowering in mir_lower_expr.fbs needs it too.
+Declare Function MIRTryEmitPropertySetterCall(ByRef ps As ParseState, ByVal lhsNode As Integer, ByRef rhsName As String, ByRef module As MIRModule, ByVal fnIdx As Integer, ByRef blkIdx As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer
 Declare Function MIRTryEmitClassFieldStore(ByRef ps As ParseState, ByVal lhsNode As Integer, ByRef assignTarget As String, ByRef valueName As String, ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByRef errText As String) As Integer
+
+' S-442: UNION fields share one physical cell. They must not fall through to
+' the pseudo-variable path used by TYPE/STRUCT fields or to MIR_FIELD_* (which
+' is an object-heap operation). The implementation is defined below so both
+' statement lowerers and expression lowering use one layout/operand contract.
+Declare Function MIRTryResolveUnionFieldLayout(ByRef ps As ParseState, ByRef rootTypeRaw As String, ByRef memberPath As String, ByRef fieldTypeOut As String, ByRef offsetOut As Integer, ByRef sizeOut As Integer, ByRef errText As String) As Integer
+Declare Function MIRTryEmitUnionFieldStore(ByRef ps As ParseState, ByVal lhsNode As Integer, ByRef assignTarget As String, ByRef valueName As String, ByRef opText As String, ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer
 ' S-101: LBOUND/UBOUND lowering lives in mir_lower_array_dim.fbs (it needs that file's bound helpers)
 ' but is called from mir_lower_expr.fbs.
 Declare Function MIRLowerArrayBoundsCall(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByRef tempSeed As Integer, ByRef valueNameOut As String, ByRef handledOut As Integer, ByRef errText As String) As Integer
@@ -41,6 +49,116 @@ End Function
 
 Function UXBMIRSemanticAstKindIsCompileTimeOnly(ByRef astKindText As String) As Integer
     Return UXBMIRStep4AstNodeIsCompileTimeOnly(astKindText)
+End Function
+
+' Return 1 for a scalar UNION field, 0 when the root is not a UNION, and -1
+' with an error when the root is a UNION whose field cannot use the raw scalar
+' overlay contract. Keeping the distinction lets ordinary TYPE/CLASS lowering
+' continue through its existing paths without masking a malformed UNION.
+Function MIRTryResolveUnionFieldLayout(ByRef ps As ParseState, ByRef rootTypeRaw As String, ByRef memberPath As String, ByRef fieldTypeOut As String, ByRef offsetOut As Integer, ByRef sizeOut As Integer, ByRef errText As String) As Integer
+    fieldTypeOut = ""
+    offsetOut = 0
+    sizeOut = 0
+    errText = ""
+
+    Dim recSize As Integer
+    Dim recAlign As Integer
+    Dim recKind As String
+    Dim recAbi As String
+    Dim recPack As Integer
+    Dim recExplicit As Integer
+    If TypeLayoutDescribeGlobal(rootTypeRaw, recSize, recAlign, recKind, recAbi, recPack, recExplicit) = 0 Then Return 0
+    If UCase(Trim(recKind)) <> "UNION" Then Return 0
+
+    Dim pathErr As String
+    If TypeLayoutResolvePath(ps, rootTypeRaw, memberPath, offsetOut, fieldTypeOut, sizeOut, pathErr) = 0 Then
+        errText = "mir: union field layout resolve failed " & pathErr
+        Return -1
+    End If
+    fieldTypeOut = UCase(Trim(fieldTypeOut))
+    If fieldTypeOut = "" Or sizeOut <= 0 Then
+        errText = "mir: union field has no scalar layout: " & memberPath
+        Return -1
+    End If
+
+    Dim abiPayload As Integer
+    Dim abiAlign As Integer
+    Dim abiStride As Integer
+    If UXBTypeAbi(fieldTypeOut, abiPayload, abiAlign, abiStride) = 0 Then
+        errText = "mir: UNION field type is not a native scalar: " & fieldTypeOut
+        Return -1
+    End If
+    If fieldTypeOut = "F80" Or fieldTypeOut = "F128" Or fieldTypeOut = "EXTENDED" Or fieldTypeOut = "EXT" Or fieldTypeOut = "QUAD" Then
+        errText = "mir: UNION overlay does not support extended floating field type: " & fieldTypeOut
+        Return -1
+    End If
+    If sizeOut <> 1 And sizeOut <> 2 And sizeOut <> 4 And sizeOut <> 8 Then
+        errText = "mir: UNION field width is not supported: " & LTrim(Str(sizeOut))
+        Return -1
+    End If
+    Return 1
+End Function
+
+' Emit the complete read-modify-write sequence for a UNION assignment. The
+' operands deliberately carry root/member/offset/width/type, so every backend
+' can implement the same physical overlay without re-discovering source AST
+' layout information.
+Function MIRTryEmitUnionFieldStore(ByRef ps As ParseState, ByVal lhsNode As Integer, ByRef assignTarget As String, ByRef valueName As String, ByRef opText As String, ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer, ByRef tempSeed As Integer, ByRef errText As String) As Integer
+    Dim fieldDot As Integer
+    fieldDot = InStr(assignTarget, ".")
+    If fieldDot <= 1 Then Return -1
+
+    Dim fieldRoot As String
+    Dim fieldMember As String
+    fieldRoot = UCase(Trim(Left(assignTarget, fieldDot - 1)))
+    fieldMember = Trim(Mid(assignTarget, fieldDot + 1))
+    Dim fieldRootType As String
+    If MIRResolveFieldRootType(ps, lhsNode, fieldRoot, fieldRootType) = 0 Then Return -1
+
+    Dim fieldType As String
+    Dim fieldOffset As Integer
+    Dim fieldSize As Integer
+    Dim layoutErr As String
+    Dim layoutRv As Integer
+    layoutRv = MIRTryResolveUnionFieldLayout(ps, fieldRootType, fieldMember, fieldType, fieldOffset, fieldSize, layoutErr)
+    If layoutRv = 0 Then Return -1
+    If layoutRv < 0 Then errText = layoutErr: Return 0
+
+    Dim storeValue As String
+    storeValue = valueName
+    Dim unionOp As String
+    Select Case opText
+    Case "=", "=+"
+        ' storeValue is already the RHS.
+    Case "=-"
+        Dim negTemp As String
+        negTemp = MIRNextTemp(tempSeed)
+        If MIRTypeNameIsFloat64Family(fieldType) <> 0 Then
+            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_FNEG, negTemp, 1, valueName
+        Else
+            MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_NEG, negTemp, 1, valueName
+        End If
+        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, fieldType
+        storeValue = negTemp
+    Case "+=", "-=", "*=", "/=", "\=", "%=", "&=", "|=", "^=", "<<=", ">>=", "**=", "ROL=", "ROR="
+        Dim currentTemp As String
+        currentTemp = MIRNextTemp(tempSeed)
+        MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_UNION_FIELD_LOAD, currentTemp, 5, fieldRoot, fieldMember, LTrim(Str(fieldOffset)), LTrim(Str(fieldSize)), fieldType
+        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, fieldType
+        If MIRCompoundAssignOpcode(opText, IIf(MIRTypeNameIsFloat64Family(fieldType) <> 0, 1, 0), fieldType, 0, unionOp) = 0 Then
+            errText = "mir: unsupported UNION assign op " & opText
+            Return 0
+        End If
+        storeValue = MIRNextTemp(tempSeed)
+        MIRAppendInstruction module, fnIdx, blkIdx, unionOp, storeValue, 2, currentTemp, valueName
+        MIRSetLastInstructionMetadata module, fnIdx, blkIdx, fieldType
+    Case Else
+        Return -1
+    End Select
+
+    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_UNION_FIELD_STORE, "", 6, fieldRoot, fieldMember, storeValue, LTrim(Str(fieldOffset)), LTrim(Str(fieldSize)), fieldType
+    MIRSetLastInstructionMetadata module, fnIdx, blkIdx, fieldType
+    Return 1
 End Function
 
 #endif

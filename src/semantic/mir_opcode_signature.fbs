@@ -69,6 +69,14 @@ Function MIROpcodeGetSignature(ByVal opcodeText As String, ByRef sig As MIROpcod
         sig.minOps = 4: sig.maxOps = 4: sig.resultRequired = 0
         sig.roles(0) = MIR_OPR_OBJECT_NAME: sig.roles(1) = MIR_OPR_FIELD_NAME: sig.roles(2) = MIR_OPR_VALUE: sig.roles(3) = MIR_OPR_CONST
         Return 1
+    Case "MIR_UNION_FIELD_LOAD"
+        sig.minOps = 5: sig.maxOps = 5: sig.resultRequired = 1
+        sig.roles(0) = MIR_OPR_OBJECT_NAME: sig.roles(1) = MIR_OPR_FIELD_NAME: sig.roles(2) = MIR_OPR_CONST: sig.roles(3) = MIR_OPR_CONST: sig.roles(4) = MIR_OPR_TYPE_NAME
+        Return 1
+    Case "MIR_UNION_FIELD_STORE"
+        sig.minOps = 6: sig.maxOps = 6: sig.resultRequired = 0
+        sig.roles(0) = MIR_OPR_OBJECT_NAME: sig.roles(1) = MIR_OPR_FIELD_NAME: sig.roles(2) = MIR_OPR_VALUE: sig.roles(3) = MIR_OPR_CONST: sig.roles(4) = MIR_OPR_CONST: sig.roles(5) = MIR_OPR_TYPE_NAME
+        Return 1
     Case "MIR_MEMORY_LOAD", "MIR_MEM_LOAD", "MIR_PEEK", "PEEK"
         sig.minOps = 3: sig.maxOps = 3: sig.resultRequired = 1
         sig.roles(0) = MIR_OPR_CONST: sig.roles(1) = MIR_OPR_VALUE: sig.roles(2) = MIR_OPR_CONST

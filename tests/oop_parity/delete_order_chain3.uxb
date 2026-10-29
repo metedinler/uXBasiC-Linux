@@ -1,0 +1,23 @@
+' S-574: three levels - the destructors run most derived first.
+CLASS A
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 1
+    END DESTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 2
+    END DESTRUCTOR
+END CLASS
+CLASS C EXTENDS B
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 3
+    END DESTRUCTOR
+END CLASS
+DIM x AS A = NEW C()
+DELETE x
+DIM y AS B = NEW C()
+DELETE y

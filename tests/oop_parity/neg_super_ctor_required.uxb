@@ -1,0 +1,15 @@
+CLASS Ata
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(pa AS I32)
+        x = pa
+    END CONSTRUCTOR
+END CLASS
+CLASS Cocuk EXTENDS Ata
+    PUBLIC
+    CONSTRUCTOR()
+        PRINT 1
+    END CONSTRUCTOR
+END CLASS
+' S-487: the base class needs an argument, so the derived constructor must start with SUPER(...).
+DIM p AS Cocuk = NEW Cocuk()

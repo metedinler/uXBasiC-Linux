@@ -1,0 +1,6 @@
+THREAD Worker(path AS STRING, attempt AS U16)
+    PRINT path
+    PRINT attempt
+END THREAD
+
+TRIGGER THREAD Worker, "main.uxb", 3

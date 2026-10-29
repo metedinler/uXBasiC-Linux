@@ -1,0 +1,6 @@
+AST=passes 1 argument(s) but class TEK declares no CONSTRUCTOR
+MIR=passes 1 argument(s) but class TEK declares no CONSTRUCTOR
+x64=passes 1 argument(s) but class TEK declares no CONSTRUCTOR
+AST-x64=passes 1 argument(s) but class TEK declares no CONSTRUCTOR
+JS=passes 1 argument(s) but class TEK declares no CONSTRUCTOR
+WASM=passes 1 argument(s) but class TEK declares no CONSTRUCTOR

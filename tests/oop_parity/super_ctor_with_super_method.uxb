@@ -1,0 +1,22 @@
+CLASS A
+    PUBLIC
+    DIM fa AS I32
+    CONSTRUCTOR(p AS I32)
+        fa = p
+    END CONSTRUCTOR
+    VIRTUAL METHOD Al() AS I32
+        RETURN fa
+    END METHOD
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    CONSTRUCTOR(q AS I32)
+        SUPER(q * 10)
+    END CONSTRUCTOR
+    OVERRIDE METHOD Al() AS I32
+        RETURN SUPER.Al() + 1
+    END METHOD
+END CLASS
+' S-487: SUPER(...) in the constructor and SUPER.Method() in a method are two different uses of the same word.
+DIM x AS A = NEW B(4)
+PRINT x.Al()

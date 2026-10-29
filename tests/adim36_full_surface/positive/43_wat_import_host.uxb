@@ -1,0 +1,7 @@
+%%TARGET WASM
+%%ALLOW_RAW_WAT ON
+%%WAT_IMPORT "env", "print_i32", "print_i32", "(param i32)"
+%%WAT_BEGIN
+(func $dummy)
+%%WAT_END
+PRINT "WAT_IMPORT"

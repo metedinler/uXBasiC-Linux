@@ -1,0 +1,8 @@
+DIM CSRLIN AS I32 = 17
+DIM POS AS I32 = 23
+PRINT CSRLIN
+PRINT POS
+DIM currentRow AS I32 = CSRLIN()
+DIM currentCol AS I32 = POS()
+PRINT currentRow
+PRINT currentCol

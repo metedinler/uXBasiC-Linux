@@ -1,0 +1,127 @@
+F32 tam sayi islemleri
+DIM a AS F32
+DIM b AS F32
+a = 7
+b = 2
+PRINT a
+PRINT a + b
+PRINT a * b
+PRINT a / b
+=====
+F32 ondalik atama
+DIM a AS F32
+a = 1.5
+PRINT a
+PRINT a * 2
+=====
+F64 tam sayi islemleri
+DIM a AS F64
+DIM b AS F64
+a = 7
+b = 2
+PRINT a
+PRINT a + b
+PRINT a * b
+PRINT a / b
+=====
+F64 ondalik atama
+DIM a AS F64
+a = 1.5
+PRINT a
+PRINT a * 2
+=====
+F80 tam sayi islemleri
+DIM a AS F80
+DIM b AS F80
+a = 7
+b = 2
+PRINT a
+PRINT a + b
+PRINT a * b
+PRINT a / b
+=====
+F80 ondalik atama
+DIM a AS F80
+a = 1.5
+PRINT a
+PRINT a * 2
+=====
+F128 tam sayi islemleri
+DIM a AS F128
+DIM b AS F128
+a = 7
+b = 2
+PRINT a
+PRINT a + b
+PRINT a * b
+PRINT a / b
+=====
+F128 ondalik atama
+DIM a AS F128
+a = 1.5
+PRINT a
+PRINT a * 2
+=====
+BIGINT tam sayi islemleri
+DIM a AS BIGINT
+DIM b AS BIGINT
+a = 7
+b = 2
+PRINT a
+PRINT a + b
+PRINT a * b
+PRINT a / b
+=====
+BIGINT ondalik atama
+DIM a AS BIGINT
+a = 1.5
+PRINT a
+PRINT a * 2
+=====
+BIGF tam sayi islemleri
+DIM a AS BIGF
+DIM b AS BIGF
+a = 7
+b = 2
+PRINT a
+PRINT a + b
+PRINT a * b
+PRINT a / b
+=====
+BIGF ondalik atama
+DIM a AS BIGF
+a = 1.5
+PRINT a
+PRINT a * 2
+=====
+BIGD tam sayi islemleri
+DIM a AS BIGD
+DIM b AS BIGD
+a = 7
+b = 2
+PRINT a
+PRINT a + b
+PRINT a * b
+PRINT a / b
+=====
+BIGD ondalik atama
+DIM a AS BIGD
+a = 1.5
+PRINT a
+PRINT a * 2
+=====
+BALL tam sayi islemleri
+DIM a AS BALL
+DIM b AS BALL
+a = 7
+b = 2
+PRINT a
+PRINT a + b
+PRINT a * b
+PRINT a / b
+=====
+BALL ondalik atama
+DIM a AS BALL
+a = 1.5
+PRINT a
+PRINT a * 2

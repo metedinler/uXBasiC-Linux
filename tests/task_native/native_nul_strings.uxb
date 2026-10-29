@@ -1,0 +1,12 @@
+THREAD CopyText(s AS STRING) AS STRING
+    PRINT LEN(s)
+    RETURN s + "!" + CHR(0) + "Z"
+END THREAD
+DIM original AS STRING = "A" + CHR(0) + "B"
+DIM pending AS TASK OF STRING = SPAWN CopyText(original)
+original = "changed"
+DIM received AS STRING = pending.JOIN()
+PRINT LEN(received)
+PRINT ASC(MID(received, 3, 1))
+PRINT ASC(MID(received, 5, 1))
+PRINT ASC(RIGHT(received, 1))

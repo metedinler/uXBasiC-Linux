@@ -1,0 +1,10 @@
+FUNCTION Change(n AS F32) AS F32
+ n++
+ n++
+ n--
+ RETURN n
+END FUNCTION
+PRINT Change(0.5)
+DIM value AS F64 = 0.25
+value--
+PRINT value

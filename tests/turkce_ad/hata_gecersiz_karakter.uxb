@@ -1,0 +1,4 @@
+' S-579: Türkçe olmayan harf (é) adda geçerse konumu ve kod noktasıyla açık bir hata verilir
+DIM é AS I32
+é = 5
+PRINT é

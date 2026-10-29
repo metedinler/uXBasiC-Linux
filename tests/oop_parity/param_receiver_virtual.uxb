@@ -1,0 +1,23 @@
+' S-596 (2026-10-17): virtual dispatch follows the object's real class even when the receiver is a SUB parameter declared as the
+' base class (or an alias that never went through `= NEW X`). The AST interpreter took the declared class: it printed 10 here.
+CLASS Taban
+    PUBLIC
+    VIRTUAL METHOD Deger() AS I32
+        RETURN 10
+    END METHOD
+END CLASS
+CLASS Alt EXTENDS Taban
+    PUBLIC
+    OVERRIDE METHOD Deger() AS I32
+        RETURN 20
+    END METHOD
+END CLASS
+SUB Yaz(t AS Taban)
+    PRINT t.Deger()
+END SUB
+DIM x AS Alt = NEW Alt()
+Yaz(x)
+DIM y AS Taban = NEW Alt()
+PRINT y.Deger()
+DIM z AS Taban = y
+PRINT z.Deger()

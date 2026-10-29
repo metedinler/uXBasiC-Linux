@@ -1,4 +1,4 @@
-' S-150: WASM'da her deger i32'dir; F32/F64 ve ondalik sabit eskiden GECERSIZ WAT (`local.get $0_1`) uretiyordu. Simdi NET red.
+' S-150: historical rejection probe is now a positive F64 execution regression.
 DIM a AS F64
 a = 0.5
 PRINT a

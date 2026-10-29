@@ -1,0 +1,97 @@
+#ifndef UXB_WEB_CONTROL_FLOW_FBS
+#define UXB_WEB_CONTROL_FLOW_FBS
+
+' Private web-function copy. Split labels and GOSUB continuations into real
+' dispatcher blocks, retaining original block IDs and instruction metadata.
+Private Sub UXBWebAppendBlock(ByRef fn As MIRFunction, ByVal blockId As Integer)
+    Dim n As Integer = fn.blockCount
+    ReDim Preserve fn.blocks(0 To n)
+    fn.blocks(n).id = blockId
+    fn.blocks(n).instructionCount = 0
+    fn.blockCount += 1
+End Sub
+
+Private Sub UXBWebAppendInstruction(ByRef fn As MIRFunction, ByRef ins As MIRIRInstruction)
+    Dim b As Integer = fn.blockCount - 1
+    Dim n As Integer = fn.blocks(b).instructionCount
+    Dim blockPtr As MIRBasicBlock Ptr = @fn.blocks(b)
+    ReDim Preserve blockPtr->instructions(0 To n)
+    fn.blocks(b).instructions(n) = ins
+    fn.blocks(b).instructions(n).blockId = fn.blocks(b).id
+    fn.blocks(b).instructionCount += 1
+End Sub
+
+Private Function UXBWebPrepareControlFlow(ByRef original As MIRFunction, ByRef prepared As MIRFunction, ByRef errText As String) As Integer
+    prepared = original
+    Dim needSplit As Integer = 0
+    Dim b As Integer, j As Integer
+    Dim nextId As Integer = 0
+    For b = 0 To original.blockCount - 1
+        If original.blocks(b).id >= nextId Then nextId = original.blocks(b).id + 1
+        For j = 0 To original.blocks(b).instructionCount - 1
+            Dim op As String = UCase(Trim(original.blocks(b).instructions(j).opcode))
+            If op = "LABEL" Or op = "GOTO" Or op = "GOSUB" Then needSplit = 1
+        Next j
+    Next b
+    If needSplit = 0 Then Return 1
+    Erase prepared.blocks
+    prepared.blockCount = 0
+    Dim labelNames(Any) As String, labelIds(Any) As Integer
+    Dim labelCount As Integer = 0
+    For b = 0 To original.blockCount - 1
+        UXBWebAppendBlock prepared, original.blocks(b).id
+        For j = 0 To original.blocks(b).instructionCount - 1
+            Dim ins As MIRIRInstruction = original.blocks(b).instructions(j)
+            Dim op As String = UCase(Trim(ins.opcode))
+            If op = "LABEL" Then
+                If ins.operandCount <> 1 Then errText = "web LABEL requires one name": Return 0
+                Dim labelNameText As String = UCase(Trim(ins.operands(0)))
+                Dim l As Integer
+                For l = 0 To labelCount - 1
+                    If labelNames(l) = labelNameText Then errText = "web duplicate LABEL: " & labelNameText: Return 0
+                Next l
+                If prepared.blocks(prepared.blockCount - 1).instructionCount > 0 Then
+                    UXBWebAppendBlock prepared, nextId
+                    nextId += 1
+                End If
+                ReDim Preserve labelNames(0 To labelCount)
+                ReDim Preserve labelIds(0 To labelCount)
+                labelNames(labelCount) = labelNameText
+                labelIds(labelCount) = prepared.blocks(prepared.blockCount - 1).id
+                labelCount += 1
+                ins.opcode = "NOP"
+            End If
+            If op = "GOSUB" Then
+                If ins.operandCount <> 1 Then errText = "web GOSUB requires one label": Return 0
+                ins.operandCount = 2
+                ins.operands(1) = LTrim(Str(nextId))
+            End If
+            UXBWebAppendInstruction prepared, ins
+            If op = "GOSUB" Then
+                UXBWebAppendBlock prepared, nextId
+                nextId += 1
+            End If
+        Next j
+    Next b
+    For b = 0 To prepared.blockCount - 1
+        For j = 0 To prepared.blocks(b).instructionCount - 1
+            Dim op As String = UCase(Trim(prepared.blocks(b).instructions(j).opcode))
+            If op = "GOTO" Or op = "GOSUB" Then
+                Dim targetNameText As String = UCase(Trim(prepared.blocks(b).instructions(j).operands(0)))
+                Dim found As Integer = 0
+                Dim l As Integer
+                For l = 0 To labelCount - 1
+                    If labelNames(l) = targetNameText Then
+                        prepared.blocks(b).instructions(j).operands(0) = LTrim(Str(labelIds(l)))
+                        found = 1
+                        Exit For
+                    End If
+                Next l
+                If found = 0 Then errText = "web label not found in " & original.name & ": " & targetNameText: Return 0
+                If op = "GOTO" Then prepared.blocks(b).instructions(j).opcode = "JMP"
+            End If
+        Next j
+    Next b
+    Return 1
+End Function
+#endif

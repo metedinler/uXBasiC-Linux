@@ -1,0 +1,7 @@
+' S-329: S.Yok, S ad alaninda tanimli degil = derleme hatasi.
+NAMESPACE S
+    FUNCTION F(a AS I32) AS I32
+        RETURN a
+    END FUNCTION
+END NAMESPACE
+PRINT S.Yok(1)

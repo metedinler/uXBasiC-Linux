@@ -26,6 +26,11 @@ Type UXBSemanticToCanonicalMIRBridgeResult
     operandTypeInferredCount As Integer
     verifyStatus As String
     diagnosticsText As String
+    oopClassNames(Any) As String
+    oopClassBaseNames(Any) As String
+    oopClassCtorNames(Any) As String
+    oopClassCtorParamCounts(Any) As Integer
+    oopClassCount As Integer
 End Type
 
 Private Sub UXBSemanticToCanonicalMIRBridgeInit(ByRef r As UXBSemanticToCanonicalMIRBridgeResult)
@@ -43,6 +48,11 @@ Private Sub UXBSemanticToCanonicalMIRBridgeInit(ByRef r As UXBSemanticToCanonica
     r.operandTypeInferredCount = 0
     r.verifyStatus = "PENDING"
     r.diagnosticsText = ""
+    r.oopClassCount = 0
+    Erase r.oopClassNames
+    Erase r.oopClassBaseNames
+    Erase r.oopClassCtorNames
+    Erase r.oopClassCtorParamCounts
     ReDim r.functions(0)
     ReDim r.blocks(0)
     ReDim r.instructions(0)
@@ -137,6 +147,7 @@ Private Function UXBSemanticMIRIsIdentifierType(ByVal typeText As String) As Int
     Dim i As Integer
     For i = 1 To Len(t)
         Dim ch As String = UCase(Mid(t, i, 1))
+        If Asc(ch) >= 128 Then Continue For ' S-579: UTF-8 Turkish letter of a type name
         If (ch < "A" Or ch > "Z") And (ch < "0" Or ch > "9") And ch <> "_" And ch <> "." Then Return 0
         If i = 1 And ch >= "0" And ch <= "9" Then Return 0
     Next i
@@ -229,6 +240,28 @@ Private Function UXBSemanticCanonicalMIRObjectContractOk(ByRef outInst As UXBMIR
             errText = "canonical OOP MIR: MIR_FIELD_STORE offset is invalid"
             Return 0
         End If
+    Case "MIR_UNION_FIELD_LOAD"
+        If outInst.operandCount <> 5 Or Trim(outInst.operands(0)) = "" Or Trim(outInst.operands(1)) = "" Or Trim(outInst.operands(4)) = "" Then
+            errText = "canonical UNION MIR: MIR_UNION_FIELD_LOAD requires root, field, offset, width and type"
+            Return 0
+        End If
+        Dim unionLoadOffset As Integer
+        Dim unionLoadWidth As Integer
+        If UXBSemanticCanonicalMIRTryParseNonNegativeInt(outInst.operands(2), unionLoadOffset) = 0 Or UXBSemanticCanonicalMIRTryParseNonNegativeInt(outInst.operands(3), unionLoadWidth) = 0 Or (unionLoadWidth <> 1 And unionLoadWidth <> 2 And unionLoadWidth <> 4 And unionLoadWidth <> 8) Then
+            errText = "canonical UNION MIR: MIR_UNION_FIELD_LOAD offset/width is invalid"
+            Return 0
+        End If
+    Case "MIR_UNION_FIELD_STORE"
+        If outInst.operandCount <> 6 Or Trim(outInst.operands(0)) = "" Or Trim(outInst.operands(1)) = "" Or Trim(outInst.operands(5)) = "" Then
+            errText = "canonical UNION MIR: MIR_UNION_FIELD_STORE requires root, field, value, offset, width and type"
+            Return 0
+        End If
+        Dim unionStoreOffset As Integer
+        Dim unionStoreWidth As Integer
+        If UXBSemanticCanonicalMIRTryParseNonNegativeInt(outInst.operands(3), unionStoreOffset) = 0 Or UXBSemanticCanonicalMIRTryParseNonNegativeInt(outInst.operands(4), unionStoreWidth) = 0 Or (unionStoreWidth <> 1 And unionStoreWidth <> 2 And unionStoreWidth <> 4 And unionStoreWidth <> 8) Then
+            errText = "canonical UNION MIR: MIR_UNION_FIELD_STORE offset/width is invalid"
+            Return 0
+        End If
     Case "MIR_DELETE_OBJECT"
         If outInst.operandCount <> 1 Or Trim(outInst.operands(0)) = "" Then
             errText = "canonical OOP MIR: MIR_DELETE_OBJECT requires an object receiver"
@@ -315,6 +348,9 @@ Private Function UXBSemanticMIRInstructionToCanonical(ByRef src As MIRModule, By
     outInst.sourceAstNode = inst.flags
     If outInst.sourceAstNode <= 0 Then outInst.sourceAstNode = -1
     outInst.sourceAstKind = inst.comment
+    ' S-537: kaynaktaki degersiz RETURN (programin ortuk sonundaki RET degil) MIR yorumlayicisi icin isaretlenir; ana programda
+    ' (yordam disinda) GOSUB yigini bossa acik calisma ani hatasi verilir.
+    If inst.bareReturn <> 0 And op = "MIR_RETURN" Then outInst.sourceAstKind = "SOURCE_RETURN"
 
     If UXBSemanticMIRInstructionMetaOk(inst) = 0 Then
         errText = "semantic MIR instruction metadata is invalid before canonical bridge"
@@ -520,6 +556,24 @@ Function UXBSemanticMIRToCanonicalMIR(ByRef src As MIRModule, ByRef r As UXBSema
     r.moduleRecord.name = "semantic_mir_bridge"
     r.moduleRecord.functionCount = src.functionCount
     r.moduleRecord.globalCount = src.globalVarCount
+
+    r.oopClassCount = src.vtableClassCount
+    If r.oopClassCount > 0 Then
+        ReDim r.oopClassNames(r.oopClassCount - 1)
+        ReDim r.oopClassBaseNames(r.oopClassCount - 1)
+        ReDim r.oopClassCtorNames(r.oopClassCount - 1)
+        ReDim r.oopClassCtorParamCounts(r.oopClassCount - 1)
+        Dim oi As Integer
+        For oi = 0 To r.oopClassCount - 1
+            r.oopClassNames(oi) = src.vtableClassNames(oi)
+            r.oopClassBaseNames(oi) = src.vtableClassBaseNames(oi)
+            r.oopClassCtorNames(oi) = ""
+            r.oopClassCtorParamCounts(oi) = src.vtableClassCtorParamCount(oi)
+            Dim octorIdx As Integer
+            octorIdx = src.vtableClassCtorFunctionIndex(oi)
+            If octorIdx >= 0 And octorIdx < src.functionCount Then r.oopClassCtorNames(oi) = src.functions(octorIdx).name
+        Next oi
+    End If
 
     Dim fi As Integer
     For fi = 0 To src.functionCount - 1

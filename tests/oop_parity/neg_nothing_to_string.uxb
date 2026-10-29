@@ -1,0 +1,4 @@
+' S-564: NOTHING cannot be assigned to a text variable either.
+DIM s AS STRING
+s = NOTHING
+PRINT s

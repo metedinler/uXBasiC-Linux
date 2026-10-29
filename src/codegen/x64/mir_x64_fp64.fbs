@@ -77,7 +77,11 @@ Function MIRX64LoadFloatOperandToXmm(ByRef cg As MIRX64Context, ByRef operandTex
             ' declared float width.
             MIRX64Emit cg, "    mov rax, qword " & MIRX64RbpRef(off)
             If UCase(Trim(cg.locals(localIdx).typeName)) = "F32" Then
-                MIRX64Emit cg, "    cvtss2sd " & xmmName & ", dword [rax]"
+                If cg.locals(localIdx).isFloatWide <> 0 Then
+                    MIRX64Emit cg, "    movsd " & xmmName & ", qword [rax]"
+                Else
+                    MIRX64Emit cg, "    cvtss2sd " & xmmName & ", dword [rax]"
+                End If
             Else
                 MIRX64Emit cg, "    movsd " & xmmName & ", qword [rax]"
             End If
@@ -85,7 +89,11 @@ Function MIRX64LoadFloatOperandToXmm(ByRef cg As MIRX64Context, ByRef operandTex
         End If
         If MIRX64TypeIsFloat(cg.locals(localIdx).typeName) <> 0 Then
             If UCase(Trim(cg.locals(localIdx).typeName)) = "F32" Then
-                MIRX64Emit cg, "    cvtss2sd " & xmmName & ", dword " & MIRX64RbpRef(off)
+                If cg.locals(localIdx).isFloatWide <> 0 Then
+                    MIRX64Emit cg, "    movsd " & xmmName & ", qword " & MIRX64RbpRef(off)
+                Else
+                    MIRX64Emit cg, "    cvtss2sd " & xmmName & ", dword " & MIRX64RbpRef(off)
+                End If
             Else
                 MIRX64Emit cg, "    movsd " & xmmName & ", qword " & MIRX64RbpRef(off)
             End If
@@ -145,16 +153,24 @@ Function MIRX64StoreXmmToVar(ByRef cg As MIRX64Context, ByRef xmmName As String,
         ' pointer as a plain 8-byte value first, then store through it.
         MIRX64Emit cg, "    mov rax, qword " & MIRX64RbpRef(off)
         If UCase(Trim(cg.locals(localIdx).typeName)) = "F32" Then
-            MIRX64Emit cg, "    cvtsd2ss xmm4, " & xmmName
-            MIRX64Emit cg, "    movss dword [rax], xmm4"
+            If cg.locals(localIdx).isFloatWide <> 0 Then
+                MIRX64Emit cg, "    movsd qword [rax], " & xmmName
+            Else
+                MIRX64Emit cg, "    cvtsd2ss xmm4, " & xmmName
+                MIRX64Emit cg, "    movss dword [rax], xmm4"
+            End If
         Else
             MIRX64Emit cg, "    movsd qword [rax], " & xmmName
         End If
         Return 1
     End If
     If MIRX64FindLocalIndex(cg, varName, localIdx) <> 0 And UCase(Trim(cg.locals(localIdx).typeName)) = "F32" Then
-        MIRX64Emit cg, "    cvtsd2ss xmm4, " & xmmName
-        MIRX64Emit cg, "    movss dword " & MIRX64RbpRef(off) & ", xmm4"
+        If cg.locals(localIdx).isFloatWide <> 0 Then
+            MIRX64Emit cg, "    movsd qword " & MIRX64RbpRef(off) & ", " & xmmName
+        Else
+            MIRX64Emit cg, "    cvtsd2ss xmm4, " & xmmName
+            MIRX64Emit cg, "    movss dword " & MIRX64RbpRef(off) & ", xmm4"
+        End If
     Else
         MIRX64Emit cg, "    movsd qword " & MIRX64RbpRef(off) & ", " & xmmName
     End If

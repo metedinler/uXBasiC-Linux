@@ -1,0 +1,9 @@
+CLASS Ata
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(pa AS I32)
+        x = pa
+    END CONSTRUCTOR
+END CLASS
+' S-619 (P0.2): NEW passes exactly the constructor's parameters. Too few arguments stopped AST / MIR at run time and the native build later; now one compile error.
+DIM p AS Ata = NEW Ata()

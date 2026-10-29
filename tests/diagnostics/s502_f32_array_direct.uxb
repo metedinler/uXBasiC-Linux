@@ -1,0 +1,8 @@
+DIM a(2) AS F32
+a(0) = 2.5
+a(1) = 1.25
+PRINT a(0)
+PRINT STR(a(0))
+PRINT F64(a(0))
+DIM i AS I32 = 1
+PRINT a(i)

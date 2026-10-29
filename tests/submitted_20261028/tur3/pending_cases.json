@@ -1,0 +1,6 @@
+{
+  "extra_element_address": {
+    "status":"DESIGN-PROBE; not in acceptance cases",
+    "reason":"Our first probe only formed VARPTR(values(5)), without dereferencing it. S-081 deliberately lowers this to raw pointer arithmetic shared by all engines. Its non-error does not prove a missing ordinary array load/store guard. The original probe and failed observation are preserved; legacy dereference provenance remains S-094, and no new pointer-formation rule is introduced."
+  }
+}

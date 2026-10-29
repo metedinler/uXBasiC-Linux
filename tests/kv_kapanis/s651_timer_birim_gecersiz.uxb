@@ -1,0 +1,2 @@
+' S-651: bilinmeyen TIMER birimi altı yolda derleme zamaninda acik hatadir (eskiden yalniz AST yurutme aninda reddederdi).
+PRINT TIMER("saat")

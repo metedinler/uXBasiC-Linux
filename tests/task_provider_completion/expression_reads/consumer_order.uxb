@@ -1,0 +1,24 @@
+' Model D section 10.1: user calls finish before the statement reads shared storage.
+DIM metin AS STRING = "old"
+THREAD Touch() AS I32
+    RETURN LEN(metin)
+END THREAD
+FUNCTION Change() AS STRING
+    metin = "new"
+    RETURN "!"
+END FUNCTION
+FUNCTION ReadAfter() AS STRING
+    RETURN metin + Change()
+END FUNCTION
+DIM t AS TASK OF I32 = SPAWN Touch()
+DIM joined AS I32 = t.JOIN()
+metin = "old"
+PRINT metin + Change()
+metin = "old"
+IF metin + Change() = "new!" THEN
+    PRINT "condition"
+ELSE
+    PRINT "wrong condition"
+END IF
+metin = "old"
+PRINT ReadAfter()

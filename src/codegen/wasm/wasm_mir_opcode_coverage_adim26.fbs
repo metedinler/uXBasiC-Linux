@@ -117,7 +117,7 @@ Function UXBWasmOpcodeEmitClassAdim26(ByVal opcodeText As String) As String
     Select Case op
     Case "WASM_BLOCKED"
         Return "NATIVE_ONLY_DIAGNOSTIC"
-    Case "NOP", "DECL", "LOAD_CONST", "LOAD_VAR", "STORE_VAR", "ADD", "SUB", "MUL", "DIV", "MOD", "UIDIV", "UMOD", "EQ", "NE", "LT", "LE", "GT", "GE", "ULT", "ULE", "UGT", "UGE", "AND", "OR", "XOR", "SHL", "SHR", "NEG", "NOT", "JMP", "JZ", "JNZ", "RET"
+    Case "NOP", "DECL", "LOAD_CONST", "LOAD_VAR", "STORE_VAR", "ADD", "SUB", "MUL", "DIV", "MOD", "UIDIV", "UMOD", "EQ", "NE", "LT", "LE", "GT", "GE", "ULT", "ULE", "UGT", "UGE", "AND", "OR", "XOR", "SHL", "SHR", "USHR", "ROL", "ROR", "NEG", "NOT", "JMP", "JZ", "JNZ", "RET"
         Return "DIRECT_WAT"
     Case "HOST_IMPORT"
         Return "HOST_IMPORT_WAT"

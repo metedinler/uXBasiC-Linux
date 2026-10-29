@@ -1,0 +1,3 @@
+' S-579: tanımsız Türkçe harfli ad, hatada yazıldığı gibi (kişi_yok) görünür; derleyen motorlarda iç yazımı (kiu015fxi_yok) görünmez
+DIM kişi AS I32 = 1
+PRINT KİŞİ_YOK

@@ -26,6 +26,11 @@ Type UXBInterpContext
     globalCount As Integer
     routines(Any) As UXBInterpRoutine
     routineCount As Integer
+    oopClassNames(Any) As String
+    oopClassBaseNames(Any) As String
+    oopClassCtorNames(Any) As String
+    oopClassCtorParamCounts(Any) As Integer
+    oopClassCount As Integer
     stack As UXBInterpStack
     heap As UXBInterpHeap
     trace As UXBInterpTraceBuffer
@@ -45,8 +50,13 @@ Declare Sub UXBInterpContextSyncRuntime(ByRef ctx As UXBInterpContext)
 Sub UXBInterpContextInit(ByRef ctx As UXBInterpContext, ByVal targetText As String = "native", ByVal traceEnabled As Integer = 0)
     ctx.globalCount = 0
     ctx.routineCount = 0
+    ctx.oopClassCount = 0
     Erase ctx.globals
     Erase ctx.routines
+    Erase ctx.oopClassNames
+    Erase ctx.oopClassBaseNames
+    Erase ctx.oopClassCtorNames
+    Erase ctx.oopClassCtorParamCounts
     UXBInterpStackInit ctx.stack
     UXBInterpHeapInit ctx.heap
     UXBInterpTraceInit ctx.trace, traceEnabled
@@ -60,6 +70,26 @@ Sub UXBInterpContextInit(ByRef ctx As UXBInterpContext, ByVal targetText As Stri
     ctx.serviceCallCount = 0
     ctx.strictMode = 1
     UXBRuntimeContextInit ctx.runtime, ctx.targetName
+End Sub
+
+Sub UXBInterpContextSetOopMetadata(ByRef ctx As UXBInterpContext, classNames() As String, baseNames() As String, ctorNames() As String, ctorParamCounts() As Integer, ByVal classCount As Integer)
+    ctx.oopClassCount = classCount
+    Erase ctx.oopClassNames
+    Erase ctx.oopClassBaseNames
+    Erase ctx.oopClassCtorNames
+    Erase ctx.oopClassCtorParamCounts
+    If classCount <= 0 Then Exit Sub
+    ReDim ctx.oopClassNames(classCount - 1)
+    ReDim ctx.oopClassBaseNames(classCount - 1)
+    ReDim ctx.oopClassCtorNames(classCount - 1)
+    ReDim ctx.oopClassCtorParamCounts(classCount - 1)
+    Dim i As Integer
+    For i = 0 To classCount - 1
+        ctx.oopClassNames(i) = classNames(i)
+        ctx.oopClassBaseNames(i) = baseNames(i)
+        ctx.oopClassCtorNames(i) = ctorNames(i)
+        ctx.oopClassCtorParamCounts(i) = ctorParamCounts(i)
+    Next i
 End Sub
 
 Private Function UXBInterpContextFindGlobal(ByRef ctx As UXBInterpContext, ByVal nameText As String) As Integer

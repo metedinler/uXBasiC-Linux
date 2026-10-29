@@ -1,0 +1,65 @@
+EXIT SUB
+SUB S(n AS I32)
+    IF n > 1 THEN EXIT SUB
+    PRINT "kucuk"
+END SUB
+S(0)
+S(5)
+PRINT "bitti"
+=====
+EXIT FUNCTION
+FUNCTION F(n AS I32) AS I32
+    IF n > 1 THEN EXIT FUNCTION
+    RETURN 7
+END FUNCTION
+PRINT F(0)
+PRINT F(5)
+=====
+fazla arguman
+SUB P(a AS I32)
+    PRINT a
+END SUB
+P(1, 2)
+=====
+eksik arguman
+SUB P(a AS I32, b AS I32)
+    PRINT a
+END SUB
+P(1)
+=====
+FUNCTION sonucu deyim olarak parantezli
+FUNCTION Kare(x AS I32) AS I32
+    PRINT "kare calisti"
+    RETURN x * x
+END FUNCTION
+Kare(5)
+PRINT "bitti"
+=====
+CALL FUNCTION
+FUNCTION Kare(x AS I32) AS I32
+    PRINT "kare calisti"
+    RETURN x * x
+END FUNCTION
+CALL Kare(5)
+PRINT "bitti"
+=====
+SUB sonra tanimli
+Ilk()
+SUB Ilk()
+    PRINT "ilk"
+END SUB
+=====
+ic ice cagri
+FUNCTION K(x AS I32) AS I32
+    RETURN x * x
+END FUNCTION
+FUNCTION T(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+PRINT T(K(3), K(K(2)))
+=====
+boru
+FUNCTION K(x AS I32) AS I32
+    RETURN x * x
+END FUNCTION
+PRINT 3 |> K |> K

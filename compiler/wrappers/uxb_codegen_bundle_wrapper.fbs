@@ -1,5 +1,0 @@
-#include once "../hooks/uxb_codegen_hook.fbs"
-#include once "../../src/codegen/x64/code_generator.fbs"
-#include once "../../src/codegen/x64/ffi_call_backend.fbs"
-#include once "../../src/codegen/x64/inline_backend.fbs"
-#include once "../../src/codegen/x86/ffi_call_backend.fbs"

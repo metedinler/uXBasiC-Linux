@@ -1,0 +1,6 @@
+{
+  "s101_unallocated_dynamic_pending": {
+    "target_output": "0\n-1\n5",
+    "reason": "Provided TUR9 explicitly has no DIM a() implementation; tracked in S-101, excluded from working feature counts."
+  }
+}

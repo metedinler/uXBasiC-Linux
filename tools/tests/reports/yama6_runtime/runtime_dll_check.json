@@ -1,0 +1,8 @@
+{
+  "schema": "uxb.yama6.runtime.v2",
+  "dll": "C:\\Users\\mete\\Downloads\\BasicOyunSource\\UXBc_Clean\\UXBc\\uxb\\tools\\tests\\bin\\uxb_runtime.dll",
+  "status": "FAIL",
+  "exports": {},
+  "behavior": {},
+  "error": "missing C:\\Users\\mete\\Downloads\\BasicOyunSource\\UXBc_Clean\\UXBc\\uxb\\tools\\tests\\bin\\uxb_runtime.dll"
+}

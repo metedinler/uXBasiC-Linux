@@ -1,0 +1,16 @@
+' S-572 / S-360: `ABSTRACT CLASS` parses (the lexer used to read the word CLASS after ABSTRACT as an
+' identifier, so the class was never declared) and a concrete subclass works through a base-typed variable.
+ABSTRACT CLASS Shape
+    PUBLIC
+    VIRTUAL METHOD Area() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+CLASS Square EXTENDS Shape
+    PUBLIC
+    OVERRIDE METHOD Area() AS I32
+        RETURN 4
+    END METHOD
+END CLASS
+DIM s AS Shape = NEW Square()
+PRINT s.Area()

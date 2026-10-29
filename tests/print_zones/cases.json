@@ -1,0 +1,14 @@
+{
+  "separators": {
+    "raw_stdout": "A             B\nCD\n\nE             F\nGH\n"
+  },
+  "boundaries": {
+    "raw_stdout": "12345678901234              X\nab            c\nx\ny             z\n1234567890123 t             u\n"
+  },
+  "typed_once": {
+    "raw_stdout": "value         1.25          1             2\n2\n1.25!\n"
+  },
+  "trailing": {
+    "raw_stdout": "a             \n\nb"
+  }
+}

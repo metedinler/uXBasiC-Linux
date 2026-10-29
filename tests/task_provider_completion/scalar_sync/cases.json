@@ -1,0 +1,93 @@
+{
+  "i64_updates": {
+    "output": "10000",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "compound_float": {
+    "output": "500\n1000",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "multiple_calls_once": {
+    "output": "6000\n4000",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "shared_lock_order": {
+    "output": "2000\n2000",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "callee_shared_write": {
+    "output": "22000",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "local_shadow": {
+    "output": "1010\n1020\n7",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "main_worker_updates": {
+    "output": "10000",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "recursive_call": {
+    "output": "840",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "global_f32_storage": {
+    "output": "1",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "local_f32_storage": {
+    "output": "1",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "declared_narrow_storage": {
+    "output": "-128\n0\n-128",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "float_one_arg_call": {
+    "output": "1000",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "conditional_call_not_hoisted": {
+    "output": "7\n0",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  }
+}

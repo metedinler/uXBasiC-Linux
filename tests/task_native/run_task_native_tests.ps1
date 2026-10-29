@@ -54,7 +54,13 @@ try {
     }
   }
 } finally {
-  Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
+  $resolvedTemp = [IO.Path]::GetFullPath($tmpRoot)
+  $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')
+  if ([IO.Path]::GetDirectoryName($resolvedTemp) -ne $tempParent -or
+      -not [IO.Path]::GetFileName($resolvedTemp).StartsWith('uxb_tasknat_')) {
+    throw 'Refusing cleanup outside this task-native invocation temp directory.'
+  }
+  Remove-Item -LiteralPath $resolvedTemp -Recurse -Force -ErrorAction SilentlyContinue
 }
 Write-Host "Toplam: $($pass + $fail)   PASS: $pass   FAIL: $fail"
 if ($fail -gt 0) { exit 1 }

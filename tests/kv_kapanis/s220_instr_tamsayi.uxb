@@ -1,0 +1,11 @@
+' S-220: INSTR bir TAMSAYI dondurur; AST'de metin gibi saklaniyordu (k + 6 -> 26, IF k = 2 yanlis).
+DIM k AS I32
+k = INSTR(1, "abc", "b")
+PRINT k + 6
+IF k = 2 THEN
+    PRINT "ok"
+ELSE
+    PRINT "yanlis"
+END IF
+DIM m AS I32 = INSTR("hello", "l")
+PRINT m * 2

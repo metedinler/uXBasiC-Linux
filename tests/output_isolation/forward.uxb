@@ -1,0 +1,3 @@
+%%DEFINE CALLER 9
+INCLUDE "forward.uxbh"
+PRINT "etiket="; RESULT

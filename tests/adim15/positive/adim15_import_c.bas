@@ -1,0 +1,3 @@
+IMPORT(C, "libs/native/add_i32.c")
+DECLARE FUNCTION add_i32 CDECL ALIAS "add_i32" (BYVAL a AS I32, BYVAL b AS I32) AS I32
+PRINT add_i32(2, 3)

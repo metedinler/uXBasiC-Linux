@@ -1,0 +1,27 @@
+INCLUDE "include/modules/uxpython.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT PythonAddPath(0, "")
+        PRINT PythonCall(0, 0, "", "")
+        PRINT PythonCallModule(0, "", "", "", "")
+        PRINT PythonClose(0)
+        PRINT PythonError(0)
+        PRINT PythonFlagIgnoreEnvironment()
+        PRINT PythonFlagIsolated()
+        PRINT PythonFlagNoSite()
+        PRINT PythonFloat(0, 0)
+        PRINT PythonGet(0, 0, "")
+        PRINT PythonImport(0, "")
+        PRINT PythonInt(0, 0)
+        PRINT PythonJson(0, 0)
+        PRINT PythonOpen("", "", "", 0)
+        PRINT PythonReady(0)
+        PRINT PythonRelease(0, 0)
+        PRINT PythonRuntimeVersion(0)
+        PRINT PythonShutdown()
+        PRINT PythonString(0, 0)
+        PRINT PythonVersion()
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXPYTHON"
+END MAIN

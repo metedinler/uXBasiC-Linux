@@ -1,0 +1,45 @@
+DIM s AS STRING = "abcdef"
+MID(s, 2, 2) = "XY"
+PRINT s
+MID(s, 6, 10) = "123"
+PRINT s
+MID(s, 7) = "Z"
+MID(s, 2, 0) = "ZZ"
+MID(s, 2, 5) = ""
+PRINT s
+MID(s, 2) = "Q"
+PRINT s
+s = "abcdef"
+MID(s, 2, 4) = "Q"
+PRINT s
+MID(s, 2, 2) = s
+PRINT s
+TYPE Record
+    name AS STRING
+END TYPE
+DIM rec AS Record
+rec.name = "abcdef"
+MID(rec.name, 2, 2) = "XY"
+PRINT rec.name
+DIM a(0 TO 1) AS STRING
+DIM evaluations AS I32 = 0
+a(0) = "abcdef"
+FUNCTION Index() AS I32
+    evaluations += 1
+    RETURN 0
+END FUNCTION
+FUNCTION StartPosition() AS I32
+    evaluations += 1
+    RETURN 2
+END FUNCTION
+FUNCTION LengthValue() AS I32
+    evaluations += 1
+    RETURN 2
+END FUNCTION
+FUNCTION ReplacementText() AS STRING
+    evaluations += 1
+    RETURN "XY"
+END FUNCTION
+MID(a(Index()), StartPosition(), LengthValue()) = ReplacementText()
+PRINT a(0)
+PRINT evaluations

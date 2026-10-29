@@ -1,0 +1,26 @@
+exit_sub | SUB S()\n    PRINT "a"\n    EXIT SUB\n    PRINT "b"\nEND SUB | S()\nPRINT "c"
+exit_function | FUNCTION F(x AS I32) AS I32\n    IF x > 0 THEN EXIT FUNCTION\n    RETURN 5\nEND FUNCTION | PRINT F(1); " "; F(-1)
+for_ondalik | DIM x AS F64 | FOR x = 0 TO 1 STEP 0.25\n    PRINT x; " ";\nNEXT\nPRINT
+for_geri | DIM i AS I32 | FOR i = 3 TO 1 STEP -1\n    PRINT i; " ";\nNEXT\nPRINT
+for_hic | DIM i AS I32 | FOR i = 5 TO 1\n    PRINT "calismaz"\nNEXT\nPRINT "bitti"
+exit_while | DIM i AS I32 | WHILE i < 10\n    i += 1\n    IF i = 3 THEN EXIT WHILE\nWEND\nPRINT i
+continue_while | DIM i AS I32\nDIM t AS I32 | WHILE i < 5\n    i += 1\n    IF i = 3 THEN CONTINUE\n    t += i\nWEND\nPRINT t
+continue_do | DIM i AS I32\nDIM t AS I32 | DO WHILE i < 5\n    i += 1\n    IF i MOD 2 = 0 THEN CONTINUE\n    t += i\nLOOP\nPRINT t
+ic_ice_exit | DIM i AS I32\nDIM j AS I32 | FOR i = 1 TO 3\n    FOR j = 1 TO 3\n        IF j = 2 THEN EXIT FOR\n        PRINT i; j; " ";\n    NEXT\nNEXT\nPRINT
+select_liste | DIM n AS I32 = 3 | SELECT CASE n\n    CASE 1, 3, 5\n        PRINT "tek"\n    CASE 2, 4\n        PRINT "cift"\nEND SELECT
+select_is | DIM n AS I32 = 12 | SELECT CASE n\n    CASE IS < 0\n        PRINT "eksi"\n    CASE 0\n        PRINT "sifir"\n    CASE IS >= 10\n        PRINT "buyuk"\n    CASE ELSE\n        PRINT "kucuk"\nEND SELECT
+select_aralik_lst | DIM n AS I32 = 7 | SELECT CASE n\n    CASE 1 TO 3, 7 TO 9\n        PRINT "ikisinden biri"\n    CASE ELSE\n        PRINT "disari"\nEND SELECT
+select_ifade | DIM n AS I32 = 4 | SELECT CASE n * 2\n    CASE 8\n        PRINT "sekiz"\n    CASE ELSE\n        PRINT "baska"\nEND SELECT
+select_f64 | DIM x AS F64 = 2.5 | SELECT CASE x\n    CASE 2.5\n        PRINT "iki bucuk"\n    CASE ELSE\n        PRINT "baska"\nEND SELECT
+if_ic_ice | DIM a AS I32 = 5\nDIM b AS I32 = 7 | IF a > 3 THEN\n    IF b > 10 THEN\n        PRINT "ikisi"\n    ELSE\n        PRINT "yalniz a"\n    END IF\nEND IF
+if_tek_else | DIM a AS I32 = 0 | IF a = 0 THEN PRINT "sifir" ELSE PRINT "degil"
+if_iki_nokta | DIM a AS I32 = 1 | IF a = 1 THEN PRINT "x": PRINT "y"
+end_sub | SUB S()\n    PRINT "icerde"\n    END\nEND SUB | S()\nPRINT "gorunmez"
+end_ana | | PRINT "a"\nEND\nPRINT "b"
+goto_geri | DIM i AS I32 | basla:\ni += 1\nIF i < 3 THEN GOTO basla\nPRINT i
+gosub_cok | | GOSUB a1\nGOSUB a1\nEND\na1:\nPRINT "x"\nRETURN
+on_goto_dene | DIM n AS I32 = 2 | ON n GOTO e1, e2\ne1:\nPRINT "bir"\nEND\ne2:\nPRINT "iki"
+do_loop_sonsuz | DIM i AS I32 | DO\n    i += 1\n    IF i >= 3 THEN EXIT DO\nLOOP\nPRINT i
+while_kosul_metin | DIM s AS STRING = "a" | WHILE LEN(s) < 4\n    s = s + "b"\nWEND\nPRINT s
+for_degisken_sinir | DIM n AS I32 = 3\nDIM i AS I32 | FOR i = 1 TO n\n    n = 10\n    PRINT i; " ";\nNEXT\nPRINT
+for_adim_degisken | DIM s AS I32 = 2\nDIM i AS I32 | FOR i = 1 TO 7 STEP s\n    PRINT i; " ";\nNEXT\nPRINT

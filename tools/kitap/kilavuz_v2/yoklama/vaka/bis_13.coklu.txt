@@ -1,0 +1,84 @@
+V5 dizi en basta, sonra ASSERT ve cagri
+FUNCTION Iki(x AS I32) AS I32
+    RETURN x * 2
+END FUNCTION
+MAIN
+    DIM k(3) AS I32
+    DIM j AS I32
+    DIM a AS I32 = Iki(3)
+    ASSERT a > 0, "a pozitif olmali"
+    DIM n AS I32 = Iki(2)
+    FOR j = 0 TO 3
+        k(j) = 0
+    NEXT
+    FOR j = 0 TO 3
+        IF k(j) = 0 THEN PRINT "bos "; j
+    NEXT
+END MAIN
+=====
+V6 ASSERT yok, TRY/CATCH var, cagri sonra DIM
+FUNCTION Iki(x AS I32) AS I32
+    RETURN x * 2
+END FUNCTION
+MAIN
+    DIM a AS I32 = Iki(3)
+    TRY
+        THROW "deneme"
+    CATCH e
+        PRINT "yakalandi"
+    END TRY
+    DIM n AS I32 = Iki(2)
+    DIM k(3) AS I32
+    DIM j AS I32
+    FOR j = 0 TO 3
+        k(j) = 0
+    NEXT
+    FOR j = 0 TO 3
+        IF k(j) = 0 THEN PRINT "bos "; j
+    NEXT
+END MAIN
+=====
+V7 ASSERT bir FUNCTION icinde, FUNCTION icinde cagri sonra DIM
+FUNCTION Iki(x AS I32) AS I32
+    RETURN x * 2
+END FUNCTION
+FUNCTION Say() AS I32
+    DIM a AS I32 = Iki(3)
+    ASSERT a > 0, "a pozitif olmali"
+    DIM n AS I32 = Iki(2)
+    DIM k(3) AS I32
+    DIM j AS I32
+    DIM s AS I32 = 0
+    FOR j = 0 TO 3
+        k(j) = j
+    NEXT
+    FOR j = 0 TO 3
+        IF k(j) > 0 THEN s += 1
+    NEXT
+    RETURN s
+END FUNCTION
+MAIN
+    PRINT Say()
+END MAIN
+=====
+V8 ASSERT yalniz MAIN icinde, DIM bir baska FUNCTION icinde (cagri oncesi)
+FUNCTION Iki(x AS I32) AS I32
+    RETURN x * 2
+END FUNCTION
+FUNCTION Say() AS I32
+    DIM a AS I32 = Iki(3)
+    DIM k(3) AS I32
+    DIM j AS I32
+    DIM s AS I32 = 0
+    FOR j = 0 TO 3
+        k(j) = j
+    NEXT
+    FOR j = 0 TO 3
+        IF k(j) > 0 THEN s += 1
+    NEXT
+    RETURN s
+END FUNCTION
+MAIN
+    ASSERT Iki(1) = 2, "iki"
+    PRINT Say()
+END MAIN

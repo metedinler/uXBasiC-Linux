@@ -1,0 +1,16 @@
+DIM metin AS STRING = "old"
+DIM calls AS I32 = 0
+THREAD Touch() AS I32
+    RETURN LEN(metin) + calls
+END THREAD
+FUNCTION Change() AS STRING
+    calls += 1
+    metin = "new"
+    RETURN "!"
+END FUNCTION
+DIM t AS TASK OF I32 = SPAWN Touch()
+DIM joined AS I32 = t.JOIN()
+IF 0 ANDALSO LEN(metin + Change()) > 0 THEN PRINT "wrong branch"
+IF -1 ORELSE LEN(metin + Change()) > 0 THEN PRINT "selected"
+PRINT metin
+PRINT calls

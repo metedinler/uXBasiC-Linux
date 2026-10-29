@@ -1,0 +1,18 @@
+INCLUDE "include/modules/uxdatetime.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxdatetime.AddMilliseconds(0, 0)
+        PRINT uxdatetime.DifferenceMilliseconds(0, 0)
+        PRINT uxdatetime.ErrorText()
+        PRINT uxdatetime.FileTimeUtc()
+        PRINT uxdatetime.FormatLocal(0)
+        PRINT uxdatetime.FormatUtc(0)
+        PRINT uxdatetime.MonotonicFrequency()
+        PRINT uxdatetime.MonotonicTicks()
+        PRINT uxdatetime.ParseUtc("")
+        uxdatetime.SleepMilliseconds(0)
+        PRINT uxdatetime.UnixMillisecondsUtc()
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXDATETIME"
+END MAIN

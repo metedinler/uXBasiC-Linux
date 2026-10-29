@@ -1,0 +1,10 @@
+CLASS DtorBox
+    DIM value AS I32
+
+    DESTRUCTOR()
+        PRINT "DTOR"
+    END DESTRUCTOR
+END CLASS
+
+DIM b AS DtorBox = NEW DtorBox()
+DELETE b

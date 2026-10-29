@@ -1,0 +1,8 @@
+' S-329 koruma: ozyineleme.
+FUNCTION Fakt(n AS I32) AS I32
+    IF n <= 1 THEN
+        RETURN 1
+    END IF
+    RETURN n * Fakt(n - 1)
+END FUNCTION
+PRINT Fakt(5)

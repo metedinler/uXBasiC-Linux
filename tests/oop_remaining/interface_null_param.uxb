@@ -1,0 +1,14 @@
+INTERFACE IOku
+    METHOD Deger() AS I32
+END INTERFACE
+CLASS Okuyucu IMPLEMENTS IOku
+    PUBLIC
+    METHOD Deger() AS I32
+        RETURN 9
+    END METHOD
+END CLASS
+SUB Oku(o AS IOku)
+    PRINT o.Deger()
+END SUB
+DIM a AS IOku = NOTHING
+Oku(a)

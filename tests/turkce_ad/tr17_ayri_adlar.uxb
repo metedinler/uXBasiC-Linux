@@ -1,0 +1,8 @@
+' S-579: yalnız bir harfi Türkçe olan adlar birbirine karışmaz (seker/şeker, ceker/çeker, guc/güç)
+DIM seker AS I32 = 1
+DIM şeker AS I32 = 2
+DIM ceker AS I32 = 3
+DIM çeker AS I32 = 4
+DIM guc AS I32 = 5
+DIM güç AS I32 = 6
+PRINT seker * 100000 + şeker * 10000 + ceker * 1000 + çeker * 100 + guc * 10 + güç

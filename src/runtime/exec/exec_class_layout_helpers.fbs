@@ -11,8 +11,11 @@ Private Function ExecFindClassDeclNode(ByRef ps As ParseState, ByRef classTypeNa
 
     If UXBAstNameIndexEnsure(ps) <> 0 Then
         Dim ce As Integer = UXBAstNameIndexFirst(2, targetName)
-        If ce = -1 Then Return -1
-        Return UXBAstNameIndexNode(ce)
+        If ce <> -1 Then Return UXBAstNameIndexNode(ce)
+        ' The index is an acceleration structure, not a source of truth.  A
+        ' miss can occur while a parser extension has produced a declaration
+        ' kind not yet indexed; retain the original scan as the correctness
+        ' fallback for runtime class layout and inheritance.
     End If
 
     Dim i As Integer
@@ -272,11 +275,18 @@ Private Function ExecRoutineParamCount(ByRef ps As ParseState, ByVal routineNode
     Return total
 End Function
 
-Private Function ExecInvokeClassCtorIfPresent(ByRef ps As ParseState, ByRef es As ExecState, ByRef classTypeName As String, ByVal instanceAddr As UInteger, ByVal ctorCallNodeIdx As Integer, ByRef errText As String) As Integer
+Private Function ExecInvokeClassCtorChain(ByRef ps As ParseState, ByRef es As ExecState, ByRef classTypeName As String, ByVal instanceAddr As UInteger, ByVal ctorCallNodeIdx As Integer, ByVal depth As Integer, ByRef errText As String) As Integer
     Dim classUpper As String
     classUpper = UCase(Trim(classTypeName))
     If classUpper = "" Then Return 1
+    If depth > 64 Then
+        errText = "DIM: constructor inheritance chain too deep " & classUpper
+        Return 0
+    End If
 
+    ' S-485 / S-487 (P0.2, 2026-10-17): only the constructor of THIS class runs here. The base constructors are called from inside its body: the front
+    ' end (semantic_base_ctor.fbs) writes `SUPER.CONSTRUCTOR(args)` as its first statement (explicit SUPER(...) or the implicit parameterless one), so the
+    ' chain is the same on every engine. This function used to walk the bases first and call each parameterless base constructor.
     Dim ctorName As String
     ctorName = classUpper & "_CTOR"
 
@@ -303,6 +313,10 @@ Private Function ExecInvokeClassCtorIfPresent(ByRef ps As ParseState, ByRef es A
     End If
 
     Return 1
+End Function
+
+Private Function ExecInvokeClassCtorIfPresent(ByRef ps As ParseState, ByRef es As ExecState, ByRef classTypeName As String, ByVal instanceAddr As UInteger, ByVal ctorCallNodeIdx As Integer, ByRef errText As String) As Integer
+    Return ExecInvokeClassCtorChain(ps, es, classTypeName, instanceAddr, ctorCallNodeIdx, 0, errText)
 End Function
 
 Private Function ExecValidateClassDtorSignature(ByRef ps As ParseState, ByRef es As ExecState, ByVal routineIdx As Integer, ByRef classTypeName As String, ByRef errText As String) As Integer
@@ -407,12 +421,12 @@ End Function
 
 Private Function ExecRunClassVarDtorAtIndex(ByRef ps As ParseState, ByRef es As ExecState, ByVal varIdx As Integer, ByRef errText As String) As Integer
     If varIdx < 0 Or varIdx >= es.count Then Return 1
-    If es.vars(varIdx).isArray <> 0 Then Return 1
+    If ExecVarAt(es, varIdx).isArray <> 0 Then Return 1
 
     Dim declType As String
     Dim runtimeType As String
-    declType = UCase(Trim(es.vars(varIdx).declType))
-    runtimeType = UCase(Trim(es.vars(varIdx).runtimeClassType))
+    declType = UCase(Trim(ExecVarAt(es, varIdx).declType))
+    runtimeType = UCase(Trim(ExecVarAt(es, varIdx).runtimeClassType))
 
     Dim dtorType As String
     dtorType = runtimeType
@@ -421,16 +435,16 @@ Private Function ExecRunClassVarDtorAtIndex(ByRef ps As ParseState, ByRef es As 
     If ExecFindClassDeclNode(ps, dtorType) = -1 Then Return 1
 
     Dim objAddr As UInteger
-    objAddr = es.vars(varIdx).addr
-    If objAddr = 0 Then objAddr = CUInt(ExecValueToInteger(es.vars(varIdx).value))
+    objAddr = ExecVarAt(es, varIdx).addr
+    If objAddr = 0 Then objAddr = CUInt(ExecValueToInteger(ExecVarAt(es, varIdx).value))
     If objAddr = 0 Then Return 1
 
     If ExecInvokeClassDtorChainIfPresent(ps, es, dtorType, objAddr, errText) = 0 Then Return 0
 
     ' Bu degisken icin destructor calisti; program sonu veya DELETE sonrasi tekrar calismasin.
-    ExecSetVar es, es.vars(varIdx).nameText, 0
-    ExecSetVarAddr es, es.vars(varIdx).nameText, 0
-    es.vars(varIdx).runtimeClassType = ""
+    ExecSetVar es, ExecVarAt(es, varIdx).nameText, 0
+    ExecSetVarAddr es, ExecVarAt(es, varIdx).nameText, 0
+    ExecVarAt(es, varIdx).runtimeClassType = ""
 
     Return 1
 End Function
@@ -464,7 +478,7 @@ Private Function ExecConfigureClassStorage(ByRef ps As ParseState, ByRef es As E
     End If
 
     Dim objectBase As UInteger
-    objectBase = es.vars(varIdx).addr
+    objectBase = ExecVarAt(es, varIdx).addr
     If objectBase > &h7FFFFFFF - CUInt(classSize) + 1 Then
         errText = "DIM: class allocation overflow"
         Return 0

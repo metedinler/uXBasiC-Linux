@@ -1,0 +1,14 @@
+TYPE Pair16
+    x AS I16
+    y AS I16
+END TYPE
+FUNCTION Oku(a AS Pair16[]) AS I32
+    RETURN a(1).y
+END FUNCTION
+FUNCTION Toplam(n AS I32) AS I32
+    DIM a(0 TO 1) AS Pair16
+    a(1).y = I16(n)
+    IF n > 1 THEN RETURN Toplam(n - 1) + Oku(a)
+    RETURN Oku(a)
+END FUNCTION
+PRINT Toplam(3)

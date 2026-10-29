@@ -1,0 +1,13 @@
+TYPE Point
+    f AS F32
+    d AS F64
+END TYPE
+DIM a(0 TO 1) AS Point
+a(0).f = 1
+a(0).d = 2
+PRINT a(0).f
+PRINT a(0).d
+a(0).f++
+a(0).d--
+PRINT a(0).f
+PRINT a(0).d

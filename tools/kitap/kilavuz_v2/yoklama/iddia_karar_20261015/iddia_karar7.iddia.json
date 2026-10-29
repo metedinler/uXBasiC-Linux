@@ -1,0 +1,26 @@
+[
+ {
+  "ad": "i01 DICTHAS yazdir",
+  "kod": "DIM d AS DICT\nDICTSET(d, \"a\", 1)\nPRINT DICTHAS(d, \"a\")\nPRINT DICTHAS(d, \"z\")\n"
+ },
+ {
+  "ad": "i02 SETHAS yazdir",
+  "kod": "DIM s AS SET\nSETADD(s, 5)\nPRINT SETHAS(s, 5)\nPRINT SETHAS(s, 9)\n"
+ },
+ {
+  "ad": "i03 DICTHAS IF icinde",
+  "kod": "DIM d AS DICT\nDICTSET(d, \"a\", 1)\nIF DICTHAS(d, \"a\") THEN PRINT \"var\"\nIF DICTHAS(d, \"z\") THEN PRINT \"yanlis\" ELSE PRINT \"yok\"\n"
+ },
+ {
+  "ad": "i04 karsilastirma yazdir",
+  "kod": "PRINT 5 > 3\nPRINT 3 > 5\n"
+ },
+ {
+  "ad": "i05 dizi skaler baslangic AST dizi elemanlari",
+  "kod": "DIM a(2) AS I32 = 7\nPRINT a(0)\nPRINT a(1)\nPRINT a(2)\n"
+ },
+ {
+  "ad": "i06 dizi skaler baslangic F64",
+  "kod": "DIM a(1) AS F64 = 2.5\nPRINT a(0)\n"
+ }
+]

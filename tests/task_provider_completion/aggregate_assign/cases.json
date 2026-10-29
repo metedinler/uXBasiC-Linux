@@ -1,0 +1,172 @@
+{
+  "index_once": {
+    "output": "13\n1\n21",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "float_fields": {
+    "output": "0.75\n1\n2",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "class_multidim": {
+    "output": "13\n12",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "property_compound": {
+    "output": "0.75\n1\n1",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "array_typed": {
+    "output": "0.75\n1\n-128\n3",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "shared_array": {
+    "output": "1\n1\n4000\n4000.5",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "shared_compound_wait": {
+    "output": "1\n1\n2",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "shared_plain_wait": {
+    "output": "1\n1\n2",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "plain_order": {
+    "output": "7\n21",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "index_advances": {
+    "output": "13\n20\n1",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "rhs_before_index": {
+    "output": "6\n9",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "property_plain": {
+    "output": "0.25\n0\n1",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "integer_ops": {
+    "output": "100\n10",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "local_parameter": {
+    "output": "0.75\n0.75",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "null_plain": {
+    "error": "null object reference",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "deleted_compound": {
+    "error": "null object reference",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "record_layout": {
+    "output": "0\n0\n-128\n5\n0\n16777216\n0.75",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "shared_field_wait": {
+    "output": "1\n1\n2",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "shared_field_compound": {
+    "output": "1\n1\n2",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "incdec_call_barrier": {
+    "output": "1\n2\n21",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+MAIN
+ DIM handle AS U64
+ DIM total AS I64
+ DIM half AS F64
+ DIM text AS STRING
+
+ handle = CALL(DLL, "uxb_ffi_token_test.dll", "uxb_test_open", PTR, CDECL)
+ ASSERT handle <> 0
+ ASSERT CALL(DLL, "uxb_ffi_token_test.dll", "uxb_test_set", I32, CDECL, "PTR,STRPTR", handle, "uXBasic-bridge") = 1
+ text = CALL(DLL, "uxb_ffi_token_test.dll", "uxb_test_get", STRPTR, CDECL, "PTR", handle)
+ ASSERT text = "uXBasic-bridge"
+
+ total = CALL(DLL, "uxb_ffi_token_test.dll", "uxb_test_sum10", I64, CDECL, "I32,I32,I32,I32,I32,I32,I32,I32,I32,I32", 1,2,3,4,5,6,7,8,9,10)
+ ASSERT total = 55
+ half = CALL(DLL, "uxb_ffi_token_test.dll", "uxb_test_half", F64, CDECL, "I32", 7)
+ ASSERT half = 7.5
+
+ CALL(DLL, "uxb_ffi_token_test.dll", "uxb_test_free", VOID, CDECL, "PTR", handle)
+ PRINT "UXB_FFI_BRIDGE_CONTRACT_PASS"
+END MAIN

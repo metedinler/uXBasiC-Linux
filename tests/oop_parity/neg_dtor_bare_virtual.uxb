@@ -1,0 +1,12 @@
+' S-576: the same rule covers a destructor: a bare / ME virtual call there is a compile error on every engine.
+CLASS Taban
+    PUBLIC
+    VIRTUAL METHOD Ad() AS I32
+        RETURN 1
+    END METHOD
+    DESTRUCTOR()
+        PRINT Ad()
+    END DESTRUCTOR
+END CLASS
+DIM x AS Taban = NEW Taban()
+DELETE x

@@ -1,0 +1,51 @@
+{
+  "03_pipe_return": {
+    "output": "42",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "07_thread_typed_params": {
+    "output": "main.uxb\n3",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "08_paralel_normal_body": {
+    "output": "11\n12\n13",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "09e_taskin_single_evaluation": {
+    "output": "once\n42",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "02_pipe_named_result": {
+    "output": "42",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "05_pipe_last_assignment": {
+    "output": "42",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "pipe_result_control_flow": {
+    "output": "body\n42\nbody\n-1",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  }
+}

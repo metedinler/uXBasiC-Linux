@@ -326,6 +326,24 @@ Private Function StiBuiltinEffect(ByVal nameRaw As String, ByRef detailOut As St
     Return STI_E_UNKNOWN
 End Function
 
+' Scalar/string sync consumers share the existing builtin effect registry.
+' This is eligibility only: callers must still validate argument/result types
+' and must not move conditional, faulting or write-barrier expressions.
+Function UXBTaskBuiltinCanStayInSync(ByVal nameText As String) As Integer
+    Dim retType As String, args As String, target As String, detail As String
+    If UXBBuiltinTypeRegistryReturnType(nameText, retType, args, target) = 0 Then Return 0
+    If UCase(Trim(target)) <> "ALL" Then Return 0
+    Return IIf(StiBuiltinEffect(nameText, detail) = 0, 1, 0)
+End Function
+
+Function UXBTaskSyncValueType(ByVal typeText As String) As Integer
+    Select Case UCase(UXBStep3TypeCanonical(UXBStep3StorageType(typeText)))
+    Case TYPE_I8, TYPE_I16, TYPE_I32, TYPE_I64, TYPE_U8, TYPE_U16, TYPE_U32, TYPE_U64, TYPE_BOOL, TYPE_F32, TYPE_F64, TYPE_STRING
+        Return 1
+    End Select
+    Return 0
+End Function
+
 ' Model D (Mete 2026-09-26): gorevde tek DIL YASAGI END'dir. Digerleri dil kurali degil, sozlesmenin
 ' henuz uygulanmamis adimlaridir (belge §10 sirasi); sessiz yanlis sonuc yerine acik tani verilir.
 Private Function StiRuleText(ByVal effBit As Integer) As String

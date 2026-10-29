@@ -3,7 +3,7 @@
 
 ' Backend orchestration bundle.
 ' This bundle owns backend policy, target selection, native/web pipeline dispatch,
-' backend reports, native-surface scan, and x64 build bridge integration.
+' backend reports, and native-surface scan.
 
 #include once "../backend/common/backend_target.fbs"
 #include once "../backend/common/backend_error_codes.fbs"
@@ -17,17 +17,20 @@
 #include once "../backend/target/target_registry.fbs"
 #include once "../backend/target/target_support_rules.fbs"
 
-#include once "../backend/backend_cli_args.fbs"
-#include once "../backend/backend_context_builder.fbs"
-#include once "../backend/backend_pipeline_result.fbs"
-#include once "../backend/backend_pipeline_gate.fbs"
-#include once "../backend/backend_step6.fbs"
+' S-688: Adim13 native backend boru hatti (backend_pipeline, backend_pipeline_gate, backend_pipeline_result,
+' backend_context_builder, backend_step6, backend_native_report_writer, backend_cli_args, backend_x64_build_bridge;
+' ayrica codegen/x64/mir_x64_abi_gate ve x64_codegen) hicbir yerden cagrilmiyordu; _retired/backend_adim13/ altina tasindi.
+' DIKKAT (include sirasi): backend_step6.fbs -> x64_codegen.fbs zinciri su CANLI dosyalari ILK KEZ burada yukluyordu; main.bas
+' bu paketi x64 paketlerinden once include eder ve WASM/JS/x64 dosyalari bu sira icin yazilmistir. Sira degismesin:
+' mir_x64_codegen.fbs (gercek x64 ureteci) yalniz burada, TEK yazimla include edilir (iki yazim "once" ile tekillesmez).
+#include once "../semantic/mir_model.fbs"
+#include once "../codegen/x64/x64_codegen_registry.fbs"
+#include once "../codegen/x64/mir_x64_codegen.fbs"
+#include once "../codegen/js/js_codegen.fbs"
+#include once "../codegen/wasm/wasm_codegen.fbs"
 #include once "../backend/backend_native_only_diagnostics_adim15.fbs"
 #include once "../backend/backend_native_surface_scan.fbs"
-#include once "../backend/backend_native_report_writer.fbs"
 #include once "../backend/backend_diagnostic_json_adim16.fbs"
-#include once "../backend/backend_x64_build_bridge.fbs"
-#include once "../backend/backend_pipeline.fbs"
 
 #include once "../backend/backend_web_cli_args.fbs"
 #include once "../backend/backend_web_context_builder.fbs"
@@ -37,7 +40,7 @@
 #include once "../backend/backend_web_pipeline.fbs"
 #include once "../main_backend_close_gate_adim27.fbs"
 
-' x86 transitional backend remains native, not web.
+' The native x64 build pipeline below is native, not web (the old x86 backend is retired: S-666).
 
 #include once "../build/x64_build_pipeline.fbs"
 #include once "../backend/compare/backend_x64_real_execution_compare.fbs"

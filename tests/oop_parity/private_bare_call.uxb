@@ -1,0 +1,13 @@
+' S-484: a bare call of a PRIVATE method inside its own class (now rewritten to ME.m()) stays legal on every engine.
+CLASS Kutu
+    PRIVATE
+    METHOD Gizli() AS I32
+        RETURN 6
+    END METHOD
+    PUBLIC
+    METHOD Ac() AS I32
+        RETURN Gizli() + 1
+    END METHOD
+END CLASS
+DIM x AS Kutu = NEW Kutu()
+PRINT x.Ac()

@@ -1,0 +1,4 @@
+' S-669: %%UNTILMETA bir kosul ister.
+%%REPEAT 3
+PRINT 1
+%%UNTILMETA

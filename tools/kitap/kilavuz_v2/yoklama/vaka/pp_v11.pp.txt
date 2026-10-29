@@ -1,0 +1,154 @@
+=== mod_nitelikli_cagri
+MODULE Geo
+    FUNCTION Alan(en AS I32, boy AS I32) AS I32
+        RETURN en * boy
+    END FUNCTION
+END MODULE
+PRINT Geo.Alan(3, 4)
+=== mod_using_kisa
+MODULE Geo
+    FUNCTION Alan(en AS I32, boy AS I32) AS I32
+        RETURN en * boy
+    END FUNCTION
+END MODULE
+USING Geo
+PRINT Alan(3, 4)
+=== mod_iki_modul_ayni_ad
+MODULE A
+    FUNCTION F() AS I32
+        RETURN 1
+    END FUNCTION
+END MODULE
+MODULE B
+    FUNCTION F() AS I32
+        RETURN 2
+    END FUNCTION
+END MODULE
+PRINT A.F(); " "; B.F()
+=== mod_using_cakisma
+MODULE A
+    FUNCTION F() AS I32
+        RETURN 1
+    END FUNCTION
+END MODULE
+MODULE B
+    FUNCTION F() AS I32
+        RETURN 2
+    END FUNCTION
+END MODULE
+USING A
+USING B
+PRINT F()
+=== mod_degisken
+MODULE Sayac
+    DIM adet AS I32
+    SUB Artir()
+        adet += 1
+    END SUB
+    FUNCTION Oku() AS I32
+        RETURN adet
+    END FUNCTION
+END MODULE
+Sayac.Artir()
+Sayac.Artir()
+PRINT Sayac.Oku()
+=== mod_degisken_disaridan
+MODULE Sayac
+    DIM adet AS I32
+END MODULE
+Sayac.adet = 5
+PRINT Sayac.adet
+=== mod_ic_ice
+MODULE Dis
+    MODULE Ic
+        FUNCTION F() AS I32
+            RETURN 7
+        END FUNCTION
+    END MODULE
+END MODULE
+PRINT Dis.Ic.F()
+=== ns_ic_ice
+NAMESPACE Dis
+    NAMESPACE Ic
+        DIM v AS I32
+    END NAMESPACE
+END NAMESPACE
+Dis.Ic.v = 4
+PRINT Dis.Ic.v
+=== ns_islev
+NAMESPACE Matematik
+    FUNCTION Kare(x AS I32) AS I32
+        RETURN x * x
+    END FUNCTION
+END NAMESPACE
+PRINT Matematik.Kare(5)
+=== ns_ac_kapat_iki_kez
+NAMESPACE N
+    DIM a AS I32
+END NAMESPACE
+NAMESPACE N
+    DIM b AS I32
+END NAMESPACE
+N.a = 1
+N.b = 2
+PRINT N.a + N.b
+=== alias_islev
+FUNCTION UzunAdliIslev(x AS I32) AS I32
+    RETURN x + 1
+END FUNCTION
+ALIAS Kisa = UzunAdliIslev
+PRINT Kisa(4)
+=== alias_ad_alani
+NAMESPACE Cok_Uzun_Ad
+    FUNCTION F() AS I32
+        RETURN 3
+    END FUNCTION
+END NAMESPACE
+ALIAS CU = Cok_Uzun_Ad
+PRINT CU.F()
+=== using_ns
+NAMESPACE N
+    FUNCTION F() AS I32
+        RETURN 3
+    END FUNCTION
+END NAMESPACE
+USING N
+PRINT F()
+=== mod_tip_icinde
+MODULE M
+    CONST SINIR AS I32 = 10
+    FUNCTION Sinirla(x AS I32) AS I32
+        IF x > SINIR THEN RETURN SINIR
+        RETURN x
+    END FUNCTION
+END MODULE
+PRINT M.Sinirla(50); " "; M.SINIR
+=== mod_sinif
+MODULE M
+    CLASS Nokta
+        PUBLIC
+        DIM x AS I32
+    END CLASS
+END MODULE
+DIM p AS M.Nokta = NEW M.Nokta()
+p.x = 3
+PRINT p.x
+=== mod_thread
+MODULE M
+    THREAD W(x AS I32) AS I32
+        RETURN x * 2
+    END THREAD
+END MODULE
+DIM t AS TASK OF I32 = SPAWN M.W(4)
+PRINT t.JOIN()
+=== mod_private
+MODULE M
+    PRIVATE FUNCTION Gizli() AS I32
+        RETURN 1
+    END FUNCTION
+    FUNCTION Acik() AS I32
+        RETURN Gizli() + 1
+    END FUNCTION
+END MODULE
+PRINT M.Acik()
+PRINT M.Gizli()

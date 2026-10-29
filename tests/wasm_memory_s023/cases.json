@@ -1,0 +1,12 @@
+{
+  "virtual_widths": {
+    "output": "254\n65244\n305419896\n11\n1234\n123456\n99\n0",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64",
+      "WASM"
+    ]
+  }
+}

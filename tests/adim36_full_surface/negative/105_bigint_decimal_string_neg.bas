@@ -1,0 +1,2 @@
+DIM A AS BIGI
+A = BIGINIT(BIGI, "1.25", 0)

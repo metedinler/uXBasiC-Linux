@@ -5,6 +5,7 @@
 #include once "json_builder.fbs"
 #include once "report_writer.fbs"
 #include once "error_system_adim45.fbs"
+#include once "error_limit.fbs"
 
 Const UXB_DIAG_INFO As Integer = 1
 Const UXB_DIAG_WARNING As Integer = 2
@@ -25,6 +26,7 @@ Type UXBDiagnostic
     relatedSurface As String
     hintTr As String
     hintEn As String
+    occurrences As Integer
 End Type
 
 Type UXBDiagnosticList
@@ -54,7 +56,7 @@ Sub UXBDiagnosticListInit(ByRef list As UXBDiagnosticList)
     list.capacity = 32
     ReDim list.items(list.capacity - 1)
     list.count = 0
-    list.errorLimit = 100
+    list.errorLimit = gUXBDiagnosticErrorLimit
     list.strictMode = 0
 End Sub
 
@@ -111,10 +113,27 @@ Private Sub UXBDiagnosticMirrorToErrorCenter(ByRef d As UXBDiagnostic)
     End If
     If Trim(hintUse) <> "" Then detailText &= " hint=" & hintUse
 
-    UXBErrorEmit45 UXBDiagnosticErrorCenterSeverity(d.severity), codeUse, d.layer, msgUse, "common/diagnostic.fbs", detailText
+    UXBErrorEmitStructured45 UXBDiagnosticErrorCenterSeverity(d.severity), codeUse, d.layer, d.phase, d.messageEn, d.messageTr, d.sourceFile, d.lineNo, d.colNo, d.length, detailText
 End Sub
 
 Function UXBDiagnosticPushBilingual(ByRef list As UXBDiagnosticList, ByRef codeText As String, ByVal sev As Integer, ByRef layerText As String, ByRef phaseText As String, ByRef msgEn As String, ByRef msgTr As String, ByRef sourceLoc As SourceLocation, ByRef relatedSurfaceText As String = "", ByRef hintEn As String = "", ByRef hintTr As String = "") As Integer
+    For existing As Integer = 0 To list.count - 1
+        With list.items(existing)
+            If .code = Trim(codeText) And .severity = sev And .layer = Trim(layerText) And .phase = Trim(phaseText) And _
+               .sourceFile = sourceLoc.filePath And .lineNo = sourceLoc.lineNo And .colNo = sourceLoc.colNo And .length = sourceLoc.length And _
+               .messageEn = msgEn And .messageTr = msgTr And .relatedSurface = relatedSurfaceText And .hintEn = hintEn And .hintTr = hintTr Then
+                .occurrences += 1
+                Return existing
+            End If
+        End With
+    Next existing
+    If sev >= UXB_DIAG_ERROR And list.errorLimit > 0 Then
+        Dim errorCount As Integer = 0
+        For existing As Integer = 0 To list.count - 1
+            If list.items(existing).severity >= UXB_DIAG_ERROR Then errorCount += 1
+        Next existing
+        If errorCount >= list.errorLimit Then Return -1
+    End If
     UXBDiagnosticEnsureCapacity list, list.count + 1
     Dim idx As Integer
     idx = list.count
@@ -133,6 +152,7 @@ Function UXBDiagnosticPushBilingual(ByRef list As UXBDiagnosticList, ByRef codeT
         .relatedSurface = relatedSurfaceText
         .hintTr = hintTr
         .hintEn = hintEn
+        .occurrences = 1
     End With
     UXBDiagnosticMirrorToErrorCenter list.items(idx)
     Return idx
@@ -166,6 +186,7 @@ Sub UXBDiagnosticToJsonObject(ByRef b As UXBJsonBuilder, ByRef d As UXBDiagnosti
     UXBJsonFieldString b, "severity", UXBDiagnosticSeverityName(d.severity)
     UXBJsonFieldString b, "layer", d.layer
     UXBJsonFieldString b, "phase", d.phase
+    UXBJsonFieldInt b, "occurrences", d.occurrences
     UXBJsonFieldString b, "message_tr", d.messageTr
     UXBJsonFieldString b, "message_en", d.messageEn
     UXBJsonBeginObjectField b, "source"
@@ -173,6 +194,7 @@ Sub UXBDiagnosticToJsonObject(ByRef b As UXBJsonBuilder, ByRef d As UXBDiagnosti
     UXBJsonFieldInt b, "line", d.lineNo
     UXBJsonFieldInt b, "col", d.colNo
     UXBJsonFieldInt b, "length", d.length
+    UXBJsonFieldBool b, "known", IIf(d.lineNo > 0 And d.colNo > 0, 1, 0)
     UXBJsonEndObject b
     UXBJsonFieldString b, "related_surface", d.relatedSurface
     UXBJsonFieldString b, "hint_tr", d.hintTr
@@ -187,6 +209,8 @@ Function UXBDiagnosticListToJson(ByRef list As UXBDiagnosticList, ByRef jsonOut 
     UXBJsonFieldString b, "schema", "uxb.diagnostics.v1"
     UXBJsonFieldInt b, "count", list.count
     UXBJsonFieldInt b, "error_count", UXBDiagnosticErrorCount(list)
+    UXBJsonFieldInt b, "error_limit", list.errorLimit
+    UXBJsonFieldBool b, "error_limit_reached", IIf(list.errorLimit > 0 And UXBDiagnosticErrorCount(list) >= list.errorLimit, 1, 0)
     UXBJsonFieldBool b, "strict", list.strictMode
     UXBJsonBeginArrayField b, "diagnostics"
     Dim i As Integer

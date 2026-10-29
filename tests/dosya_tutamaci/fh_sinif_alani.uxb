@@ -1,0 +1,20 @@
+' S-549: a handle as a CLASS field, used from the class's own methods (bare field name).
+CLASS Gunluk
+    PUBLIC
+    DIM dosya AS FILE_HANDLE
+    METHOD Ac()
+        OPEN "fh_c.txt" FOR OUTPUT AS dosya
+    END METHOD
+    METHOD Yaz(s AS STRING)
+        PRINT #dosya, s
+    END METHOD
+    METHOD Kapat()
+        CLOSE dosya
+    END METHOD
+END CLASS
+DIM k AS Gunluk = NEW Gunluk()
+k.Ac()
+PRINT k.dosya
+k.Yaz("x")
+k.Kapat()
+PRINT k.dosya

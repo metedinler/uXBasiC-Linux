@@ -204,7 +204,7 @@ Function UXBSurfaceMirOpcode(ByRef surfaceText As String) As String
     Case "END": Return "MIR_METADATA_ONLY"
     Case "EOF": Return "MIR_FILE_EOF"
     Case "EVENT": Return "MIR_HOST_CALL"
-    Case "EXIT": Return "MIR_RUNTIME_CALL"
+    Case "EXIT", "CONTINUE": Return "MIR_RUNTIME_CALL"
     Case "EXP": Return "MIR_EXP"
     Case "F128": Return "MIR_TYPE_DECL"
     Case "F32": Return "MIR_TYPE_DECL"

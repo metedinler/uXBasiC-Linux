@@ -1,0 +1,42 @@
+sabit toplama 2^63-1 + 10 (sabit katlama)
+PRINT 9223372036854775807 + 10
+=====
+sabit toplama 2^53+1 + 2 (sabit katlama)
+PRINT 9007199254740993 + 2
+=====
+I64 degisken 2^63-1 ve +10 atamasiyla
+DIM a AS I64 = 9223372036854775807
+a = a + 10
+PRINT a
+=====
+I64 degisken PRINT a + 10 dogrudan
+DIM a AS I64 = 9223372036854775807
+PRINT a + 10
+=====
+I64 degisken 2^53+1 ve +2
+DIM a AS I64 = 9007199254740993
+a = a + 2
+PRINT a
+=====
+I64 sabit ilkleme 2^63-1
+DIM a AS I64 = 9223372036854775807
+PRINT a
+=====
+U64 sabit ilkleme 2^64-1
+DIM a AS U64 = 18446744073709551615
+PRINT a
+=====
+sabit carpma 4000000000 * 4000000000
+PRINT 4000000000 * 4000000000
+=====
+I64 degisken carpma 4000000000 * 4000000000
+DIM a AS I64 = 4000000000
+PRINT a * a
+=====
+sabit I32 sinir 2147483647 + 1
+PRINT 2147483647 + 1
+=====
+I32 degisken sinir 2147483647 + 1
+DIM a AS I32 = 2147483647
+a = a + 1
+PRINT a

@@ -1,0 +1,11 @@
+DIM small AS I8 = I8(127)
+DIM byteval AS U8 = U8(255)
+small = I8(small + 1)
+byteval = U8(byteval + 1)
+PRINT small
+PRINT byteval
+FUNCTION Narrow(n AS I8) AS I8
+ n = I8(n + 1)
+ RETURN n
+END FUNCTION
+PRINT Narrow(I8(127))

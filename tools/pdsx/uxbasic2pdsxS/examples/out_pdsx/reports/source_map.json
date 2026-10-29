@@ -1,0 +1,38 @@
+[
+  {
+    "node_index": 1,
+    "node_kind": "DIM_STMT",
+    "source_line": 2,
+    "source_column": 1,
+    "output_line": 4,
+    "mode": "source",
+    "text": "DIM A AS INTEGER"
+  },
+  {
+    "node_index": 2,
+    "node_kind": "ASSIGN_STMT",
+    "source_line": 3,
+    "source_column": 1,
+    "output_line": 5,
+    "mode": "source",
+    "text": "A = 10"
+  },
+  {
+    "node_index": 5,
+    "node_kind": "CALL_STMT",
+    "source_line": 4,
+    "source_column": 1,
+    "output_line": 6,
+    "mode": "source",
+    "text": "CALL(DLL, \"user32.dll\", \"MessageBoxA\", 0, \"Merhaba\", \"uXBasic\", 0)"
+  },
+  {
+    "node_index": 6,
+    "node_kind": "PRINT_STMT",
+    "source_line": 5,
+    "source_column": 1,
+    "output_line": 9,
+    "mode": "source",
+    "text": "PRINT A"
+  }
+]

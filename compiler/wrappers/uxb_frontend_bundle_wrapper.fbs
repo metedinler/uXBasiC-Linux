@@ -1,5 +1,0 @@
-#include once "../hooks/uxb_global_noop_hook.fbs"
-#include once "uxb_ast_bundle_wrapper.fbs"
-#include once "uxb_hir_bundle_wrapper.fbs"
-#include once "uxb_mir_bundle_wrapper.fbs"
-#include once "../../src/build/interop_manifest.fbs"

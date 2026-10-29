@@ -1,0 +1,11 @@
+' S-030 Faz 2A / K4: ic ice SPAWN; bekleyen isci kuyruktan is calistirir (tek isciyle de kilitlenmez).
+THREAD Fib(n AS I64) AS I64
+    IF n < 2 THEN RETURN n
+    DIM a AS TASK OF I64 = SPAWN Fib(n - 1)
+    DIM b AS TASK OF I64 = SPAWN Fib(n - 2)
+    RETURN a.JOIN() + b.JOIN()
+END THREAD
+DIM t AS TASK OF I64 = SPAWN Fib(14)
+PRINT t.JOIN()
+
+

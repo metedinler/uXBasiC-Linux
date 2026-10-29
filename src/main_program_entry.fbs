@@ -9,7 +9,6 @@ Dim As Integer semanticMode
 Dim As Integer execMemMode
 Dim As Integer interopMode
 Dim As Integer x64EmitMode
-Dim As Integer x86EmitMode
 Dim As Integer codegenMode
 Dim As Integer x64BuildMode
 Dim As Integer jsBackendMode
@@ -67,6 +66,7 @@ UxbInit
 Dim As String cliErrText
 Dim As Integer cliInitOk
 cliInitOk = UXBCliInitFromCommandLine(cliErrText)
+gCliCompatInitAttempted = 1
 
 If UXBCliIsHelpRequested() <> 0 Then
     UXBCliPrintHelp
@@ -78,7 +78,9 @@ If UXBCliIsVersionRequested() <> 0 Then
 End If
 
 If cliInitOk = 0 Then
-    UxbError cliErrText
+    ' Output paths cannot be trusted before CLI validation. Report on the
+    ' terminal without creating a default log in the caller's working directory.
+    UxbError cliErrText, 0
     End 20
 End If
 
@@ -101,17 +103,6 @@ End If
 'End If
 
 debugMode = HasArg("--debug")
-Dim As String preprocessorSetArg
-preprocessorSetArg = ""
-If GetArgValue("--pp", preprocessorSetArg) = 0 Then
-    If GetArgValue("--preprocessor", preprocessorSetArg) = 0 Then preprocessorSetArg = ""
-End If
-If Trim(preprocessorSetArg) <> "" Then
-    If UXBPreprocessorSetDefault(preprocessorSetArg) = 0 Then
-        UxbError "Gecersiz preprocessor secimi: " & preprocessorSetArg & " (A veya B beklenir)"
-        End 2
-    End If
-End If
 Dim As Integer quietMode
 Dim As Integer traceMode
 Dim As Integer debugTokenDumpMode
@@ -141,6 +132,7 @@ If IsTurkishMessageRequested() <> 0 Then messageLang = "tr"
 errorLogOutPath = ""
 GetArgValue("--error-log-out", errorLogOutPath)
 If Trim(errorLogOutPath) = "" Then GetArgValue("-elo", errorLogOutPath)
+Dim explicitErrorLogPath As Integer = IIf(Trim(errorLogOutPath) <> "", 1, 0)
 errorLanguageFilePath = ""
 GetArgValue("--error-language-file", errorLanguageFilePath)
 If Trim(errorLanguageFilePath) = "" Then GetArgValue("-elf", errorLanguageFilePath)
@@ -158,7 +150,6 @@ semanticMode = HasArg("--semantic")
 execMemMode = HasArg("--execmem")
 interopMode = HasArg("--interop")
 x64EmitMode = HasArg("--emit-x64-nasm") Or HasArg("--x64gen")
-x86EmitMode = HasArg("--emit-x86") Or HasArg("--target-x86")
 codegenMode = HasArg("--codegen") Or HasArg("--x64")
 x64BuildMode = HasArg("--build-x64")
 jsBackendMode = HasArg("--emit-js") Or HasArg("--target-js") Or HasArg("--target-browser")
@@ -475,6 +466,7 @@ End If
 
 ' S-030 K4: --task-workers N -- native SPAWN isci sayisi (1..1024), derlenen programa gomulur.
 gMirX64TaskWorkers = 0
+gX64TaskWorkers = 0
 Dim taskWorkersArg As String
 If GetArgValue("--task-workers", taskWorkersArg) <> 0 Then
     Dim taskWorkersText As String = Trim(taskWorkersArg)
@@ -491,6 +483,7 @@ If GetArgValue("--task-workers", taskWorkersArg) <> 0 Then
         End 2
     End If
     gMirX64TaskWorkers = ValInt(taskWorkersText)
+    gX64TaskWorkers = gMirX64TaskWorkers
 End If
 
 If Trim(outputContractPaths.stdoutOutPath) <> "" Then
@@ -508,8 +501,18 @@ End If
 
 UxbConsoleConfigure consoleMode, programOutputOutPath, programOutputJsonOutPath, finalScreenJsonOutPath
 
+Dim terminalDiagnosticFormat As String = "text"
+GetArgValue("--diag-format", terminalDiagnosticFormat)
+UXBErrorSetTerminalFormat45 terminalDiagnosticFormat
+If LCase(terminalDiagnosticFormat) = "json" Then quietMode = 1: errorToTerminal = 0
+UXBErrorSystemConfigure45 errorLogOutPath, messageLang, errorLanguageFilePath, errorToTerminal, explicitErrorLogPath
 UxbConfigure logOutPath, debugLogOutPath, quietMode, debugMode, traceMode, debugTokenDumpMode, ""
-UXBErrorSystemConfigure45 errorLogOutPath, messageLang, errorLanguageFilePath, errorToTerminal
+Dim errorLimitText As String = "20"
+GetArgValue("--error-limit", errorLimitText)
+If UXBConfigureErrorLimit(errorLimitText) = 0 Then
+    UxbError "UXB_INVALID_ERROR_LIMIT: --error-limit must be an integer in 1..1000000"
+    End 2
+End If
 UXBMessageBusInit
 UXBMessageBusSetLogPath(messageLogOutPath)
 If UXBMessageLanguageSupported(messageLang) = 0 Then
@@ -528,23 +531,30 @@ UxbTraceInit sessionLiveJsonOutPath, layerTimingJsonOutPath, hookTraceMode, "mai
 UxbTraceMark "SESSION", "START", startupMessage
 
 If HasArg("--emit-surface-matrices") Or gUXBCli.route.verb = "mtx" Then
-    Dim matrixOutDir As String = "build\matrices"
-    GetArgValue("--out-dir", matrixOutDir)
+    ' Use the registered output-root option and preserve its default.
+    Dim matrixOutDir As String = outputContractPaths.buildRoot & "/matrices"
     Dim writeErr As String
-    If UXBAdim26EnsureParentDir(matrixOutDir & "\surface_backend_matrix.json") <> 0 Then
-        UXBAdim26WriteText matrixOutDir & "\surface_backend_matrix.json", UXBGenerateSurfaceBackendMatrixJson(), writeErr
-        UXBAdim26WriteText matrixOutDir & "\builtin_backend_matrix.json", UXBGenerateBuiltinBackendMatrixJson(), writeErr
-        UXBAdim26WriteText matrixOutDir & "\type_backend_matrix.json", UXBGenerateTypeBackendMatrixJson(), writeErr
-        UXBAdim26WriteText matrixOutDir & "\library_target_matrix.json", UXBGenerateLibraryTargetMatrixJson(), writeErr
-        UXBAdim26WriteText matrixOutDir & "\design_semantics_matrix.json", UXBGenerateDesignSemanticsMatrixJson(), writeErr
-    End If
-
     If UXBValidateAllSurfaceBackendMatrices() = 0 Then
         UxbError "surface backend matrix validation basarisiz (MISSING eleman bulundu)"
         End 1
     End If
-
-    UxbInfo "surface backend matrix validation PASS: 5 JSON matris dosyasi uretildi -> " & matrixOutDir
+    Dim matrixNames(0 To 4) As String = {"surface_backend_matrix", "builtin_backend_matrix", "type_backend_matrix", "library_target_matrix", "design_semantics_matrix"}
+    Dim matrixTexts(0 To 4) As String
+    matrixTexts(0) = UXBGenerateSurfaceBackendMatrixJson()
+    matrixTexts(1) = UXBGenerateBuiltinBackendMatrixJson()
+    matrixTexts(2) = UXBGenerateTypeBackendMatrixJson()
+    matrixTexts(3) = UXBGenerateLibraryTargetMatrixJson()
+    matrixTexts(4) = UXBGenerateDesignSemanticsMatrixJson()
+    Dim matrixWritten As Integer = 0
+    For matrixIdx As Integer = 0 To 4
+        Dim matrixPath As String = matrixOutDir & "/" & matrixNames(matrixIdx) & ".json"
+        If UXBAdim26WriteText(matrixPath, matrixTexts(matrixIdx), writeErr) = 0 Then
+            UxbError writeErr
+            End 1
+        End If
+        matrixWritten += 1
+    Next matrixIdx
+    UxbInfo "surface backend matrix validation PASS: " & LTrim(Str(matrixWritten)) & " JSON matris dosyasi uretildi -> " & matrixOutDir
     End 0
 End If
 
@@ -693,6 +703,8 @@ UxbTraceEnd "PREPROCESSOR", "OK", "expanded source ready"
 Dim As LexerState st
 UxbTraceBegin "LEXER", sourcePath
 UXBLayerEventBegin "LEXER", sourcePath
+' S-579: the code-generating backends (x64 NASM, WAT, JS) get ASCII-only names; the interpreters keep the Turkish spelling
+gUxbAsciiIdentNames = IIf(x64BuildMode <> 0 Or x64EmitMode <> 0 Or codegenMode <> 0 Or jsBackendMode <> 0, 1, 0)
 LexerInitFromPreprocessed st, sourceText, sourcePath
 
 Dim lexerBridgeCount As Integer
@@ -707,7 +719,13 @@ If lexerBridgeCount > 0 Then
         End 22
     End If
     UXBLayerEventDiagnostic "LEXER", "UXB_LEXER_DIAGNOSTICS", "lexer diagnostics count=" & LTrim(Str(lexerBridgeCount))
-    UxbError "Lexer diagnostic bridge hata buldu: " & LTrim(Str(lexerBridgeCount))
+    ' S-579: the first diagnostic is part of the message (code, position, text), not only the count
+    Dim lexerFirstDiag As String
+    lexerFirstDiag = ""
+    If st.diagnostics.count > 0 Then
+        lexerFirstDiag = " | " & st.diagnostics.items(0).code & " [" & LTrim(Str(st.diagnostics.items(0).lineNo)) & ":" & LTrim(Str(st.diagnostics.items(0).colNo)) & "] " & st.diagnostics.items(0).message
+    End If
+    UxbError "Lexer diagnostic bridge hata buldu: " & LTrim(Str(lexerBridgeCount)) & lexerFirstDiag
     End 2
 End If
 
@@ -836,10 +854,13 @@ If parseOk = 0 Then
     End 1
 End If
 
-runSemanticPass = IIf(semanticMode <> 0 Or execMemMode <> 0 Or interopMode <> 0 Or x64EmitMode <> 0 Or x86EmitMode <> 0 Or codegenMode <> 0 Or x64BuildMode <> 0 Or jsBackendMode <> 0, 1, 0)
+runSemanticPass = IIf(semanticMode <> 0 Or execMemMode <> 0 Or interopMode <> 0 Or x64EmitMode <> 0 Or codegenMode <> 0 Or x64BuildMode <> 0 Or jsBackendMode <> 0, 1, 0)
 
 If Trim(inventoryJsonOutPath) <> "" Then runSemanticPass = 1
 If Trim(mirModuleJsonOutPath) <> "" Then runSemanticPass = 1
+' MIR verification consumes typed IR, including the CLI mir verb and JSON aliases.
+' Structural validity alone must never let an ill-typed source report success.
+If mirVerifyRequested <> 0 Then runSemanticPass = 1
 If (interpreterBackend = "MIR" Or interpreterBackend = "BOTH") And execMemMode <> 0 Then runSemanticPass = 1
 
 If runSemanticPass <> 0 Then
@@ -864,13 +885,17 @@ If runSemanticPass <> 0 Then
 
     Dim libraryExecutionTarget As String
     If execMemMode <> 0 Then libraryExecutionTarget = interpreterBackend
-    If x64BuildMode <> 0 Or x64EmitMode <> 0 Or x86EmitMode <> 0 Or codegenMode <> 0 Or interopMode <> 0 Then libraryExecutionTarget = "NATIVE"
+    If x64BuildMode <> 0 Or x64EmitMode <> 0 Or codegenMode <> 0 Or interopMode <> 0 Then libraryExecutionTarget = "NATIVE"
     If jsBackendMode <> 0 Then libraryExecutionTarget = "JS"
     If wasmBackendMode <> 0 Then libraryExecutionTarget = "WASM"
     If watBackendMode <> 0 Then libraryExecutionTarget = "WAT"
     If libraryExecutionTarget <> "" Then
         If UXBLibraryTypeValidateExecutionTarget(libraryExecutionTarget, semanticErr) = 0 Then
             UxbError semanticErr
+            UXBOutputContractPushFailureDiagnostic frontendDiagnostics, "library_type", semanticErr, sourcePath
+            If UXBOutputContractWriteDiagnosticList(outputContractPaths, frontendDiagnostics, outputContractErr) = 0 Then
+                UxbError "birlesik library type diagnostics yazilamadi: " & outputContractErr
+            End If
             UXBOutputContractWriteFailureDiagnostics outputContractPaths, "library_type", semanticErr, outputContractErr
             End 1
         End If
@@ -1011,7 +1036,7 @@ needMirModule = 0
 mirModuleReady = 0
 
 If execMemMode <> 0 And (interpreterBackend = "MIR" Or interpreterBackend = "BOTH") Then needMirModule = 1
-If codegenSourceMode = "MIR" And (x64EmitMode <> 0 Or x86EmitMode <> 0 Or codegenMode <> 0 Or x64BuildMode <> 0 Or jsBackendMode <> 0) Then needMirModule = 1
+If codegenSourceMode = "MIR" And (x64EmitMode <> 0 Or codegenMode <> 0 Or x64BuildMode <> 0 Or jsBackendMode <> 0) Then needMirModule = 1
 If jsBackendMode <> 0 Or watBackendMode <> 0 Or wasmBackendMode <> 0 Or browserBackendMode <> 0 Then needMirModule = 1
 If Trim(mirModuleJsonOutPath) <> "" Then needMirModule = 1
 If mirVerifyRequested <> 0 Then needMirModule = 1
@@ -1028,6 +1053,8 @@ If codegenSourceMode = "MIR" And Trim(x64CodegenPolicyJsonOutPath) <> "" Then ne
 If x64EmitMode <> 0 Or codegenMode <> 0 Or x64BuildMode <> 0 Then needMirModule = 1
 
 Dim mirModule As MIRModule
+Dim canonicalBridge As UXBSemanticToCanonicalMIRBridgeResult
+Dim canonicalBridgeReady As Integer = 0
 If needMirModule <> 0 Then
     UxbTraceBegin "MIR_BUILD", "MIRBuildModuleFromAST + MIROptimizeModule"
     UXBLayerEventBegin "MIR_BUILD", sourcePath
@@ -1088,8 +1115,8 @@ If needMirModule <> 0 Then
     End If
     UXBActiveBindPlanAdd activeBindPlan, "MIR", "semantic_mir_verify", "UXBMIRMandatoryGate/UXBMIRWriteGateJson", "PASS", outputContractPaths.mirVerifySemanticJsonOutPath
 
-    Dim canonicalBridge As UXBSemanticToCanonicalMIRBridgeResult
     Dim canonicalBridgeErr As String
+    UxbTraceBegin "MIR_CANONICAL_BUILD", "shared verified execution view"
     If UXBSemanticMIRToCanonicalMIR(mirModule, canonicalBridge, canonicalBridgeErr, 1) = 0 Then
         Dim canonicalBridgeFailureText As String
         Dim canonicalBridgeWriteErr As String
@@ -1102,6 +1129,8 @@ If needMirModule <> 0 Then
         UxbError "Canonical MIR bridge/verify basarisiz: " & canonicalBridgeFailureText
         End 18
     End If
+    canonicalBridgeReady = 1
+    UxbTraceEnd "MIR_CANONICAL_BUILD", "OK", "shared verified execution view ready"
     If UXBSemanticCanonicalMIRBridgeWriteJson(canonicalBridge, outputContractPaths.canonicalMirJsonOutPath, canonicalBridgeErr) = 0 Then
         UxbError "canonical_mir.json yazilamadi: " & canonicalBridgeErr
         End 18

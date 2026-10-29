@@ -1,0 +1,37 @@
+%%DEFINE DEBUG 1
+%%SET TITLE = "ADIM34 Demo"
+%%SET WIDTH = 800
+%%SET HEIGHT = 600
+%%LOCK_META TITLE
+%%PROFILE DEBUG
+%%TARGET WEB
+%%OUTDIR "dist/web/adim34"
+%%PATH_ALIAS "@assets" AS "assets"
+%%EXPANDLIMIT 10000
+%%INFOMETA "ADIM34 extended meta command test"
+%%IFN WIDTH >= 800
+PRINT "wide screen"
+%%ELIF WIDTH == 640
+PRINT "vga"
+%%ELSE
+PRINT "small"
+%%ENDIF
+
+DIM BUFFER(%%EVAL(WIDTH)) AS I32
+
+%%SOURCE_MAP "adim34_extended_meta.uxb:html-body"
+%%HTML_BEGIN "index.html" BODY
+<div id="app">{{TITLE}}</div>
+%%HTML_END
+
+%%CSS_RULE "#app", "color:red;"
+%%CSS_IMPORT "reset.css"
+%%HTMLIMAGE "player", "player.png"
+%%HTMLAUDIO "music", "music.ogg"
+%%MANIFEST_SET "app.name", "ADIM34 Demo"
+%%MD_SAFE ON
+%%MD_CSS "doc.css"
+%%DEPRECATED "OLD_FN", "NEW_FN"
+%%MINIFY JS ON
+%%FINGERPRINT_ASSETS ON
+%%LICENSEFILE "LICENSE.txt"

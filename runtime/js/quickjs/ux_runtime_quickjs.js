@@ -21,7 +21,8 @@
   });
 
   uxb.time.now = () => Number(nativeHost.nowMs());
-  uxb.time.timer = () => Number(nativeHost.nowMs()) / 1000;
+  // S-624: TIMER = yerel gece yarisindan beri kesirli saniye (ux_runtime_core.js ile ayni tanim).
+  uxb.time.timer = () => { const d = new Date(Number(nativeHost.nowMs())); return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000; };
   uxb.random.u32 = () => Number(nativeHost.randomU32()) >>> 0;
   uxb.random.next = () => uxb.random.u32() / 4294967296;
 

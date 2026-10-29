@@ -1,0 +1,12 @@
+EVENT VeriGeldi
+    PRINT "EVENT_BODY"
+END EVENT
+
+THREAD SensorOku
+    PRINT "THREAD_BODY"
+END THREAD
+
+SLOT
+    Kaydet 5 ON VeriGeldi
+    Isci 6 OFF SensorOku
+END SLOT

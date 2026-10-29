@@ -1,0 +1,14 @@
+' S-570 (2026-10-16): a NULL class reference is a clean error even when other objects already exist.
+' The MIR interpreter used to resolve NULL (the integer 0 the lowering stores) to heap slot 0, i.e. to the
+' FIRST object the program ever created: `k.v` read that object's field. The older neg_null_* tests allocate
+' no object first, so they never saw it.
+CLASS Box
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS Box = NEW Box()
+a.v = 9
+DIM k AS Box
+PRINT "before"
+PRINT k.v
+PRINT "unreachable"

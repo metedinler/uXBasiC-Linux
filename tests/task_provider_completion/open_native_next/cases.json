@@ -1,0 +1,11 @@
+{
+  "incdec_index_once": {
+    "output": "10\n11\n1",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  }
+}

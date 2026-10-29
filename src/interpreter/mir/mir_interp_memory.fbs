@@ -49,6 +49,124 @@ Private Function UXBMIRInterpParseVirtualBytes(ByRef rawText As String, ByRef by
     Return 1
 End Function
 
+Private Function UXBMIRInterpUnionTypeBase(ByVal typeRaw As String) As String
+    Dim t As String = UCase(Trim(typeRaw))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    Return t
+End Function
+
+Private Function UXBMIRInterpUnionIsFloat(ByVal typeRaw As String) As Integer
+    Dim t As String = UXBMIRInterpUnionTypeBase(typeRaw)
+    Return IIf(t = "F32" Or t = "SINGLE" Or t = "F64" Or t = "DOUBLE", 1, 0)
+End Function
+
+Private Function UXBMIRInterpUnionIsUnsigned(ByVal typeRaw As String) As Integer
+    Dim t As String = UXBMIRInterpUnionTypeBase(typeRaw)
+    Select Case t
+    Case "U8", "UBYTE", "U16", "USHORT", "U32", "UINTEGER", "UINT", "ULONG", "U64", "ULONGINT"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Private Function UXBMIRInterpUnionReadBits(ByRef cell As UXBMIRInterpVar, ByVal offsetValue As Integer, ByVal widthValue As Integer) As ULongInt
+    Dim bits As ULongInt = 0
+    Dim i As Integer
+    For i = 0 To widthValue - 1
+        bits = bits Or (CULngInt(cell.recordCell(offsetValue + i)) Shl (i * 8))
+    Next i
+    Return bits
+End Function
+
+Private Sub UXBMIRInterpUnionWriteBits(ByRef cell As UXBMIRInterpVar, ByVal offsetValue As Integer, ByVal widthValue As Integer, ByVal bits As ULongInt)
+    Dim i As Integer
+    For i = 0 To widthValue - 1
+        cell.recordCell(offsetValue + i) = CUByte((bits Shr (i * 8)) And &hFFULL)
+    Next i
+    If cell.recordCellBytes < offsetValue + widthValue Then cell.recordCellBytes = offsetValue + widthValue
+End Sub
+
+Private Function UXBMIRInterpUnionRead(ByRef st As UXBMIRInterpState, ByVal rootName As String, ByVal fieldName As String, ByVal offsetValue As Integer, ByVal widthValue As Integer, ByVal typeRaw As String) As UXBInterpValue
+    Dim idx As Integer = UXBMIRInterpFindVar(st, rootName)
+    If idx < 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "UNION field root not found: " & rootName)
+    If Trim(fieldName) = "" Then Return UXBInterpValueError(UXB_INTERP_ERR_MIR_OPCODE, "MIR_UNION_FIELD_LOAD field name is empty")
+    If offsetValue < 0 Or widthValue <= 0 Or widthValue > 8 Or offsetValue + widthValue > 256 Then Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "UNION field range is invalid: " & rootName & "." & fieldName)
+
+    Dim cell As UXBMIRInterpVar Ptr = st.vars(idx)
+    Dim bits As ULongInt = UXBMIRInterpUnionReadBits(*cell, offsetValue, widthValue)
+    Dim t As String = UXBMIRInterpUnionTypeBase(typeRaw)
+    If t = "F32" Or t = "SINGLE" Then
+        Dim raw(0 To 3) As UByte
+        Dim i As Integer
+        For i = 0 To 3
+            raw(i) = cell->recordCell(offsetValue + i)
+        Next i
+        Dim f32 As Single
+        Dim fp As UByte Ptr = CPtr(UByte Ptr, @f32)
+        For i = 0 To 3
+            fp[i] = raw(i)
+        Next i
+        Return UXBInterpValueFloat(CDbl(f32))
+    End If
+    If t = "F64" Or t = "DOUBLE" Then
+        Dim raw64(0 To 7) As UByte
+        Dim j As Integer
+        For j = 0 To 7
+            raw64(j) = cell->recordCell(offsetValue + j)
+        Next j
+        Dim f64 As Double
+        Dim dp As UByte Ptr = CPtr(UByte Ptr, @f64)
+        For j = 0 To 7
+            dp[j] = raw64(j)
+        Next j
+        Return UXBInterpValueFloat(f64)
+    End If
+
+    Dim resultValue As UXBInterpValue
+    If UXBMIRInterpUnionIsUnsigned(typeRaw) <> 0 Then
+        resultValue = UXBInterpValueUInt(bits)
+    Else
+        Dim signedBits As ULongInt = bits
+        If widthValue < 8 Then
+            Dim signBit As ULongInt = CULngInt(1) Shl (widthValue * 8 - 1)
+            If (signedBits And signBit) <> 0 Then signedBits = signedBits Or (&hFFFFFFFFFFFFFFFFULL Shl (widthValue * 8))
+        End If
+        resultValue = UXBInterpValueInt(CLngInt(signedBits))
+    End If
+    Return UXBInterpApplyDeclaredType(resultValue, typeRaw)
+End Function
+
+Private Function UXBMIRInterpUnionStore(ByRef st As UXBMIRInterpState, ByVal rootName As String, ByVal fieldName As String, ByRef value As UXBInterpValue, ByVal offsetValue As Integer, ByVal widthValue As Integer, ByVal typeRaw As String) As UXBInterpValue
+    Dim idx As Integer = UXBMIRInterpFindVar(st, rootName)
+    If idx < 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "UNION field root not found: " & rootName)
+    If Trim(fieldName) = "" Then Return UXBInterpValueError(UXB_INTERP_ERR_MIR_OPCODE, "MIR_UNION_FIELD_STORE field name is empty")
+    If offsetValue < 0 Or widthValue <= 0 Or widthValue > 8 Or offsetValue + widthValue > 256 Then Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "UNION field range is invalid: " & rootName & "." & fieldName)
+
+    Dim bits As ULongInt
+    Dim t As String = UXBMIRInterpUnionTypeBase(typeRaw)
+    If t = "F32" Or t = "SINGLE" Then
+        Dim f32 As Single = CSng(value.floatValue)
+        Dim fp As UByte Ptr = CPtr(UByte Ptr, @f32)
+        Dim i As Integer
+        For i = 0 To widthValue - 1
+            bits = bits Or (CULngInt(fp[i]) Shl (i * 8))
+        Next i
+    ElseIf t = "F64" Or t = "DOUBLE" Then
+        Dim f64 As Double = value.floatValue
+        Dim dp As UByte Ptr = CPtr(UByte Ptr, @f64)
+        Dim j As Integer
+        For j = 0 To widthValue - 1
+            bits = bits Or (CULngInt(dp[j]) Shl (j * 8))
+        Next j
+    ElseIf value.kind = UXB_VAL_U64 Or value.kind = UXB_VAL_PTR Or value.kind = UXB_VAL_FUNCTION Then
+        bits = value.uintValue
+    Else
+        bits = CULngInt(value.intValue)
+    End If
+    UXBMIRInterpUnionWriteBits *st.vars(idx), offsetValue, widthValue, bits
+    Return UXBInterpValueVoid()
+End Function
+
 Function UXBMIRInterpExecMemory(ByRef ins As UXBMIRInstructionRecord, ByRef ctx As UXBInterpContext, ByRef st As UXBMIRInterpState) As UXBInterpValue
     Dim op As String = UXBMIRStep4CanonicalOpcode(ins.opcode)
     If op = "MIR_VIRTUAL_INIT" Then
@@ -60,6 +178,16 @@ Function UXBMIRInterpExecMemory(ByRef ins As UXBMIRInstructionRecord, ByRef ctx 
         Dim vmemErr As String
         If VMemInit(CUInt(ramBytes), diskBytes, vmemErr) = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "VIRTUAL init failed: " & vmemErr)
         Return UXBInterpValueVoid()
+    End If
+    If op = "MIR_UNION_FIELD_LOAD" Then
+        If ins.operandCount <> 5 Or Trim(ins.resultName) = "" Then Return UXBInterpValueError(UXB_INTERP_ERR_MIR_OPCODE, "MIR_UNION_FIELD_LOAD requires root,field,offset,width,type and result")
+        Dim unionLoadValue As UXBInterpValue = UXBMIRInterpUnionRead(st, ins.operands(0), ins.operands(1), ValInt(ins.operands(2)), ValInt(ins.operands(3)), ins.operands(4))
+        Return unionLoadValue
+    End If
+    If op = "MIR_UNION_FIELD_STORE" Then
+        If ins.operandCount <> 6 Then Return UXBInterpValueError(UXB_INTERP_ERR_MIR_OPCODE, "MIR_UNION_FIELD_STORE requires root,field,value,offset,width,type")
+        Dim unionStoreValue As UXBInterpValue = UXBMIRInterpGetOperand(st, ins.operands(2))
+        Return UXBMIRInterpUnionStore(st, ins.operands(0), ins.operands(1), unionStoreValue, ValInt(ins.operands(3)), ValInt(ins.operands(4)), ins.operands(5))
     End If
     If op = "MIR_MEMORY_REF" Then
         ' S-033 follow-up: MIRLowerMemoryOperandPatch4 (memory_ref_lowering.fbs)

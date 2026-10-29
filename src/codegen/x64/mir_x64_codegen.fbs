@@ -37,7 +37,7 @@ Private Sub MIRX64EmitSourceComment(ByRef cg As MIRX64Context, ByRef ins As MIRI
     ' backslash even inside comments, swallowing the following instruction.
     Dim commentPos As Integer
     For commentPos = 1 To Len(c)
-        If Mid(c, commentPos, 1) = Chr(10) Or Mid(c, commentPos, 1) = Chr(13) Then Mid(c, commentPos, 1) = " "
+        If Asc(c, commentPos) < 32 Or Asc(c, commentPos) = 127 Then Mid(c, commentPos, 1) = " "
     Next commentPos
     c &= " ;"
     MIRX64Emit cg, c
@@ -275,6 +275,20 @@ Private Function MIRX64CollectLocals(ByRef fn As MIRFunction, ByRef cg As MIRX64
             errText = "MIR x64 emitter: local slot allocation failed"
             Return 0
         End If
+        If UCase(fn.localVarTypes(i)) = "ARRAY" Then
+            ' Descending frame slots: upper, lower, data. DATA + 8/+16
+            ' then matches the existing three-qword descriptor ABI.
+            Dim upperSlot As String = MIRX64FrameArraySlotName(fn.localVars(i), "UPPER")
+            Dim lowerSlot As String = MIRX64FrameArraySlotName(fn.localVars(i), "LOWER")
+            Dim dataSlot As String = MIRX64FrameArraySlotName(fn.localVars(i), "DATA")
+            Dim upperOff As Integer, lowerOff As Integer, dataOff As Integer
+            If MIRX64EnsureLocalSlot(cg, upperSlot, upperOff) = 0 Or MIRX64EnsureLocalSlot(cg, lowerSlot, lowerOff) = 0 Or MIRX64EnsureLocalSlot(cg, dataSlot, dataOff) = 0 Then
+                errText = "MIR x64 arrays: cannot reserve frame descriptor": Return 0
+            End If
+            If lowerOff <> dataOff + 8 Or upperOff <> dataOff + 16 Then
+                errText = "MIR x64 arrays: frame descriptor is not contiguous": Return 0
+            End If
+        End If
     Next i
 
     Dim b As Integer
@@ -335,7 +349,7 @@ Private Function MIRX64CallReturnsString(ByRef targetText As String) As Integer
     Select Case UCase(Trim(targetText))
     Case "CHR", "CHR$", "STR", "STR$", "LEFT", "LEFT$", "RIGHT", "RIGHT$", _
          "MID", "MID$", "LCASE", "LCASE$", "UCASE", "UCASE$", "LTRIM", _
-         "LTRIM$", "RTRIM", "RTRIM$", "TRIM", "TRIM$", "SPACE", "SPACE$", _
+         "LTRIM$", "RTRIM", "RTRIM$", "TRIM", "TRIM$", "SPACE", "SPACE$", "STRING", _
          "HEX", "HEX$", "OCT", "OCT$", "BIN", "BIN$", "STR_CONCAT"
         Return 1
     End Select
@@ -345,10 +359,10 @@ End Function
 Private Sub MIRX64InferLocalTypes(ByRef fn As MIRFunction, ByRef cg As MIRX64Context)
     Dim declaredIdx As Integer
     For declaredIdx = 0 To fn.paramVarCount - 1
-        If Trim(fn.paramVarTypes(declaredIdx)) <> "" Then MIRX64SetLocalType cg, fn.paramVars(declaredIdx), fn.paramVarTypes(declaredIdx)
+        If Trim(fn.paramVarTypes(declaredIdx)) <> "" Then MIRX64SetLocalType cg, fn.paramVars(declaredIdx), fn.paramVarTypes(declaredIdx), 1
     Next declaredIdx
     For declaredIdx = 0 To fn.localVarCount - 1
-        If Trim(fn.localVarTypes(declaredIdx)) <> "" Then MIRX64SetLocalType cg, fn.localVars(declaredIdx), fn.localVarTypes(declaredIdx)
+        If Trim(fn.localVarTypes(declaredIdx)) <> "" Then MIRX64SetLocalType cg, fn.localVars(declaredIdx), fn.localVarTypes(declaredIdx), 1
     Next declaredIdx
 
     Dim passNo As Integer
@@ -393,8 +407,16 @@ Private Sub MIRX64InferLocalTypes(ByRef fn As MIRFunction, ByRef cg As MIRX64Con
                 Case "FADD", "FSUB", "FMUL", "FDIV", "FNEG"
                     ' S-142b: F32 op F32 is a single-precision value (prints with the 7 digit rule); a mix with
                     ' an F64 operand or literal is F64.
-                    inferredType = "F64"
-                    If ins.operandCount >= 1 Then
+                    If UCase(Trim(ins.resultType)) = "F32" Then
+                        ' The canonical MIR result type is authoritative. A
+                        ' mixed F32/I32 expression is still F32 under the
+                        ' language promotion rule; requiring both operands to
+                        ' be F32 here widened the temporary in native x64.
+                        inferredType = "F32"
+                    Else
+                        inferredType = "F64"
+                    End If
+                    If inferredType <> "F32" And ins.operandCount >= 1 Then
                         If MIRX64OperandIsF32(cg, ins.operands(0)) <> 0 Then
                             If op = "FNEG" Then
                                 inferredType = "F32"
@@ -421,6 +443,10 @@ Private Sub MIRX64InferLocalTypes(ByRef fn As MIRFunction, ByRef cg As MIRX64Con
                 If inferredType <> "" Then
                     Dim resultGlobalIdx As Integer
                     If MIRX64FindGlobalSlot(cg, ins.result, resultGlobalIdx) <> 0 Then
+                        ' A store converts into its declared destination. An F64
+                        ' intermediate must not change F32 storage in this or a
+                        ' subsequently emitted function (S-030 numeric probe).
+                        If cg.globals(resultGlobalIdx).hasDeclaredType <> 0 Then Continue For
                         Dim normalizedGlobalType As String
                         normalizedGlobalType = UCase(Trim(inferredType))
                         If Left(normalizedGlobalType, 5) = "TYPE_" Then normalizedGlobalType = Mid(normalizedGlobalType, 6)
@@ -565,8 +591,13 @@ Private Function MIRX64EmitCallInstruction(ByRef ins As MIRIRInstruction, ByRef 
         Return MIRX64EmitRuntimePrintNewline(cg)
 
     Case "PRINT_SEP_COMMA", "PRINT_SEP_SPACE", "PRINT_SEP_SEMICOLON"
-        errText = "TR: MIR_X64_RUNTIME_LOWERING_PENDING: " & callTarget & " ayirici metaverisi eksik | EN: MIR_X64_RUNTIME_LOWERING_PENDING: " & callTarget & " separator metadata is missing"
-        Return MIRX64EmitRuntimeUnsupportedDiagnostic(cg, callTarget, "separator metadata missing")
+        If ins.operandCount <> 1 Then errText = "MIR x64: PRINT separator does not accept operands": Return 0
+        Dim separatorKind As Integer = 0
+        If callTarget = "PRINT_SEP_COMMA" Then separatorKind = 2
+        If callTarget = "PRINT_SEP_SPACE" Then separatorKind = 1
+        MIRX64Emit cg, "    mov rax, " & LTrim(Str(separatorKind))
+        MIRX64EmitRuntimeCall1Reg cg, "__uxb_rt_print_separator", "rax"
+        Return 1
 
     Case "CLS"
         Return MIRX64EmitRuntimeCls(cg)
@@ -802,29 +833,13 @@ Private Function MIRX64EmitObjectNew(ByRef ins As MIRIRInstruction, ByRef cg As 
     MIRX64Emit cg, "    mov qword [rax], r11"
     If MIRX64StoreRegToVar(cg, "rax", ins.result, errText) = 0 Then Return 0
 
-    ' Constructors execute base-to-derived.  A base constructor may consume
-    ' a prefix of NEW's explicit arguments; the derived constructor consumes
-    ' the complete NEW argument list.  The function ABI remains exact.
+    ' S-485 / S-487 (P0.2, 2026-10-17): NEW runs ONLY the constructor of the class it creates. The base constructors are called from inside the
+    ' constructor body (the front end writes `SUPER.CONSTRUCTOR(args)` as its first statement, semantic_base_ctor.fbs), so the chain is the same on
+    ' every engine. This code used to walk the bases and give each constructor a prefix of NEW's arguments.
     Dim ctorChain(0 To 64) As Integer
     Dim chainCount As Integer
-    Dim curIdx As Integer
-    curIdx = classIdx
-    Do While curIdx >= 0
-        If chainCount >= 65 Then
-            errText = "MIR x64 OBJECT_NEW constructor hierarchy is too deep for " & className
-            Return 0
-        End If
-        ctorChain(chainCount) = curIdx
-        chainCount += 1
-        Dim baseName As String
-        baseName = UCase(Trim(cg.modulePtr->vtableClassBaseNames(curIdx)))
-        If baseName = "" Then Exit Do
-        curIdx = MIRX64FindOopClassIndex(cg, baseName)
-        If curIdx < 0 Then
-            errText = "MIR x64 OBJECT_NEW base class metadata is missing: " & baseName
-            Return 0
-        End If
-    Loop
+    ctorChain(0) = classIdx
+    chainCount = 1
 
     Dim ci As Integer
     For ci = chainCount - 1 To 0 Step -1
@@ -859,6 +874,40 @@ Private Function MIRX64EmitObjectNew(ByRef ins As MIRIRInstruction, ByRef cg As 
     MIRX64Emit cg, allocDone & ":"
     Return 1
 End Function
+
+' %%NOZEROVARS ON: 1 when the DIM of this local may leave the slot untouched. Only a declared plain numeric local qualifies;
+' strings, references and arrays keep their zero start because their cleanup and null checks rely on it.
+Private Function MIRX64DimMayKeepStackValue(ByRef cg As MIRX64Context, ByRef nameText As String) As Integer
+    If gLastPreprocessResult.noZeroVars = 0 Then Return 0
+    Dim slotIdx As Integer
+    If MIRX64FindLocalIndex(cg, nameText, slotIdx) = 0 Then Return 0
+    If cg.locals(slotIdx).isByRef <> 0 Or cg.locals(slotIdx).hasDeclaredType = 0 Then Return 0
+    If MIRX64IsOwnedStringSlotName(cg, cg.locals(slotIdx).nameText) <> 0 Then Return 0
+    Dim slotType As String = UCase(Trim(cg.locals(slotIdx).typeName))
+    If Left(slotType, 5) = "TYPE_" Then slotType = Mid(slotType, 6)
+    Select Case slotType
+    Case "I8", "I16", "I32", "I64", "U8", "U16", "U32", "U64", "F32", "F64", "BOOLEAN", "BOOL"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' %%SECSTACK ON: before the routine returns every local slot is cleared (immediate stores only, so rax / xmm0 keep the result).
+' The callee-saved register slots are skipped: they are restored right after.
+Private Sub MIRX64EmitSecStackWipe(ByRef cg As MIRX64Context)
+    If gLastPreprocessResult.secStack = 0 Then Exit Sub
+    Dim wipeIdx As Integer
+    For wipeIdx = 0 To cg.localCount - 1
+        If InStr(UCase(cg.locals(wipeIdx).nameText), "ABI_SAVE_") > 0 Then Continue For
+        ' a slot must lie wholly below rbp (saved rbp and the return address sit above it)
+        If cg.locals(wipeIdx).offset >= 0 Or cg.locals(wipeIdx).offset + cg.locals(wipeIdx).sizeBytes > 0 Then Continue For
+        Dim wipeAt As Integer = 0
+        Do While wipeAt + 8 <= cg.locals(wipeIdx).sizeBytes
+            MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(cg.locals(wipeIdx).offset + wipeAt) & ", 0"
+            wipeAt += 8
+        Loop
+    Next wipeIdx
+End Sub
 
 Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
     MIRX64EmitSourceComment cg, ins
@@ -910,6 +959,8 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
         If ins.operandCount >= 3 Then
             Return MIRX64EmitDimArray(ins, cg, errText)
         End If
+        ' %%NOZEROVARS ON: a declared plain numeric local keeps whatever the stack slot held; the program must assign it before reading it
+        If MIRX64DimMayKeepStackValue(cg, ins.operands(0)) <> 0 Then Return 1
         Return MIRX64StoreImmediateToVar(cg, ins.operands(0), "0", errText)
 
     Case "REDIM"
@@ -942,6 +993,8 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             errText = "MIR x64 emitter: LOAD_CONST requires operand and result"
             Return 0
         End If
+        ' %%NOZEROVARS ON: the lowering marked the zero start of a plain numeric local; native code leaves it out
+        If Left(Trim(ins.result), 6) = "__nzv_" And gLastPreprocessResult.noZeroVars <> 0 Then Return 1
         If MIRX64TypeIsFloat(ins.resultType) <> 0 Or MIRX64IsFloatLiteral(ins.operands(0)) <> 0 Then
             If MIRX64IsFloatLiteral(ins.operands(0)) <> 0 Then
                 If MIRX64LoadFloatOperandToXmm(cg, ins.operands(0), "xmm0", errText) = 0 Then Return 0
@@ -964,6 +1017,13 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             MIRX64EmitRuntimeCall0 cg, "__uxb_rt_exc_active"
             Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
         End If
+        ' A widened F32 temporary and a packed F32 variable have different
+        ' representations. Copy values through the shared typed FP helpers,
+        ' rather than copying the low half of a double into a single slot.
+        If MIRX64TypeIsFloat(MIRX64ResolvedOperandType(cg, ins.result)) <> 0 Then
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(0), "xmm0", errText) = 0 Then Return 0
+            Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
+        End If
         If MIRX64LoadOperandToReg(cg, ins.operands(0), "rax", errText) = 0 Then Return 0
         Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
 
@@ -972,6 +1032,7 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             errText = "MIR x64 emitter: STORE_VAR requires source and target"
             Return 0
         End If
+        If Left(Trim(ins.operands(0)), 6) = "__nzv_" And gLastPreprocessResult.noZeroVars <> 0 Then Return 1
         Dim excTarget As String = UCase(Trim(ins.result))
         If excTarget = "__MIR_EXC_ACTIVE" Then
             If MIRX64LoadOperandToReg(cg, ins.operands(0), "r10", errText) = 0 Then Return 0
@@ -1028,6 +1089,11 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             errText = "MIR x64 emitter: NEG requires operand and result"
             Return 0
         End If
+        ' The canonical MIR result type is authoritative.  In particular,
+        ' unary arithmetic over BOOLEAN is I64 even though its operand is a
+        ' comparison; do not let an earlier temp inference keep the result in
+        ' a BOOL slot and normalize 1 back to -1 (S-505).
+        If Trim(ins.resultType) <> "" Then MIRX64SetLocalType cg, ins.result, ins.resultType
         If MIRX64LoadOperandToReg(cg, ins.operands(0), "rax", errText) = 0 Then Return 0
         MIRX64Emit cg, "    neg rax"
         Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
@@ -1109,8 +1175,30 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             errText = "MIR x64 emitter: " & op & " requires 2 operands and result"
             Return 0
         End If
+        Dim rotateResultOffset As Integer
+        If MIRX64EnsureLocalSlot(cg, ins.result, rotateResultOffset) = 0 Then
+            errText = "MIR x64 emitter: cannot allocate " & op & " result slot"
+            Return 0
+        End If
+        If Trim(ins.resultType) <> "" Then MIRX64SetLocalType cg, ins.result, ins.resultType
         If MIRX64EmitLoadPairToRaxR10(cg, ins.operands(0), ins.operands(1), errText) = 0 Then Return 0
-        If MIRX64EmitSafeShiftRotateI64(cg, op, errText) = 0 Then Return 0
+        If op = "ROL" Or op = "ROR" Then
+            Dim rotateType As String = UCase(Trim(UXBStep3StorageType(ins.resultType)))
+            If Left(rotateType, 5) = "TYPE_" Then rotateType = Mid(rotateType, 6)
+            MIRX64Emit cg, "    mov ecx, r10d"
+            Select Case rotateType
+            Case "U8", "UBYTE", "I8", "BYTE", "SBYTE"
+                If op = "ROL" Then MIRX64Emit cg, "    rol al, cl" Else MIRX64Emit cg, "    ror al, cl"
+            Case "U16", "USHORT", "I16", "SHORT"
+                If op = "ROL" Then MIRX64Emit cg, "    rol ax, cl" Else MIRX64Emit cg, "    ror ax, cl"
+            Case "U32", "UINTEGER", "UINT", "ULONG", "I32", "INTEGER", "INT", "LONG"
+                If op = "ROL" Then MIRX64Emit cg, "    rol eax, cl" Else MIRX64Emit cg, "    ror eax, cl"
+            Case Else
+                If op = "ROL" Then MIRX64Emit cg, "    rol rax, cl" Else MIRX64Emit cg, "    ror rax, cl"
+            End Select
+        Else
+            If MIRX64EmitSafeShiftRotateI64(cg, op, errText) = 0 Then Return 0
+        End If
         Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
 
     Case "LABEL"
@@ -1155,6 +1243,22 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
         End If
         ' Iptal denetimi kosul yuklenmeden ONCE (cagri rax'i ve bayraklari bozar).
         MIRX64EmitTaskCancelPointIfBackEdge cg, targetCond
+
+        If MIRX64OperandIsFloat(cg, ins.operands(0)) <> 0 Then
+            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(0), "xmm0", errText) = 0 Then Return 0
+            MIRX64Emit cg, "    xorpd xmm1, xmm1"
+            MIRX64Emit cg, "    ucomisd xmm0, xmm1"
+            If op = "JZ" Then
+                Dim nonzeroLabel As String = MIRX64NextLabel(cg, "float_condition_nonzero")
+                MIRX64Emit cg, "    jp " & nonzeroLabel
+                MIRX64Emit cg, "    je " & MIRX64BlockLabel(targetCond)
+                MIRX64Emit cg, nonzeroLabel & ":"
+            Else
+                MIRX64Emit cg, "    jp " & MIRX64BlockLabel(targetCond)
+                MIRX64Emit cg, "    jne " & MIRX64BlockLabel(targetCond)
+            End If
+            Return 1
+        End If
 
         If MIRX64LoadOperandToReg(cg, ins.operands(0), "rax", errText) = 0 Then Return 0
 
@@ -1205,6 +1309,12 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
 
     Case "STORE_FIELD", "FIELD_SET"
         Return MIRX64EmitStoreFieldSynthetic(ins, cg, errText)
+
+    Case "UNION_FIELD_LOAD"
+        Return MIRX64EmitLoadUnionFieldSynthetic(ins, cg, errText)
+
+    Case "UNION_FIELD_STORE"
+        Return MIRX64EmitStoreUnionFieldSynthetic(ins, cg, errText)
 
     Case "METHOD_CALL"
         Return MIRX64EmitMethodCallSynthetic(ins, cg, errText)
@@ -1302,29 +1412,41 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             errText = "MIR x64 emitter: DELETE_OBJECT requires object operand"
             Return 0
         End If
+        ' S-574 (2026-10-17): DELETE destroys by the REAL class (the destructor thunk the object's vtable carries at [vtable-8] runs the
+        ' chain derived-to-base), exactly once, and keeps the block: the header word (the vtable pointer) is zeroed instead of calling free. A
+        ' reference that survived the DELETE (an alias, a field, a parameter) then hits the "null object reference" check on the next
+        ' field access or method call; with free() it read recycled memory, and a second DELETE through an alias freed the block twice.
+        ' An empty reference and an already destroyed object (header 0) are left alone. S-616: while the destructor chain runs the header holds 1
+        ' (swapped in atomically from the vtable pointer), so a DELETE of the same object from inside its own destructor (through a global alias)
+        ' finds 1 and does nothing instead of starting the chain again without end.
         If MIRX64LoadOperandToReg(cg, ins.operands(0), "rcx", errText) = 0 Then Return 0
-        MIRX64EmitExtern cg, "extern free"
         Dim delDone As String
         delDone = MIRX64NextLabel(cg, "delete_object_done")
         Dim dtorSkip As String
         dtorSkip = MIRX64NextLabel(cg, "delete_object_dtor_skip")
         MIRX64Emit cg, "    test rcx, rcx"
         MIRX64Emit cg, "    jz " & delDone
-        MIRX64Emit cg, "    mov r11, qword [rcx]"
-        MIRX64Emit cg, "    test r11, r11"
-        MIRX64Emit cg, "    jz " & dtorSkip
-        MIRX64Emit cg, "    mov r10, qword [r11-8]"
+        MIRX64Emit cg, "    mov rax, qword [rcx]"
+        MIRX64Emit cg, "    cmp rax, 1"
+        MIRX64Emit cg, "    jbe " & delDone
+        MIRX64Emit cg, "    mov r8, rcx"
+        MIRX64Emit cg, "    mov edx, 1"
+        MIRX64Emit cg, "    lock cmpxchg qword [rcx], rdx"
+        MIRX64Emit cg, "    jne " & delDone
+        MIRX64Emit cg, "    mov r10, qword [rax-8]"
         MIRX64Emit cg, "    test r10, r10"
         MIRX64Emit cg, "    jz " & dtorSkip
-        MIRX64Emit cg, "    sub rsp, 32"
+        ' The object address is kept in the call frame across the destructor call: the VARIABLE that named it cannot be reloaded afterwards - the
+        ' destructor may have emptied it itself (a DELETE of the same variable inside the destructor), and a write through the emptied variable
+        ' would be a write to address 0.
+        MIRX64Emit cg, "    mov rcx, r8"
+        MIRX64Emit cg, "    sub rsp, 48"
+        MIRX64Emit cg, "    mov qword [rsp+32], r8"
         MIRX64Emit cg, "    call r10"
-        MIRX64Emit cg, "    add rsp, 32"
+        MIRX64Emit cg, "    mov r8, qword [rsp+32]"
+        MIRX64Emit cg, "    add rsp, 48"
         MIRX64Emit cg, dtorSkip & ":"
-        ' Reload the original object because the destructor call may clobber RCX/RAX.
-        If MIRX64LoadOperandToReg(cg, ins.operands(0), "rcx", errText) = 0 Then Return 0
-        MIRX64Emit cg, "    sub rsp, 32"
-        MIRX64Emit cg, "    call free"
-        MIRX64Emit cg, "    add rsp, 32"
+        MIRX64Emit cg, "    mov qword [r8], 0"
         MIRX64Emit cg, delDone & ":"
         Return 1
 
@@ -1420,7 +1542,26 @@ Private Function MIRX64EmitInstruction(ByRef ins As MIRIRInstruction, ByRef cg A
             If UCase(Trim(ins.operands(0))) = "__RESULT__" Then isBareReturn = 1
         End If
         If cg.inGosubRegion <> 0 And isBareReturn <> 0 Then
+            ' S-537: ana programda bu RETURN'un bir GOSUB'tan gelmesi gerekir: etkin GOSUB yoksa (ornegin GOSUB govdesine
+            ' dusme ile girildiyse) hardware yigininda gecerli bir donus adresi yoktur -> acik calisma ani hatasi.
+            If UCase(Trim(cg.currentFunctionName)) = "MAIN" Then
+                MIRX64EnsureGosubDepthSlot cg
+                Dim gosubRetOkLabel As String
+                gosubRetOkLabel = MIRX64NextLabel(cg, "gosubret_ok")
+                MIRX64Emit cg, "    cmp qword [rel __uxb_gosub_depth], 0"
+                MIRX64Emit cg, "    jne " & gosubRetOkLabel
+                If MIRX64EmitCollectionErrorExit(cg, "TR: GOSUB olmadan RETURN (9301) | EN: RETURN used without GOSUB (9301)", errText) = 0 Then Return 0
+                MIRX64Emit cg, gosubRetOkLabel & ":"
+                MIRX64Emit cg, "    dec qword [rel __uxb_gosub_depth]"
+            End If
             MIRX64Emit cg, "    ret"
+            Return 1
+        End If
+        ' S-537: ana programda (MAIN) bir GOSUB bolgesinin disindaki kaynak RETURN'u hicbir GOSUB'tan donmez; programi sessizce
+        ' bitirmek yerine acik calisma ani hatasidir (AST, MIR, JS ve WASM ile ayni ileti). Ortuk program sonu RET'i
+        ' kaynak RETURN degildir (ins.bareReturn = 0).
+        If ins.bareReturn <> 0 And UCase(Trim(cg.currentFunctionName)) = "MAIN" Then
+            If MIRX64EmitCollectionErrorExit(cg, "TR: GOSUB olmadan RETURN (9301) | EN: RETURN used without GOSUB (9301)", errText) = 0 Then Return 0
             Return 1
         End If
         If ins.operandCount > 0 And Trim(ins.operands(0)) <> "" Then
@@ -1561,6 +1702,18 @@ End Function
 Private Function MIRX64EmitFunction(ByRef fn As MIRFunction, ByVal fnIdx As Integer, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
     MIRX64BeginFunctionState cg, fn.name, fnIdx
     If MIRX64CollectLocals(fn, cg, errText) = 0 Then Return 0
+    ' Collection/array emitters use nonvolatile registers as scratch. Every
+    ' generated function must preserve them for native callers and callbacks.
+    Dim abiSavedRegs(0 To 5) As String = {"rsi", "rdi", "r12", "r13", "r14", "r15"}
+    Dim abiSavedOffsets(0 To 5) As Integer
+    For abiRegIdx As Integer = 0 To 5
+        Dim abiSlotName As String = MIRX64NextLabel(cg, "ABI_SAVE_" & abiSavedRegs(abiRegIdx))
+        If MIRX64EnsureLocalSlot(cg, abiSlotName, abiSavedOffsets(abiRegIdx)) = 0 Then
+            errText = "MIR x64: cannot reserve callee-saved register slot"
+            Return 0
+        End If
+    Next abiRegIdx
+    cg.stackBytes = MIRX64StackBytesForLocals(cg.localCount)
     MIRX64InferLocalTypes fn, cg
     If MIRX64RegisterParamArrays(cg, fn, errText) = 0 Then Return 0
 
@@ -1569,7 +1722,41 @@ Private Function MIRX64EmitFunction(ByRef fn As MIRFunction, ByVal fnIdx As Inte
     MIRX64Emit cg, "    mov rbp, rsp"
     MIRX64Emit cg, "    push rbx"
     MIRX64EmitRegisterDisciplineComment cg
+    ' Commit each guard page before descending farther into a large frame.
+    ' A single large SUB can jump over Windows' stack guard and fault later.
+    Dim frameRemaining As Integer = cg.stackBytes
+    If frameRemaining > 0 Then MIRX64Emit cg, "    mov r11, rsp"
+    Do While frameRemaining >= 4096
+        MIRX64Emit cg, "    sub r11, 4096"
+        MIRX64Emit cg, "    test byte [r11], 0"
+        frameRemaining -= 4096
+    Loop
+    If frameRemaining > 0 Then
+        MIRX64Emit cg, "    sub r11, " & MIRX64ToStr(frameRemaining)
+        MIRX64Emit cg, "    test byte [r11], 0"
+    End If
     If cg.stackBytes > 0 Then MIRX64Emit cg, "    sub rsp, " & MIRX64ToStr(cg.stackBytes)
+    For abiRegIdx As Integer = 0 To 5
+        MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(abiSavedOffsets(abiRegIdx)) & ", " & abiSavedRegs(abiRegIdx)
+    Next abiRegIdx
+
+    ' Owned STRING temporaries can be assigned conditionally or in a loop.
+    ' Start every frame with empty slots before parameter setup and cleanup.
+    For textLocal As Integer = 0 To cg.localCount - 1
+        If MIRX64IsOwnedStringSlotName(cg, cg.locals(textLocal).nameText) <> 0 Then
+            MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(cg.locals(textLocal).offset) & ", 0"
+        End If
+    Next textLocal
+
+    For arrayLocal As Integer = 0 To fn.localVarCount - 1
+        If UCase(fn.localVarTypes(arrayLocal)) <> "ARRAY" Then Continue For
+        Dim dataOff As Integer, dataName As String = MIRX64FrameArraySlotName(fn.localVars(arrayLocal), "DATA")
+        If MIRX64FindLocalOffset(cg, dataName, dataOff) <> 0 Then
+            MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(dataOff) & ", 0"
+            MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(dataOff + 8) & ", 0"
+            MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(dataOff + 16) & ", -1"
+        End If
+    Next arrayLocal
 
     Dim excInitOffset As Integer
     If MIRX64FindLocalOffset(cg, "__mir_exc_active", excInitOffset) <> 0 Then
@@ -1577,6 +1764,9 @@ Private Function MIRX64EmitFunction(ByRef fn As MIRFunction, ByVal fnIdx As Inte
     End If
 
     If UCase(Trim(fn.name)) = "MAIN" And cg.modulePtr <> 0 Then
+        MIRX64Emit cg, "    sub rsp, 32"
+        MIRX64Emit cg, "    call __uxb_mir_register_literal_spans"
+        MIRX64Emit cg, "    add rsp, 32"
         If MIRX64ModuleHasFfiCalls(*cg.modulePtr) <> 0 Then
             MIRX64EmitExtern cg, "extern __uxb_ffi_resolve_all"
             MIRX64Emit cg, "    sub rsp, 32"
@@ -1618,6 +1808,19 @@ Private Function MIRX64EmitFunction(ByRef fn As MIRFunction, ByVal fnIdx As Inte
             End If
         Next pi
     End If
+
+    ' Control-flow and exception passes may place a REDIM's block before
+    ' its DIM's block in physical emission order. Declare live descriptors
+    ' first; storage allocation still happens only when DIM executes.
+    For declarationBlock As Integer = 0 To fn.blockCount - 1
+        For declarationIndex As Integer = 0 To fn.blocks(declarationBlock).instructionCount - 1
+            Dim declaration As MIRIRInstruction = fn.blocks(declarationBlock).instructions(declarationIndex)
+            If MIRX64CanonicalEmitterOpcode(declaration.opcode) <> "DIM" Then Continue For
+            If declaration.operandCount < 6 OrElse declaration.operands(5) <> "LIVE_DESCRIPTOR" Then Continue For
+            Dim arraySlot As Integer
+            If MIRX64EnsureArraySlot(cg, declaration.operands(0), 0, 0, arraySlot, errText, ValInt(declaration.operands(3)), declaration.operands(4), 1) = 0 Then Return 0
+        Next declarationIndex
+    Next declarationBlock
 
     Dim b As Integer
     For b = 0 To fn.blockCount - 1
@@ -1694,6 +1897,10 @@ Private Function MIRX64EmitFunction(ByRef fn As MIRFunction, ByVal fnIdx As Inte
             MIRX64Emit cg, ".mir_memory_status_ok_" & LTrim(Str(cg.currentFunctionIndex)) & ":"
         End If
     End If
+    MIRX64EmitSecStackWipe cg
+    For abiRegIdx As Integer = 0 To 5
+        MIRX64Emit cg, "    mov " & abiSavedRegs(abiRegIdx) & ", qword " & MIRX64RbpRef(abiSavedOffsets(abiRegIdx))
+    Next abiRegIdx
     If cg.stackBytes > 0 Then MIRX64Emit cg, "    add rsp, " & MIRX64ToStr(cg.stackBytes)
     MIRX64Emit cg, "    pop rbx"
     MIRX64Emit cg, "    pop rbp"
@@ -1748,6 +1955,24 @@ Function MIRX64EmitModule(ByRef m As MIRModule, ByRef outPath As String, ByRef e
         If MIRX64EmitTaskCallbacks(m, cg, errText) = 0 Then Return 0
     End If
     If MIRX64EmitSpawnThunks(m, cg, errText) = 0 Then Return 0
+
+    Dim literalCount As Integer = 0, literalPairs As String
+    For literalIndex As Integer = 0 To cg.stringCount - 1
+        If InStr(cg.stringLiterals(literalIndex).rawText, Chr(0)) = 0 Then Continue For
+        literalPairs &= "    dq " & cg.stringLiterals(literalIndex).labelText & ", " & LTrim(Str(Len(cg.stringLiterals(literalIndex).rawText))) & Chr(10)
+        literalCount += 1
+    Next literalIndex
+    MIRX64Emit cg, "__uxb_mir_register_literal_spans:"
+    If literalCount > 0 Then
+        MIRX64EmitData cg, "__uxb_mir_literal_spans:"
+        cg.dataText &= literalPairs
+        MIRX64EmitRuntimeExtern cg, "__uxb_rt_register_string_literals"
+        MIRX64Emit cg, "    lea rcx, [rel __uxb_mir_literal_spans]"
+        MIRX64Emit cg, "    mov rdx, " & LTrim(Str(literalCount))
+        MIRX64Emit cg, "    jmp __uxb_rt_register_string_literals"
+    Else
+        MIRX64Emit cg, "    ret"
+    End If
 
     Dim content As String
     ' memoryModeHelperText (NATIVE/VIRTUAL PEEK/POKE/MEMCOPY/MEMFILL support

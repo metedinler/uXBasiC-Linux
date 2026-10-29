@@ -1,0 +1,9 @@
+THREAT Worker
+    PRINT "bad"
+END THREAT
+
+PARALLEL Job
+    PRINT "bad"
+END PARALLEL
+
+SIHIRLIMETOT <.bad.>

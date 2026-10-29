@@ -1,0 +1,7 @@
+CLASS Cell
+ PUBLIC
+ value AS I32
+END CLASS
+DIM n AS I32 = 0
+DIM a(1 TO n, 0 TO 2) AS Cell
+PRINT "unreachable"

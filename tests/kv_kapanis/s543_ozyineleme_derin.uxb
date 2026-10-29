@@ -1,0 +1,8 @@
+' S-543 / G-YORDAM-8: derin (ama sinirlar icinde) ozyineleme altı yolda ayni sonucu verir. Yorumlayicilar 1 MB ana yigin yuzunden
+' MIR'de derinlik 50, AST'de ~200 civarinda iletisiz erisim ihlaliyle dusuyordu. T(900) = 900*901/2 = 405450.
+FUNCTION T(n AS I64) AS I64
+    IF n = 0 THEN RETURN 0
+    RETURN n + T(n - 1)
+END FUNCTION
+PRINT T(900)
+PRINT T(60)

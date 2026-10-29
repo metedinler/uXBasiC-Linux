@@ -1,0 +1,7 @@
+' S-329 koruma (gorunurluk): dizi parametresi v(i) olarak okunur.
+SUB Yaz(v AS I32[])
+    PRINT v(1)
+END SUB
+DIM a(3) AS I32
+a(1) = 4
+Yaz(a)

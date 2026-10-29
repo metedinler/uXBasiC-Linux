@@ -27,7 +27,7 @@ End Sub
 Function UXBFFITargetIsNative(ByRef targetText As String) As Integer
     Dim t As String
     t = UCase(Trim(targetText))
-    If t = "NATIVE" Or t = "X64" Or t = "X86" Or t = "WIN64" Or t = "WIN32" Then Return 1
+    If t = "NATIVE" Or t = "X64" Or t = "WIN64" Then Return 1
     Return 0
 End Function
 

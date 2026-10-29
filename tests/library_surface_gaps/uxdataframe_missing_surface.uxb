@@ -1,0 +1,22 @@
+INCLUDE "include/modules/uxdataframe.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxdataframe.Describe(0)
+        PRINT uxdataframe.Exec(0, "")
+        PRINT uxdataframe.Filter(0, "")
+        PRINT uxdataframe.GroupMean(0, "", "")
+        PRINT uxdataframe.Head(0, 0)
+        PRINT uxdataframe.JoinInner(0, 0, "", "")
+        PRINT uxdataframe.LastError(0)
+        PRINT uxdataframe.LoadParquet("")
+        PRINT uxdataframe.MatrixDataPtr(0)
+        PRINT uxdataframe.OpenDatabase("")
+        PRINT uxdataframe.OpenMemory()
+        PRINT uxdataframe.OrderBy(0, "")
+        PRINT uxdataframe.Query(0, "")
+        PRINT uxdataframe.ToCSV(0, "")
+        PRINT uxdataframe.ToParquet(0, "")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXDATAFRAME"
+END MAIN

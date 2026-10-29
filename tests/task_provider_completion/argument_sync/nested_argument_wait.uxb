@@ -1,0 +1,31 @@
+' S-030/T2.6: both real workers rendezvous in a user call. The shared read
+' belongs AFTER that call and under the same statement lock as the write.
+DIM total AS I64 = 0
+FUNCTION WaitPeer(value AS I64, ownEvent AS I64, otherEvent AS I64) AS I64
+    DIM rc AS I32
+    UNSAFE
+        CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", ownEvent)
+        rc = CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", otherEvent, 5000)
+    END UNSAFE
+    IF rc <> 0 THEN RETURN -100
+    RETURN value + 1
+END FUNCTION
+FUNCTION Identity(value AS I64) AS I64
+    RETURN value
+END FUNCTION
+FUNCTION ValueOne() AS I64
+    RETURN 1
+END FUNCTION
+THREAD Increment(ownEvent AS I64, otherEvent AS I64) AS I32
+    total = total + ValueOne() + WaitPeer(Identity(total + total), ownEvent, otherEvent)
+    RETURN 1
+END THREAD
+DIM a AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM b AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM first AS TASK OF I32 = SPAWN Increment(a, b)
+DIM second AS TASK OF I32 = SPAWN Increment(b, a)
+PRINT first.JOIN()
+PRINT second.JOIN()
+PRINT total
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", a)
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", b)

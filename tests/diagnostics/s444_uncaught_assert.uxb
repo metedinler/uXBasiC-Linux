@@ -1,0 +1,3 @@
+PRINT "once"
+ASSERT 1 = 2, "bozuk"
+PRINT "sonra"

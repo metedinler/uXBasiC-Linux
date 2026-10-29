@@ -20,6 +20,30 @@ Function ParseIfStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Integer
         inlineStmt = ParseSimpleStatement(ps)
         If inlineStmt = -1 Then Return -1
         ASTAddChild ps.ast, ifNode, inlineStmt
+
+        ' S-083: single-line ELSE belongs to this IF (was parsed as a standalone statement).
+        If IsKw(ps, "ELSE") Then
+            Dim inlineElseTok As Token
+            inlineElseTok = CurToken(ps)
+            AdvanceTok ps
+
+            Dim inlineElseNode As Integer
+            inlineElseNode = MakeNodeFromToken(ps, "ELSE_PART", "", "", inlineElseTok)
+
+            Dim afterElse As Token
+            afterElse = CurToken(ps)
+            If afterElse.kind = "EOL" Or afterElse.kind = "EOF" Or (afterElse.kind = "OP" And afterElse.lexeme = ":") Then
+                ps.lastError = "single-line IF: statement expected after ELSE"
+                Return -1
+            End If
+
+            Dim inlineElseStmt As Integer
+            inlineElseStmt = ParseSimpleStatement(ps)
+            If inlineElseStmt = -1 Then Return -1
+            ASTAddChild ps.ast, inlineElseNode, inlineElseStmt
+            ASTAddChild ps.ast, ifNode, inlineElseNode
+        End If
+
         Return ifNode
     End If
 
@@ -173,6 +197,17 @@ Function ParseSelectStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Int
                     Dim caseExpr As Integer
                     caseExpr = ParseExpression(ps)
                     If caseExpr = -1 Then Return -1
+                    If MatchKeyword(ps, "TO") <> 0 Then
+                        Dim caseUpper As Integer = ParseExpression(ps)
+                        If caseUpper = -1 Then
+                            ps.lastError = "CASE TO: upper bound expected"
+                            Return -1
+                        End If
+                        Dim caseRange As Integer = MakeNodeFromToken(ps, "CASE_RANGE_VALUE", "", "TO", caseTok)
+                        ps.ast.nodes(caseRange).left = caseExpr
+                        ps.ast.nodes(caseRange).right = caseUpper
+                        caseExpr = caseRange
+                    End If
                     ASTAddChild ps.ast, caseNode, caseExpr
                     If MatchOp(ps, ",") = 0 Then Exit Do
                 Loop
@@ -573,7 +608,9 @@ End Function
 
 Function ParseExitStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Integer
     Dim exitNode As Integer
-    exitNode = MakeNodeFromToken(ps, "EXIT_STMT", "", "", firstTok)
+    Dim isContinue As Integer = IIf(UCase(firstTok.lexeme) = "CONTINUE", 1, 0)
+    Dim flowWord As String = IIf(isContinue <> 0, "CONTINUE", "EXIT")
+    exitNode = MakeNodeFromToken(ps, IIf(isContinue <> 0, "CONTINUE_STMT", "EXIT_STMT"), "", "", firstTok)
 
     Dim tk As Token
     tk = CurToken(ps)
@@ -582,12 +619,24 @@ Function ParseExitStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Integ
     If tk.kind = "KEYWORD" Then
         Dim modeText As String
         modeText = UCase(tk.lexeme)
-        If modeText = "FOR" Or modeText = "DO" Or modeText = "IF" Then
+        If (modeText = "SUB" Or modeText = "FUNCTION") And isContinue = 0 Then
+            AdvanceTok ps
+            If IsFlowStmtTerminator(CurToken(ps)) = 0 Then
+                ps.lastError = "EXIT: unexpected token after EXIT " & modeText
+                Return -1
+            End If
+            ' S-710: one routine-return representation. All engines reuse
+            ' RETURN's FINALLY, lock unwind and managed-return lifetime path.
+            ps.ast.nodes(exitNode).kind = "RETURN_STMT"
+            ps.ast.nodes(exitNode).op = modeText
+            Return exitNode
+        End If
+        If modeText = "FOR" Or modeText = "DO" Or modeText = "WHILE" Or (modeText = "IF" And isContinue = 0) Then
             ps.ast.nodes(exitNode).op = modeText
             AdvanceTok ps
 
             If IsFlowStmtTerminator(CurToken(ps)) = 0 Then
-                ps.lastError = "EXIT: unexpected token after EXIT " & modeText
+                ps.lastError = flowWord & ": unexpected token after " & flowWord & " " & modeText
                 Return -1
             End If
 
@@ -595,7 +644,7 @@ Function ParseExitStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Integ
         End If
     End If
 
-    ps.lastError = "EXIT: expected FOR, DO, IF, or statement end"
+    ps.lastError = flowWord & ": expected FOR, DO, WHILE, " & IIf(isContinue <> 0, "", "IF, SUB, FUNCTION, ") & "or statement end"
     Return -1
 End Function
 

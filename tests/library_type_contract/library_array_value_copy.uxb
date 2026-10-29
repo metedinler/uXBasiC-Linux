@@ -1,0 +1,11 @@
+LIBTYPE "owned_text.library_type.json"
+MAIN
+    DIM a AS TEXT_VALUE
+    DIM values(0 TO 0) AS TEXT_VALUE
+    a = TEXT_VALUE.CONSTRUCT("hello")
+    values(0) = a
+    a = TEXT_VALUE.NORMALIZE(a)
+    PRINT TEXT_VALUE.TOSTRING(values(0))
+    values(0) = TEXT_VALUE.NORMALIZE(values(0))
+    PRINT TEXT_VALUE.TOSTRING(values(0))
+END MAIN

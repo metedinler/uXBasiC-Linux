@@ -1,0 +1,11 @@
+NAMESPACE CORE
+MODULE IO
+ALIAS GT = CALL(DLL, "kernel32.dll", "GetTickCount", I32)
+END MODULE
+END NAMESPACE
+
+MAIN
+a = 77
+CALL(DLL, "kernel32.dll", "GetTickCount", I32, a)
+PRINT a
+END MAIN

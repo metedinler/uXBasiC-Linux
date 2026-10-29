@@ -1,0 +1,7 @@
+CLASS Kutu
+    PUBLIC
+    n AS I32
+END CLASS
+DIM a(0 TO 1, 0 TO 1) AS Kutu
+DIM k AS Kutu = a(1)
+PRINT 99

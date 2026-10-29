@@ -1,0 +1,9 @@
+FUNCTION CollectionCallback() AS I64
+    DIM values AS LIST
+    LISTADD(values, 7)
+    LISTSET(values, 0, 8)
+    RETURN I64(0)
+END FUNCTION
+DIM callbackAddress AS PTR
+callbackAddress = CODEPTR(CollectionCallback)
+PRINT CALL(DLL, "C:/Users/mete/AppData/Local/Temp/uxb_consolidation_probe_h_dnii_8/callee_probe.dll", "CheckRegs", I64, CDECL, "PTR", callbackAddress)

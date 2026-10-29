@@ -16,6 +16,7 @@
 
 #include "uxb_runtime.h"
 #include "uxb_runtime_print.h"
+#include "uxb_runtime_text.h"
 
 #include <algorithm>
 #include <atomic>
@@ -158,12 +159,8 @@ void start_worker_locked();
 
 // STATUS/ERRORTEXT metin donusleri: cagiran is parcacigina ozel halka; ayni ifadede iki cagri
 // (ornek: t.STATUS + t.ERRORTEXT) birbirini ezmez. uxb_runtime_mir.cpp hold_text ile ayni kural.
-thread_local std::string tl_textRing[16];
-thread_local unsigned tl_textIndex = 0;
 const char* hold_task_text(const std::string& value) {
-    std::string& slot = tl_textRing[tl_textIndex++ % 16];
-    slot = value;
-    return slot.c_str();
+    return uxb::hold_text_span(value);
 }
 
 const char* state_name(int s) {
@@ -181,7 +178,7 @@ bool is_finished(int s) { return s == TS_DONE || s == TS_ERROR || s == TS_CANCEL
 
 [[noreturn]] void runtime_fatal(const std::string& message) {
     uxb::console_flush_current_thread();
-    std::fputs(message.c_str(), stderr);
+    std::fwrite(message.data(), 1, message.size(), stderr);
     std::fputc('\n', stderr);
     std::fflush(stderr);
     std::exit(1);
@@ -240,11 +237,13 @@ void run_task(TaskRunV2* t) {
     } catch (...) {
         failure = "native gorev ic hatasi";
     }
-    tl_current = previous;
+    // Flush under the task that owns the text and its explicit CONSOLE lock.
+    // A nested run must not flush the suspended caller's unfinished line.
+    uxb::console_finish_current_task();
     // S-146: gorev biterken (normal ya da hatayla) hala tuttugu kilitler birakilir.
     uxb::sync_release_all(t->id);
     // K9: gorevin yarim kalan satiri (PRINT x; ile biten) gorev bitiminde yazilir, baska gorevle karismaz.
-    uxb::console_flush_current_thread();
+    tl_current = previous;
 
     std::lock_guard<std::mutex> lock(g_mutex);
     if (!failure.empty() && t->errorText.empty()) t->errorText = failure;
@@ -256,7 +255,7 @@ void run_task(TaskRunV2* t) {
             // Lane sonucu isci is parcacigina ozel metin halkasinda; gorev kaydina kopyalanir.
             const char* p = nullptr;
             std::memcpy(&p, &t->resultBits, sizeof(p));
-            t->resultText = p ? std::string(p) : std::string();
+            t->resultText = uxb::copy_text(p);
         }
         t->state = TS_DONE;
     }
@@ -363,7 +362,7 @@ std::string failure_message_locked(TaskRunV2* t) {
 
 int64_t result_value_locked(TaskRunV2* t) {
     if (t->resultKind == kValueString) {
-        const char* p = t->resultText.c_str();   // gorev kaydinin omru boyunca (surec) gecerli
+        const char* p = uxb::hold_text_span(t->resultText);
         int64_t bits = 0;
         std::memcpy(&bits, &p, sizeof(p));
         return bits;
@@ -389,7 +388,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_spawn(void* thunk, const void* arg
         if ((stringArgMask >> i) & 1) {
             const char* p = nullptr;
             std::memcpy(&p, t->block.data() + 8 + 8 * i, sizeof(p));
-            t->argTexts.emplace_back(p ? p : "");
+            t->argTexts.emplace_back(uxb::copy_text(p));
         } else {
             t->argTexts.emplace_back();
         }
@@ -397,6 +396,9 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_spawn(void* thunk, const void* arg
     for (int64_t i = 0; i < argSlots && i < 62; ++i) {
         if ((stringArgMask >> i) & 1) {
             const char* owned = t->argTexts[static_cast<std::size_t>(i)].c_str();
+            // The task table retains these immutable argument strings for
+            // process lifetime. Workers must see the same byte length.
+            uxb::register_persistent_text(owned, t->argTexts[static_cast<std::size_t>(i)].size());
             std::memcpy(t->block.data() + 8 + 8 * i, &owned, sizeof(owned));
         }
     }
@@ -413,9 +415,9 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_spawn(void* thunk, const void* arg
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_fail_cstr(const char* message) {
-    if (!tl_current) runtime_fatal(std::string("uncaught THROW ") + (message ? message : ""));
+    if (!tl_current) runtime_fatal(std::string("uncaught THROW ") + uxb::copy_text(message));
     std::lock_guard<std::mutex> lock(g_mutex);
-    if (tl_current->errorText.empty()) tl_current->errorText = std::string("native: uncaught THROW ") + (message ? message : "");
+    if (tl_current->errorText.empty()) tl_current->errorText = std::string("native: uncaught THROW ") + uxb::copy_text(message);
     return 0;
 }
 
@@ -444,7 +446,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_exc_set_value(int64_t bits, int64_t isS
     if (tl_excIsString) {
         const char* p = nullptr;
         std::memcpy(&p, &bits, sizeof(p));
-        tl_excText = p ? std::string(p) : std::string();   // atan cercevenin gecici metni omur boyu kopyalanir
+        tl_excText = uxb::copy_text(p);   // preserve bytes from the throwing frame
         tl_excBits = 0;
     } else {
         tl_excText.clear();
@@ -608,7 +610,7 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_task_shutdown(int64_t normalExit) {
             // Iptal, programin kendi istegidir (hata degil); yalniz okunmamis ERROR raporlanir.
             if (t->state == TS_ERROR && !t->errorObserved) {
                 const std::string msg = "okunmamis gorev hatasi (" + t->name + "): " + t->errorText;
-                std::fputs(msg.c_str(), stderr);
+                std::fwrite(msg.data(), 1, msg.size(), stderr);
                 std::fputc('\n', stderr);
                 unread = 1;
             }

@@ -1,0 +1,125 @@
+P1_ad_alani_icinden_kok_yordam
+' Ad alani icinde nitelensiz cagri, ust duzey (kok) yordama gider. Beklenen: 4
+FUNCTION Kok(a AS I32) AS I32
+    RETURN a + 1
+END FUNCTION
+NAMESPACE A
+    FUNCTION Say(a AS I32) AS I32
+        RETURN Kok(a)
+    END FUNCTION
+END NAMESPACE
+PRINT A.Say(3)
+=====
+P2_ad_alani_icinde_kendi_uyesi
+' S-141: ad alani icinde yalin ad once kendi ad alanina cozulur. Beklenen: 6
+NAMESPACE A
+    FUNCTION Uc(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+    FUNCTION Say(a AS I32) AS I32
+        RETURN Uc(a)
+    END FUNCTION
+END NAMESPACE
+PRINT A.Say(2)
+=====
+P3_ic_ice_ad_alani_nitelikli
+' A.B.F nitelikli cagri. Beklenen: 5
+NAMESPACE A
+    NAMESPACE B
+        FUNCTION F(a AS I32) AS I32
+            RETURN a + 2
+        END FUNCTION
+    END NAMESPACE
+END NAMESPACE
+PRINT A.B.F(3)
+=====
+P4_ic_ad_alani_dis_uyeyi_cagirir
+' Ic ad alani, kapsayan ad alaninin uyesini nitelensiz cagirir. Beklenen: 6
+NAMESPACE A
+    FUNCTION Dis(a AS I32) AS I32
+        RETURN a * 2
+    END FUNCTION
+    NAMESPACE B
+        FUNCTION Ic(a AS I32) AS I32
+            RETURN Dis(a)
+        END FUNCTION
+    END NAMESPACE
+END NAMESPACE
+PRINT A.B.Ic(3)
+=====
+P5_using_baska_ad_alanindan
+' USING ile acilan ad alani, baska bir ad alaninin icinden de nitelensiz cagrilir. Beklenen: 9
+NAMESPACE L
+    FUNCTION Uc(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+END NAMESPACE
+USING L
+NAMESPACE A
+    FUNCTION Say(a AS I32) AS I32
+        RETURN Uc(a)
+    END FUNCTION
+END NAMESPACE
+PRINT A.Say(3)
+=====
+P6_ust_duzey_dizi_yordamda
+' Ust duzey DIM dizisi bir SUB icinde a(i) olarak okunur. Beklenen: 7
+DIM g(3) AS I32
+g(1) = 7
+SUB Yaz()
+    PRINT g(1)
+END SUB
+Yaz()
+=====
+P7_ayni_ad_iki_yordamda_ayri_dizi
+' Her yordamin kendi dizisi var. Beklenen: 4 | 9
+SUB Bir()
+    DIM v(3) AS I32
+    v(1) = 4
+    PRINT v(1)
+END SUB
+SUB Iki()
+    DIM v(3) AS I32
+    v(1) = 9
+    PRINT v(1)
+END SUB
+Bir()
+Iki()
+=====
+P8_sinif_alan_dizisi
+' Sinif govdesinde dizi alani a(i) okunur. Beklenen: 5
+CLASS Kutu
+    PUBLIC
+    DIM d(3) AS I32
+    SUB Koy()
+        d(1) = 5
+    END SUB
+    SUB Yaz()
+        PRINT d(1)
+    END SUB
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.Koy()
+k.Yaz()
+=====
+P9_parametre_dizisi
+' Dizi parametresi a(i) olarak okunur. Beklenen: 4
+SUB Yaz(v AS I32[])
+    PRINT v(1)
+END SUB
+DIM a(3) AS I32
+a(1) = 4
+Yaz(a)
+=====
+P10_yontem_nesne_uzerinden
+' Yontem yalnizca nesne uzerinden nitelikli cagrilir. Beklenen: 1
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    SUB Bump()
+        n = n + 1
+    END SUB
+END CLASS
+DIM s AS Sayac = NEW Sayac()
+s.Bump()
+PRINT s.n

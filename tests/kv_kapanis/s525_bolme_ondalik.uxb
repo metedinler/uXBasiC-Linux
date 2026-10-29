@@ -1,0 +1,14 @@
+' S-525: iki tamsayinin "/" bolumu ondaliktir (7 / 2 = 3.5; tamsayi bolme "\" ile yazilir). Eski AST-x64 3 yaziyordu.
+' U64 degeri 2^63 ve ustunde F64'e isaretsiz buyukluguyle cevrilir (eski AST-x64 -1 yaziyordu).
+DIM a AS I32 = 7
+DIM b AS I32 = 2
+PRINT a / b
+PRINT a \ b
+DIM c AS F64
+c = a / b
+PRINT c
+PRINT CDBL(a)
+DIM u AS U64 = 18446744073709551615
+DIM f AS F64
+f = u
+PRINT f

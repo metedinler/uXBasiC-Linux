@@ -1,0 +1,20 @@
+' S-577: a class DERIVED from an implementing class is accepted too (the interface comes from the base class).
+' S-336 (2026-10-18): MIR now resolves the inherited implementation; all six engines participate.
+' Legacy AST-x64 participates after S-578.
+INTERFACE IKonum
+    METHOD GetX() AS I32
+END INTERFACE
+CLASS Pt IMPLEMENTS IKonum
+    PUBLIC
+    METHOD GetX() AS I32
+        RETURN 4
+    END METHOD
+END CLASS
+CLASS Alt EXTENDS Pt
+    PUBLIC
+END CLASS
+SUB Yaz(k AS IKonum)
+    PRINT k.GetX()
+END SUB
+DIM aa AS Alt = NEW Alt()
+Yaz(aa)

@@ -1,0 +1,13 @@
+NAMESPACE Ornek
+    FUNCTION Metin() AS STRING
+        Metin = "N" + CHR(0) + "S"
+        EXIT FUNCTION
+    END FUNCTION
+    FUNCTION Bos() AS F64
+        EXIT FUNCTION
+    END FUNCTION
+END NAMESPACE
+DIM s AS STRING = Ornek.Metin()
+PRINT LEN(s)
+PRINT ASC(MID(s, 2, 1))
+PRINT Ornek.Bos()

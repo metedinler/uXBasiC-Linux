@@ -1,0 +1,15 @@
+' S-329 koruma: sinif govdesinde yalin yontem cagrisi (implicit THIS) tanimsiz sayilmaz.
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    SUB Bump()
+        n = n + 1
+    END SUB
+    SUB Iki()
+        Bump()
+        Bump()
+    END SUB
+END CLASS
+DIM s AS Sayac = NEW Sayac()
+s.Iki()
+PRINT s.n

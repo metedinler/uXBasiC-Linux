@@ -26,6 +26,10 @@ Private Function UXBMIRStep4ExpectedOperandCount(ByRef opRaw As String) As Integ
         Return 4
     Case "MIR_FIELD_STORE":
         Return 4
+    Case "MIR_UNION_FIELD_LOAD":
+        Return 5
+    Case "MIR_UNION_FIELD_STORE":
+        Return 6
     Case "MIR_METHOD_CALL", "MIR_VIRTUAL_CALL":
         Return 4
     Case "MIR_OBJECT_NEW":

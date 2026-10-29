@@ -1,0 +1,18 @@
+CLASS A
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 1
+    END DESTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 2
+    END DESTRUCTOR
+END CLASS
+
+' S-574 / S-486 (2026-10-17): DELETE runs the destructors of the object's REAL class, derived to base. A base-typed variable holding a derived
+' object skipped the derived destructor on five engines (only the AST interpreter wrote 2 1).
+DIM x AS A = NEW B()
+DELETE x
+PRINT 9

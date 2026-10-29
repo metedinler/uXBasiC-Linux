@@ -1,0 +1,6 @@
+SUB Change(BYREF value AS STRING)
+    MID(value, 3, 2) = "ZZ"
+END SUB
+DIM s AS STRING = "abcdef"
+Change(s)
+PRINT s

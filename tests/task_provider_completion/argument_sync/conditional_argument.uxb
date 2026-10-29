@@ -1,0 +1,18 @@
+DIM g AS I64 = 7
+DIM calls AS I32 = 0
+FUNCTION Change() AS I64
+    calls += 1
+    g = 100
+    RETURN 0
+END FUNCTION
+FUNCTION Identity(value AS I64) AS I64
+    RETURN value
+END FUNCTION
+THREAD Read() AS I32
+    DIM x AS I64 = Identity(0 ? Change() : g)
+    RETURN CINT(x)
+END THREAD
+DIM t AS TASK OF I32 = SPAWN Read()
+PRINT t.JOIN()
+PRINT calls
+PRINT g

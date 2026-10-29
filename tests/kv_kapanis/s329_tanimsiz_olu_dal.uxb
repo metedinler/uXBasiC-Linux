@@ -1,0 +1,5 @@
+' S-329: calismayacak dalda da tanimsiz cagri derleme hatasidir (AST/MIR/JS eskiden "ok" yazip basarili biterdi).
+IF 0 THEN
+    PRINT Yok(4)
+END IF
+PRINT "ok"

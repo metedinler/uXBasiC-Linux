@@ -1,0 +1,6 @@
+%%FOR I = 1 TO 3
+PRINT "FOR {{I}}"
+%%ENDFOR
+%%FOREACH NAME IN ("A", "B")
+PRINT "NAME {{NAME}}"
+%%ENDFOREACH

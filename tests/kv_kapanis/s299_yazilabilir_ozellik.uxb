@@ -1,0 +1,27 @@
+' S-299 (olumlu yon): GET SET bayrakli ve govdeli GET/SET ozellikler yazilabilir; yalniz-GET reddi bunlari etkilemez.
+CLASS Kutu
+    PUBLIC
+    PROPERTY Deger AS I32 GET SET
+END CLASS
+CLASS Sayac
+    PRIVATE
+    DIM n AS I32
+    PUBLIC
+    PROPERTY Deger AS I32
+    GET
+        RETURN n * 2
+    END GET
+    SET
+        n = value
+    END SET
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.Deger = 3
+PRINT k.Deger
+k.Deger = k.Deger + 4
+PRINT k.Deger
+DIM s AS Sayac = NEW Sayac()
+s.Deger = 10
+PRINT s.Deger
+s.Deger += 1
+PRINT s.Deger

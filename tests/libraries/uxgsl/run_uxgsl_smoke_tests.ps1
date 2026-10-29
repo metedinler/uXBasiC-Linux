@@ -1,34 +1,26 @@
 [CmdletBinding()]
-param([string]$Uxb = ".\bin\uxb.exe", [string]$TestRoot = ".\tests\libraries\uxgsl")
+param([string]$Uxb = ".\bin\uxb.exe", [string]$TestRoot = ".\tests\libraries\uxgsl", [string[]]$Only = @())
 # uxgsl (GNU Scientific Library koprusu) duman testleri: her program dort motorda (AST, canonical-MIR, native x64, legacy AST-x64)
 # calistirilir. Beklenen: programin son PRINT'i olan "<AD>_PASS" satiri. CODEPTR kullanan (geri cagirma) testlerde
 # yorumlayicilar (AST/MIR) gercek kod adresi veremez -> NET "requires native x64" hatasi beklenir (S-076); native ve legacy PASS verir.
 # Onkosul: bin\uxgsl.dll (+ libgsl-28.dll, libgslcblas-0.dll); derleme bunlari PE import tablosundan bulup cikti klasorune kopyalar.
-$ErrorActionPreference = "Continue"
-function Norm([string]$s) { (($s -replace "`r","") -split "`n" | Where-Object { $_ -notmatch '^INFO|^WARN|^\s*$' }) -join "`n" }
-$pass = 0; $fail = 0
-foreach ($f in Get-ChildItem $TestRoot -Filter *.uxb | Sort-Object Name) {
-  $src = Get-Content $f.FullName -Raw
-  $m = [regex]::Match($src, 'PRINT\s+"([A-Z0-9_]+_PASS)"')
-  if (-not $m.Success) { continue }
-  $expected = $m.Groups[1].Value
-  $needsNative = $src -match 'CODEPTR'
-  $results = [ordered]@{}
-  $results["AST"] = Norm ((& $Uxb run $f.FullName 2>&1) -join "`n")
-  $results["MIR"] = Norm ((& $Uxb run $f.FullName --interpreter-backend MIR 2>&1) -join "`n")
-  foreach ($mode in @(@("x64", @()), @("AST-x64", @("--x64-mode","AST")))) {
-    $o = (& $Uxb bld $f.FullName @($mode[1]) -o "out\gsl_$($mode[0]).exe" 2>&1) -join "`n"
-    $bm = [regex]::Match($o, "build tamamlandi: (.+)")
-    $results[$mode[0]] = if ($bm.Success) { Norm ((& $bm.Groups[1].Value.Trim() 2>&1) -join "`n") } else { "BUILDFAIL: " + (Norm $o) }
-  }
-  foreach ($k in $results.Keys) {
-    $interp = ($k -eq "AST" -or $k -eq "MIR")
-    if ($needsNative -and $interp) { $ok = $results[$k].Contains("requires native x64"); $want = "icerir: requires native x64" }
-    else { $ok = ($results[$k] -eq $expected); $want = $expected }
-    if ($ok) { $pass++; Write-Host "  PASS $k/$($f.BaseName)" -ForegroundColor Green }
-    else { $fail++; Write-Host "  FAIL $k/$($f.BaseName)`n    beklenen: $want`n    gelen   : $($results[$k] -replace "`n",' | ')" -ForegroundColor Red }
-  }
+$ErrorActionPreference = 'Stop'
+$compiler = (Resolve-Path -LiteralPath $Uxb).Path
+if ([IO.Path]::GetExtension($compiler) -eq '.cmd') {
+  $match = [regex]::Match([IO.File]::ReadAllText($compiler), '(?m)^"([^"\r\n]+\.exe)" %\*')
+  if (!$match.Success) { throw 'Cannot find compiler in the model-test wrapper.' }
+  $compiler = $match.Groups[1].Value
 }
-"==================== OZET ===================="
-"Toplam: $($pass+$fail)   PASS: $pass   FAIL: $fail"
-if ($fail -eq 0) { "Tum kontroller gecti." } else { exit 1 }
+$evidence = Join-Path (Get-Location) ('test_results/libraries_uxgsl/' + [guid]::NewGuid().ToString('N'))
+$arguments = @('--uxb',$compiler,'--test-root',(Resolve-Path -LiteralPath $TestRoot).Path,'--output',$evidence,'--temp-builds','--jobs','2')
+if ($Only.Count -gt 0) {
+  $selected = @(Get-ChildItem -LiteralPath $TestRoot -Filter '*.uxb' -File | Where-Object { $name=$_.BaseName; @($Only | Where-Object { $name -like "*$_*" }).Count -gt 0 } | Select-Object -ExpandProperty BaseName)
+  if (!$selected.Count) { throw 'No GSL case matches the requested filter.' }
+  $arguments += @('--only') + $selected
+}
+# Existing six-engine runner checks exits, source/compiler hashes and actual
+# output, and owns all temporary products. Callback rejection stays explicit.
+& python (Join-Path $PSScriptRoot '../../turkce_ad/run_tests.py') @arguments
+$runExit = $LASTEXITCODE
+Write-Output "Evidence: $evidence"
+exit $runExit

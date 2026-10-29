@@ -1,0 +1,17 @@
+' S-520: ROL= ve ROR= bilesik atamalari donme yapar (kaydirma degil) ve acik yazimla (a = a ROL n) ayni sonucu verir;
+' eskiden U8 129 ROL= 1 -> 2 (beklenen 3), U16 32769 ROL= 2 -> 4 (beklenen 6), JS 258 / 131072 yaziyordu.
+DIM a AS U8 = 129
+a ROL= 1
+PRINT a
+DIM b AS U16 = 32769
+b ROL= 2
+PRINT b
+DIM c AS U32 = 2147483649
+c ROR= 1
+PRINT c
+DIM e AS U8 = 129
+e = e ROL 1
+PRINT e
+DIM f AS U8 = 3
+f ROR= 1
+PRINT f

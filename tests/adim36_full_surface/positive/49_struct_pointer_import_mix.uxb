@@ -1,0 +1,9 @@
+IMPORT(C, "tests/adim36_full_surface/imports/c/add_i32.c")
+TYPE BUFFER
+    P AS PTR
+    N AS I32
+END TYPE
+DIM B AS BUFFER
+B.P = 0
+B.N = SIZEOF(BUFFER)
+PRINT VARPTR(B)

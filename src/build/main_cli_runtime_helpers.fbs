@@ -10,6 +10,15 @@ Private Sub EnsureCliCompatInit()
     If UXBCliInitFromCommandLine(cliErrText) = 0 Then Exit Sub
 End Sub
 
+Private Function EffectiveCliArg(ByVal index As Integer) As String
+    EnsureCliCompatInit
+    If UXBCliBridgeReady() <> 0 Then
+        If index < 1 Or index > gUXBCli.expandedArgs.count Then Return ""
+        Return gUXBCli.expandedArgs.items(index - 1)
+    End If
+    Return Command(index)
+End Function
+
 Private Function HasArg(ByRef keyText As String) As Integer
     EnsureCliCompatInit
     If UXBCliBridgeReady() <> 0 Then
@@ -20,9 +29,9 @@ Private Function HasArg(ByRef keyText As String) As Integer
     keyLower = LCase(Trim(keyText))
 
     Dim i As Integer
-    For i = 1 To 64
+    For i = 1 To UXB_CLI_MAX_ARGS
         Dim a As String
-        a = Command(i)
+        a = EffectiveCliArg(i)
         If a = "" Then Exit For
 
         Dim aLower As String
@@ -48,9 +57,9 @@ Private Function GetArgValue(ByRef keyText As String, ByRef valueOut As String) 
     keyLower = LCase(Trim(keyText))
 
     Dim i As Integer
-    For i = 1 To 64
+    For i = 1 To UXB_CLI_MAX_ARGS
         Dim a As String
-        a = Command(i)
+        a = EffectiveCliArg(i)
         If a = "" Then Exit For
 
         Dim aTrim As String
@@ -59,7 +68,7 @@ Private Function GetArgValue(ByRef keyText As String, ByRef valueOut As String) 
         aLower = LCase(aTrim)
 
         If aLower = keyLower Then
-            valueOut = Command(i + 1)
+            valueOut = EffectiveCliArg(i + 1)
             Return IIf(valueOut <> "", 1, 0)
         End If
 
@@ -85,14 +94,14 @@ Private Function GetRawCommandArgValue(ByRef keyText As String, ByRef valueOut A
     Dim keyLower As String
     keyLower = LCase(Trim(keyText))
     Dim i As Integer
-    For i = 1 To 64
+    For i = 1 To UXB_CLI_MAX_ARGS
         Dim raw As String
-        raw = Command(i)
+        raw = EffectiveCliArg(i)
         If raw = "" Then Exit For
         Dim lowered As String
         lowered = LCase(Trim(raw))
         If lowered = keyLower Then
-            valueOut = Command(i + 1)
+            valueOut = EffectiveCliArg(i + 1)
             Return IIf(Trim(valueOut) <> "", 1, 0)
         End If
         Dim eqPos As Integer
@@ -109,12 +118,9 @@ Private Function GetRawCommandArgValue(ByRef keyText As String, ByRef valueOut A
 End Function
 
 Private Function IsTurkishMessageRequested() As Integer
-    Dim commandLineText As String
-    commandLineText = LCase(" " & Command & " ")
-    If InStr(commandLineText, " --message-lang tr ") > 0 Then Return 1
-    If InStr(commandLineText, " --message-lang=tr ") > 0 Then Return 1
-    If InStr(commandLineText, " --language tr ") > 0 Then Return 1
-    If InStr(commandLineText, " --language=tr ") > 0 Then Return 1
+    Dim languageText As String
+    If GetRawCommandArgValue("--message-lang", languageText) = 0 Then GetRawCommandArgValue "--language", languageText
+    If LCase(Trim(languageText)) = "tr" Then Return 1
     Return 0
 End Function
 
@@ -122,9 +128,9 @@ Private Function GetArgInlineValue(ByRef keyText As String, ByRef valueOut As St
     Dim keyPrefix As String
     keyPrefix = LCase(Trim(keyText)) & "="
     Dim i As Integer
-    For i = 1 To 64
+    For i = 1 To UXB_CLI_MAX_ARGS
         Dim argText As String
-        argText = Trim(Command(i))
+        argText = Trim(EffectiveCliArg(i))
         If argText = "" Then Exit For
         If Left(LCase(argText), Len(keyPrefix)) = keyPrefix Then
             valueOut = Mid(argText, Len(keyPrefix) + 1)
@@ -158,8 +164,6 @@ Private Function IsValueArgKey(ByRef keyText As String) As Integer
     If k = "--hir-json-out" Then Return 1
     If k = "--build-x64-out" Then Return 1
     If k = "--interpreter-backend" Then Return 1
-    If k = "--pp" Then Return 1
-    If k = "--preprocessor" Then Return 1
     If k = "--codegen-source" Then Return 1
     If k = "--artifact-report-json-out" Then Return 1
     If k = "--validate-all-report-json-out" Then Return 1
@@ -271,14 +275,14 @@ Private Function TryGetSourcePath(ByRef sourcePathOut As String, ByRef errText A
 
     Dim i As Integer
     i = 1
-    Do While i <= 64
+    Do While i <= UXB_CLI_MAX_ARGS
         Dim a As String
-        a = Command(i)
+        a = EffectiveCliArg(i)
         If a = "" Then Exit Do
 
         If IsOptionLike(a) <> 0 Then
             If IsValueArgKey(a) <> 0 Then i += 1
-        Else
+        ElseIf UXBCliIsKnownVerb(a) = 0 Then
             If firstCandidate = "" Then firstCandidate = a
             If Dir(a) <> "" Then
                 sourcePathOut = a

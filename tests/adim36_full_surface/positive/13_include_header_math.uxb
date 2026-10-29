@@ -1,0 +1,3 @@
+INCLUDE "tests/adim36_full_surface/includes/math_aliases.uxbh"
+PRINT "INCLUDE_OK"
+PRINT HEADER_CONST

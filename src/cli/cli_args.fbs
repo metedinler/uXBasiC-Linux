@@ -210,11 +210,12 @@ End Function
 Function UXBCliReadCommandLineRaw(ByRef outArgs As UXBCliArgList) As Integer
     UXBCliArgListInit outArgs
     Dim i As Integer
-    For i = 1 To UXB_CLI_MAX_ARGS - 1
+    For i = 1 To UXB_CLI_MAX_ARGS
         Dim a As String = Command(i)
         If a = "" Then Exit For
         If UXBCliArgListAdd(outArgs, a) = 0 Then Return 0
     Next i
+    If Command(UXB_CLI_MAX_ARGS + 1) <> "" Then Return 0
     Return 1
 End Function
 

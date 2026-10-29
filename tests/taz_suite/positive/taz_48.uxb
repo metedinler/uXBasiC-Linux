@@ -1,0 +1,26 @@
+%%DEFINE CASE_ID 48
+%%IF CASE_ID
+PRINT "PP_OK"
+%%ENDIF
+%%MACRO TWICE(X) X + X
+%%WAT_BEGIN dist/wasm/taz_embed.wat
+(module)
+%%WAT_END
+INCLUDE "tests/taz_suite/support/inc_math.bas"
+DIM a AS I32
+DIM b AS I64
+DIM c AS F64
+DIM s AS STRING
+a = CASE_ID
+b = 100
+c = 3.14
+s = "taz"
+a = TWICE(a)
+INLINE(x64, nasm, ABI=WIN64)
+; noop
+END INLINE
+PRINT ABS(-5)
+PRINT LEN(s)
+PRINT UCASE(s)
+PRINT STR(a)
+PRINT VAL("12")

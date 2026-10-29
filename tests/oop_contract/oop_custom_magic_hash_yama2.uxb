@@ -1,0 +1,5 @@
+CLASS Anahtar
+    MAGIC HASH(seed AS I32) AS I32
+        RETURN seed + 7
+    END MAGIC
+END CLASS

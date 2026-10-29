@@ -221,11 +221,7 @@ End Function
 
 Private Function UXBRuntimeFfiPointerBits(ByRef value As UXBInterpValue) As ULongInt
     If value.ptrValue <> 0 Then
-#Ifdef __FB_64BIT__
         Return CULngInt(CLngInt(value.ptrValue))
-#Else
-        Return CULngInt(CULng(value.ptrValue))
-#EndIf
     End If
 
     If value.kind = UXB_VAL_DLL_HANDLE Or value.kind = UXB_VAL_FILE_HANDLE Or value.kind = UXB_VAL_RUNTIME_HANDLE Or value.kind = UXB_VAL_JS_HANDLE Or value.kind = UXB_VAL_WASM_HANDLE Then
@@ -271,11 +267,7 @@ Private Function UXBRuntimeFfiResolveArg( _
         keepAlive = UXBInterpValueToString(value)
         ' S-145: FreeBASIC StrPtr of an empty string is NULL; "" must reach the callee as a real empty C string.
         If Len(keepAlive) = 0 Then keepAlive = Chr(0)
-#Ifdef __FB_64BIT__
         argU64Out = CULngInt(CLngInt(CPtr(Any Ptr, StrPtr(keepAlive))))
-#Else
-        argU64Out = CULngInt(CULng(CPtr(Any Ptr, StrPtr(keepAlive))))
-#EndIf
         argKindOut = UXB_RTFFI_KIND_STRPTR
     Case "PTR"
         argU64Out = UXBRuntimeFfiPointerBits(value)
@@ -607,7 +599,7 @@ End Function
 
 Function UXBRuntimeFfiDispatch(ByRef rt As UXBRuntimeContext, ByVal serviceId As String, ByRef args As UXBRuntimeArgList) As UXBInterpValue
     Dim targetText As String = UCase(Trim(rt.targetName))
-    If targetText <> "NATIVE" And targetText <> "X64" And targetText <> "X86" Then
+    If targetText <> "NATIVE" And targetText <> "X64" Then
         Return UXBRuntimeSetError(rt, UXB_RT_ERR_NATIVE_ONLY, "FFI service requires native target: " & serviceId)
     End If
 

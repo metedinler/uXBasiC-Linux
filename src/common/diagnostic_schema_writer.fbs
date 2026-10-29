@@ -4,26 +4,7 @@
 #include once "json_builder.fbs"
 #include once "report_writer.fbs"
 
-Function UXBDiagnosticSchemaJson(ByRef jsonOut As String) As Integer
-    Dim b As UXBJsonBuilder
-    UXBJsonInit b
-    UXBJsonBeginObject b
-    UXBJsonFieldString b, "schema", "uxb.diagnostic_schema.v1"
-    UXBJsonFieldString b, "diagnostic_required_fields", "code,severity,layer,phase,message_tr,source.file,source.line,source.col,related_surface"
-    UXBJsonFieldString b, "severity_values", "info,warning,error,fatal"
-    UXBJsonFieldString b, "formats", "text,json,vscode"
-    UXBJsonBeginArrayField b, "source_mapping_stages"
-    UXBJsonArrayString b, "token"
-    UXBJsonArrayString b, "ast"
-    UXBJsonArrayString b, "semantic"
-    UXBJsonArrayString b, "hir"
-    UXBJsonArrayString b, "mir"
-    UXBJsonArrayString b, "backend"
-    UXBJsonEndArray b
-    UXBJsonEndObject b
-    jsonOut = UXBJsonText(b)
-    Return 1
-End Function
+#include once "diagnostic_schema_data.fbs"
 
 Function UXBWriteDiagnosticSchemaJson(ByRef outPath As String, ByRef errText As String) As Integer
     Dim jsonText As String
@@ -37,7 +18,10 @@ Function UXBWriteJsonSchemaReportCsv(ByRef outPath As String, ByRef errText As S
     csvText &= "diagnostic,code,1,must not be empty" & Chr(10)
     csvText &= "diagnostic,severity,1,info warning error fatal" & Chr(10)
     csvText &= "diagnostic,layer,1,lexer parser ast semantic hir mir runtime backend" & Chr(10)
-    csvText &= "diagnostic,message_tr,1,user-facing Turkish message" & Chr(10)
+    csvText &= "diagnostic,message_tr,1,Turkish message" & Chr(10)
+    csvText &= "diagnostic,message_en,1,English message" & Chr(10)
+    csvText &= "diagnostic,occurrences,1,deduplicated occurrence count" & Chr(10)
+    csvText &= "diagnostic,source.known,1,positive line and column or unknown coordinates" & Chr(10)
     csvText &= "diagnostic,source,1,file line col length" & Chr(10)
     csvText &= "source_map,source_stage,1,origin stage" & Chr(10)
     csvText &= "source_map,target_stage,1,next stage" & Chr(10)

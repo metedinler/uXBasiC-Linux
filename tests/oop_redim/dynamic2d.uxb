@@ -1,0 +1,21 @@
+CLASS Cell
+ PUBLIC
+ value AS I32
+END CLASS
+DIM height AS I32 = 2
+DIM width AS I32 = 3
+DIM a(1 TO height, -1 TO width) AS Cell
+a(2,3) = NEW Cell()
+a(2,3).value = 17
+PRINT a(2,3).value
+PRINT LBOUND(a,1)
+PRINT UBOUND(a,2)
+PRINT SIZEOF(a)
+REDIM a(-2 TO height+1, 0 TO width-1) AS Cell
+PRINT a(0,0) = NULL
+a(-2,2) = NEW Cell()
+a(-2,2).value = 29
+PRINT a(-2,2).value
+PRINT LBOUND(a,1)
+PRINT UBOUND(a,2)
+PRINT SIZEOF(a)

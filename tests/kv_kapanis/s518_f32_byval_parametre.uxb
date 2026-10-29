@@ -1,0 +1,9 @@
+' S-518: BYVAL F32 parametreye giren deger tek duyarliga yuvarlanir (eskiden JS'te 1 yaziyordu).
+SUB B(BYVAL p AS F32)
+    PRINT p - 16777216
+END SUB
+B(16777217)
+FUNCTION G(BYVAL p AS F32) AS F32
+    RETURN p
+END FUNCTION
+PRINT G(16777217) - 16777216

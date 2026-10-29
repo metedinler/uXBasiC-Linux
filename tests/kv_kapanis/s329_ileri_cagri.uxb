@@ -1,0 +1,5 @@
+' S-329 koruma (S-544): tanimdan ONCE cagri, DECLARE'siz.
+PRINT Iki(4)
+FUNCTION Iki(a AS I32) AS I32
+    RETURN a * 2
+END FUNCTION

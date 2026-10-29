@@ -1,0 +1,2 @@
+OPEN "cleanup_normal.txt" FOR OUTPUT AS #1
+PRINT #1, "saved"

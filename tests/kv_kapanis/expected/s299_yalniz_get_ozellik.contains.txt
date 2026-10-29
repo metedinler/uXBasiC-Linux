@@ -1,0 +1,1 @@
+ALL=property SET accessor denied

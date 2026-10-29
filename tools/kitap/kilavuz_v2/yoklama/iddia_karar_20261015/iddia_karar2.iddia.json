@@ -1,0 +1,82 @@
+[
+ {
+  "ad": "c01 satir devami alt cizgi",
+  "kod": "DIM x AS I32 = 1 + _\n    2\nPRINT x\n"
+ },
+ {
+  "ad": "c02 parantez icinde satir sonu",
+  "kod": "DIM x AS I32 = (1 +\n    2)\nPRINT x\n"
+ },
+ {
+  "ad": "c03 tur cikarimi DIM y = 5",
+  "kod": "DIM y = 5\nPRINT y\n"
+ },
+ {
+  "ad": "c04 dizi bir butun olarak a() ile",
+  "kod": "SUB Yaz(a() AS I32)\n    PRINT a(0)\nEND SUB\nDIM b(1) AS I32\nb(0) = 7\nYaz(b())\n"
+ },
+ {
+  "ad": "c05 data adli degisken ve atama",
+  "kod": "DIM data AS I32 = 5\ndata = 6\nPRINT data\n"
+ },
+ {
+  "ad": "c06 read adli degisken",
+  "kod": "DIM read AS I32 = 5\nread = read + 1\nPRINT read\n"
+ },
+ {
+  "ad": "c07 restore adli degisken",
+  "kod": "DIM restore AS I32 = 5\nPRINT restore\n"
+ },
+ {
+  "ad": "c08 etiket ve iki nokta ayni satirda",
+  "kod": "GOTO Son\nPRINT \"atlandi\"\nSon:\nPRINT \"bitti\"\n"
+ },
+ {
+  "ad": "c09 CONST ifadesi dizi boyutu",
+  "kod": "CONST N = 2 * 3\nDIM a(N - 1) AS I32\nPRINT UBOUND(a)\n"
+ },
+ {
+  "ad": "c10 baslangic degeri olan dizi etkisiz mi",
+  "kod": "DIM a(2) AS I32\na(0) = 1: a(1) = 2: a(2) = 3\nPRINT a(0) + a(1) + a(2)\n"
+ },
+ {
+  "ad": "c11 LISTGET ile karisik tur",
+  "kod": "DIM l AS LIST\nLISTADD(l, 1)\nLISTADD(l, 2.5)\nLISTADD(l, \"a\")\nPRINT LISTLEN(l)\n"
+ },
+ {
+  "ad": "c12 INCLUDE olmadan modul duzeyi etiket ve rutin icinde GOTO",
+  "kod": "SUB S()\n    GOTO Son\n    PRINT \"x\"\nSon:\n    PRINT \"s\"\nEND SUB\nS()\n"
+ },
+ {
+  "ad": "c13 iki nokta ile deyim ayirma",
+  "kod": "PRINT 1: PRINT 2\n"
+ },
+ {
+  "ad": "c14 FILE_HANDLE bugun",
+  "kod": "DIM f AS FILE_HANDLE\nPRINT 1\n"
+ },
+ {
+  "ad": "c15 OPEN kanal degiskeni FREEFILE yok",
+  "kod": "DIM n AS I32 = 3\nOPEN \"karar2_deneme.txt\" FOR OUTPUT AS #n\nPRINT #n, \"x\"\nCLOSE #n\nPRINT 1\n"
+ },
+ {
+  "ad": "c16 DECLARE sonrasi ileri cagri",
+  "kod": "DECLARE SUB Selam()\nSelam()\nSUB Selam()\n    PRINT \"merhaba\"\nEND SUB\n"
+ },
+ {
+  "ad": "c17 ileri cagri DECLARE'siz",
+  "kod": "Selam()\nSUB Selam()\n    PRINT \"merhaba\"\nEND SUB\n"
+ },
+ {
+  "ad": "c18 TRUE FALSE degerleri",
+  "kod": "PRINT TRUE\nPRINT FALSE\n"
+ },
+ {
+  "ad": "c19 yorum icinde DATA",
+  "kod": "' DATA 1, 2, 3\nPRINT 1\n"
+ },
+ {
+  "ad": "c20 REM DATA",
+  "kod": "REM DATA 1, 2, 3\nPRINT 1\n"
+ }
+]

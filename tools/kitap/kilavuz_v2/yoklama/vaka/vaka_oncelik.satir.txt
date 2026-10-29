@@ -1,0 +1,31 @@
+us_eksi | | PRINT 2 ** -1
+not_topla | | PRINT NOT 1 + 1
+topla_and | | PRINT 1 + 2 AND 3
+and_esit | | PRINT 5 AND 3 = 3
+or_and | | PRINT 1 OR 2 AND 4
+xor_and | | PRINT 6 XOR 3 AND 1
+or_xor | | PRINT 1 OR 6 XOR 3
+shl_topla | | PRINT 1 SHL 2 + 1
+tambol_carp | | PRINT 8 \ 2 * 2
+mod_carp | | PRINT 7 MOD 4 * 2
+carp_mod | | PRINT 2 * 7 MOD 4
+kucuk_and | | PRINT 1 < 2 AND 2 < 3
+tambol_us | | PRINT 5 \ 2 ** 2
+not_and | | PRINT NOT 5 AND 3
+topla_esit | | PRINT 1 + 1 = 2
+ve_veya_mantik | | PRINT 5 && 0 || 1
+andalso_orelse | | PRINT 0 ORELSE 1 ANDALSO 0
+xor_topla | | PRINT 2 ^ 3 + 1
+bol_tambol | | PRINT 12 / 4 \ 2
+tambol_bol | | PRINT 12 \ 4 / 2
+eksi_mod | | PRINT -7 MOD 3
+eksi_tambol | | PRINT -7 \ 2
+carp_topla_bit | | PRINT 2 * 3 SHL 1
+esit_zincir | | PRINT 1 < 2 < 3
+mod_tambol | | PRINT 17 MOD 5 \ 2
+us_carp | | PRINT 2 * 3 ** 2
+yuzde_carp | | PRINT 7 % 4 * 2
+not_esit | | PRINT NOT 1 = 2
+ucluk_or | | PRINT 1 OR 0 ? 10 : 20
+ucluk_topla | | PRINT 1 + 1 ? 10 : 20
+iff_ic | | PRINT IFF(1 > 0 AND 2 > 1, 10, 20)

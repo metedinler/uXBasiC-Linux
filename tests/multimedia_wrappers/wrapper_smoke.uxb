@@ -1,0 +1,10 @@
+INCLUDE "include/modules/uxraylib.uxmh"
+INCLUDE "include/modules/uxsdl3.uxmh"
+
+PRINT "RAY_ADAPTER="; uxraylib.AdapterVersion()
+PRINT "RAYLIB="; uxraylib.RaylibVersion()
+PRINT "RAYGUI="; uxraylib.RayguiVersion()
+PRINT "AREA="; uxraylib.RectangleArea(12, 5)
+PRINT "COLOR="; uxraylib.ColorRGBA(1, 2, 3, 4)
+PRINT "SDL_ADAPTER="; uxsdl3.AdapterVersion()
+PRINT "SDL_RUNTIME="; uxsdl3.RuntimeVersion()

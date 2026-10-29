@@ -1,0 +1,17 @@
+DIM i AS I32
+DIM finalized AS I32 = 0
+FOR i = 1 TO 2
+    TRY
+        DO
+            CONTINUE FOR
+        LOOP
+    FINALLY
+        finalized += 1
+        IF finalized > 4 THEN THROW "loop transfer did not advance"
+        PRINT i
+        CONTINUE
+        PRINT 999
+    END TRY
+    PRINT 998
+NEXT i
+PRINT finalized

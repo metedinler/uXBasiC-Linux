@@ -1,0 +1,19 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT 7
+    END DESTRUCTOR
+    SUB Say()
+        PRINT v
+    END SUB
+END CLASS
+
+' S-574 / S-472: writing a field through a dead alias is the same error.
+DIM a AS Kutu = NEW Kutu(3)
+DIM b AS Kutu = a
+DELETE a
+b.v = 5

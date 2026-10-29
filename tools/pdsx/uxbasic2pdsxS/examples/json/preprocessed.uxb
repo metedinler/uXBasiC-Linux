@@ -1,0 +1,5 @@
+' Bu yorum aynen geçecek
+DIM A AS INTEGER
+A = 10
+CALL(DLL, "user32.dll", "MessageBoxA", 0, "Merhaba", "uXBasic", 0)
+PRINT A

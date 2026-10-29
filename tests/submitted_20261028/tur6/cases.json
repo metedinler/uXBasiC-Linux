@@ -1,0 +1,8 @@
+{
+  "s103_type_4_byte_stride": {"output": "7"},
+  "s103_type_12_byte_stride": {"output": "19"},
+  "s103_type_alias_write": {"output": "23"},
+  "s103_type_param_forward": {"output": "17"},
+  "s103_nonzero_lower_bound": {"output": "31"},
+  "s097_type_param_oob_negative": {"error": "array index out of bounds"}
+}

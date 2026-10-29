@@ -1,0 +1,12 @@
+not_us | | PRINT NOT 2 ** 2
+tilde_us | | PRINT ~2 ** 2
+unlem_us | | PRINT !0 + 1
+orelse_andalso | | PRINT 1 ORELSE 0 ANDALSO 0
+andalso_orelse2 | | PRINT 0 ANDALSO 1 ORELSE 1
+eksi_xor | | PRINT -2 ^ 2
+and_or2 | | PRINT 1 AND 3 OR 4
+mod_us | | PRINT 5 MOD 3 ** 2
+and_andalso | | PRINT 1 AND 0 ANDALSO 1
+ve_ve_and | | PRINT 3 && 4 AND 0
+kucuk_topla | | PRINT 2 < 1 + 2
+shr_esit | | PRINT 8 SHR 1 = 4

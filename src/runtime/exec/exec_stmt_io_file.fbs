@@ -217,7 +217,7 @@ Private Function ExecRunInputStmt(ByRef ps As ParseState, ByRef es As ExecState,
         Dim inputTargetName As String = ps.ast.nodes(inputTarget).value
         Dim inputTargetIdx As Integer = ExecFindVar(es, inputTargetName)
         Dim inputTargetType As String = ""
-        If inputTargetIdx <> -1 Then inputTargetType = UCase(Trim(es.vars(inputTargetIdx).declType))
+        If inputTargetIdx <> -1 Then inputTargetType = UCase(Trim(ExecVarAt(es, inputTargetIdx).declType))
         If Left(inputTargetType, 5) = "TYPE_" Then inputTargetType = Mid(inputTargetType, 6)
         If inputTargetType = "STRING" Or inputTargetType = "WSTRING" Then
             Dim inputStringValue As ExecValue
@@ -287,7 +287,7 @@ Private Function ExecRunInputFileStmt(ByRef ps As ParseState, ByRef es As ExecSt
         End If
 
         Dim inputTargetType43 As String
-        inputTargetType43 = UCase(Trim(es.vars(inputTargetVarIdx43).declType))
+        inputTargetType43 = UCase(Trim(ExecVarAt(es, inputTargetVarIdx43).declType))
         If inputTargetType43 = "STRING" Or inputTargetType43 = "WSTRING" Then
             Dim inputStringValue43 As ExecValue
             ExecValueSetString inputStringValue43, inputReadLine43
@@ -380,8 +380,10 @@ Private Function ExecRunOpenStmt(ByRef ps As ParseState, ByRef es As ExecState, 
         Return 0
     End If
 
+    ' S-622: the file name is any STRING expression (variable, concatenation, call); the AST engine used to accept only a literal ("string literal expected")
+    ' while MIR, native x64 and the legacy engine evaluated the expression.
     Dim filePath As String
-    If ExecEvalStringLiteral(ps, es, openFileExpr, filePath, errText) = 0 Then
+    If ExecEvalNodeAsText(ps, es, openFileExpr, filePath, errText) = 0 Then
         Return 0
     End If
 

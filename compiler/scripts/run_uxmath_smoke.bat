@@ -9,7 +9,7 @@ if errorlevel 1 exit /b 1
 echo === Build compiler if available ===
 if exist build_compiler_64.bat call build_compiler_64.bat
 
-set "UXB=uxb\compiler\wrappers\uxb_main_wrapper_64.exe"
+set "UXB=uxb\bin\uxb.exe"
 if exist "%UXB%" (
   echo === Run uxmath include smoke through uXBasiC ===
   "%UXB%" uxb\tests\uxmath\uxmath_include_smoke.bas --execmem --interpreter-backend AST --debug

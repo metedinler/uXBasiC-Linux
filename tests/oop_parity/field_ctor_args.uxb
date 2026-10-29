@@ -1,0 +1,20 @@
+' S-575 (2026-10-16): constructor arguments, field writes and field reads reach the same values on every engine.
+' The WASM backend lost the first constructor argument (OBJECT_NEW base index off by one) and stored 0 for every
+' field write (FIELD_STORE read operand 5 instead of the value), so objects read 0 in WASM (G-WASM-1).
+CLASS Pt
+    PUBLIC
+    DIM x AS I32
+    DIM y AS I32
+    CONSTRUCTOR(ax AS I32, ay AS I32)
+        x = ax
+        y = ay
+    END CONSTRUCTOR
+    METHOD Sum() AS I32
+        RETURN x + y
+    END METHOD
+END CLASS
+DIM p AS Pt = NEW Pt(10, 20)
+PRINT p.x
+PRINT p.y
+p.x = 5
+PRINT p.Sum()

@@ -1,0 +1,26 @@
+INCLUDE "include/modules/uxsqlite.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxsqlite.BindF64(0, 0, 0.0)
+        PRINT uxsqlite.BindI64(0, 0, 0)
+        PRINT uxsqlite.BindText(0, 0, "")
+        PRINT uxsqlite.Changes(0)
+        uxsqlite.Close(0)
+        PRINT uxsqlite.ColumnCount(0)
+        PRINT uxsqlite.ColumnF64(0, 0)
+        PRINT uxsqlite.ColumnI64(0, 0)
+        PRINT uxsqlite.ColumnText(0, 0)
+        PRINT uxsqlite.ColumnType(0, 0)
+        PRINT uxsqlite.ErrorText(0)
+        PRINT uxsqlite.Exec(0, "")
+        uxsqlite.Finalize(0)
+        PRINT uxsqlite.LastInsertRowId(0)
+        PRINT uxsqlite.Open("")
+        PRINT uxsqlite.OpenMemory()
+        PRINT uxsqlite.Prepare(0, "")
+        PRINT uxsqlite.Reset(0)
+        PRINT uxsqlite.Step(0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXSQLITE"
+END MAIN

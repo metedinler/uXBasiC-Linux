@@ -1,0 +1,5 @@
+DIM a AS I32 = 7
+DIM b AS F64 = a
+PRINT b / 2
+PRINT I32(2.75)
+PRINT F64(3) + 0.5

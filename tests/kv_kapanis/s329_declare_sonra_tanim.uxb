@@ -1,0 +1,6 @@
+' S-329 koruma: DECLARE, sonra cagri, sonra tanim.
+DECLARE FUNCTION Uc(a AS I32) AS I32
+PRINT Uc(3)
+FUNCTION Uc(a AS I32) AS I32
+    RETURN a * 3
+END FUNCTION

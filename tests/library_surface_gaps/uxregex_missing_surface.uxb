@@ -1,0 +1,15 @@
+INCLUDE "include/modules/uxregex.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxregex.Compile("", 0)
+        PRINT uxregex.ErrorText(0)
+        PRINT uxregex.GroupCount(0)
+        PRINT uxregex.GroupEnd(0, 0)
+        PRINT uxregex.GroupStart(0, 0)
+        PRINT uxregex.GroupText(0, "", 0)
+        PRINT uxregex.IsMatch(0, "")
+        PRINT uxregex.Match(0, "", 0, 0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXREGEX"
+END MAIN

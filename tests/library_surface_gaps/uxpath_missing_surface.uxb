@@ -1,0 +1,20 @@
+INCLUDE "include/modules/uxpath.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxpath.ChangeExtension("", "")
+        PRINT uxpath.Combine3("", "", "")
+        PRINT uxpath.DirectoryName("")
+        PRINT uxpath.ErrorText()
+        PRINT uxpath.Extension("")
+        PRINT uxpath.FileName("")
+        PRINT uxpath.Full("")
+        PRINT uxpath.HasExtension("", "")
+        PRINT uxpath.IsAbsolute("")
+        PRINT uxpath.IsInside("", "")
+        PRINT uxpath.Join("", "")
+        PRINT uxpath.Normalize("")
+        PRINT uxpath.Stem("")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXPATH"
+END MAIN

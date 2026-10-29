@@ -1,0 +1,14 @@
+DIM calls AS I32 = 0
+FUNCTION Pick() AS I32
+    calls = calls + 1
+    RETURN 0
+END FUNCTION
+CLASS Ic
+    PUBLIC
+    n AS I32
+END CLASS
+DIM arr(1) AS Ic
+arr(0) = NEW Ic()
+arr(Pick()).n += 3
+PRINT arr(0).n
+PRINT calls

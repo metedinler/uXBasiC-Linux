@@ -1,0 +1,38 @@
+' S-670: %%BREAK ve %%CONTINUE kendi turunun %%IF durumuna bakar. Eskiden metin duzeyinde taranir, %%IF'in icindeki %%BREAK
+' kosula bakmadan ilk turda donguyu bitirirdi. Simdi: dogru %%IF kolunda calisir, yanlis kolda atlanir; ic ice dongude yalniz
+' kendi donguyu etkiler; %%REPEAT ... %%UNTILMETA ve %%FOREACH icinde de ayni sekilde calisir.
+%%FOR K = 1 TO 5
+%%IFN {{K}} == 2
+%%CONTINUE
+%%ENDIF
+PRINT {{K}}
+%%IFN {{K}} == 4
+%%BREAK
+%%ENDIF
+%%ENDFOR
+%%FOREACH A IN (1, 2, 3, 4)
+%%IFN {{A}} >= 3
+%%BREAK
+%%ENDIF
+PRINT {{A}} * 10
+%%NEXTMETA
+%%FOR P = 1 TO 2
+%%FOR Q = 1 TO 3
+%%IFN {{Q}} == 2
+%%BREAK
+%%ENDIF
+PRINT {{P}} * 100 + {{Q}}
+%%ENDFOR
+%%NEXTMETA
+%%FOR M = 1 TO 3
+%%IF FALSE
+%%BREAK
+%%ENDIF
+PRINT {{M}} + 1000
+%%ENDFOR
+%%REPEAT
+PRINT {{INDEX}} + 2000
+%%IFN {{INDEX}} == 2
+%%BREAK
+%%ENDIF
+%%UNTILMETA FALSE

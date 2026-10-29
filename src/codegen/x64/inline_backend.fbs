@@ -199,18 +199,18 @@ Private Function InlineValidateBlock(ByRef blockItem As InlineX64Block, ByRef er
     archU = UCase(Trim(blockItem.arch))
 
     Dim isX64 As Integer
-    Dim isX86 As Integer
     isX64 = 0
-    isX86 = 0
 
     Select Case archU
     Case "X64", "X86_64", "AMD64"
         isX64 = 1
     Case "X86", "X86_32", "I386", "WIN32"
-        isX86 = 1
+        ' S-666 (x86 emeklilik, Asama 3): 32 bit satir ici makine kodu emekli edildi; INLINE yalniz x64 ailesidir.
+        errText = "inline-x64: x86 (32-bit) INLINE blocks are retired; use arch ""x64"" at line " & LTrim(Str(blockItem.startLine))
+        Return 0
     End Select
 
-    If isX64 = 0 And isX86 = 0 Then
+    If isX64 = 0 Then
         errText = "inline-x64: unsupported arch at line " & LTrim(Str(blockItem.startLine))
         Return 0
     End If
@@ -234,49 +234,25 @@ Private Function InlineValidateBlock(ByRef blockItem As InlineX64Block, ByRef er
     Dim policyU As String
     policyU = UCase(blockItem.policy)
 
-    If isX64 <> 0 Then
-        If Instr(1, policyU, "ABI=WIN64") = 0 Then
-            errText = "inline-x64: ABI=WIN64 policy is required at line " & LTrim(Str(blockItem.startLine))
-            Return 0
-        End If
+    If Instr(1, policyU, "ABI=WIN64") = 0 Then
+        errText = "inline-x64: ABI=WIN64 policy is required at line " & LTrim(Str(blockItem.startLine))
+        Return 0
+    End If
 
-        If Instr(1, policyU, "PRESERVE=") = 0 Then
-            errText = "inline-x64: PRESERVE register policy is required at line " & LTrim(Str(blockItem.startLine))
-            Return 0
-        End If
+    If Instr(1, policyU, "PRESERVE=") = 0 Then
+        errText = "inline-x64: PRESERVE register policy is required at line " & LTrim(Str(blockItem.startLine))
+        Return 0
+    End If
 
-        If Instr(1, policyU, "STACK=16") = 0 Then
-            errText = "inline-x64: STACK=16 policy is required at line " & LTrim(Str(blockItem.startLine))
-            Return 0
-        End If
+    If Instr(1, policyU, "STACK=16") = 0 Then
+        errText = "inline-x64: STACK=16 policy is required at line " & LTrim(Str(blockItem.startLine))
+        Return 0
+    End If
 
-        If InlineContainsWord(blockItem.bodyText, "CALL") Then
-            If Instr(1, policyU, "SHADOW=32") = 0 Then
-                errText = "inline-x64: SHADOW=32 policy is required for CALL usage at line " & LTrim(Str(blockItem.startLine))
-                Return 0
-            End If
-        End If
-    Else
-        If Instr(1, policyU, "ABI=WIN32") = 0 Then
-            errText = "inline-x64: ABI=WIN32 policy is required at line " & LTrim(Str(blockItem.startLine))
+    If InlineContainsWord(blockItem.bodyText, "CALL") Then
+        If Instr(1, policyU, "SHADOW=32") = 0 Then
+            errText = "inline-x64: SHADOW=32 policy is required for CALL usage at line " & LTrim(Str(blockItem.startLine))
             Return 0
-        End If
-
-        If Instr(1, policyU, "PRESERVE=") = 0 Then
-            errText = "inline-x64: PRESERVE register policy is required at line " & LTrim(Str(blockItem.startLine))
-            Return 0
-        End If
-
-        If Instr(1, policyU, "STACK=4") = 0 And Instr(1, policyU, "STACK=16") = 0 Then
-            errText = "inline-x64: STACK=4/16 policy is required at line " & LTrim(Str(blockItem.startLine))
-            Return 0
-        End If
-
-        If InlineContainsWord(blockItem.bodyText, "CALL") Then
-            If Instr(1, policyU, "CLEANUP=CDECL") = 0 And Instr(1, policyU, "CLEANUP=STDCALL") = 0 Then
-                errText = "inline-x64: CLEANUP=CDECL/STDCALL policy is required for x86 CALL usage at line " & LTrim(Str(blockItem.startLine))
-                Return 0
-            End If
         End If
     End If
 

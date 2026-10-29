@@ -1,0 +1,8 @@
+' S-544: a use inside the body of another routine counts as well.
+SUB Once(x AS I32)
+    Sonra(x + 1)
+END SUB
+SUB Sonra(x AS I32)
+    PRINT x
+END SUB
+Once(4)

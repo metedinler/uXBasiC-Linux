@@ -1,0 +1,19 @@
+CLASS TextCell
+ PUBLIC
+ value AS STRING
+ CONSTRUCTOR(s AS STRING)
+  THIS.value = s
+ END CONSTRUCTOR
+ METHOD Read() AS STRING
+  RETURN THIS.value
+ END METHOD
+END CLASS
+DIM box AS TextCell = NEW TextCell("A" + CHR(0) + "B")
+PRINT LEN(box.value)
+PRINT LEN(box.Read())
+DIM copy AS STRING = box.Read()
+box.value = "changed"
+PRINT LEN(copy)
+PRINT ASC(RIGHT(copy, 1))
+DELETE box
+PRINT LEN(copy)

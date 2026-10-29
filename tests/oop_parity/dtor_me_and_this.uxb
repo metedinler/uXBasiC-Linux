@@ -1,0 +1,24 @@
+' S-484: inside a destructor ME.Duz() (non-virtual) and THIS.San() (a DIRECT call: the base implementation, never the override of the
+' object being destroyed) are allowed; an ME virtual call there is a compile error (neg_dtor_bare_virtual).
+CLASS Taban
+    PUBLIC
+    METHOD Duz()
+        PRINT 1
+    END METHOD
+    VIRTUAL METHOD San()
+        PRINT 2
+    END METHOD
+    DESTRUCTOR()
+        ME.Duz()
+        THIS.San()
+    END DESTRUCTOR
+END CLASS
+CLASS Alt EXTENDS Taban
+    PUBLIC
+    OVERRIDE METHOD San()
+        PRINT 3
+    END METHOD
+END CLASS
+DIM x AS Alt = NEW Alt()
+DELETE x
+PRINT 9

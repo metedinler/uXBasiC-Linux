@@ -1,0 +1,16 @@
+FUNCTION Echo(value AS STRING) AS STRING
+ DIM localText AS STRING = value + CHR(0) + "Z"
+ RETURN localText
+END FUNCTION
+DIM source AS STRING = "A" + CHR(0) + "B"
+DIM kept AS STRING = source
+DIM values(2) AS STRING
+values(1) = Echo(source)
+DIM i AS I32
+FOR i = 1 TO 80
+ source = STR(i)
+NEXT i
+PRINT LEN(kept)
+PRINT LEN(values(1))
+PRINT ASC(RIGHT(values(1), 1))
+PRINT LEN(Echo(values(1)))

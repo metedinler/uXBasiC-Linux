@@ -1,2 +1,0 @@
-WASM=does not support GOSUB/RETURN
-JS=UXB host binding missing: GOSUB

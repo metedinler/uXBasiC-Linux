@@ -1,0 +1,3 @@
+DIM s AS STRING = "A" + CHR(0) + "B"
+PRINT LEN(s)
+PRINT ASC(RIGHT(s, 1))

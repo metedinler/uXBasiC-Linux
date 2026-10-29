@@ -1,0 +1,4 @@
+DIM s AS STRING
+OPEN "wrong_mode.txt" FOR OUTPUT AS #3
+INPUT #3, s
+PRINT "UNREACHABLE"

@@ -1,0 +1,34 @@
+[
+ {
+  "ad": "h01 DIM a() bos parantez",
+  "kod": "DIM a() AS I32\nPRINT 1\n"
+ },
+ {
+  "ad": "h02 REDIM sabit",
+  "kod": "DIM a(2) AS I32\nREDIM a(5)\na(5) = 4\nPRINT a(5)\n"
+ },
+ {
+  "ad": "h03 REDIM degiskenle",
+  "kod": "DIM n AS I32 = 4\nDIM a(2) AS I32\nREDIM a(n)\na(4) = 9\nPRINT a(4)\n"
+ },
+ {
+  "ad": "h04 cok boyutlu dizi",
+  "kod": "DIM m(1, 2) AS I32\nm(1, 2) = 5\nPRINT m(1, 2)\nPRINT UBOUND(m, 2)\n"
+ },
+ {
+  "ad": "h05 dizi baslangic degeri esittir",
+  "kod": "DIM a(2) AS I32 = 7\nPRINT a(0)\n"
+ },
+ {
+  "ad": "h06 skaler baslangic degeri",
+  "kod": "DIM x AS I32 = 7\nDIM s AS STRING = \"ab\"\nPRINT x\nPRINT s\n"
+ },
+ {
+  "ad": "h07 LIST_NEW ve LISTADD",
+  "kod": "DIM l AS LIST = LIST_NEW()\nLISTADD(l, 5)\nPRINT LISTLEN(l)\n"
+ },
+ {
+  "ad": "h08 sinif alani DIM ile liste",
+  "kod": "DIM d AS DICT\nDICTSET(d, \"a\", 1)\nDICTSET(d, \"b\", 2)\nPRINT DICTLEN(d)\nPRINT DICTHAS(d, \"a\")\n"
+ }
+]

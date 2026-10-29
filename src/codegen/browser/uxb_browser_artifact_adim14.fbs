@@ -3,6 +3,7 @@
 
 #include once "../js/runtime/js_runtime_writer.fbs"
 #include once "../../preprocessor/preprocess_meta_model.fbs"
+#include once "../../preprocessor/preprocess_package.fbs"
 
 
 Function UXBAdim14BrowserBaseName(ByRef pathText As String) As String
@@ -86,7 +87,10 @@ Function UXBAdim14PreprocessBlocksFor(ByRef r As PreprocessResult, ByRef targetT
     For i = 0 To r.blockCount - 1
         If UCase(Trim(r.blocks(i).target)) = wantTarget Then
             If wantSection = "" Or UCase(Trim(r.blocks(i).section)) = wantSection Then
-                outText &= r.blocks(i).content & Chr(10)
+                ' %%SOURCE_MAP: a comment with the tag that was current when the block was captured
+                Dim tagKind As String = wantTarget
+                If tagKind = "WASM_HOST_JS" Then tagKind = "JS"
+                outText &= UXBPkgSourceTagComment(r.blocks(i).sourceTag, tagKind) & r.blocks(i).content & Chr(10)
             End If
         End If
     Next i
@@ -160,6 +164,9 @@ Function UXBAdim14WriteBrowserManifest(ByRef ctx As UXBBackendContext, ByRef err
     j &= "  " & Chr(34) & "js" & Chr(34) & ": " & Chr(34) & UXBAdim14BrowserJsonEscape(UXBAdim14BrowserBaseName(ctx.jsOutPath)) & Chr(34) & "," & Chr(10)
     j &= "  " & Chr(34) & "wat" & Chr(34) & ": " & Chr(34) & UXBAdim14BrowserJsonEscape(UXBAdim14BrowserBaseName(ctx.watOutPath)) & Chr(34) & "," & Chr(10)
     j &= "  " & Chr(34) & "wasm" & Chr(34) & ": " & Chr(34) & UXBAdim14BrowserJsonEscape(UXBAdim14BrowserBaseName(ctx.wasmOutPath)) & Chr(34) & "," & Chr(10)
+    ' S-672: the declarations of the program (bundle, entries, files, exports, api, routes, capabilities, security, ...) as nested objects
+    Dim pkgMembers As String = UXBPkgManifestMembers(pr, 2)
+    If pkgMembers <> "" Then j &= pkgMembers & "," & Chr(10)
     j &= "  " & Chr(34) & "preprocess_block_count" & Chr(34) & ": " & LTrim(Str(pr.blockCount)) & "," & Chr(10)
     j &= "  " & Chr(34) & "preprocess_asset_count" & Chr(34) & ": " & LTrim(Str(pr.assetCount)) & "," & Chr(10)
     j &= "  " & Chr(34) & "preprocess_blocks" & Chr(34) & ": [" & Chr(10)
@@ -171,18 +178,12 @@ Function UXBAdim14WriteBrowserManifest(ByRef ctx As UXBBackendContext, ByRef err
         j &= "," & Chr(34) & "outFile" & Chr(34) & ":" & Chr(34) & UXBAdim14BrowserJsonEscape(pr.blocks(i).outFile) & Chr(34)
         j &= "," & Chr(34) & "source" & Chr(34) & ":" & Chr(34) & UXBAdim14BrowserJsonEscape(pr.blocks(i).sourceFile) & Chr(34)
         j &= "," & Chr(34) & "startLine" & Chr(34) & ":" & LTrim(Str(pr.blocks(i).startLine))
-        j &= "," & Chr(34) & "endLine" & Chr(34) & ":" & LTrim(Str(pr.blocks(i).endLine)) & "}"
+        j &= "," & Chr(34) & "endLine" & Chr(34) & ":" & LTrim(Str(pr.blocks(i).endLine))
+        j &= "," & Chr(34) & "sourceTag" & Chr(34) & ":" & Chr(34) & UXBAdim14BrowserJsonEscape(pr.blocks(i).sourceTag) & Chr(34) & "}"
     Next i
     j &= Chr(10) & "  ]," & Chr(10)
     j &= "  " & Chr(34) & "preprocess_assets" & Chr(34) & ": [" & Chr(10)
-    For i = 0 To pr.assetCount - 1
-        If i > 0 Then j &= "," & Chr(10)
-        j &= "    {" & Chr(34) & "kind" & Chr(34) & ":" & Chr(34) & UXBAdim14BrowserJsonEscape(pr.assets(i).assetKind) & Chr(34)
-        j &= "," & Chr(34) & "source" & Chr(34) & ":" & Chr(34) & UXBAdim14BrowserJsonEscape(pr.assets(i).sourcePath) & Chr(34)
-        j &= "," & Chr(34) & "target" & Chr(34) & ":" & Chr(34) & UXBAdim14BrowserJsonEscape(pr.assets(i).targetPath) & Chr(34)
-        j &= "," & Chr(34) & "alias" & Chr(34) & ":" & Chr(34) & UXBAdim14BrowserJsonEscape(pr.assets(i).aliasName) & Chr(34)
-        j &= "," & Chr(34) & "required" & Chr(34) & ":" & LTrim(Str(pr.assets(i).required)) & "}"
-    Next i
+    j &= UXBPkgAssetsJson(pr)
     j &= Chr(10) & "  ]" & Chr(10)
     j &= "}" & Chr(10)
 
@@ -207,21 +208,39 @@ Function UXBAdim14WriteBrowserHtmlShell(ByRef ctx As UXBBackendContext, ByRef er
     Dim jsBlockText As String
     Dim htmlHeadText As String
     Dim htmlBodyText As String
-    cssText = UXBAdim14PreprocessBlocksStyle(pr)
-    jsBlockText = UXBAdim14PreprocessBlocksScript(pr)
+    cssText = UXBPkgMinifyFor(pr, "CSS", UXBAdim14PreprocessBlocksStyle(pr))
+    jsBlockText = UXBPkgMinifyFor(pr, "JS", UXBAdim14PreprocessBlocksScript(pr))
     htmlHeadText = UXBAdim14PreprocessBlocksFor(pr, "HTML", "HEAD")
-    htmlBodyText = UXBAdim14PreprocessBlocksFor(pr, "HTML", "BODY") & UXBAdim14PreprocessBlocksFor(pr, "HTML", "LINE")
+    htmlBodyText = UXBPkgRewriteAssetLinks(pr, UXBAdim14PreprocessBlocksFor(pr, "HTML", "BODY") & UXBAdim14PreprocessBlocksFor(pr, "HTML", "LINE"))
+
+    ' %%STYLE_ENTRY / %%SCRIPT_ENTRY: the collected CSS and user JS go to their own files and are linked, not inlined.
+    Dim browserDir As String = UXBPkgDirOf(ctx.htmlOutPath)
+    Dim styleEntry As String = "", scriptEntry As String = ""
+    UXBPkgManifestGet pr, "entries.css", styleEntry
+    UXBPkgManifestGet pr, "entries.js", scriptEntry
+    styleEntry = UXBPkgSlash(styleEntry)
+    scriptEntry = UXBPkgSlash(scriptEntry)
+    If styleEntry <> "" Then
+        If UXBAdim14BrowserWriteFile(UXBPkgJoin(browserDir, styleEntry), cssText & Chr(10), errText) = 0 Then Return 0
+    End If
+    If scriptEntry <> "" Then
+        If UXBAdim14BrowserWriteFile(UXBPkgJoin(browserDir, scriptEntry), jsBlockText & Chr(10), errText) = 0 Then Return 0
+    End If
+    Dim dataHref As String = UXBPkgDataHref(pr)
+    Dim globalsScript As String = UXBPkgGlobalsScript(pr, dataHref)
 
     Dim h As String
     h = "<!doctype html>" & Chr(10)
     h &= "<html><head><meta charset=" & Chr(34) & "utf-8" & Chr(34) & ">" & Chr(10)
-    h &= "<title>uXBasic Browser Output</title>" & Chr(10)
-    If Trim(cssText) <> "" Then h &= "<style>" & Chr(10) & cssText & Chr(10) & "</style>" & Chr(10)
+    h &= "<title>" & UXBPkgHtmlEscapeText(UXBPkgPageTitle(pr)) & "</title>" & Chr(10)
+    h &= UXBPkgHeadExtras(pr, styleEntry)
+    If styleEntry = "" And Trim(cssText) <> "" Then h &= "<style>" & Chr(10) & cssText & Chr(10) & "</style>" & Chr(10)
     If Trim(htmlHeadText) <> "" Then h &= htmlHeadText & Chr(10)
     h &= "</head>" & Chr(10)
     h &= "<body>" & Chr(10)
     h &= "<pre id=" & Chr(34) & "uxb-console" & Chr(34) & "></pre>" & Chr(10)
     If Trim(htmlBodyText) <> "" Then h &= htmlBodyText & Chr(10)
+    If Trim(globalsScript) <> "" Then h &= "<script>" & Chr(10) & globalsScript & "</script>" & Chr(10)
     If Trim(ctx.jsRuntimeOutPath) <> "" Then
         h &= "<script src=" & Chr(34) & UXBAdim14BrowserRelativePath(ctx.htmlOutPath, ctx.jsRuntimeOutPath) & Chr(34) & "></script>" & Chr(10)
     End If
@@ -230,10 +249,15 @@ Function UXBAdim14WriteBrowserHtmlShell(ByRef ctx As UXBBackendContext, ByRef er
     End If
     If Trim(ctx.wasmOutPath) <> "" Then
         h &= "<script>globalThis.uxbWasmPath = '" & UXBAdim14BrowserRelativePath(ctx.htmlOutPath, ctx.wasmOutPath) & "';</script>" & Chr(10)
-        h &= "<script>if (globalThis.uxbWasmPath) fetch(globalThis.uxbWasmPath).then(r=>r.arrayBuffer()).then(b=>WebAssembly.instantiate(b,{})).then(x=>globalThis.uxbWasm=x.instance).catch(e=>console.error('uXBasic wasm load failed', e));</script>" & Chr(10)
+        h &= "<script>if (globalThis.uxbWasmPath) fetch(globalThis.uxbWasmPath).then(r=>r.arrayBuffer()).then(b=>WebAssembly.instantiate(b,globalThis.uxbBuildWasmImports?globalThis.uxbBuildWasmImports():{})).then(x=>globalThis.uxbWasm=x.instance).catch(e=>console.error('uXBasic wasm load failed', e));</script>" & Chr(10)
     End If
-    If Trim(jsBlockText) <> "" Then h &= "<script>" & Chr(10) & jsBlockText & Chr(10) & "</script>" & Chr(10)
+    If scriptEntry <> "" Then
+        h &= "<script src=" & Chr(34) & UXBPkgHtmlEscape(scriptEntry) & Chr(34) & "></script>" & Chr(10)
+    ElseIf Trim(jsBlockText) <> "" Then
+        h &= "<script>" & Chr(10) & jsBlockText & Chr(10) & "</script>" & Chr(10)
+    End If
     h &= "</body></html>" & Chr(10)
+    h = UXBPkgMinifyFor(pr, "HTML", h)
 
     Return UXBAdim14BrowserWriteFile(ctx.htmlOutPath, h, errText)
 End Function
@@ -248,10 +272,12 @@ End Function
 ' UXBAdim14PreprocessBlocksFor's grouping so multiple %%GEN_BLOCK sections that
 ' target the same outFile concatenate (in source order) into one file, instead of
 ' each write overwriting the last.
-Function UXBAdim14WriteGeneratedBlocks(ByRef errText As String) As Integer
+Function UXBAdim14WriteGeneratedBlocks(ByRef ctx As UXBBackendContext, ByRef errText As String) As Integer
     errText = ""
     Dim pr As PreprocessResult
     LexerPreprocessGetLastResult pr
+    ' The files belong to the package (below its root), never to whatever folder the compiler happens to run in.
+    Dim genRoot As String = UXBPkgJoin(UXBPkgPackageRoot(ctx.htmlOutPath), "generated")
 
     Dim writtenFiles(0 To 2047) As String
     Dim writtenCount As Integer
@@ -281,7 +307,7 @@ Function UXBAdim14WriteGeneratedBlocks(ByRef errText As String) As Integer
             End If
         Next j
 
-        If UXBAdim14BrowserWriteFile(outFile, combined, errText) = 0 Then Return 0
+        If UXBAdim14BrowserWriteFile(UXBPkgJoin(genRoot, outFile), combined, errText) = 0 Then Return 0
 
         If writtenCount <= UBound(writtenFiles) Then
             writtenFiles(writtenCount) = outFile
@@ -295,9 +321,35 @@ End Function
 Function UXBAdim14BrowserBackendEmit(ByRef moduleValue As MIRModule, ByRef ctx As UXBBackendContext, ByRef result As UXBBackendResult) As Integer
     Dim errText As String
 
+    ' S-672: write the files the program declared (assets, data, Markdown, README, ...) and record what was copied.
+    Dim pkgResult As PreprocessResult
+    LexerPreprocessGetLastResult pkgResult
+    Dim pkgWarn As String
+    If UXBPkgMaterialize(pkgResult, ctx.htmlOutPath, ctx.watOutPath, errText, pkgWarn) = 0 Then
+        UXBBackendResultFail result, UXB_BACKEND_E_EMIT, errText
+        Return 0
+    End If
+    LexerPreprocessSetLastResult pkgResult
+    If pkgWarn <> "" Then
+        Dim warnPos As Integer = 1
+        Do While warnPos <= Len(pkgWarn)
+            Dim warnNl As Integer = InStr(warnPos, pkgWarn, Chr(10))
+            If warnNl = 0 Then warnNl = Len(pkgWarn) + 1
+            UxbWarn Mid(pkgWarn, warnPos, warnNl - warnPos)
+            warnPos = warnNl + 1
+        Loop
+    End If
+
     If UXBAdim14WriteBrowserHtmlShell(ctx, errText) = 0 Then
         UXBBackendResultFail result, UXB_BACKEND_E_EMIT, errText
         Return 0
+    End If
+
+    If pkgResult.minifyJs <> 0 Then
+        If UXBPkgMinifyFile(pkgResult, "JS", ctx.jsOutPath, errText) = 0 OrElse UXBPkgMinifyFile(pkgResult, "JS", ctx.jsRuntimeOutPath, errText) = 0 Then
+            UXBBackendResultFail result, UXB_BACKEND_E_EMIT, errText
+            Return 0
+        End If
     End If
 
     If UXBAdim14WriteBrowserManifest(ctx, errText) = 0 Then
@@ -305,7 +357,7 @@ Function UXBAdim14BrowserBackendEmit(ByRef moduleValue As MIRModule, ByRef ctx A
         Return 0
     End If
 
-    If UXBAdim14WriteGeneratedBlocks(errText) = 0 Then
+    If UXBAdim14WriteGeneratedBlocks(ctx, errText) = 0 Then
         UXBBackendResultFail result, UXB_BACKEND_E_EMIT, errText
         Return 0
     End If

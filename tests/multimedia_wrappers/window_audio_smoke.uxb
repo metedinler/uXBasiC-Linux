@@ -1,0 +1,16 @@
+INCLUDE "include/modules/uxraylib.uxmh"
+
+uxraylib.InitWindow(320, 180, "uXBasic raylib smoke")
+PRINT "WINDOW_READY=1"
+uxraylib.BeginDrawing()
+uxraylib.ClearBackground(24, 28, 40, 255)
+uxraylib.DrawText("uXBasic + raylib + raygui", 18, 24, 20, 240, 240, 240, 255)
+uxraylib.DrawCircle(160, 105, 24, 80, 180, 255, 255)
+PRINT "GUI_BUTTON="; uxraylib.GuiButton(110, 140, 100, 26, "Smoke")
+uxraylib.EndDrawing()
+
+uxraylib.InitAudio()
+PRINT "AUDIO_READY="; uxraylib.AudioReady()
+uxraylib.CloseAudio()
+uxraylib.CloseWindow()
+PRINT "WINDOW_CLOSED=1"

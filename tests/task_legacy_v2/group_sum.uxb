@@ -1,0 +1,25 @@
+' S-030 Faz 2A: 16 gorev TASKGROUP ile toplanir; sonuclar ekleme sirasiyla okunur (cikti sirasi belirli).
+THREAD Sum(n AS I64) AS I64
+    DIM i AS I64
+    DIM s AS I64
+    FOR i = 1 TO n
+        s = s + i
+    NEXT
+    RETURN s
+END THREAD
+DIM g AS TASKGROUP
+DIM t(16) AS TASK OF I64
+DIM k AS I32
+FOR k = 1 TO 16
+    t(k) = SPAWN Sum(k * 10)
+    g.ADD(t(k))
+NEXT
+g.JOIN()
+DIM total AS I64
+FOR k = 1 TO 16
+    total = total + t(k).RESULT
+NEXT
+PRINT total
+PRINT t(16).STATUS
+
+

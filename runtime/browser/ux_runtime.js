@@ -306,7 +306,7 @@ export const ux = {
     if (c.kind === "DICT") {
       if (opu === "SET") { c.value.set(String(args[0]), args[1]); return args[1]; }
       if (opu === "GET") return c.value.get(String(args[0]));
-      if (opu === "HAS") return c.value.has(String(args[0])) ? 1 : 0;
+      if (opu === "HAS") return c.value.has(String(args[0])) ? -1 : 0;   // S-569/S-246: dilde DOGRU = -1
       if (opu === "CLEAR") { c.value.clear(); return 0; }
       if (opu === "FINDKEY") {
         for (const [k, v] of c.value.entries()) {
@@ -318,7 +318,7 @@ export const ux = {
     }
     if (c.kind === "SET") {
       if (opu === "ADD") { c.value.add(args[0]); return c.value.size; }
-      if (opu === "HAS") return c.value.has(args[0]) ? 1 : 0;
+      if (opu === "HAS") return c.value.has(args[0]) ? -1 : 0;   // S-569/S-246: dilde DOGRU = -1
       if (opu === "REMOVE") return c.value.delete(args[0]) ? 1 : 0;
       if (opu === "CLEAR") { c.value.clear(); return 0; }
       if (opu === "FIND") return c.value.has(args[0]) ? args[0] : null;
@@ -638,7 +638,8 @@ export const ux = {
       case "MOUSEDOWN": return this.mouseDown(args[0]);
       case "AI": case "AI$": case "AI_PROMPT": return this.aiPrompt(args[0]);
 
-      case "TIMER": return (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000;
+      // S-624: TIMER = yerel gece yarisindan beri kesirli saniye (ux_runtime_core.js ile ayni tanim).
+      case "TIMER": { const d = new Date(); return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000; }
       case "SETSTRINGSIZE": return this.setStringSize(args[0]);
       case "SETNEWOFFSET": return (toNumber(args[0]) | 0) + (toNumber(args[1]) | 0);
 

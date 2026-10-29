@@ -1,0 +1,19 @@
+CLASS Cell
+    PUBLIC
+    n AS I32
+END CLASS
+DIM cells(-1 TO 0, 2 TO 3) AS Cell
+cells(-1, 2) = NEW Cell()
+cells(-1, 2).n = 10
+DIM trace AS I32 = 0
+FUNCTION AxisOne() AS I32
+    trace = trace * 10 + 1
+    RETURN -1
+END FUNCTION
+FUNCTION AxisTwo() AS I32
+    trace = trace * 10 + 2
+    RETURN 2
+END FUNCTION
+cells(AxisOne(), AxisTwo()).n += 3
+PRINT cells(-1, 2).n
+PRINT trace

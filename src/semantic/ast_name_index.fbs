@@ -22,8 +22,8 @@
 '
 ' The index is (re)built whenever the AST it was built for has a different node
 ' count, is a different ParseState, or a new parse started (gUxbAstEpoch, bumped by
-' ASTPoolInit). Declaration nodes are created by the parser
-' and never re-kinded/renamed afterwards; if a caller ever needs to be sure, it
+' ASTPoolInit). Semantic arity-overload binding also bumps that epoch when
+' it renames declarations without changing node count; a caller additionally
 ' re-checks kind/value of the node it is handed (all current callers do).
 ' If the table cannot hold the names (very large programs) Ensure returns 0 and the
 ' caller falls back to its plain scan.

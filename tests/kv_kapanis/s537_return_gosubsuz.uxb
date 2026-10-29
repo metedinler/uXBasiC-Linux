@@ -1,0 +1,5 @@
+' S-537: programda hic GOSUB yokken yordam disindaki RETURN altı yolda ayni DERLEME hatasidir (eskiden AST "RETURN used
+' without GOSUB (9301)" ile duruyor, MIR / native / JS / WASM sessizce bitiyor, eski AST-x64 coker).
+PRINT "once"
+RETURN
+PRINT "sonra"

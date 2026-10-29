@@ -13,6 +13,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot '../../UXB-Common.ps1')
 
 # Batch/terminal çağrılarında -Modules uxsqlite,uxjson biçimini de kabul et.
 $Modules = @(
@@ -112,14 +113,7 @@ function Test-Pe64 {
 
 function Get-ImportedDlls {
     param([string]$DllPath)
-    $text = & $script:Objdump -p $DllPath 2>$null
-    if ($LASTEXITCODE -ne 0) { return @() }
-    return @(
-        $text |
-        Select-String -Pattern "DLL Name:\s*(.+)$" |
-        ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() } |
-        Sort-Object -Unique
-    )
+    @(Get-UxbPeImportedDllNames -Path $DllPath -Objdump $script:Objdump)
 }
 
 function Test-IsSystemDll([string]$Name) {

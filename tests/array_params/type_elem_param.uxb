@@ -1,8 +1,8 @@
 ' S-103: TYPE elemanli dizi parametresi (arr AS Pt[]).
 ' AST ve canonical-MIR: parametre CAGIRANIN dizisinin takma adidir -- okuma ve yazma cagirana gorunur.
 ' Eskiden AST sessizce 0 okuyor ve cagirana yazmiyordu (yanlis sonuc).
-' Native x64 ve legacy AST-x64: eleman adimi (stride) bilgisi henuz yok -> DURUST, NET derleme hatasi
-' (yalniz yerlesik skaler elemanli dizi parametreleri destekli; expected/type_elem_param.contains.txt).
+' 2026-10-28 TUR6/TUR8: native x64 ve legacy AST-x64 de ortak TYPE
+' stride/descriptor kullanir; her motor gercek 7, 10, 11 ciktisini vermelidir.
 TYPE Pt
     X AS I32
     Y AS I32

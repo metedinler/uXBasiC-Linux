@@ -1,0 +1,11 @@
+' S-572 / S-360: a FINAL class cannot be extended.
+FINAL CLASS Seal
+    PUBLIC
+    METHOD F() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+CLASS Child EXTENDS Seal
+    PUBLIC
+END CLASS
+PRINT 1

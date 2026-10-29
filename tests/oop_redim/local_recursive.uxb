@@ -1,0 +1,14 @@
+CLASS Cell
+ PUBLIC
+ value AS I32
+END CLASS
+FUNCTION Sum(depth AS I32) AS I32
+ DIM a(0 TO depth, 1 TO 1) AS Cell
+ a(depth,1) = NEW Cell()
+ a(depth,1).value = depth*10
+ DIM child AS I32 = 0
+ IF depth > 0 THEN child = Sum(depth-1)
+ REDIM PRESERVE a(0 TO depth+1, 0 TO 2) AS Cell
+ RETURN a(depth,1).value+child
+END FUNCTION
+PRINT Sum(3)

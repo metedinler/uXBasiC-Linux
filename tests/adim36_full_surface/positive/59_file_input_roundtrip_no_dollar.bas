@@ -1,0 +1,10 @@
+DIM S AS STRING
+OPEN "tmp_adim40_io.txt" FOR OUTPUT AS #1
+PRINT #1, "HELLO"
+CLOSE #1
+
+OPEN "tmp_adim40_io.txt" FOR INPUT AS #2
+INPUT #2, S
+CLOSE #2
+
+PRINT S

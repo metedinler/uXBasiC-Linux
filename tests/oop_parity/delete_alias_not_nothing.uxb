@@ -1,0 +1,21 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT 7
+    END DESTRUCTOR
+    SUB Say()
+        PRINT v
+    END SUB
+END CLASS
+
+' S-574: the alias is NOT emptied by the other variable's DELETE - it still names the dead object, so it differs from NOTHING while the
+' variable that was deleted equals NOTHING.
+DIM a AS Kutu = NEW Kutu(3)
+DIM b AS Kutu = a
+DELETE a
+IF a = NOTHING THEN PRINT 1
+IF b <> NOTHING THEN PRINT 2

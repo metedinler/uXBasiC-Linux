@@ -1,0 +1,46 @@
+N1 hic cagrilmayan SUB icinde DELETE
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Kullanilmayan()
+    DIM s AS Sayac = NEW Sayac()
+    DELETE s
+END SUB
+PRINT "tamam"
+=====
+N2 hic cagrilmayan SUB icinde baska deyimler
+SUB Kullanilmayan()
+    DIM i AS I32
+    FOR i = 1 TO 3
+        PRINT i
+    NEXT
+END SUB
+PRINT "tamam"
+=====
+N3 hic cagrilmayan FUNCTION DELETE parametreli (uxoop deseni), MAIN yok
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+SUB Salin(x AS Sayac)
+    DIM y AS Sayac
+    y = x
+    DELETE y
+END SUB
+FUNCTION Yap() AS Sayac
+    DIM r AS Sayac
+    r = NEW Sayac()
+    RETURN r
+END FUNCTION
+=====
+N4 yalniz bildirimler, ust duzey deyim yok, DELETE yok
+CLASS Sayac
+PUBLIC
+    DIM n AS I32
+END CLASS
+FUNCTION Yap() AS Sayac
+    DIM r AS Sayac
+    r = NEW Sayac()
+    RETURN r
+END FUNCTION

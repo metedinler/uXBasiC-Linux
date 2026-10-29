@@ -1,0 +1,11 @@
+' S-624: iki TIMER okumasi arasindaki fark pozitif ve 1 saniyenin altindadir (tam saniye cozunurlugu yetmez).
+DIM a AS F64 = TIMER
+DIM b AS F64 = a
+DIM n AS I32 = 0
+DO WHILE (b = a) AND (n < 200000000)
+    b = TIMER
+    n += 1
+LOOP
+PRINT b > a
+PRINT (b - a) < 1
+PRINT (b - a) > 0

@@ -5,8 +5,8 @@ call uxb\tests\uxtensor\build_and_run_uxtensor_probe.bat
 if errorlevel 1 exit /b 1
 call build_compiler_64.bat
 if errorlevel 1 exit /b 1
-if exist "uxb\compiler\wrappers\uxb_main_wrapper_64.exe" (
-  set "UXB=uxb\compiler\wrappers\uxb_main_wrapper_64.exe"
+if exist "uxb\bin\uxb.exe" (
+  set "UXB=uxb\bin\uxb.exe"
 ) else (
   set "UXB=uxb\build\uxb_main_64.exe"
 )

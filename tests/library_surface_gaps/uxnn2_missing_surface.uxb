@@ -1,0 +1,20 @@
+INCLUDE "include/modules/uxnn2.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxnn2.Backend()
+        uxnn2.ForwardPtr(0, 0, 0)
+        PRINT uxnn2.GetBias(0, 0, 0)
+        PRINT uxnn2.GetWeight(0, 0, 0, 0)
+        PRINT uxnn2.Load("")
+        PRINT uxnn2.LossMSEPtr(0, 0, 0)
+        PRINT uxnn2.PredictArgmaxPtr(0, 0)
+        PRINT uxnn2.Save(0, "")
+        uxnn2.SetBias(0, 0, 0, 0.0)
+        uxnn2.SetOptimizerParams(0, 0.0, 0.0, 0.0, 0.0)
+        uxnn2.SetWeight(0, 0, 0, 0, 0.0)
+        PRINT uxnn2.TrainArrayMSEPtr(0, 0, 0, 0, 0, 0)
+        PRINT uxnn2.TrainSampleMSEPtr(0, 0, 0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXNN2"
+END MAIN

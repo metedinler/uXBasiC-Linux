@@ -2,7 +2,7 @@ Sub ExecSetFfiPolicyPath(ByRef pathText As String)
     Dim p As String
     p = Trim(pathText)
     If p = "" Then
-        gFfiDefaultPolicyPath = "build/manual/config/ffi_allowlist.txt"
+        gFfiDefaultPolicyPath = ExePath & "/config/ffi_allowlist.txt"
     Else
         gFfiDefaultPolicyPath = p
     End If
@@ -13,12 +13,7 @@ Sub ExecSetFfiPolicyPath(ByRef pathText As String)
         gFfiAllowlistLoadFailed = 0
         gFfiAllowlistLoadFailReason = ""
         gFfiAllowEntryCount = 0
-        gFfiAllowEntryCap = 0
         Erase gFfiAllowEntries
-        gFfiIndexBuilt = 0
-        gFfiIndexCap = 0
-        Erase gFfiIndexSlots
-        Erase gFfiChainNext
     End If
 End Sub
 
@@ -26,11 +21,11 @@ Private Function ExecGetFfiPolicyPath() As String
     If gActiveRuntimeCtx <> 0 Then
         If Trim(gActiveRuntimeCtx->ffiPolicyPath) = "" Then
             gActiveRuntimeCtx->ffiPolicyPath = gFfiDefaultPolicyPath
-            If Trim(gActiveRuntimeCtx->ffiPolicyPath) = "" Then gActiveRuntimeCtx->ffiPolicyPath = "build/manual/config/ffi_allowlist.txt"
+            If Trim(gActiveRuntimeCtx->ffiPolicyPath) = "" Then gActiveRuntimeCtx->ffiPolicyPath = ExePath & "/config/ffi_allowlist.txt"
         End If
         Return gActiveRuntimeCtx->ffiPolicyPath
     End If
-    If Trim(gFfiDefaultPolicyPath) = "" Then gFfiDefaultPolicyPath = "build/manual/config/ffi_allowlist.txt"
+    If Trim(gFfiDefaultPolicyPath) = "" Then gFfiDefaultPolicyPath = ExePath & "/config/ffi_allowlist.txt"
     Return gFfiDefaultPolicyPath
 End Function
 
@@ -52,266 +47,6 @@ Private Function ExecGetFfiPolicyMode() As String
     End If
     If gFfiDefaultPolicyEnforce <> 0 Then Return "ENFORCE"
     Return "REPORT_ONLY"
-End Function
-
-Sub ExecSetFfiResolverPath(ByRef pathText As String)
-    Dim p As String
-    p = Trim(pathText)
-    If p = "" Then
-        gFfiDefaultResolverPath = "build/manual/interop/ffi_call_x86_resolver.csv"
-    Else
-        gFfiDefaultResolverPath = p
-    End If
-    If gActiveRuntimeCtx <> 0 Then gActiveRuntimeCtx->ffiResolverPath = gFfiDefaultResolverPath
-
-    If gActiveRuntimeCtx <> 0 Then
-        gFfiX86ResolverLoaded = 0
-        gFfiX86ResolverLoadFailed = 0
-        gFfiX86ResolverLoadFailReason = ""
-        gFfiX86ResolverEntryCount = 0
-        Erase gFfiX86ResolverEntries
-        gFfiX86ResolvedEntryCount = 0
-        Erase gFfiX86ResolvedEntries
-        gFfiX86SymptrMapEntryCount = 0
-        Erase gFfiX86SymptrMapEntries
-        gFfiX86InvokeCount = 0
-        gFfiX86LastInvokeStubId = 0
-        gFfiX86LastInvokeConv = ""
-        gFfiX86CallerCleanupBytes = 0
-        gFfiX86CalleeCleanupBytes = 0
-        gFfiX86SymptrWriteCount = 0
-    End If
-End Sub
-
-Sub ExecSetFfiResolverMode(ByRef modeText As String)
-    Dim m As String
-    m = UCase(Trim(modeText))
-    If m = "ENFORCE" Then
-        gFfiDefaultResolverEnforce = 1
-    Else
-        gFfiDefaultResolverEnforce = 0
-    End If
-    If gActiveRuntimeCtx <> 0 Then gActiveRuntimeCtx->ffiResolverEnforce = gFfiDefaultResolverEnforce
-End Sub
-
-Private Function ExecGetFfiResolverMode() As String
-    If gActiveRuntimeCtx <> 0 Then
-        If gActiveRuntimeCtx->ffiResolverEnforce <> 0 Then Return "ENFORCE"
-        Return "REPORT_ONLY"
-    End If
-    If gFfiDefaultResolverEnforce <> 0 Then Return "ENFORCE"
-    Return "REPORT_ONLY"
-End Function
-
-Private Function ExecGetFfiResolverPath() As String
-    If gActiveRuntimeCtx <> 0 Then
-        If Trim(gActiveRuntimeCtx->ffiResolverPath) = "" Then
-            gActiveRuntimeCtx->ffiResolverPath = gFfiDefaultResolverPath
-            If Trim(gActiveRuntimeCtx->ffiResolverPath) = "" Then gActiveRuntimeCtx->ffiResolverPath = "build/manual/interop/ffi_call_x86_resolver.csv"
-        End If
-        Return gActiveRuntimeCtx->ffiResolverPath
-    End If
-    If Trim(gFfiDefaultResolverPath) = "" Then gFfiDefaultResolverPath = "build/manual/interop/ffi_call_x86_resolver.csv"
-    Return gFfiDefaultResolverPath
-End Function
-
-Private Function ExecFindX86ResolvedProc(ByVal stubId As Integer, ByRef procOut As Any Ptr) As Integer
-    Dim i As Integer
-    For i = 0 To gFfiX86ResolvedEntryCount - 1
-        If gFfiX86ResolvedEntries(i).stubId = stubId Then
-            procOut = gFfiX86ResolvedEntries(i).procAddr
-            If procOut <> 0 Then Return 1
-            Return 0
-        End If
-    Next i
-
-    procOut = 0
-    Return 0
-End Function
-
-Private Function ExecFindX86SymptrMapIndex(ByVal stubId As Integer) As Integer
-    Dim i As Integer
-    For i = 0 To gFfiX86SymptrMapEntryCount - 1
-        If gFfiX86SymptrMapEntries(i).stubId = stubId Then Return i
-    Next i
-
-    Return -1
-End Function
-
-Private Sub ExecUpsertX86SymptrMap(ByVal stubId As Integer, ByVal procAddr As Any Ptr)
-    Dim idx As Integer
-    idx = ExecFindX86SymptrMapIndex(stubId)
-
-    If idx <> -1 Then
-        gFfiX86SymptrMapEntries(idx).procAddr = procAddr
-        gFfiX86SymptrWriteCount += 1
-        Exit Sub
-    End If
-
-    If gFfiX86SymptrMapEntryCount = 0 Then
-        ReDim gFfiX86SymptrMapEntries(0)
-    Else
-        ReDim Preserve gFfiX86SymptrMapEntries(gFfiX86SymptrMapEntryCount)
-    End If
-
-    gFfiX86SymptrMapEntries(gFfiX86SymptrMapEntryCount).stubId = stubId
-    gFfiX86SymptrMapEntries(gFfiX86SymptrMapEntryCount).symptrLabel = "__uxb_ffi_x86_symptr_" & LTrim(Str(stubId))
-    gFfiX86SymptrMapEntries(gFfiX86SymptrMapEntryCount).procAddr = procAddr
-    gFfiX86SymptrMapEntryCount += 1
-    gFfiX86SymptrWriteCount += 1
-End Sub
-
-Private Sub ExecAppendX86ResolvedProc(ByVal stubId As Integer, ByVal procAddr As Any Ptr)
-    If gFfiX86ResolvedEntryCount = 0 Then
-        ReDim gFfiX86ResolvedEntries(0)
-    Else
-        ReDim Preserve gFfiX86ResolvedEntries(gFfiX86ResolvedEntryCount)
-    End If
-
-    gFfiX86ResolvedEntries(gFfiX86ResolvedEntryCount).stubId = stubId
-    gFfiX86ResolvedEntries(gFfiX86ResolvedEntryCount).procAddr = procAddr
-    gFfiX86ResolvedEntryCount += 1
-End Sub
-
-Function ExecDebugGetFfiX86ResolvedCount() As Integer
-    If gActiveRuntimeCtx = 0 Then Return 0
-    Return gFfiX86ResolvedEntryCount
-End Function
-
-Function ExecDebugGetFfiX86SymptrMapCount() As Integer
-    If gActiveRuntimeCtx = 0 Then Return 0
-    Return gFfiX86SymptrMapEntryCount
-End Function
-
-Function ExecDebugGetFfiX86InvokeCount() As Integer
-    If gActiveRuntimeCtx = 0 Then Return 0
-    Return gFfiX86InvokeCount
-End Function
-
-Function ExecDebugGetFfiX86LastInvokeStubId() As Integer
-    If gActiveRuntimeCtx = 0 Then Return 0
-    Return gFfiX86LastInvokeStubId
-End Function
-
-Function ExecDebugGetFfiX86LastInvokeConv() As String
-    If gActiveRuntimeCtx = 0 Then Return ""
-    Return gFfiX86LastInvokeConv
-End Function
-
-Function ExecDebugGetFfiX86CallerCleanupBytes() As Integer
-    If gActiveRuntimeCtx = 0 Then Return 0
-    Return gFfiX86CallerCleanupBytes
-End Function
-
-Function ExecDebugGetFfiX86CalleeCleanupBytes() As Integer
-    If gActiveRuntimeCtx = 0 Then Return 0
-    Return gFfiX86CalleeCleanupBytes
-End Function
-
-Function ExecDebugGetFfiX86SymptrWriteCount() As Integer
-    If gActiveRuntimeCtx = 0 Then Return 0
-    Return gFfiX86SymptrWriteCount
-End Function
-
-Function ExecDebugGetFfiX86SymptrLabelByStubId(ByVal stubId As Integer) As String
-    If gActiveRuntimeCtx = 0 Then Return ""
-    Dim idx As Integer
-    idx = ExecFindX86SymptrMapIndex(stubId)
-    If idx = -1 Then Return ""
-    Return gFfiX86SymptrMapEntries(idx).symptrLabel
-End Function
-
-Function ExecDebugGetFfiX86SymptrProcAddrByStubId(ByVal stubId As Integer) As UInteger
-    If gActiveRuntimeCtx = 0 Then Return 0
-    Dim idx As Integer
-    idx = ExecFindX86SymptrMapIndex(stubId)
-    If idx = -1 Then Return 0
-    Return CUInt(gFfiX86SymptrMapEntries(idx).procAddr)
-End Function
-
-Private Function ExecFindX86ResolverEntryIndex(ByRef dllName As String, ByRef symbolName As String, ByRef signatureText As String, ByRef callingConventionText As String, ByVal argCount As Integer) As Integer
-    Dim dllKey As String
-    Dim symbolKey As String
-    Dim sigKey As String
-    Dim convKey As String
-    dllKey = UCase(Trim(dllName))
-    symbolKey = UCase(Trim(symbolName))
-    sigKey = UCase(Trim(signatureText))
-    convKey = UCase(Trim(callingConventionText))
-
-    Dim fallbackWildcardIdx As Integer
-    Dim fallbackCompatIdx As Integer
-    fallbackWildcardIdx = -1
-    fallbackCompatIdx = -1
-
-    Dim i As Integer
-    For i = 0 To gFfiX86ResolverEntryCount - 1
-        Dim sameDll As Integer
-        Dim sameSymbol As Integer
-        Dim sameSig As Integer
-        Dim allowConv As String
-        Dim reqConv As String
-
-        sameDll = IIf(gFfiX86ResolverEntries(i).dllName = dllKey, 1, 0)
-        sameSymbol = IIf(gFfiX86ResolverEntries(i).symbolName = symbolKey, 1, 0)
-        sameSig = IIf(gFfiX86ResolverEntries(i).signatureText = sigKey, 1, 0)
-
-        If sameDll <> 0 And sameSymbol <> 0 And sameSig <> 0 Then
-            reqConv = convKey
-            allowConv = UCase(Trim(gFfiX86ResolverEntries(i).callingConventionText))
-            If reqConv = "" Then reqConv = "CDECL"
-
-            If gFfiX86ResolverEntries(i).argCount = argCount Then
-                If allowConv = reqConv Then
-                    Return i
-                End If
-
-                If (allowConv = "" Or allowConv = "*") And fallbackWildcardIdx = -1 Then
-                    fallbackWildcardIdx = i
-                End If
-
-#Ifdef __FB_64BIT__
-                If (allowConv = "CDECL" Or allowConv = "STDCALL") And (reqConv = "CDECL" Or reqConv = "STDCALL") Then
-                    If fallbackCompatIdx = -1 Then fallbackCompatIdx = i
-                End If
-#EndIf
-            End If
-        End If
-    Next i
-
-    If fallbackWildcardIdx <> -1 Then Return fallbackWildcardIdx
-    If fallbackCompatIdx <> -1 Then Return fallbackCompatIdx
-
-    Return -1
-End Function
-
-Function ExecX86FfiValidateCleanupContract(ByRef errText As String) As Integer
-    Dim i As Integer
-    For i = 0 To gFfiX86ResolverEntryCount - 1
-        Dim conv As String
-        Dim cleanup As String
-        conv = UCase(Trim(gFfiX86ResolverEntries(i).callingConventionText))
-        cleanup = UCase(Trim(gFfiX86ResolverEntries(i).cleanupType))
-
-        If gFfiX86ResolverEntries(i).argStackBytes <> gFfiX86ResolverEntries(i).argCount * 4 Then
-            errText = "exec: x86 cleanup contract arg_stack_bytes mismatch"
-            Return 0
-        End If
-
-        If conv = "STDCALL" Then
-            If cleanup <> "CALLEE" Then
-                errText = "exec: x86 cleanup contract stdcall must be CALLEE"
-                Return 0
-            End If
-        Else
-            If cleanup <> "CALLER" Then
-                errText = "exec: x86 cleanup contract cdecl must be CALLER"
-                Return 0
-            End If
-        End If
-    Next i
-
-    Return 1
 End Function
 
 #ifndef UXB_WIN32_LOADER_DECLARED
@@ -352,384 +87,6 @@ Type ExecFnArg4CdeclI32U64 As Function Cdecl (ByVal a0 As ULongInt, ByVal a1 As 
 Declare Function ExecGetActiveFfiAbiName() As String
 Declare Function ExecIsFreeBasicRuntimeDll(ByRef dllName As String) As Integer
 Declare Function ExecClampI32(ByVal valueIn As Double) As Integer
-
-Private Sub ExecFfiX86ResolverAppend(ByVal stubId As Integer, ByRef dllName As String, ByRef symbolName As String, ByRef signatureText As String, ByRef callingConventionText As String, ByVal argCount As Integer, ByVal argStackBytes As Integer, ByRef cleanupType As String, ByRef symptrLabel As String)
-    If gFfiX86ResolverEntryCount = 0 Then
-        ReDim gFfiX86ResolverEntries(0)
-    Else
-        ReDim Preserve gFfiX86ResolverEntries(gFfiX86ResolverEntryCount)
-    End If
-
-    gFfiX86ResolverEntries(gFfiX86ResolverEntryCount).stubId = stubId
-    gFfiX86ResolverEntries(gFfiX86ResolverEntryCount).dllName = UCase(Trim(dllName))
-    gFfiX86ResolverEntries(gFfiX86ResolverEntryCount).symbolName = UCase(Trim(symbolName))
-    gFfiX86ResolverEntries(gFfiX86ResolverEntryCount).signatureText = UCase(Trim(signatureText))
-    gFfiX86ResolverEntries(gFfiX86ResolverEntryCount).callingConventionText = UCase(Trim(callingConventionText))
-    gFfiX86ResolverEntries(gFfiX86ResolverEntryCount).argCount = argCount
-    gFfiX86ResolverEntries(gFfiX86ResolverEntryCount).argStackBytes = argStackBytes
-    gFfiX86ResolverEntries(gFfiX86ResolverEntryCount).cleanupType = UCase(Trim(cleanupType))
-    gFfiX86ResolverEntries(gFfiX86ResolverEntryCount).symptrLabel = Trim(symptrLabel)
-    gFfiX86ResolverEntryCount += 1
-End Sub
-
-Private Sub ExecLoadFfiX86ResolverIfNeeded()
-    If gFfiX86ResolverLoaded <> 0 Then Exit Sub
-
-    gFfiX86ResolverLoaded = 1
-    gFfiX86ResolverLoadFailed = 0
-    gFfiX86ResolverLoadFailReason = ""
-    gFfiX86ResolverEntryCount = 0
-    Erase gFfiX86ResolverEntries
-    gFfiX86ResolvedEntryCount = 0
-    Erase gFfiX86ResolvedEntries
-    gFfiX86SymptrMapEntryCount = 0
-    Erase gFfiX86SymptrMapEntries
-    gFfiX86InvokeCount = 0
-    gFfiX86LastInvokeStubId = 0
-    gFfiX86LastInvokeConv = ""
-    gFfiX86CallerCleanupBytes = 0
-    gFfiX86CalleeCleanupBytes = 0
-    gFfiX86SymptrWriteCount = 0
-
-    Dim resolverPath As String
-    resolverPath = ExecGetFfiResolverPath()
-
-    If Dir(resolverPath) = "" Then
-        gFfiX86ResolverLoadFailed = 1
-        gFfiX86ResolverLoadFailReason = "file-not-found"
-        Exit Sub
-    End If
-
-    Dim f As Integer
-    f = FreeFile
-    Open resolverPath For Input As #f
-    If Err <> 0 Then
-        gFfiX86ResolverLoadFailed = 1
-        gFfiX86ResolverLoadFailReason = "open-failed"
-        Exit Sub
-    End If
-
-    Dim headerSeen As Integer
-    Dim headerValid As Integer
-    headerSeen = 0
-    headerValid = 0
-
-    Do While Not Eof(f)
-        Dim lineText As String
-        Line Input #f, lineText
-        lineText = Trim(lineText)
-        If lineText <> "" Then
-            If headerSeen = 0 Then
-                headerSeen = 1
-                Dim headerText As String
-                headerText = UCase(lineText)
-                If headerText = "STUB_ID,DLL,SYMBOL,SIGNATURE,CONVENTION,ARG_COUNT,ARG_STACK_BYTES,CLEANUP_TYPE,SYMPTR_LABEL" Then
-                    headerValid = 1
-                Else
-                    Close #f
-                    gFfiX86ResolverLoadFailed = 1
-                    gFfiX86ResolverLoadFailReason = "header-invalid"
-                    Exit Sub
-                End If
-            Else
-                Dim p1 As Integer, p2 As Integer, p3 As Integer, p4 As Integer
-                Dim p5 As Integer, p6 As Integer, p7 As Integer, p8 As Integer
-                p1 = Instr(1, lineText, ",")
-                p2 = Instr(p1 + 1, lineText, ",")
-                p3 = Instr(p2 + 1, lineText, ",")
-                p4 = Instr(p3 + 1, lineText, ",")
-                p5 = Instr(p4 + 1, lineText, ",")
-                p6 = Instr(p5 + 1, lineText, ",")
-                p7 = Instr(p6 + 1, lineText, ",")
-                p8 = Instr(p7 + 1, lineText, ",")
-
-                If p1 > 0 And p2 > p1 And p3 > p2 And p4 > p3 And p5 > p4 And p6 > p5 And p7 > p6 And p8 > p7 Then
-                    Dim c0 As String, c1 As String, c2 As String, c3 As String, c4 As String
-                    Dim c5 As String, c6 As String, c7 As String, c8 As String
-                    c0 = Trim(Left(lineText, p1 - 1))
-                    c1 = Trim(Mid(lineText, p1 + 1, p2 - p1 - 1))
-                    c2 = Trim(Mid(lineText, p2 + 1, p3 - p2 - 1))
-                    c3 = Trim(Mid(lineText, p3 + 1, p4 - p3 - 1))
-                    c4 = Trim(Mid(lineText, p4 + 1, p5 - p4 - 1))
-                    c5 = Trim(Mid(lineText, p5 + 1, p6 - p5 - 1))
-                    c6 = Trim(Mid(lineText, p6 + 1, p7 - p6 - 1))
-                    c7 = Trim(Mid(lineText, p7 + 1, p8 - p7 - 1))
-                    c8 = Trim(Mid(lineText, p8 + 1))
-
-                    Dim stubId As Integer
-                    Dim argCount As Integer
-                    Dim argStackBytes As Integer
-                    stubId = ValInt(c0)
-                    argCount = ValInt(c5)
-                    argStackBytes = ValInt(c6)
-
-                    If stubId > 0 And c1 <> "" And c2 <> "" And c3 <> "" Then
-                        ExecFfiX86ResolverAppend stubId, c1, c2, c3, c4, argCount, argStackBytes, c7, c8
-                    End If
-                End If
-            End If
-        End If
-    Loop
-
-    Close #f
-
-    If headerValid = 0 Then
-        gFfiX86ResolverLoadFailed = 1
-        gFfiX86ResolverLoadFailReason = "header-missing"
-        Exit Sub
-    End If
-
-    If gFfiX86ResolverEntryCount = 0 Then
-        gFfiX86ResolverLoadFailed = 1
-        gFfiX86ResolverLoadFailReason = "no-valid-entries"
-        Exit Sub
-    End If
-End Sub
-
-Private Function ExecResolveX86InteropTarget(ByRef dllName As String, ByRef symbolName As String, ByRef signatureText As String, ByRef callingConventionText As String, ByVal argCount As Integer, ByRef cleanupTypeOut As String, ByRef errText As String) As Integer
-    cleanupTypeOut = ""
-
-    ExecLoadFfiX86ResolverIfNeeded
-    If gFfiX86ResolverLoadFailed <> 0 Then
-        errText = "exec: CALL(DLL) x86 resolver plan missing/invalid (" & LTrim(Str(UXB_FFI_ERR_RESOLVER_PLAN_MISSING)) & ")"
-        Return 0
-    End If
-
-    Dim foundIdx As Integer
-    foundIdx = ExecFindX86ResolverEntryIndex(dllName, symbolName, signatureText, callingConventionText, argCount)
-
-    If foundIdx = -1 Then
-        errText = "exec: CALL(DLL) x86 resolver no matching entry (" & LTrim(Str(UXB_FFI_ERR_RESOLVER_NO_MATCH)) & ")"
-        Return 0
-    End If
-
-    cleanupTypeOut = gFfiX86ResolverEntries(foundIdx).cleanupType
-
-    Dim resolvedAddr As Any Ptr
-    If ExecFindX86ResolvedProc(gFfiX86ResolverEntries(foundIdx).stubId, resolvedAddr) <> 0 Then
-        Return 1
-    End If
-
-    Dim hModule As Any Ptr
-    hModule = LoadLibraryA(StrPtr(dllName))
-    If hModule = 0 Then
-        errText = "exec: CALL(DLL) x86 resolver LoadLibrary failed (" & LTrim(Str(UXB_FFI_ERR_DLL_LOAD_FAILED)) & ")"
-        Return 0
-    End If
-
-    Dim procAddr As Any Ptr
-    procAddr = GetProcAddress(hModule, StrPtr(symbolName))
-    If procAddr = 0 Then
-        errText = "exec: CALL(DLL) x86 resolver GetProcAddress failed (" & LTrim(Str(UXB_FFI_ERR_SYMBOL_RESOLVE_FAILED)) & ")"
-        Return 0
-    End If
-
-    ExecAppendX86ResolvedProc gFfiX86ResolverEntries(foundIdx).stubId, procAddr
-    ExecUpsertX86SymptrMap gFfiX86ResolverEntries(foundIdx).stubId, procAddr
-
-    Return 1
-End Function
-
-Private Function ExecTryInvokeResolvedX86I32(ByRef ps As ParseState, ByRef es As ExecState, ByVal callNodeIdx As Integer, ByVal argStartPos As Integer, ByRef dllName As String, ByRef symbolName As String, ByRef signatureText As String, ByRef callingConventionText As String, ByVal argCount As Integer, ByRef valueOut As Integer, ByRef invokedOut As Integer, ByRef errText As String) As Integer
-    invokedOut = 0
-    valueOut = 0
-
-    If UCase(Trim(signatureText)) <> "I32" Then Return 1
-    If argCount < 0 Or argCount > 4 Then Return 1
-
-    Dim resolverIdx As Integer
-    resolverIdx = ExecFindX86ResolverEntryIndex(dllName, symbolName, signatureText, callingConventionText, argCount)
-    If resolverIdx = -1 Then Return 1
-
-    Dim stubId As Integer
-    stubId = gFfiX86ResolverEntries(resolverIdx).stubId
-
-    Dim symMapIdx As Integer
-    symMapIdx = ExecFindX86SymptrMapIndex(stubId)
-    If symMapIdx = -1 Or gFfiX86SymptrMapEntries(symMapIdx).procAddr = 0 Then
-        errText = "exec: x86 symptr map entry missing for stub " & LTrim(Str(stubId))
-        Return 0
-    End If
-
-    Dim procAddr As Any Ptr
-    procAddr = gFfiX86SymptrMapEntries(symMapIdx).procAddr
-
-    Dim argValues(0 To 3) As Integer
-    Dim ai As Integer
-    For ai = 0 To argCount - 1
-        Dim argNode As Integer
-        argNode = ExecChildAt(ps, callNodeIdx, argStartPos + ai)
-        If argNode = -1 Then
-            errText = "exec: x86 invoke proof argument missing"
-            Return 0
-        End If
-
-        argValues(ai) = ExecEvalNode(ps, es, argNode, errText)
-        If errText <> "" Then
-            errText = "exec: x86 invoke proof argument eval failed: " & errText
-            Return 0
-        End If
-    Next ai
-
-    Dim conv As String
-    conv = UCase(Trim(callingConventionText))
-    If conv = "" Then conv = "CDECL"
-
-    If conv = "STDCALL" Then
-        Select Case argCount
-        Case 0
-            Dim fnStd0 As ExecFnNoArgStdcallI32
-            fnStd0 = procAddr
-            valueOut = fnStd0()
-        Case 1
-            Dim fnStd1 As ExecFnArg1StdcallI32
-            fnStd1 = procAddr
-            valueOut = fnStd1(argValues(0))
-        Case 2
-            Dim fnStd2 As ExecFnArg2StdcallI32
-            fnStd2 = procAddr
-            valueOut = fnStd2(argValues(0), argValues(1))
-        Case 3
-            Dim fnStd3 As ExecFnArg3StdcallI32
-            fnStd3 = procAddr
-            valueOut = fnStd3(argValues(0), argValues(1), argValues(2))
-        Case 4
-            Dim fnStd4 As ExecFnArg4StdcallI32
-            fnStd4 = procAddr
-            valueOut = fnStd4(argValues(0), argValues(1), argValues(2), argValues(3))
-        End Select
-    Else
-        Select Case argCount
-        Case 0
-            Dim fnC0 As ExecFnNoArgCdeclI32
-            fnC0 = procAddr
-            valueOut = fnC0()
-        Case 1
-            Dim fnC1 As ExecFnArg1CdeclI32
-            fnC1 = procAddr
-            valueOut = fnC1(argValues(0))
-        Case 2
-            Dim fnC2 As ExecFnArg2CdeclI32
-            fnC2 = procAddr
-            valueOut = fnC2(argValues(0), argValues(1))
-        Case 3
-            Dim fnC3 As ExecFnArg3CdeclI32
-            fnC3 = procAddr
-            valueOut = fnC3(argValues(0), argValues(1), argValues(2))
-        Case 4
-            Dim fnC4 As ExecFnArg4CdeclI32
-            fnC4 = procAddr
-            valueOut = fnC4(argValues(0), argValues(1), argValues(2), argValues(3))
-        End Select
-    End If
-
-    gFfiX86InvokeCount += 1
-    gFfiX86LastInvokeStubId = stubId
-    gFfiX86LastInvokeConv = conv
-    If UCase(Trim(gFfiX86ResolverEntries(resolverIdx).cleanupType)) = "CALLER" Then
-        gFfiX86CallerCleanupBytes += gFfiX86ResolverEntries(resolverIdx).argStackBytes
-    Else
-        gFfiX86CalleeCleanupBytes += gFfiX86ResolverEntries(resolverIdx).argStackBytes
-    End If
-
-    invokedOut = 1
-    Return 1
-End Function
-
-Private Function ExecTryInvokeDirectX86I32(ByRef ps As ParseState, ByRef es As ExecState, ByVal callNodeIdx As Integer, ByVal argStartPos As Integer, ByRef dllName As String, ByRef symbolName As String, ByRef signatureText As String, ByRef callingConventionText As String, ByVal argCount As Integer, ByRef valueOut As Integer, ByRef invokedOut As Integer, ByRef errText As String) As Integer
-    invokedOut = 0
-    valueOut = 0
-
-    If SizeOf(Any Ptr) <> 4 Then Return 1
-    If UCase(Trim(signatureText)) <> "I32" Then Return 1
-    If argCount < 0 Or argCount > 4 Then Return 1
-
-    Dim hModule As Any Ptr
-    hModule = LoadLibraryA(StrPtr(dllName))
-    If hModule = 0 Then
-        errText = "exec: CALL(DLL) x86 LoadLibrary failed (" & LTrim(Str(UXB_FFI_ERR_DLL_LOAD_FAILED)) & ")"
-        Return 0
-    End If
-
-    Dim procAddr As Any Ptr
-    procAddr = GetProcAddress(hModule, StrPtr(symbolName))
-    If procAddr = 0 Then
-        errText = "exec: CALL(DLL) x86 GetProcAddress failed (" & LTrim(Str(UXB_FFI_ERR_SYMBOL_RESOLVE_FAILED)) & ")"
-        Return 0
-    End If
-
-    Dim argValues(0 To 3) As Integer
-    Dim ai As Integer
-    For ai = 0 To argCount - 1
-        Dim argNode As Integer
-        argNode = ExecChildAt(ps, callNodeIdx, argStartPos + ai)
-        If argNode = -1 Then
-            errText = "exec: x86 direct invoke argument missing"
-            Return 0
-        End If
-
-        argValues(ai) = ExecEvalNode(ps, es, argNode, errText)
-        If errText <> "" Then
-            errText = "exec: x86 direct invoke argument eval failed: " & errText
-            Return 0
-        End If
-    Next ai
-
-    Dim conv As String
-    conv = UCase(Trim(callingConventionText))
-    If conv = "" Then conv = "CDECL"
-
-    If conv = "STDCALL" Then
-        Select Case argCount
-        Case 0
-            Dim fnStd0 As ExecFnNoArgStdcallI32
-            fnStd0 = procAddr
-            valueOut = fnStd0()
-        Case 1
-            Dim fnStd1 As ExecFnArg1StdcallI32
-            fnStd1 = procAddr
-            valueOut = fnStd1(argValues(0))
-        Case 2
-            Dim fnStd2 As ExecFnArg2StdcallI32
-            fnStd2 = procAddr
-            valueOut = fnStd2(argValues(0), argValues(1))
-        Case 3
-            Dim fnStd3 As ExecFnArg3StdcallI32
-            fnStd3 = procAddr
-            valueOut = fnStd3(argValues(0), argValues(1), argValues(2))
-        Case 4
-            Dim fnStd4 As ExecFnArg4StdcallI32
-            fnStd4 = procAddr
-            valueOut = fnStd4(argValues(0), argValues(1), argValues(2), argValues(3))
-        End Select
-    Else
-        Select Case argCount
-        Case 0
-            Dim fnC0 As ExecFnNoArgCdeclI32
-            fnC0 = procAddr
-            valueOut = fnC0()
-        Case 1
-            Dim fnC1 As ExecFnArg1CdeclI32
-            fnC1 = procAddr
-            valueOut = fnC1(argValues(0))
-        Case 2
-            Dim fnC2 As ExecFnArg2CdeclI32
-            fnC2 = procAddr
-            valueOut = fnC2(argValues(0), argValues(1))
-        Case 3
-            Dim fnC3 As ExecFnArg3CdeclI32
-            fnC3 = procAddr
-            valueOut = fnC3(argValues(0), argValues(1), argValues(2))
-        Case 4
-            Dim fnC4 As ExecFnArg4CdeclI32
-            fnC4 = procAddr
-            valueOut = fnC4(argValues(0), argValues(1), argValues(2), argValues(3))
-        End Select
-    End If
-
-    invokedOut = 1
-    Return 1
-End Function
 
 #include once "exec_ffi_x64_invoke_helpers.fbs"
 
@@ -884,13 +241,10 @@ Private Function ExecEvalDllArgAsMixedSlot(ByRef ps As ParseState, ByRef es As E
 
     Case "STRPTR"
         If ExecEvalNodeAsText(ps, es, argNode, stringKeepAlive, errText) = 0 Then Return 0
-        ' S-145: FreeBASIC StrPtr of an empty string is NULL; "" must reach the callee as a real empty C string.
+        ' S-535 / S-145: FreeBASIC StrPtr of an empty string is NULL; "" must reach the callee as a real empty C string
+        ' (NULL is a different thing and only PTR 0 passes it). The MIR bridge does the same (mir_interp_ffi.fbs).
         If Len(stringKeepAlive) = 0 Then stringKeepAlive = Chr(0)
-#Ifdef __FB_64BIT__
         u64Out = CULngInt(CLngInt(CPtr(Any Ptr, StrPtr(stringKeepAlive))))
-#Else
-        u64Out = CULngInt(CULng(CPtr(Any Ptr, StrPtr(stringKeepAlive))))
-#EndIf
         Return 1
 
     Case Else
@@ -905,16 +259,20 @@ Private Function ExecEvalDllArgAsMixedSlot(ByRef ps As ParseState, ByRef es As E
             Return 0
         End If
 
-        If t = "PTR" Or t = "U64" Or t = "I64" Then
-            u64Out = ExecValueToU64(iv)
+        If t = "PTR" Or t = "U64" Or t = "I64" Or t = "STRPTR" Then
+            If iv.valueType = "U64_PTR" Or iv.valueType = "I64_VALUE" Then
+                u64Out = iv.u64Value
+            Else
+                u64Out = CULngInt(iv.intValue)
+            End If
         ElseIf t = "I32" Then
             u64Out = CULngInt(CLng(ExecValueToInteger(iv)))
         ElseIf t = "U32" Then
-            u64Out = CULngInt(CUInt(ExecValueToU64(iv)))
+            u64Out = CULngInt(CUInt(ExecValueToU64(iv) And &hFFFFFFFFULL))
         ElseIf t = "I64" Then
-            u64Out = CULngInt(CLngInt(iv.intValue))
+            u64Out = ExecValueToU64(iv)
         Else
-            u64Out = CULngInt(iv.intValue)
+            u64Out = ExecValueToU64(iv)
         End If
         Return 1
     End Select
@@ -968,31 +326,27 @@ Private Function ExecTryInvokeResolvedX64Mixed(ByRef ps As ParseState, ByRef es 
     Dim bridgeU64 As ULongInt
     Dim bridgeF64 As Double
     Dim bridgeResult As ExecValue
-    If ExecFfiBridge10Invoke(dllName, symbolName, retType, callingConventionText, argTypes(), argCount, argValuesU64(), argValuesF64(), bridgeU64, bridgeF64, bridgeInvoked, errText) = 0 Then Return 0
-    If bridgeInvoked <> 0 Then
-        Select Case retType
-        Case "F64"
-            ExecValueSetFloat bridgeResult, bridgeF64
-        Case "STRPTR"
-            Dim bridgeText As String
-            If ExecFfiBridge10CopyString(bridgeU64, bridgeText, errText) = 0 Then Return 0
-            ExecValueSetString bridgeResult, bridgeText
-        Case "VOID"
-            ExecValueSetInteger bridgeResult, 0
-        Case "I32"
-            ' I32 is a scalar integer, not an opaque pointer-width token.
-            ' Keeping it as U64_PTR breaks typed wrapper arguments on the next call.
-            ExecValueSetInteger bridgeResult, CInt(bridgeU64)
-        Case "I64"
-            ExecValueSetI64 bridgeResult, CLngInt(bridgeU64)
-        Case Else
-            ExecValueSetU64 bridgeResult, bridgeU64
-        End Select
-        gExecLastCallValueEx = bridgeResult
-        gExecLastCallValueExValid = 1
-        valueOut = ExecValueToInteger(bridgeResult)
-        invokedOut = 1
-        Return 1
+    If retType <> "STRPTR" Or ExecIsFreeBasicRuntimeDll(dllName) = 0 Then
+        If ExecFfiBridge10Invoke(dllName, symbolName, retType, callingConventionText, argTypes(), argCount, argValuesU64(), argValuesF64(), bridgeU64, bridgeF64, bridgeInvoked, errText) = 0 Then Return 0
+        If bridgeInvoked <> 0 Then
+            Select Case retType
+            Case "F64"
+                ExecValueSetFloat bridgeResult, bridgeF64
+            Case "STRPTR"
+                Dim bridgeText As String
+                If ExecFfiBridge10CopyString(bridgeU64, bridgeText, errText) = 0 Then Return 0
+                ExecValueSetString bridgeResult, bridgeText
+            Case "VOID"
+                ExecValueSetInteger bridgeResult, 0
+            Case Else
+                ExecValueSetU64 bridgeResult, bridgeU64
+            End Select
+            gExecLastCallValueEx = bridgeResult
+            gExecLastCallValueExValid = 1
+            valueOut = ExecValueToInteger(bridgeResult)
+            invokedOut = 1
+            Return 1
+        End If
     End If
 
     ' Compatibility fallback for old installations without uxffi.dll.
@@ -1073,6 +427,19 @@ Private Function ExecConsumeLoopExit(ByRef es As ExecState, ByRef loopKind As St
     Dim req As String
     req = UCase(es.runtime.exitRequest)
 
+    ' CONTINUE is consumed by the current loop after its body. Return 3 so
+    ' callers skip the remaining body statements but still run the loop's
+    ' increment/post-condition phase; an unmatched target propagates upward.
+    If Left(req, 9) = "CONTINUE:" Then
+        Dim continueKind As String
+        continueKind = Mid(req, 10)
+        If continueKind = "ANY" Or continueKind = UCase(loopKind) Then
+            es.runtime.exitRequest = ""
+            Return 3
+        End If
+        Return 2
+    End If
+
     If req = "ANY" Or req = UCase(loopKind) Then
         es.runtime.exitRequest = ""
         Return 1
@@ -1096,35 +463,6 @@ Private Function ExecClampI32(ByVal valueIn As Double) As Integer
     If valueIn > 2147483647# Then Return 2147483647
     If valueIn < -2147483648# Then Return -2147483648
     Return CInt(valueIn)
-End Function
-
-Private Function ExecTimerUnitScale(ByRef unitText As String, ByRef scaleOut As Double) As Integer
-    Dim u As String
-    u = LCase(Trim(unitText))
-
-    Select Case u
-    Case "ns"
-        scaleOut = 1000000000#
-    Case "us"
-        scaleOut = 1000000#
-    Case "ms"
-        scaleOut = 1000#
-    Case "s"
-        scaleOut = 1#
-    Case "min"
-        scaleOut = 1# / 60#
-    Case "h"
-        scaleOut = 1# / 3600#
-    Case "day"
-        scaleOut = 1# / 86400#
-    Case "year"
-        scaleOut = 1# / (86400# * 365#)
-    Case Else
-        scaleOut = 0#
-        Return 0
-    End Select
-
-    Return 1
 End Function
 
 Private Function ExecBuiltinArgAsTypeName(ByRef ps As ParseState, ByVal callNodeIdx As Integer, ByRef callName As String, ByRef typeNameOut As String, ByRef errText As String) As Integer
@@ -1170,12 +508,10 @@ Private Function ExecIsDllCallingConvention(ByRef conventionText As String) As I
     Return 0
 End Function
 
+' S-666 (x86 emeklilik, Asama 4): 32 bit (x86) derleme emekli edildi (uxb_main_wrapper.bas basinda #Error); calisma
+' zamani yalniz Win64 MS ABI konusur. Eskiden 32 bit derlemede "X86-32" adina dusen dal kaldirildi.
 Private Function ExecGetActiveFfiAbiName() As String
-#Ifdef __FB_64BIT__
     Return "WIN64-MSABI"
-#Else
-    Return "X86-32"
-#EndIf
 End Function
 
 Private Function ExecAreDllCallingConventionsCompatible(ByRef requestedConventionText As String, ByRef allowedConventionText As String) As Integer
@@ -1188,11 +524,9 @@ Private Function ExecAreDllCallingConventionsCompatible(ByRef requestedConventio
     If allow = "" Or allow = "*" Then Return 1
     If allow = req Then Return 1
 
-#Ifdef __FB_64BIT__
     If (allow = "CDECL" Or allow = "STDCALL") And (req = "CDECL" Or req = "STDCALL") Then
         Return 1
     End If
-#EndIf
 
     Return 0
 End Function
@@ -1294,15 +628,10 @@ Private Function ExecNormalizeFfiSignerToken(ByRef signerIn As String, ByRef sig
 End Function
 
 Private Sub ExecFfiAllowlistAppend(ByRef dllName As String, ByRef symbolName As String, ByRef signatureText As String, ByRef callingConventionText As String, ByRef hashText As String, ByRef signerText As String)
-    If gFfiAllowEntryCount >= gFfiAllowEntryCap Then
-        Dim newCap As Integer
-        newCap = gFfiAllowEntryCap
-        If newCap < 1 Then newCap = 64
-        Do While newCap <= gFfiAllowEntryCount
-            newCap *= 2
-        Loop
-        ReDim Preserve gFfiAllowEntries(newCap - 1)
-        gFfiAllowEntryCap = newCap
+    If gFfiAllowEntryCount = 0 Then
+        ReDim gFfiAllowEntries(0)
+    Else
+        ReDim Preserve gFfiAllowEntries(gFfiAllowEntryCount)
     End If
 
     gFfiAllowEntries(gFfiAllowEntryCount).dllName = UCase(Trim(dllName))
@@ -1459,12 +788,7 @@ Private Sub ExecLoadFfiAllowlistIfNeeded()
     gFfiAllowlistLoadFailed = 0
     gFfiAllowlistLoadFailReason = ""
     gFfiAllowEntryCount = 0
-    gFfiAllowEntryCap = 0
     Erase gFfiAllowEntries
-    gFfiIndexBuilt = 0
-    gFfiIndexCap = 0
-    Erase gFfiIndexSlots
-    Erase gFfiChainNext
 
     Dim policyPath As String
     policyPath = ExecGetFfiPolicyPath()
@@ -1623,48 +947,23 @@ Private Function ExecValidateDllMarshalArg(ByRef ps As ParseState, ByRef es As E
     Select Case sig
     Case "I32"
         If argValue.valueType <> "INTEGER" And argValue.valueType <> "I64_VALUE" Then
-            errText = "exec: CALL(DLL) I32 requires a 32-bit integer argument"
+            errText = "exec: CALL(DLL) " & sig & " requires integer argument"
             Return 0
-        End If
-        If argValue.valueType = "I64_VALUE" Then
-            Dim signedI32Candidate As LongInt = CLngInt(argValue.u64Value)
-            If signedI32Candidate < -2147483648LL Or signedI32Candidate > 2147483647LL Then
-                errText = "exec: CALL(DLL) I32 argument is outside the 32-bit signed range"
-                Return 0
-            End If
         End If
 
     Case "I64"
         If argValue.valueType <> "INTEGER" And argValue.valueType <> "I64_VALUE" And argValue.valueType <> "U64_PTR" Then
-            errText = "exec: CALL(DLL) I64 requires integer argument"
+            errText = "exec: CALL(DLL) " & sig & " requires integer argument"
             Return 0
         End If
 
-    Case "U32"
-        ' U32 casts are represented by ExecValueSetU64 as U64_PTR.  Accept that
-        ' representation here and retain the explicit 32-bit range check below.
+    Case "U32", "U64"
         If argValue.valueType <> "INTEGER" And argValue.valueType <> "I64_VALUE" And argValue.valueType <> "U64_PTR" Then
-            errText = "exec: CALL(DLL) U32 requires a 32-bit integer argument"
+            errText = "exec: CALL(DLL) " & sig & " requires integer argument"
             Return 0
         End If
-        Dim unsignedI32Candidate As LongInt
-        If argValue.valueType = "I64_VALUE" Or argValue.valueType = "U64_PTR" Then
-            unsignedI32Candidate = CLngInt(argValue.u64Value)
-        Else
-            unsignedI32Candidate = CLngInt(argValue.intValue)
-        End If
-        If unsignedI32Candidate < 0 Or CULngInt(unsignedI32Candidate) > 4294967295ULL Then
-            errText = "exec: CALL(DLL) U32 argument is outside the 32-bit unsigned range"
-            Return 0
-        End If
-
-    Case "U64"
-        If argValue.valueType <> "INTEGER" And argValue.valueType <> "I64_VALUE" And argValue.valueType <> "U64_PTR" Then
-            errText = "exec: CALL(DLL) U64 requires integer/pointer-width argument"
-            Return 0
-        End If
-        If argValue.valueType = "INTEGER" And argValue.intValue < 0 Then
-            errText = "exec: CALL(DLL) U64 argument cannot be negative"
+        If argValue.intValue < 0 Then
+            errText = "exec: CALL(DLL) " & sig & " argument cannot be negative"
             Return 0
         End If
 
@@ -1790,97 +1089,6 @@ Private Function ExecTryParseAliasDllTarget(ByRef targetText As String, ByRef dl
     Return IIf(ffiKind = "DLL", 1, 0)
 End Function
 
-Private Function ExecFfiIndexHashOf(ByRef key As String) As UInteger
-    Dim h As UInteger = 2166136261
-    Dim i As Integer
-    For i = 1 To Len(key)
-        h = (h Xor Asc(Mid(key, i, 1))) * 16777619
-    Next i
-    Return h
-End Function
-
-Private Function ExecFfiIndexKey(ByRef dllKey As String, ByRef symbolKey As String, ByRef sigKey As String) As String
-    Return dllKey & Chr(1) & symbolKey & Chr(1) & sigKey
-End Function
-
-' Inserts entryIdx under key, appending to the tail of any existing chain so
-' lookup visits same-key entries in the original append order (order matters:
-' callers stop at the first entry whose calling convention/attestation passes).
-Private Sub ExecFfiIndexInsert(ByRef key As String, ByVal entryIdx As Integer)
-    Dim baseSlot As UInteger
-    baseSlot = ExecFfiIndexHashOf(key) Mod gFfiIndexCap
-    Dim probe As Integer
-    For probe = 0 To gFfiIndexCap - 1
-        Dim slotPos As Integer
-        slotPos = (baseSlot + probe) Mod gFfiIndexCap
-        If gFfiIndexSlots(slotPos).used = 0 Then
-            gFfiIndexSlots(slotPos).used = 1
-            gFfiIndexSlots(slotPos).key = key
-            gFfiIndexSlots(slotPos).headIdx = entryIdx
-            gFfiIndexSlots(slotPos).tailIdx = entryIdx
-            gFfiChainNext(entryIdx) = -1
-            Exit Sub
-        End If
-        If gFfiIndexSlots(slotPos).key = key Then
-            gFfiChainNext(gFfiIndexSlots(slotPos).tailIdx) = entryIdx
-            gFfiChainNext(entryIdx) = -1
-            gFfiIndexSlots(slotPos).tailIdx = entryIdx
-            Exit Sub
-        End If
-    Next probe
-End Sub
-
-Private Function ExecFfiIndexFindHead(ByRef key As String) As Integer
-    If gFfiIndexCap <= 0 Then Return -1
-    Dim baseSlot As UInteger
-    baseSlot = ExecFfiIndexHashOf(key) Mod gFfiIndexCap
-    Dim probe As Integer
-    For probe = 0 To gFfiIndexCap - 1
-        Dim slotPos As Integer
-        slotPos = (baseSlot + probe) Mod gFfiIndexCap
-        If gFfiIndexSlots(slotPos).used = 0 Then Return -1
-        If gFfiIndexSlots(slotPos).key = key Then Return gFfiIndexSlots(slotPos).headIdx
-    Next probe
-    Return -1
-End Function
-
-' Builds a (dll|symbol|signature) -> entry-chain index over gFfiAllowEntries once
-' per load, so ExecDllCallIsAllowlisted no longer has to rescan the entire
-' project-wide allowlist (which keeps growing as more libraries get audited) for
-' every single CALL(DLL) site.
-Private Sub ExecBuildFfiIndexIfNeeded()
-    If gFfiIndexBuilt <> 0 Then Exit Sub
-
-    Dim cap As Integer
-    cap = 64
-    Do While cap * 100 < gFfiAllowEntryCount * 200
-        cap *= 2
-    Loop
-
-    ReDim gFfiIndexSlots(cap - 1)
-    Dim s As Integer
-    For s = 0 To cap - 1
-        gFfiIndexSlots(s).used = 0
-        gFfiIndexSlots(s).key = ""
-        gFfiIndexSlots(s).headIdx = -1
-        gFfiIndexSlots(s).tailIdx = -1
-    Next s
-    gFfiIndexCap = cap
-
-    If gFfiAllowEntryCount > 0 Then
-        ReDim gFfiChainNext(gFfiAllowEntryCount - 1)
-    End If
-
-    Dim i As Integer
-    For i = 0 To gFfiAllowEntryCount - 1
-        Dim key As String
-        key = ExecFfiIndexKey(gFfiAllowEntries(i).dllName, gFfiAllowEntries(i).symbolName, gFfiAllowEntries(i).signatureText)
-        ExecFfiIndexInsert key, i
-    Next i
-
-    gFfiIndexBuilt = 1
-End Sub
-
 Private Function ExecDllCallIsAllowlisted(ByRef dllName As String, ByRef symbolName As String, ByRef signatureText As String, ByRef callingConventionText As String, ByVal requireAttestation As Integer, ByRef denyReasonOut As String) As Integer
     ExecLoadFfiAllowlistIfNeeded
 
@@ -1888,8 +1096,6 @@ Private Function ExecDllCallIsAllowlisted(ByRef dllName As String, ByRef symbolN
         denyReasonOut = "deny-policy-load-failed"
         Return 0
     End If
-
-    ExecBuildFfiIndexIfNeeded
 
     Dim dllKey As String
     Dim symbolKey As String
@@ -1902,11 +1108,14 @@ Private Function ExecDllCallIsAllowlisted(ByRef dllName As String, ByRef symbolN
     convKey = UCase(Trim(callingConventionText))
 
     Dim i As Integer
-    i = ExecFfiIndexFindHead(ExecFfiIndexKey(dllKey, symbolKey, sigKey))
-    Do While i <> -1
-        Dim allowConv As String
-        allowConv = UCase(Trim(gFfiAllowEntries(i).callingConventionText))
-        If ExecAreDllCallingConventionsCompatible(convKey, allowConv) <> 0 Then
+    For i = 0 To gFfiAllowEntryCount - 1
+        If dllKey = gFfiAllowEntries(i).dllName And symbolKey = gFfiAllowEntries(i).symbolName And sigKey = gFfiAllowEntries(i).signatureText Then
+            Dim allowConv As String
+            allowConv = UCase(Trim(gFfiAllowEntries(i).callingConventionText))
+            If ExecAreDllCallingConventionsCompatible(convKey, allowConv) = 0 Then
+                GoTo NextAllowEntry
+            End If
+
             If requireAttestation <> 0 Then
                 If gFfiAllowEntries(i).hashText = "" Or gFfiAllowEntries(i).signerText = "" Then
                     denyReasonOut = "deny-attestation-required"
@@ -1946,9 +1155,8 @@ Private Function ExecDllCallIsAllowlisted(ByRef dllName As String, ByRef symbolN
             denyReasonOut = ""
             Return 1
         End If
-
-        i = gFfiChainNext(i)
-    Loop
+NextAllowEntry:
+    Next i
 
     denyReasonOut = "deny-not-allowlisted"
     Return 0

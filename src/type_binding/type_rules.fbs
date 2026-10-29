@@ -1,6 +1,15 @@
 #ifndef UXB_TYPE_RULES_FBS
 #define UXB_TYPE_RULES_FBS
 #include once "type_kinds.fbs"
+#include once "../common/type_storage_contract.fbs"
+Declare Function UXBStep3EnumBaseType(ByVal typeName As String) As String
+Declare Function UXBStep3TypeIsClassOrInterfaceName(ByVal typeName As String) As Integer
+
+Function UXBStep3StorageType(ByVal rawType As String) As String
+    Dim baseType As String = UXBStep3EnumBaseType(rawType)
+    If baseType <> "" Then Return baseType
+    Return rawType
+End Function
 
 Function UXBStep3TypeU(ByVal rawText As String) As String
     Return UCase(Trim(rawText))
@@ -51,6 +60,7 @@ Function UXBStep3TypeCanonical(ByVal rawType As String) As String
     Case "TASK", "TYPE_TASK": Return TYPE_TASK
     Case "TASKGROUP", "TYPE_TASKGROUP": Return TYPE_TASKGROUP
     Case "MUTEX", "TYPE_MUTEX": Return TYPE_MUTEX
+    Case "TYPE_NULL": Return TYPE_NULL
     Case TYPE_UNKNOWN: Return TYPE_UNKNOWN
     Case TYPE_ERROR: Return TYPE_ERROR
     End Select
@@ -119,7 +129,7 @@ Function UXBStep3TypeIsKnownScalar(ByVal rawType As String) As Integer
 End Function
 
 Function UXBStep3TypeIsNumeric(ByVal rawType As String) As Integer
-    Dim t As String = UXBStep3TypeCanonical(rawType)
+    Dim t As String = UXBStep3TypeCanonical(UXBStep3StorageType(rawType))
     Select Case t
     Case TYPE_I8, TYPE_U8, TYPE_I16, TYPE_I32, TYPE_U16, TYPE_U32, TYPE_I64, TYPE_U64, TYPE_F32, TYPE_F64, TYPE_F80, TYPE_F128, TYPE_BIGINT, TYPE_BIGFLOAT, TYPE_BIGD, TYPE_BALL
         Return 1
@@ -128,7 +138,7 @@ Function UXBStep3TypeIsNumeric(ByVal rawType As String) As Integer
 End Function
 
 Function UXBStep3TypeIsInteger(ByVal rawType As String) As Integer
-    Dim t As String = UXBStep3TypeCanonical(rawType)
+    Dim t As String = UXBStep3TypeCanonical(UXBStep3StorageType(rawType))
     Select Case t
     Case TYPE_BOOL, TYPE_I8, TYPE_U8, TYPE_I16, TYPE_U16, TYPE_I32, TYPE_U32, TYPE_I64, TYPE_U64, TYPE_BIGINT
         Return 1
@@ -179,7 +189,7 @@ Function UXBStep3TypeIsObjectLike(ByVal rawType As String) As Integer
 End Function
 
 Function UXBStep3TypeSizeBytes(ByVal rawType As String) As Integer
-    Dim t As String = UXBStep3TypeCanonical(rawType)
+    Dim t As String = UXBStep3TypeCanonical(UXBStep3StorageType(rawType))
     Select Case t
     Case TYPE_VOID: Return 0
     Case TYPE_BOOL, TYPE_I8, TYPE_U8: Return 1
@@ -203,8 +213,8 @@ Function UXBStep3TypeAlignBytes(ByVal rawType As String) As Integer
 End Function
 
 Function UXBStep3TypePromoteNumeric(ByVal leftType As String, ByVal rightType As String) As String
-    Dim l As String = UXBStep3TypeCanonical(leftType)
-    Dim r As String = UXBStep3TypeCanonical(rightType)
+    Dim l As String = UXBStep3TypeCanonical(UXBStep3StorageType(leftType))
+    Dim r As String = UXBStep3TypeCanonical(UXBStep3StorageType(rightType))
     If l = TYPE_F128 Or r = TYPE_F128 Then Return TYPE_F128
     If l = TYPE_F80 Or r = TYPE_F80 Then Return TYPE_F80
     If l = TYPE_F64 Or r = TYPE_F64 Then Return TYPE_F64
@@ -228,18 +238,18 @@ End Function
 
 ' S-088: true when `rawType` is the unsigned 32-bit integer type.
 Function UXBStep3TypeIsU32(ByVal rawType As String) As Integer
-    Return IIf(UXBStep3TypeCanonical(rawType) = TYPE_U32, 1, 0)
+    Return IIf(UXBStep3TypeCanonical(UXBStep3StorageType(rawType)) = TYPE_U32, 1, 0)
 End Function
 
 ' S-077: true when `typeText` is the unsigned 64-bit integer type.
 Function UXBStep3TypeIsU64(ByVal rawType As String) As Integer
-    Return IIf(UXBStep3TypeCanonical(rawType) = TYPE_U64, 1, 0)
+    Return IIf(UXBStep3TypeCanonical(UXBStep3StorageType(rawType)) = TYPE_U64, 1, 0)
 End Function
 
 ' S-077: signed or unsigned 64-bit integer (values that do not fit the AST
 ' interpreter's 32-bit-clamping integer core).
 Function UXBStep3TypeIsWide64(ByVal rawType As String) As Integer
-    Dim t As String = UXBStep3TypeCanonical(rawType)
+    Dim t As String = UXBStep3TypeCanonical(UXBStep3StorageType(rawType))
     Return IIf(t = TYPE_U64 Or t = TYPE_I64, 1, 0)
 End Function
 
@@ -250,6 +260,22 @@ Function UXBStep3TypeCanCoerce(ByVal fromType As String, ByVal toType As String,
     If UXBStep3TypeIsBlocked(f) <> 0 Or UXBStep3TypeIsBlocked(t) <> 0 Then Return 0
     If t = TYPE_VOID Then Return IIf(f = TYPE_VOID, 1, 0)
     If f = t Then Return 1
+    ' S-564: NULL / NOTHING converts (implicitly) to a pointer, an object, a class / interface type and a function pointer, to nothing else.
+    If f = TYPE_NULL Then
+        Select Case t
+        Case TYPE_PTR, TYPE_STRPTR, TYPE_WSTRPTR, TYPE_FUNCTION_PTR, TYPE_OBJECT, TYPE_VARIANT, TYPE_ANY, TYPE_CLASS, TYPE_INTERFACE, TYPE_JS_OBJECT, TYPE_WASM_EXTERNREF
+            Return 1
+        End Select
+        Return UXBStep3TypeIsClassOrInterfaceName(t)
+    End If
+    If t = TYPE_NULL Then
+        ' (comparison operands are not checked here; assigning TO the null type has no meaning)
+        Return 0
+    End If
+    If UXBStep3EnumBaseType(f) <> "" Or UXBStep3EnumBaseType(t) <> "" Then
+        If UXBStep3TypeIsInteger(f) <> 0 And UXBStep3TypeIsInteger(t) <> 0 Then explicitCastNeeded = 1: Return 1
+        Return 0
+    End If
     If UXBStep3TypeIsNumeric(f) <> 0 And UXBStep3TypeIsNumeric(t) <> 0 Then
         ' S-132: float->integer daraltma her zaman explicit (veri kaybi garantili).
         ' float->float daraltma (F64->F32 gibi) ve integer->float atamalari IMPLICIT;

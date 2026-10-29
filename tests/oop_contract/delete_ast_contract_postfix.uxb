@@ -1,0 +1,9 @@
+CLASS A
+    DESTRUCTOR()
+        PRINT "DTOR"
+    END DESTRUCTOR
+END CLASS
+
+DIM obj AS A
+obj = NEW A()
+DELETE obj

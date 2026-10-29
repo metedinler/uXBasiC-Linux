@@ -1,3 +1,4 @@
 AST=LOCK_DEADLOCK: 'TOPLAM' kilidini tutan gorev
 MIR=LOCK_DEADLOCK: 'TOPLAM' kilidini tutan gorev
 x64=LOCK_DEADLOCK: 'TOPLAM' kilidini tutan gorev
+AST-x64=LOCK_DEADLOCK: 'TOPLAM' kilidini tutan gorev

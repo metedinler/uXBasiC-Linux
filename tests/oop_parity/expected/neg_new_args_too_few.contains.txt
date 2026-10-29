@@ -1,0 +1,6 @@
+AST=NEW ATA passes 0 argument(s) but the CONSTRUCTOR of ATA takes 1
+MIR=NEW ATA passes 0 argument(s) but the CONSTRUCTOR of ATA takes 1
+x64=NEW ATA passes 0 argument(s) but the CONSTRUCTOR of ATA takes 1
+AST-x64=NEW ATA passes 0 argument(s) but the CONSTRUCTOR of ATA takes 1
+JS=NEW ATA passes 0 argument(s) but the CONSTRUCTOR of ATA takes 1
+WASM=NEW ATA passes 0 argument(s) but the CONSTRUCTOR of ATA takes 1

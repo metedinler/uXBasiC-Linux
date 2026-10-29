@@ -1,6 +1,8 @@
 #ifndef UXB_COMMON_ERROR_SYSTEM_ADIM45_FBS
 #define UXB_COMMON_ERROR_SYSTEM_ADIM45_FBS
 
+#include once "json_builder.fbs"
+
 Const UXB_ERROR45_MAX_CATALOG As Integer = 300
 Const UXB_ERROR45_MAX_LOG_BYTES As LongInt = 60 * 1024
 
@@ -18,6 +20,8 @@ Type UXBErrorSystemState45
     catalogPath As String
     mirrorToTerminal As Integer
     sourcePath As String
+    explicitLogPath As Integer
+    terminalFormat As String
     catalogCount As Integer
     catalog(0 To UXB_ERROR45_MAX_CATALOG - 1) As UXBErrorCatalogEntry45
 End Type
@@ -114,7 +118,12 @@ Private Sub UXBErr45RotateIfNeeded(ByVal pathText As String)
     Dim bak As String
     bak = pathText & ".bak"
     On Error GoTo _rotErr
-    If Dir(bak) <> "" Then Kill bak
+    ' Preserve earlier evidence; rotation must never replace an existing backup.
+    Dim suffix As Integer = 0
+    Do While Dir(bak) <> ""
+        suffix += 1
+        bak = pathText & ".bak." & LTrim(Str(suffix))
+    Loop
     Name pathText As bak
     On Error GoTo 0
     Exit Sub
@@ -122,12 +131,35 @@ _rotErr:
     On Error GoTo 0
 End Sub
 
+Sub UXBErrorLogWriteFailure45(ByVal pathText As String, ByVal fileError As Integer)
+    Dim msgEn As String = "Diagnostic log could not be written: " & pathText
+    Dim msgTr As String = "Tani gunlugu yazilamadi: " & pathText
+    If gUXBError45.terminalFormat = "json" Then
+        Dim b As UXBJsonBuilder
+        UXBJsonInit b
+        UXBJsonBeginObject b
+        UXBJsonFieldString b, "code", "UXB_DIAGNOSTIC_LOG_WRITE_FAILED"
+        UXBJsonFieldString b, "severity", "error"
+        UXBJsonFieldString b, "message_en", msgEn
+        UXBJsonFieldString b, "message_tr", msgTr
+        UXBJsonFieldString b, "path", pathText
+        UXBJsonFieldInt b, "file_error", fileError
+        UXBJsonEndObject b
+        Print UXBJsonText(b)
+    Else
+        Print "ERROR: UXB_DIAGNOSTIC_LOG_WRITE_FAILED: " & IIf(gUXBError45.language = "tr", msgTr, msgEn) & " err=" & LTrim(Str(fileError))
+    End If
+    ' Do not recurse through the failed logger, or report a successful session.
+    End 22
+End Sub
+
 Private Sub UXBErr45Append(ByVal pathText As String, ByVal lineText As String)
     If Trim(pathText) = "" Then Exit Sub
+    Dim f As Integer = FreeFile
+    On Error GoTo _aerr
     UXBErr45EnsureDir pathText
     UXBErr45RotateIfNeeded pathText
-    Dim f As Integer
-    f = FreeFile
+    ' Rotation has its own error handler; restore ours for the actual append.
     On Error GoTo _aerr
     Open pathText For Append As #f
     Print #f, lineText
@@ -135,7 +167,10 @@ Private Sub UXBErr45Append(ByVal pathText As String, ByVal lineText As String)
     On Error GoTo 0
     Exit Sub
 _aerr:
+    Dim fileError As Integer = Err
     On Error GoTo 0
+    ' FreeBASIC closes outstanding handles at END; avoid a second failing close.
+    UXBErrorLogWriteFailure45 pathText, fileError
 End Sub
 
 Private Sub UXBErr45CatalogClear()
@@ -143,6 +178,15 @@ Private Sub UXBErr45CatalogClear()
 End Sub
 
 Private Sub UXBErr45CatalogAdd(ByVal codeText As String, ByVal classText As String, ByVal messageEn As String, ByVal messageTr As String = "")
+    ' An overlay replaces its code; appending made the builtin win every lookup.
+    For existing As Integer = 0 To gUXBError45.catalogCount - 1
+        If UCase(gUXBError45.catalog(existing).codeText) = UCase(Trim(codeText)) Then
+            gUXBError45.catalog(existing).classText = Trim(classText)
+            gUXBError45.catalog(existing).messageEn = Trim(messageEn)
+            gUXBError45.catalog(existing).messageTr = Trim(messageTr)
+            Exit Sub
+        End If
+    Next existing
     If gUXBError45.catalogCount >= UXB_ERROR45_MAX_CATALOG Then Exit Sub
     Dim i As Integer
     i = gUXBError45.catalogCount
@@ -173,7 +217,7 @@ Private Sub UXBErr45CatalogBuiltin()
     UXBErr45CatalogAdd "E.0410", "Interpreter", "Interpreter execution error", "Yorumlayici calistirma hatasi"
     UXBErr45CatalogAdd "E.0500", "Backend", "Backend/code generation error", "Backend/kod uretim hatasi"
     UXBErr45CatalogAdd "E.0510", "X64", "x64 code generation error", "x64 kod uretim hatasi"
-    UXBErr45CatalogAdd "E.0520", "X86", "x86 code generation error", "x86 kod uretim hatasi"
+    ' E.0520 (x86 kod uretim hatasi) S-666 ile emekli edildi: x86 kod uretimi yok; numara yeniden kullanilmaz.
     UXBErr45CatalogAdd "E.0530", "JS", "JavaScript backend error", "JavaScript backend hatasi"
     UXBErr45CatalogAdd "E.0540", "WAT", "WAT/WASM backend error", "WAT/WASM backend hatasi"
     UXBErr45CatalogAdd "E.0550", "Browser", "Browser artifact generation error", "Tarayici artifact uretim hatasi"
@@ -182,6 +226,18 @@ Private Sub UXBErr45CatalogBuiltin()
     UXBErr45CatalogAdd "E.0620", "BIG", "BIG number runtime/type error", "BIG sayi runtime/tip hatasi"
     UXBErr45CatalogAdd "E.0700", "Test", "Gate/test runner error", "Kapi/test kosucu hatasi"
     UXBErr45CatalogAdd "E.0800", "Internal", "Internal consistency error", "Dahili tutarlilik hatasi"
+    UXBErr45CatalogAdd "UXB_IFF_ARGUMENT_COUNT", "Semantic", "IFF requires exactly three arguments (condition,true,false)", "IFF tam olarak uc arguman ister (kosul,dogru,yanlis)"
+    UXBErr45CatalogAdd "UXB_INVALID_ERROR_LIMIT", "CLI", "--error-limit must be an integer in 1..1000000", "--error-limit 1..1000000 araliginda bir tamsayi olmali"
+    UXBErr45CatalogAdd "UXB_FLOAT_INTEGER_RANGE", "Type", "Floating value cannot be converted to an integer", "Ondalik deger tamsayiya donusturulemiyor"
+    UXBErr45CatalogAdd "UXB_CALL_PAREN_REQUIRED", "Parser", "Callable statements require parentheses; use Name(...)", "Cagrilabilir deyimler parantez ister; Name(...) kullanin"
+    UXBErr45CatalogAdd "UXB_CONST_ASSIGNMENT", "Semantic", "Cannot assign to CONST; constants are read-only", "CONST degerine atama yapilamaz; sabitler salt okunurdur"
+    UXBErr45CatalogAdd "UXB_FFI_ARGUMENT_TYPE_LIST", "FFI", "CALL(DLL/API) argument type-list contains an unknown token", "CALL(DLL/API) arguman tip listesinde bilinmeyen simge var"
+    UXBErr45CatalogAdd "UXB_MIXED_STRING_NUMERIC", "Type", "String and numeric operands cannot be mixed; use STR or VAL", "STRING ve sayisal operandlar karistirilamaz; STR veya VAL kullanin"
+    UXBErr45CatalogAdd "UXB_INTERPRETER_COMPARE_MISMATCH", "Interpreter", "AST and MIR interpreter observable outputs differ", "AST ve MIR yorumlayicilarinin gozlenebilir program ciktilari farkli"
+    UXBErr45CatalogAdd "UXB_LIBTYPE_PROVIDER_UNAVAILABLE", "LibraryType", "Library type provider is unavailable for the selected execution target", "Secilen calistirma hedefi icin kutuphane tipi saglayicisi kullanilamiyor"
+    UXBErr45CatalogAdd "UXB_LIBTYPE_PROVIDER_MISSING", "LibraryType", "Library type provider is missing", "Kutuphane tipi saglayicisi eksik"
+    UXBErr45CatalogAdd "UXB_LIBTYPE_PROVIDER_TYPE_MISMATCH", "LibraryType", "Library type provider does not support this type", "Kutuphane tipi saglayicisi bu tipi desteklemiyor"
+    UXBErr45CatalogAdd "UXB_LIBTYPE_PROVIDER_OPERATION_UNAVAILABLE", "LibraryType", "Library type provider does not support this operation", "Kutuphane tipi saglayicisi bu islemi desteklemiyor"
 End Sub
 
 Private Function UXBErr45CsvField(ByVal lineText As String, ByVal idxWant As Integer) As String
@@ -263,6 +319,18 @@ Private Sub UXBErr45Infer(ByVal msgText As String, ByRef codeOut As String, ByRe
     m = LCase(msgText)
     codeOut = "E.0001"
     classOut = "General"
+    If InStr(m, "uxb_iff_argument_count:") > 0 Then codeOut = "UXB_IFF_ARGUMENT_COUNT": classOut = "Semantic": Exit Sub
+    If InStr(m, "uxb_invalid_error_limit:") > 0 Then codeOut = "UXB_INVALID_ERROR_LIMIT": classOut = "CLI": Exit Sub
+    If InStr(m, "uxb_float_integer_range:") > 0 Then codeOut = "UXB_FLOAT_INTEGER_RANGE": classOut = "Type": Exit Sub
+    If InStr(m, "uxb_call_paren_required:") > 0 Then codeOut = "UXB_CALL_PAREN_REQUIRED": classOut = "Parser": Exit Sub
+    If InStr(m, "uxb_const_assignment:") > 0 Then codeOut = "UXB_CONST_ASSIGNMENT": classOut = "Semantic": Exit Sub
+    If InStr(m, "uxb_ffi_argument_type_list:") > 0 Then codeOut = "UXB_FFI_ARGUMENT_TYPE_LIST": classOut = "FFI": Exit Sub
+    If InStr(m, "uxb_mixed_string_numeric:") > 0 Then codeOut = "UXB_MIXED_STRING_NUMERIC": classOut = "Type": Exit Sub
+    If InStr(m, "uxb_interpreter_compare_mismatch:") > 0 Then codeOut = "UXB_INTERPRETER_COMPARE_MISMATCH": classOut = "Interpreter": Exit Sub
+    If InStr(m, "uxb_libtype_provider_unavailable:") > 0 Then codeOut = "UXB_LIBTYPE_PROVIDER_UNAVAILABLE": classOut = "LibraryType": Exit Sub
+    If InStr(m, "uxb_libtype_provider_missing:") > 0 Then codeOut = "UXB_LIBTYPE_PROVIDER_MISSING": classOut = "LibraryType": Exit Sub
+    If InStr(m, "uxb_libtype_provider_type_mismatch:") > 0 Then codeOut = "UXB_LIBTYPE_PROVIDER_TYPE_MISMATCH": classOut = "LibraryType": Exit Sub
+    If InStr(m, "uxb_libtype_provider_operation_unavailable:") > 0 Then codeOut = "UXB_LIBTYPE_PROVIDER_OPERATION_UNAVAILABLE": classOut = "LibraryType": Exit Sub
     If InStr(m, "cli") > 0 Or InStr(m, "arg") > 0 Then codeOut = "E.0010": classOut = "CLI": Exit Sub
     If InStr(m, "lang") > 0 Or InStr(m, "i18n") > 0 Then codeOut = "E.0020": classOut = "I18N": Exit Sub
     If InStr(m, "path") > 0 Or InStr(m, "dosya") > 0 Then codeOut = "E.0030": classOut = "Path": Exit Sub
@@ -278,7 +346,6 @@ Private Sub UXBErr45Infer(ByVal msgText As String, ByRef codeOut As String, ByRe
     If InStr(m, "mir") > 0 Then codeOut = "E.0400": classOut = "MIR": Exit Sub
     If InStr(m, "interpreter") > 0 Or InStr(m, "exec") > 0 Or InStr(m, "runtime") > 0 Then codeOut = "E.0410": classOut = "Interpreter": Exit Sub
     If InStr(m, "x64") > 0 Then codeOut = "E.0510": classOut = "X64": Exit Sub
-    If InStr(m, "x86") > 0 Then codeOut = "E.0520": classOut = "X86": Exit Sub
     If InStr(m, "js") > 0 Then codeOut = "E.0530": classOut = "JS": Exit Sub
     If InStr(m, "wat") > 0 Or InStr(m, "wasm") > 0 Then codeOut = "E.0540": classOut = "WAT": Exit Sub
     If InStr(m, "browser") > 0 Or InStr(m, "html") > 0 Then codeOut = "E.0550": classOut = "Browser": Exit Sub
@@ -292,6 +359,8 @@ Private Sub UXBErr45ExtractSrcPos(ByVal msgText As String, ByRef srcLineOut As I
     srcColOut = 0
     Dim atPos As Integer
     atPos = InStr(msgText, "@")
+    ' Compatibility only: structured producers pass their location directly.
+    If atPos <= 0 Then atPos = InStr(msgText, "[")
     If atPos <= 0 Then Exit Sub
     Dim frag As String
     frag = Mid(msgText, atPos + 1)
@@ -300,12 +369,14 @@ Private Sub UXBErr45ExtractSrcPos(ByVal msgText As String, ByRef srcLineOut As I
     If colon <= 0 Then Exit Sub
     srcLineOut = ValInt(Left(frag, colon - 1))
     srcColOut = ValInt(Mid(frag, colon + 1))
+    If srcLineOut <= 0 Then srcLineOut = 0: srcColOut = 0
 End Sub
 
-Sub UXBErrorSystemConfigure45(ByVal errorLogPathText As String, ByVal langText As String, ByVal catalogPathText As String, ByVal mirrorTerminal As Integer)
+Sub UXBErrorSystemConfigure45(ByVal errorLogPathText As String, ByVal langText As String, ByVal catalogPathText As String, ByVal mirrorTerminal As Integer, ByVal explicitLogPath As Integer = 0)
     gUXBError45.language = UXBErr45Lang(langText)
     gUXBError45.catalogPath = Trim(catalogPathText)
     gUXBError45.mirrorToTerminal = IIf(mirrorTerminal <> 0, 1, 0)
+    gUXBError45.explicitLogPath = explicitLogPath
 
     If Trim(errorLogPathText) <> "" Then
         gUXBError45.errorLogPath = errorLogPathText
@@ -321,6 +392,7 @@ End Sub
 
 Sub UXBErrorSetSourcePath45(ByVal sourcePathText As String)
     gUXBError45.sourcePath = Trim(sourcePathText)
+    If gUXBError45.explicitLogPath <> 0 Then Exit Sub
     If Trim(gUXBError45.errorLogPath) = "" Then Exit Sub
     Dim fixedName As String
     fixedName = UXBErr45BaseNameNoExt(gUXBError45.sourcePath)
@@ -329,6 +401,10 @@ Sub UXBErrorSetSourcePath45(ByVal sourcePathText As String)
     d = UXBErr45DirName(gUXBError45.errorLogPath)
     If d = "." Then d = "build\manual\logs"
     gUXBError45.errorLogPath = d & "\" & fixedName & ".hata.log"
+End Sub
+
+Sub UXBErrorSetTerminalFormat45(ByVal formatText As String)
+    gUXBError45.terminalFormat = LCase(Trim(formatText))
 End Sub
 
 Private Sub UXBErr45EnsureInit()
@@ -361,6 +437,64 @@ Function UXBErrorFormat45(ByVal severityText As String, ByVal codeText As String
     If Trim(detailsText) <> "" Then outText &= " details=" & detailsText
     If msgUse <> msgText And Trim(msgText) <> "" Then outText &= " raw=" & msgText
     Return outText
+End Function
+
+Function UXBErrorStructuredJson45(ByVal severityText As String, ByVal codeText As String, ByVal layerText As String, ByVal phaseText As String, ByVal msgEn As String, ByVal msgTr As String, ByVal sourceFile As String, ByVal srcLine As Integer, ByVal srcCol As Integer, ByVal sourceLength As Integer = 0, ByVal detailText As String = "") As String
+    Dim b As UXBJsonBuilder
+    UXBJsonInit b
+    UXBJsonBeginObject b
+    UXBJsonFieldString b, "code", codeText
+    UXBJsonFieldString b, "severity", LCase(severityText)
+    UXBJsonFieldString b, "layer", layerText
+    UXBJsonFieldString b, "phase", phaseText
+    UXBJsonFieldString b, "message_en", msgEn
+    UXBJsonFieldString b, "message_tr", msgTr
+    UXBJsonFieldString b, "message", IIf(gUXBError45.language = "tr", msgTr, msgEn)
+    UXBJsonBeginObjectField b, "source"
+    UXBJsonFieldString b, "file", sourceFile
+    UXBJsonFieldInt b, "line", srcLine
+    UXBJsonFieldInt b, "col", srcCol
+    UXBJsonFieldInt b, "length", sourceLength
+    UXBJsonFieldBool b, "known", IIf(srcLine > 0 And srcCol > 0, 1, 0)
+    UXBJsonEndObject b
+    UXBJsonFieldString b, "details", detailText
+    UXBJsonEndObject b
+    Return UXBJsonText(b)
+End Function
+
+Sub UXBErrorEmitStructured45(ByVal severityText As String, ByVal codeText As String, ByVal layerText As String, ByVal phaseText As String, ByVal msgEn As String, ByVal msgTr As String, ByVal sourceFile As String, ByVal srcLine As Integer, ByVal srcCol As Integer, ByVal sourceLength As Integer = 0, ByVal detailText As String = "")
+    UXBErr45EnsureInit
+    Dim displayMessage As String = IIf(gUXBError45.language = "tr", msgTr, msgEn)
+    Dim lineText As String = "[" & UXBErr45Ts() & "] [" & UCase(severityText) & "] [" & codeText & "] class=" & layerText
+    lineText &= " source_file=" & sourceFile & " source_line=" & LTrim(Str(srcLine)) & " source_col=" & LTrim(Str(srcCol))
+    lineText &= " source_known=" & IIf(srcLine > 0 And srcCol > 0, "true", "false") & " phase=" & phaseText & " msg=" & displayMessage
+    If detailText <> "" Then lineText &= " details=" & detailText
+    UXBErr45Append gUXBError45.errorLogPath, lineText
+    If gUXBError45.mirrorToTerminal <> 0 Then
+        If gUXBError45.terminalFormat = "json" Then
+            Print UXBErrorStructuredJson45(severityText, codeText, layerText, phaseText, msgEn, msgTr, sourceFile, srcLine, srcCol, sourceLength, detailText)
+        Else
+            Print lineText
+        End If
+    End If
+End Sub
+
+Function UXBErrorLegacyJson45(ByVal severityText As String, ByVal msgText As String) As String
+    UXBErr45EnsureInit
+    Dim codeText As String, layerText As String
+    UXBErr45Infer msgText, codeText, layerText
+    Dim msgEn As String = msgText, msgTr As String = msgText
+    Dim i As Integer
+    For i = 0 To gUXBError45.catalogCount - 1
+        If UCase(gUXBError45.catalog(i).codeText) = UCase(codeText) Then
+            msgEn = gUXBError45.catalog(i).messageEn
+            msgTr = gUXBError45.catalog(i).messageTr
+            Exit For
+        End If
+    Next i
+    Dim srcLine As Integer, srcCol As Integer
+    UXBErr45ExtractSrcPos msgText, srcLine, srcCol
+    Return UXBErrorStructuredJson45(severityText, codeText, layerText, "legacy", msgEn, msgTr, gUXBError45.sourcePath, srcLine, srcCol, 0, msgText)
 End Function
 
 Sub UXBErrorEmit45(ByVal severityText As String, ByVal codeText As String, ByVal classText As String, ByVal msgText As String, ByVal moduleText As String, ByVal detailsText As String)

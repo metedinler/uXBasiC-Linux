@@ -1,0 +1,10 @@
+DIM a(0 TO 1) AS U8
+a(0) = U8(255)
+DIM old AS U8 = a(0)++
+PRINT old
+PRINT a(0)
+DIM b(0 TO 1) AS I8
+b(0) = I8(127)
+DIM newer AS I32 = ++b(0)
+PRINT newer
+PRINT b(0)

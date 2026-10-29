@@ -1,0 +1,10 @@
+' S-605: a STATIC method has no object, so an instance field is not visible in it (compile error on every engine; the name used to read
+' 0, garbage or `undefined`, or fail at run time, depending on the engine).
+CLASS Say
+    PUBLIC
+    DIM n AS I32
+    STATIC METHOD Oku() AS I32
+        RETURN n
+    END METHOD
+END CLASS
+PRINT Say.Oku()

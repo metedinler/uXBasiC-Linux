@@ -1,0 +1,17 @@
+CLASS Ic
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT 5
+    END DESTRUCTOR
+END CLASS
+CLASS Kap
+    PUBLIC
+    DIM ic AS Ic
+    DIM n AS I32
+END CLASS
+' S-615: DELETE of a field that holds nothing is harmless, like DELETE of an empty variable.
+DIM c AS Kap = NEW Kap()
+DELETE c.ic
+IF c.ic = NOTHING THEN PRINT 1
+PRINT 9

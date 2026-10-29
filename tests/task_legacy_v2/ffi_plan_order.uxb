@@ -1,0 +1,6 @@
+FUNCTION Scale(n AS I32) AS I32
+    RETURN CALL(DLL, "kernel32.dll", "MulDiv", I32, STDCALL, "I32,I32,I32", n, 2, 1)
+END FUNCTION
+PRINT CALL(DLL, "kernel32.dll", "GetCurrentThreadId", U32) > 0
+PRINT Scale(21)
+PRINT CALL(DLL, "kernel32.dll", "MulDiv", I32, STDCALL, "I32,I32,I32", CALL(DLL, "kernel32.dll", "MulDiv", I32, STDCALL, "I32,I32,I32", 21, 2, 1), 1, 1)

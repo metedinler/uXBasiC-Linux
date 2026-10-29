@@ -1,0 +1,204 @@
+' S-684: yordam adi bir NASM komut oneki, yonergesi ya da yazmac adi olsa da eski AST-x64 derlenir.
+' Eskiden etiket satirlari (rep: ve call rep) NASM'da expression syntax error verirdi; build_all.bat basarisiz olurdu.
+' Her yordam a + sira numarasi doner; alti motor da ayni 40 satiri yazmali.
+
+FUNCTION rep(a AS I64) AS I64
+    RETURN a + 1
+END FUNCTION
+
+FUNCTION repe(a AS I64) AS I64
+    RETURN a + 2
+END FUNCTION
+
+FUNCTION repne(a AS I64) AS I64
+    RETURN a + 3
+END FUNCTION
+
+FUNCTION repnz(a AS I64) AS I64
+    RETURN a + 4
+END FUNCTION
+
+FUNCTION repz(a AS I64) AS I64
+    RETURN a + 5
+END FUNCTION
+
+FUNCTION lock(a AS I64) AS I64
+    RETURN a + 6
+END FUNCTION
+
+FUNCTION wait(a AS I64) AS I64
+    RETURN a + 7
+END FUNCTION
+
+FUNCTION xacquire(a AS I64) AS I64
+    RETURN a + 8
+END FUNCTION
+
+FUNCTION xrelease(a AS I64) AS I64
+    RETURN a + 9
+END FUNCTION
+
+FUNCTION bnd(a AS I64) AS I64
+    RETURN a + 10
+END FUNCTION
+
+FUNCTION nobnd(a AS I64) AS I64
+    RETURN a + 11
+END FUNCTION
+
+FUNCTION a16(a AS I64) AS I64
+    RETURN a + 12
+END FUNCTION
+
+FUNCTION a32(a AS I64) AS I64
+    RETURN a + 13
+END FUNCTION
+
+FUNCTION a64(a AS I64) AS I64
+    RETURN a + 14
+END FUNCTION
+
+FUNCTION asp(a AS I64) AS I64
+    RETURN a + 15
+END FUNCTION
+
+FUNCTION o16(a AS I64) AS I64
+    RETURN a + 16
+END FUNCTION
+
+FUNCTION o32(a AS I64) AS I64
+    RETURN a + 17
+END FUNCTION
+
+FUNCTION o64(a AS I64) AS I64
+    RETURN a + 18
+END FUNCTION
+
+FUNCTION osp(a AS I64) AS I64
+    RETURN a + 19
+END FUNCTION
+
+FUNCTION use16(a AS I64) AS I64
+    RETURN a + 20
+END FUNCTION
+
+FUNCTION use32(a AS I64) AS I64
+    RETURN a + 21
+END FUNCTION
+
+FUNCTION float(a AS I64) AS I64
+    RETURN a + 22
+END FUNCTION
+
+FUNCTION export(a AS I64) AS I64
+    RETURN a + 23
+END FUNCTION
+
+FUNCTION required(a AS I64) AS I64
+    RETURN a + 24
+END FUNCTION
+
+FUNCTION absolute(a AS I64) AS I64
+    RETURN a + 25
+END FUNCTION
+
+FUNCTION at(a AS I64) AS I64
+    RETURN a + 26
+END FUNCTION
+
+FUNCTION istruc(a AS I64) AS I64
+    RETURN a + 27
+END FUNCTION
+
+FUNCTION iend(a AS I64) AS I64
+    RETURN a + 28
+END FUNCTION
+
+FUNCTION struc(a AS I64) AS I64
+    RETURN a + 29
+END FUNCTION
+
+FUNCTION endstruc(a AS I64) AS I64
+    RETURN a + 30
+END FUNCTION
+
+FUNCTION sectalign(a AS I64) AS I64
+    RETURN a + 31
+END FUNCTION
+
+FUNCTION cpu(a AS I64) AS I64
+    RETURN a + 32
+END FUNCTION
+
+FUNCTION k0(a AS I64) AS I64
+    RETURN a + 33
+END FUNCTION
+
+FUNCTION k7(a AS I64) AS I64
+    RETURN a + 34
+END FUNCTION
+
+FUNCTION bnd0(a AS I64) AS I64
+    RETURN a + 35
+END FUNCTION
+
+FUNCTION bnd3(a AS I64) AS I64
+    RETURN a + 36
+END FUNCTION
+
+FUNCTION tmm0(a AS I64) AS I64
+    RETURN a + 37
+END FUNCTION
+
+FUNCTION tmm7(a AS I64) AS I64
+    RETURN a + 38
+END FUNCTION
+
+FUNCTION tr0(a AS I64) AS I64
+    RETURN a + 39
+END FUNCTION
+
+FUNCTION tr7(a AS I64) AS I64
+    RETURN a + 40
+END FUNCTION
+
+PRINT rep(10)
+PRINT repe(10)
+PRINT repne(10)
+PRINT repnz(10)
+PRINT repz(10)
+PRINT lock(10)
+PRINT wait(10)
+PRINT xacquire(10)
+PRINT xrelease(10)
+PRINT bnd(10)
+PRINT nobnd(10)
+PRINT a16(10)
+PRINT a32(10)
+PRINT a64(10)
+PRINT asp(10)
+PRINT o16(10)
+PRINT o32(10)
+PRINT o64(10)
+PRINT osp(10)
+PRINT use16(10)
+PRINT use32(10)
+PRINT float(10)
+PRINT export(10)
+PRINT required(10)
+PRINT absolute(10)
+PRINT at(10)
+PRINT istruc(10)
+PRINT iend(10)
+PRINT struc(10)
+PRINT endstruc(10)
+PRINT sectalign(10)
+PRINT cpu(10)
+PRINT k0(10)
+PRINT k7(10)
+PRINT bnd0(10)
+PRINT bnd3(10)
+PRINT tmm0(10)
+PRINT tmm7(10)
+PRINT tr0(10)
+PRINT tr7(10)

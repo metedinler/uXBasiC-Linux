@@ -1,0 +1,22 @@
+CLASS Temel
+    PUBLIC
+    METHOD Sabit() AS I32
+        RETURN 10
+    END METHOD
+    VIRTUAL METHOD Deger() AS I32
+        RETURN 11
+    END METHOD
+END CLASS
+CLASS Alt EXTENDS Temel
+    PUBLIC
+    METHOD Sabit() AS I32
+        RETURN 20
+    END METHOD
+    OVERRIDE METHOD Deger() AS I32
+        RETURN 21
+    END METHOD
+END CLASS
+DIM arr(1) AS Temel
+arr(0) = NEW Alt()
+PRINT arr(0).Sabit()
+PRINT arr(0).Deger()

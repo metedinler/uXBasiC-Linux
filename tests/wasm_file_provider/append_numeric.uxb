@@ -1,0 +1,16 @@
+DIM f AS FILE_HANDLE
+DIM s AS STRING
+OPEN "numbers.txt" FOR OUTPUT AS f
+PRINT #f, 12; ":"; F64(1.25)
+CLOSE f
+OPEN "numbers.txt" FOR APPEND AS f
+PRINT #f, "tail";
+CLOSE f
+OPEN "numbers.txt" FOR INPUT AS f
+INPUT #f, s
+PRINT s
+INPUT #f, s
+PRINT s
+PRINT LOF(f)
+CLOSE
+PRINT FREEFILE

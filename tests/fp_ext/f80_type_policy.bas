@@ -1,0 +1,6 @@
+DIM a AS F80
+DIM b AS F80
+a = 1.25
+b = a
+PRINT a
+PRINT b

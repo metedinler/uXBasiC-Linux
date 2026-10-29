@@ -1,0 +1,5 @@
+' S-329: hic cagrilmayan yordamin govdesindeki tanimsiz cagri da derleme hatasidir.
+SUB Hic()
+    PRINT Yok(4)
+END SUB
+PRINT "ok"

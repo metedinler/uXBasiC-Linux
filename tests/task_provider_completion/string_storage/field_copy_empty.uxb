@@ -1,0 +1,23 @@
+TYPE Record
+    before AS I32
+    first AS STRING
+    second AS STRING
+    after AS I32
+END TYPE
+DIM records(0 TO 1) AS Record
+records(0).before = 17
+records(0).after = 42
+PRINT LEN(records(0).first)
+records(0).first = "AB" + CHR(0) + "CD"
+records(0).second = records(0).first
+records(0).first = "changed"
+DIM scratch AS STRING
+DIM i AS I32
+FOR i = 1 TO 200
+    scratch = STR(i) + "-temporary"
+NEXT
+PRINT records(0).first
+PRINT LEN(records(0).second)
+PRINT ASC(MID(records(0).second, 3, 1))
+PRINT records(0).before
+PRINT records(0).after

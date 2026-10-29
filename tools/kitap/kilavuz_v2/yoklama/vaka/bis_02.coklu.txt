@@ -1,0 +1,90 @@
+A dizi TYPE yalniz I32 alan
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+d(0).a = 1: d(0).b = 2
+d(1).a = 3: d(1).b = 4
+PRINT d(0).a + d(1).b
+=====
+B dizi TYPE STRING alan
+TYPE P
+    ad AS STRING
+    u AS I32
+END TYPE
+DIM d(2) AS P
+d(0).ad = "x": d(0).u = 2
+d(1).ad = "y": d(1).u = 4
+PRINT d(1).ad; d(0).u
+=====
+C dizi TYPE STRING alan degisken indeks
+TYPE P
+    ad AS STRING
+    u AS I32
+END TYPE
+DIM d(2) AS P
+DIM i AS I32
+FOR i = 0 TO 2
+    d(i).ad = "k" + STR(i)
+    d(i).u = i * 10
+NEXT
+FOR i = 0 TO 2
+    PRINT d(i).ad; " "; d(i).u
+NEXT
+=====
+D yerel TYPE alan atama ve okuma
+TYPE P
+    ad AS STRING
+    u AS I32
+END TYPE
+DIM p AS P
+p.ad = "z"
+p.u = 5
+PRINT p.ad; " "; p.u + 1
+=====
+E fonksiyona TYPE alanlarini ayri ver
+TYPE P
+    x AS I32
+    y AS I32
+END TYPE
+FUNCTION Mesafe2(x1 AS I32, y1 AS I32, x2 AS I32, y2 AS I32) AS I32
+    RETURN (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
+END FUNCTION
+DIM a AS P
+DIM b AS P
+a.x = 0: a.y = 0: b.x = 3: b.y = 4
+PRINT Mesafe2(a.x, a.y, b.x, b.y)
+=====
+F BYREF sayi cikis
+SUB Bol(a AS I32, b AS I32, BYREF bolum AS I32, BYREF kalan AS I32)
+    bolum = a \ b
+    kalan = a MOD b
+END SUB
+DIM q AS I32
+DIM r AS I32
+Bol(17, 5, q, r)
+PRINT q; " "; r
+=====
+G TYPE dizisi alan alan siralama
+TYPE K
+    ad AS STRING
+    puan AS I32
+END TYPE
+DIM k(2) AS K
+k(0).ad = "a": k(0).puan = 30
+k(1).ad = "b": k(1).puan = 10
+k(2).ad = "c": k(2).puan = 20
+DIM i AS I32
+DIM j AS I32
+DIM tp AS I32
+DIM ta AS STRING
+FOR i = 0 TO 1
+    FOR j = 0 TO 1 - i
+        IF k(j).puan > k(j + 1).puan THEN
+            tp = k(j).puan: k(j).puan = k(j + 1).puan: k(j + 1).puan = tp
+            ta = k(j).ad: k(j).ad = k(j + 1).ad: k(j + 1).ad = ta
+        END IF
+    NEXT
+NEXT
+PRINT k(0).ad; k(1).ad; k(2).ad

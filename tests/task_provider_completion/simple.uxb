@@ -1,0 +1,5 @@
+THREAD Worker(x AS I32) AS I32
+    RETURN x + 1
+END THREAD
+DIM pending AS TASK OF I32 = SPAWN Worker(41)
+PRINT pending.JOIN()

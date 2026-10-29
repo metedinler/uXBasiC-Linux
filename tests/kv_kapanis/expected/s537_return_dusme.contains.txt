@@ -1,0 +1,2 @@
+ALL=RETURN used without GOSUB
+WASM=unreachable

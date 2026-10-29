@@ -10,20 +10,43 @@
 ' form whose exponent always has at least two digits ("1e+20", "1e-07"); infinities
 ' and NaN read "inf", "-inf", "nan"; negative zero reads "0".
 '
-' FreeBASIC's Str() already produces the digit rule (it is "%.16g" for Double and
-' "%.7g" for Single) but the Windows C runtime it is linked to writes three-digit
-' exponents ("1e+020"), so this function only normalizes the exponent and the
-' non-finite spellings. The native runtime (native/uxb_runtime), the legacy x64
-' backend and the JS/WASM runtimes implement the same rule.
+' Use the C formatter for the same rounding as native/legacy x64. FreeBASIC
+' Str() can round the last digit differently (10/3 was ...334 versus ...333).
+Declare Function UXBCrtSprintfDouble Cdecl Alias "sprintf" (ByVal buffer As ZString Ptr, ByVal formatText As ZString Ptr, ...) As Long
+Declare Function UXBCrtStrtod Cdecl Alias "strtod" (ByVal text As ZString Ptr, ByVal endPtr As ZString Ptr Ptr) As Double
+
+Private Sub UXBFormatFloatBuffer(ByVal buffer As ZString Ptr, ByVal formatText As ZString Ptr, ByVal value As Double)
+#if defined(__FB_WIN32__) And defined(__FB_64BIT__)
+    ' MSVCRT first rounds to 17 decimal digits and can then round a second
+    ' time at precision 16. Use Windows' UCRT formatter directly with a
+    ' single Win64 va_list slot, matching the native runtime's rounding.
+    Type UXBUcrtVsprintfProc As Function Cdecl (ByVal options As ULongInt, ByVal output As ZString Ptr, ByVal outputSize As ULongInt, ByVal formatArg As ZString Ptr, ByVal locale As Any Ptr, ByVal argumentList As Any Ptr) As Long
+    Static initialized As Integer
+    Static ucrtHandle As Any Ptr
+    Static formatter As UXBUcrtVsprintfProc
+    If initialized = 0 Then
+        ucrtHandle = DyLibLoad(Environ("SystemRoot") & "\System32\ucrtbase.dll")
+        If ucrtHandle <> 0 Then formatter = CPtr(UXBUcrtVsprintfProc, DyLibSymbol(ucrtHandle, "__stdio_common_vsprintf"))
+        initialized = 1
+    End If
+    If formatter <> 0 Then
+        If formatter(&H20, buffer, 64, formatText, 0, @value) >= 0 Then Exit Sub
+    End If
+#endif
+    UXBCrtSprintfDouble(buffer, formatText, value)
+End Sub
+
 Function UXBFloatToText(ByVal value As Double, ByVal isSingle As Integer = 0) As String
     If value = 0 Then Return "0"
 
     Dim s As String
+    Dim buffer As ZString * 64
     If isSingle <> 0 Then
-        s = LTrim(Str(CSng(value)))
+        UXBFormatFloatBuffer(@buffer, "%.7g", CDbl(CSng(value)))
     Else
-        s = LTrim(Str(value))
+        UXBFormatFloatBuffer(@buffer, "%.16g", value)
     End If
+    s = LTrim(buffer)
 
     If InStr(s, "#") > 0 Then
         If InStr(s, "INF") > 0 Then
@@ -32,6 +55,10 @@ Function UXBFloatToText(ByVal value As Double, ByVal isSingle As Integer = 0) As
         End If
         Return "nan"
     End If
+    ' S-691: the UCRT spells them "inf", "-inf", "nan" and "-nan(ind)" (no '#'); every engine prints inf / -inf / nan.
+    Dim lowerText As String = LCase(s)
+    If InStr(lowerText, "nan") > 0 Then Return "nan"
+    If InStr(lowerText, "inf") > 0 Then Return IIf(Left(s, 1) = "-", "-inf", "inf")
 
     Dim expPos As Integer
     expPos = InStr(s, "e")
@@ -54,9 +81,6 @@ End Function
 ' that reads back to exactly the same double. Str() is not enough here -- it keeps 16 digits, so
 ' folding `0.1 + 0.2` through it wrote the literal 0.3 and every engine compared/computed with
 ' a different number than the one the program would have computed at run time.
-Declare Function UXBCrtSprintfDouble Cdecl Alias "sprintf" (ByVal buffer As ZString Ptr, ByVal formatText As ZString Ptr, ...) As Long
-Declare Function UXBCrtStrtod Cdecl Alias "strtod" (ByVal text As ZString Ptr, ByVal endPtr As ZString Ptr Ptr) As Double
-
 Function UXBFloatToExactText(ByVal value As Double) As String
     If value = 0 Then Return "0"
     If value <> value Or value > 1.7976931348623157e308 Or value < -1.7976931348623157e308 Then Return UXBFloatToText(value)

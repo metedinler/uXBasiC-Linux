@@ -1,0 +1,183 @@
+kurucu ve yikici sirasi kalitimda (plan: A.ctor B.ctor B.dtor A.dtor)
+CLASS A
+    PUBLIC
+    CONSTRUCTOR()
+        PRINT "A.ctor"
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT "A.dtor"
+    END DESTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    CONSTRUCTOR()
+        PRINT "B.ctor"
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT "B.dtor"
+    END DESTRUCTOR
+END CLASS
+DIM nb AS B = NEW B()
+DELETE nb
+=====
+SUPER(arg) ile parametreli taban kurucusu (plan: 3 ve 4)
+CLASS A
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(ax AS I32)
+        x = ax
+    END CONSTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DIM y AS I32
+    CONSTRUCTOR(ax AS I32, ay AS I32)
+        SUPER(ax)
+        y = ay
+    END CONSTRUCTOR
+END CLASS
+DIM nb AS B = NEW B(3, 4)
+PRINT nb.x
+PRINT nb.y
+=====
+parametreli taban kurucusu SUPER yok (plan: hata)
+CLASS A
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(ax AS I32)
+        x = ax
+    END CONSTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DIM y AS I32
+    CONSTRUCTOR(ay AS I32)
+        y = ay
+    END CONSTRUCTOR
+END CLASS
+DIM nb AS B = NEW B(4)
+PRINT nb.y
+=====
+yalniz GET ozellige yazma (plan: hata)
+CLASS K
+    PUBLIC
+    PROPERTY Deger AS I32 GET
+END CLASS
+DIM nk AS K = NEW K()
+nk.Deger = 5
+PRINT nk.Deger
+=====
+alan gizleme taban ve turemiste ayni ad (plan: hata)
+CLASS A
+    PUBLIC
+    DIM x AS I32
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DIM x AS I32
+END CLASS
+DIM nb AS B = NEW B()
+nb.x = 5
+PRINT nb.x
+=====
+asiri yukleme parametre tipine gore (plan: desteklenir)
+CLASS K
+    PUBLIC
+    METHOD F(a AS I32) AS I32
+        RETURN 1
+    END METHOD
+    METHOD F(a AS STRING) AS I32
+        RETURN 2
+    END METHOD
+END CLASS
+DIM k AS K = NEW K()
+PRINT k.F(1)
+PRINT k.F("a")
+=====
+arayuz tipli degisken uzerinden cagri
+INTERFACE IHesap
+    METHOD Calis(x AS I32) AS I32
+END INTERFACE
+CLASS Ikiye IMPLEMENTS IHesap
+    PUBLIC
+    METHOD Calis(x AS I32) AS I32
+        RETURN x * 2
+    END METHOD
+END CLASS
+DIM h AS IHesap = NEW Ikiye()
+PRINT h.Calis(7)
+=====
+taban tipli degiskenle DELETE yikici zinciri (plan: B.dtor A.dtor)
+CLASS A
+    PUBLIC
+    VIRTUAL METHOD Ad() AS STRING
+        RETURN "A"
+    END METHOD
+    DESTRUCTOR()
+        PRINT "A.dtor"
+    END DESTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    OVERRIDE METHOD Ad() AS STRING
+        RETURN "B"
+    END METHOD
+    DESTRUCTOR()
+        PRINT "B.dtor"
+    END DESTRUCTOR
+END CLASS
+DIM x AS A = NEW B()
+PRINT x.Ad()
+DELETE x
+=====
+nesne esitligi iki degisken ayni nesne
+CLASS K
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS K = NEW K()
+DIM b AS K
+b = a
+DIM c AS K = NEW K()
+PRINT a = b
+PRINT a = c
+=====
+CLASS dizisi eleman nesne alani
+CLASS K
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM d(1) AS K
+d(0) = NEW K()
+d(0).v = 7
+PRINT d(0).v
+=====
+dongusel referans iki nesne birbirine (plan: zayif referans gerekir)
+CLASS Dugum
+    PUBLIC
+    DIM ad AS I32
+    DIM sonraki AS Dugum
+END CLASS
+DIM a AS Dugum = NEW Dugum()
+DIM b AS Dugum = NEW Dugum()
+a.sonraki = b
+b.sonraki = a
+a.ad = 1
+b.ad = 2
+PRINT a.sonraki.ad
+PRINT b.sonraki.ad
+=====
+nesne alanina baska nesne atamak ve yazdirmak
+CLASS Motor
+    PUBLIC
+    DIM guc AS I32
+END CLASS
+CLASS Araba
+    PUBLIC
+    DIM m AS Motor
+END CLASS
+DIM a AS Araba = NEW Araba()
+DIM m AS Motor = NEW Motor()
+m.guc = 90
+a.m = m
+PRINT a.m.guc

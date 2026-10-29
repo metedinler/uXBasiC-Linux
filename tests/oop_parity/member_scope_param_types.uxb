@@ -1,0 +1,19 @@
+' S-611 (2026-10-17): the parameters of one class member are private to that member. Three methods with a parameter of the same name and
+' different types (STRING, F64, I32) used to be rejected ("UXB_MIXED_STRING_NUMERIC", G-NESNE-16): the first parameter's type was used in all of them.
+' WASM prints neither strings nor floats (explicit rejection), so five engines run this.
+CLASS Say
+    PUBLIC
+    METHOD SetS(v AS STRING)
+        PRINT v
+    END METHOD
+    METHOD SetF(v AS F64)
+        PRINT v * 2.0
+    END METHOD
+    METHOD SetI(v AS I32)
+        PRINT v + 1
+    END METHOD
+END CLASS
+DIM s AS Say = NEW Say()
+s.SetS("a")
+s.SetF(1.5)
+s.SetI(4)

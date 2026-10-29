@@ -1,0 +1,3 @@
+DIM a AS I32
+DIM s AS STRING
+a = s + 1

@@ -1,0 +1,22 @@
+[
+ {
+  "ad": "f01 CONST ifadeli sinir ve dizi kullanimi",
+  "kod": "CONST N = 2 * 3\nDIM a(N - 1) AS I32\na(5) = 4\nPRINT a(5)\nPRINT UBOUND(a)\n"
+ },
+ {
+  "ad": "f02 CONST tek ad sinir",
+  "kod": "CONST N = 6\nDIM a(N) AS I32\na(6) = 4\nPRINT a(6)\nPRINT UBOUND(a)\n"
+ },
+ {
+  "ad": "f03 CONST ifadeli sinir yalniz UBOUND",
+  "kod": "CONST N = 2 * 3\nDIM a(N - 1) AS I32\nPRINT UBOUND(a)\n"
+ },
+ {
+  "ad": "f04 CONST ifadeli sinir ve dongu",
+  "kod": "CONST N = 2 * 3\nDIM a(N - 1) AS I32\nDIM i AS I32\nFOR i = 0 TO N - 1\n    a(i) = i * 2\nNEXT\nPRINT a(5)\n"
+ },
+ {
+  "ad": "f05 FUNCTION icinde etiket ileti",
+  "kod": "FUNCTION F() AS I32\n    GOTO Son\n    RETURN 1\nSon:\n    RETURN 2\nEND FUNCTION\nPRINT F()\n"
+ }
+]

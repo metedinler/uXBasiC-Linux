@@ -1,0 +1,2 @@
+DIM value AS I32 = "bad"
+PRINT value

@@ -22,7 +22,7 @@ if ($LASTEXITCODE -ne 0) { throw "Mevcut AST contract gate FAIL" }
 cmd /c compiler\scripts\build_uxb_main_64.bat
 if ($LASTEXITCODE -ne 0) { throw "FreeBASIC compiler build FAIL" }
 
-$exeCandidates = @("build\uxb_main_64.exe", "compiler\wrappers\uxb_main_64.exe")
+$exeCandidates = @("bin\uxb.exe")
 $exe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $exe) { throw "uxb_main_64.exe bulunamadi" }
 

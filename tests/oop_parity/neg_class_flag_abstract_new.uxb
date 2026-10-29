@@ -1,0 +1,9 @@
+' S-572 / S-360: an ABSTRACT class cannot be instantiated.
+ABSTRACT CLASS Shape
+    PUBLIC
+    VIRTUAL METHOD Area() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+DIM s AS Shape = NEW Shape()
+PRINT s.Area()

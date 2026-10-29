@@ -1,0 +1,35 @@
+MAIN icinde parantezsiz
+SUB Selam(ad AS STRING)
+    PRINT "merhaba " + ad
+END SUB
+MAIN
+    Selam "Ayse"
+    PRINT "bitti"
+END MAIN
+=====
+MAIN icinde parantezsiz argumansiz
+SUB Selam()
+    PRINT "selam"
+END SUB
+MAIN
+    Selam
+    PRINT "bitti"
+END MAIN
+=====
+sub icinde parantezsiz BYVAL degisken
+SUB Yaz(n AS I32)
+    PRINT n
+END SUB
+SUB Ana()
+    DIM k AS I32 = 3
+    Yaz k
+    PRINT "ana bitti"
+END SUB
+Ana()
+=====
+iki parantezli sonra
+SUB Yaz(n AS I32)
+    PRINT n
+END SUB
+Yaz(1)
+Yaz(2)

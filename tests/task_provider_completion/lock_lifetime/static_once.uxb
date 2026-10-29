@@ -1,0 +1,20 @@
+DIM initializations AS I64 = 0
+FUNCTION InitialValue() AS I64
+    initializations += 1
+    UNSAFE
+        CALL(DLL, "kernel32.dll", "Sleep", VOID, STDCALL, "U32", 100)
+    END UNSAFE
+    RETURN 42
+END FUNCTION
+FUNCTION StoredValue() AS I64
+    STATIC value AS I64 = InitialValue()
+    RETURN value
+END FUNCTION
+THREAD ReadStored() AS I64
+    RETURN StoredValue()
+END THREAD
+DIM a AS TASK OF I64 = SPAWN ReadStored()
+DIM b AS TASK OF I64 = SPAWN ReadStored()
+PRINT a.JOIN() + b.JOIN()
+PRINT initializations
+PRINT StoredValue()

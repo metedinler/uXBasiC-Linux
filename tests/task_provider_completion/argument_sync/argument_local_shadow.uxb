@@ -1,0 +1,10 @@
+DIM g AS I64 = 7
+FUNCTION Identity(value AS I64) AS I64
+    RETURN value
+END FUNCTION
+THREAD Read(g AS I64) AS I32
+    RETURN CINT(Identity(g + g))
+END THREAD
+DIM t AS TASK OF I32 = SPAWN Read(5)
+PRINT t.JOIN()
+PRINT g

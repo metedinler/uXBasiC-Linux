@@ -1,0 +1,11 @@
+DIM gate AS MUTEX
+FUNCTION SumLocked(a AS I64, b AS F64, c AS I32, d AS F32, e AS I64) AS F64
+    LOCK gate
+        RETURN a + b + c + d + e
+    END LOCK
+END FUNCTION
+PRINT SumLocked(1, 2.5, 3, 4.25, 5)
+LOCK gate
+    PRINT "released"
+END LOCK
+PRINT SumLocked(10, 0.5, 20, 0.25, 30)

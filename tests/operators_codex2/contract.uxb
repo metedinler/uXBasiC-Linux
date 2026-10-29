@@ -1,0 +1,41 @@
+MAIN
+    DIM x AS I32
+    x = 2
+    x **= 3
+    PRINT x
+    x = 17
+    x \= 3
+    PRINT x
+    x ^= 3
+    PRINT x
+    PRINT 5 & 3
+    PRINT 5 | 3
+    PRINT 5 ^ 3
+    PRINT 2 ** 3 ** 2
+    PRINT -2 ** 2
+    PRINT -(2 ** 2)
+    PRINT CINT(TRUE)
+    PRINT CINT(FALSE)
+    PRINT CINT(2 = 2)
+    PRINT CINT(2 == 2)
+    PRINT CINT(2 <> 3)
+    PRINT CINT(2 != 3)
+    PRINT 1 OR 0 AND 0
+    PRINT 1 XOR 1 AND 0
+    PRINT 1 ^ 1 AND 0
+    PRINT 1 NAND 1
+    PRINT 0 NOR 0
+    PRINT 1 XNOR 1
+    PRINT 1 IMP 0
+    PRINT 0 CIMP 1
+    PRINT 1 NIMP 0
+    PRINT 0 NCIMP 1
+    PRINT 1 IDA 0
+    PRINT 0 IDB 1
+    PRINT 0 NOTA 1
+    PRINT 1 NOTB 0
+    PRINT 1 NXOR 1
+    PRINT 1 EQV 1
+    PRINT 1 EQA 1
+    PRINT 1 IFF 1
+END MAIN

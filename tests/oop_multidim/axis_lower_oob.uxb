@@ -1,0 +1,8 @@
+CLASS Kutu
+    PUBLIC
+    n AS I32
+END CLASS
+DIM a(0 TO 1, 0 TO 1) AS Kutu
+DIM rowIndex AS I32 = -1
+a(rowIndex, 1) = NEW Kutu()
+PRINT 99

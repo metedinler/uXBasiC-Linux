@@ -1,0 +1,6 @@
+%%TARGET WEB
+%%ALLOW_RAW_JS ON
+%%WASM_HOST_JS_BEGIN
+const imports = { env: { print_i32: (x) => console.log(x) } };
+%%WASM_HOST_JS_END
+PRINT "HOST_JS"

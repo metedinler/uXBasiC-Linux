@@ -1,0 +1,8 @@
+DECLARE SUB Update(a AS I32[])
+SUB Update(a AS I32[])
+    a(5) = 62
+END SUB
+DIM data(3 TO 5) AS I32
+Update(data)
+PRINT data(5)
+' EXPECT stdout: 62

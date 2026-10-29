@@ -1,0 +1,6 @@
+' S-329 koruma: CALL deyimi ve parantezli SUB deyimi tanimli SUB'a gider.
+SUB Bas(n AS I32)
+    PRINT "sub:" + STR(n)
+END SUB
+CALL Bas(3)
+Bas(4)

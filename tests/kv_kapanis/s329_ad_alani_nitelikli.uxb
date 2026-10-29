@@ -1,0 +1,7 @@
+' S-329 koruma: S.F nitelikli cagri tanimli.
+NAMESPACE S
+    FUNCTION F(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+END NAMESPACE
+PRINT S.F(2)

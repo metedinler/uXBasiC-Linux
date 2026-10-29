@@ -1,0 +1,10 @@
+' S-329 koruma (gorunurluk, S-141): ad alani icinde yalin ad once kendi ad alanina cozulur.
+NAMESPACE A
+    FUNCTION Uc(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+    FUNCTION Say(a AS I32) AS I32
+        RETURN Uc(a)
+    END FUNCTION
+END NAMESPACE
+PRINT A.Say(2)

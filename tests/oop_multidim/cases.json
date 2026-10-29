@@ -1,0 +1,41 @@
+{
+  "matrix_alias_delete": {
+    "output": "8\n9\n-1\n1"
+  },
+  "cube_local": {
+    "output": "32"
+  },
+  "axis_oob": {
+    "error": "array index out of bounds"
+  },
+  "index_order_once": {
+    "output": "7\n12\n1212\n-1"
+  },
+  "shape_queries": {
+    "output": "-1\n0\n2\n4\n5\n6\n96\n16"
+  },
+  "null_matrix_read": {
+    "error": "null object reference"
+  },
+  "axis_lower_oob": {
+    "error": "array index out of bounds"
+  },
+  "wrong_rank": {
+    "error": "dimension(s)"
+  },
+  "virtual_receiver": {
+    "output": "10\n21"
+  },
+  "shadow_shapes": {
+    "output": "13\n1\n6\n7\n-1\n3"
+  },
+  "expression_bounds": {
+    "output": "17"
+  },
+  "float_field": {
+    "output": "1.5\n3.75"
+  },
+  "recursive_local": {
+    "output": "60"
+  }
+}

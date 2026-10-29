@@ -1,0 +1,4 @@
+' S-329 koruma: kutuphane yordamlari (LISTADD, LISTGET) kullanici tanimi degildir. (Eski AST-x64 S-538-L ve WASM bu programi zaten uretmez.)
+DIM l AS LIST
+CALL LISTADD(l, 10)
+PRINT LISTGET(l, 0)

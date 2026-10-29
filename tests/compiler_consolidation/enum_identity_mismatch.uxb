@@ -1,0 +1,7 @@
+ENUM Palette
+    Red
+END ENUM
+ENUM Shape
+    Round
+END ENUM
+DIM selectedColor AS Palette = Shape.Round

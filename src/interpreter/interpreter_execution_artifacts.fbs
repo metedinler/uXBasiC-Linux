@@ -87,6 +87,17 @@ Private Function UXBInterpreterNormalizeLineEndings(ByVal rawText As String) As 
     Return outText
 End Function
 
+Function UXBInterpreterCompareOutputsMatch( _
+    ByVal astStatus As String, _
+    ByVal mirStatus As String, _
+    ByVal astOutput As String, _
+    ByVal mirOutput As String _
+) As Integer
+    If astStatus <> "PASS" Or mirStatus <> "PASS" Then Return 0
+    If UXBInterpreterNormalizeLineEndings(astOutput) = UXBInterpreterNormalizeLineEndings(mirOutput) Then Return 1
+    Return 0
+End Function
+
 Function UXBInterpreterCompareJson( _
     ByVal sourceFile As String, _
     ByVal astStatus As String, _

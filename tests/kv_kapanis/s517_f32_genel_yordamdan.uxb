@@ -1,0 +1,21 @@
+' S-517: yordam icinden GENEL F32 degiskene yapilan atama da tek duyarliga yuvarlanir (eskiden JS'te 1 yaziyordu).
+' Yordamin kendi yereli ayni adli genelin ustunu kapatinca genel degismez.
+DIM gl AS F32
+SUB Ata()
+    gl = 16777217
+END SUB
+Ata()
+PRINT gl - 16777216
+SUB Artir()
+    gl = gl + 1
+END SUB
+gl = 16777216
+Artir()
+PRINT gl - 16777216
+SUB Golge()
+    DIM gl AS F64
+    gl = 16777217
+    PRINT gl - 16777216
+END SUB
+Golge()
+PRINT gl - 16777216

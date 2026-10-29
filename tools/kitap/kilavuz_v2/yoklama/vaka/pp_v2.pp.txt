@@ -1,0 +1,89 @@
+=== for_temel
+%%FOR I = 1 TO 3
+PRINT %%I * 10
+%%ENDFOR
+=== for_step
+%%FOR K = 10 TO 0 STEP -5
+PRINT {{K}}
+%%ENDFOR
+=== for_break
+%%FOR I = 1 TO 5
+%%IF %%I == 3
+%%ENDIF
+PRINT %%I
+%%BREAK
+%%ENDFOR
+=== for_continue
+%%FOR I = 1 TO 3
+PRINT %%I
+%%CONTINUE
+PRINT 99
+%%ENDFOR
+=== foreach_liste
+%%FOREACH AD IN ("Ali", "Veli", "Ece")
+PRINT "%%AD"
+%%ENDFOREACH
+=== foreach_ic_ice
+%%FOREACH A IN ("x", "y")
+%%FOREACH B IN ("1", "2")
+PRINT "%%A%%B"
+%%ENDFOREACH
+%%ENDFOREACH
+=== foreach_islev_uret
+%%FOREACH N IN (1, 2, 3)
+FUNCTION Kare%%N() AS I32
+    RETURN %%N * %%N
+END FUNCTION
+%%ENDFOREACH
+PRINT Kare1(); Kare2(); Kare3()
+=== repeat_temel
+%%REPEAT 3
+PRINT "tekrar"
+%%ENDREPEAT
+=== repeat_sifir
+%%REPEAT 0
+PRINT "yok"
+%%ENDREPEAT
+PRINT "son"
+=== nextmeta
+%%FOR I = 1 TO 2
+PRINT %%I
+%%NEXTMETA
+=== untilmeta
+%%REPEAT 2
+PRINT 1
+%%UNTILMETA
+=== for_kapanmamis
+%%FOR I = 1 TO 2
+PRINT %%I
+=== for_hatali_baslik
+%%FOR I TO 3
+PRINT 1
+%%ENDFOR
+=== for_sifir_adim
+%%FOR I = 1 TO 3 STEP 0
+PRINT 1
+%%ENDFOR
+=== for_macro_sinir
+%%DEFINE N 3
+%%FOR I = 1 TO N
+PRINT %%I
+%%ENDFOR
+=== break_disarida
+%%BREAK
+PRINT 1
+=== endfor_basibos
+%%ENDFOR
+PRINT 1
+=== for_icinde_if
+%%FOR I = 1 TO 4
+%%IFN %%I >= 3
+PRINT "buyuk %%I"
+%%ELSE
+PRINT "kucuk %%I"
+%%ENDIF
+%%ENDFOR
+=== sinirsiz_uretim
+%%FOR I = 1 TO 20000
+PRINT 1
+%%ENDFOR

@@ -12,6 +12,7 @@ namespace uxb {
 bool task_pool_active();                 // uxb_runtime_task_v2.cpp
 void console_write(const std::string& text);   // uxb_runtime_mir.cpp
 void console_flush_current_thread();           // uxb_runtime_mir.cpp
+void console_finish_current_task();            // flush and retire this task's line before its context is restored
 
 // S-146 Model D -- gorev calisma zamani ile kilit tablosu arasindaki kancalar.
 // Kilit sirasi: kilit tablosu mutex'i -> gorev mutex'i. Gorev kodu, kendi mutex'ini tutarken

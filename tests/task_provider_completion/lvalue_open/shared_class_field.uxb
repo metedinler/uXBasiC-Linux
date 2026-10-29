@@ -1,0 +1,23 @@
+CLASS Box
+    PUBLIC
+    n AS I64
+    f AS F32
+END CLASS
+DIM b AS Box = NEW Box()
+b.f = 0.25
+THREAD Increment() AS I32
+    DIM i AS I32
+    DIM old AS I64
+    DIM oldFloat AS F32
+    FOR i = 1 TO 5000
+        old = b.n++
+        oldFloat = b.f++
+    NEXT
+    RETURN 1
+END THREAD
+DIM first AS TASK OF I32 = SPAWN Increment()
+DIM second AS TASK OF I32 = SPAWN Increment()
+PRINT first.JOIN()
+PRINT second.JOIN()
+PRINT b.n
+PRINT b.f

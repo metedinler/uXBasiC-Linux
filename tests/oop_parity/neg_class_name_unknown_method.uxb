@@ -1,0 +1,8 @@
+' S-606: a class-qualified call of a name the class (and its bases) never declares is a compile error on every engine.
+CLASS Say
+    PUBLIC
+    STATIC METHOD Iki() AS I32
+        RETURN 2
+    END METHOD
+END CLASS
+PRINT Say.Yok()

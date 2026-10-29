@@ -1,0 +1,18 @@
+INCLUDE "include/modules/uxlog.uxmh"
+
+MAIN
+    IF FALSE THEN
+        uxlog.Close(0)
+        PRINT uxlog.Debug(0, "")
+        PRINT uxlog.Error(0, "")
+        PRINT uxlog.Fatal(0, "")
+        uxlog.Flush(0)
+        PRINT uxlog.Info(0, "")
+        PRINT uxlog.LastError()
+        PRINT uxlog.Open("", 0, 0)
+        PRINT uxlog.SetLevel(0, 0)
+        PRINT uxlog.Warning(0, "")
+        PRINT uxlog.Write(0, 0, "")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXLOG"
+END MAIN

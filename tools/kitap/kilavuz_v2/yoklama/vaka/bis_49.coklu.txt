@@ -1,0 +1,37 @@
+FOR EACH metin Turkce karakter
+DIM s AS STRING = "çay"
+DIM ch AS STRING
+FOR EACH ch IN s
+    PRINT ch
+NEXT
+PRINT LEN(s)
+=====
+MEMCOPY on ekli VIRTUAL
+POKED VIRTUAL, 100, 305419896
+MEMCOPYD VIRTUAL, 200, 100, 1
+PRINT PEEKD(VIRTUAL, 200)
+=====
+MEMCOPY on ekli NATIVE
+DIM a(3) AS I32
+DIM b(3) AS I32
+a(0) = 5
+a(1) = 6
+MEMCOPYD NATIVE, VARPTR(b), VARPTR(a), 2
+PRINT b(0); " "; b(1)
+=====
+PEEK PTR yazilmis degisken VIRTUAL yazim
+DIM n AS U64 = 300
+POKED n, 77
+PRINT PEEKD(300)
+=====
+VIRTUAL sinir disi
+POKEB 999999999, 1
+PRINT "sinirsiz"
+=====
+Dizi parametresi gorunum
+SUB Doldur(a() AS I32)
+    a(1) = 100
+END SUB
+DIM v(3) AS I32
+Doldur v()
+PRINT v(1)

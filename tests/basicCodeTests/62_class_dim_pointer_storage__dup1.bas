@@ -1,0 +1,21 @@
+CLASS Counter
+PUBLIC
+value AS I32
+CONSTRUCTOR()
+THIS.value = 0
+END CONSTRUCTOR
+METHOD Bump()
+THIS.value = THIS.value + 1
+END METHOD
+METHOD Read() AS I32
+RETURN THIS.value
+END METHOD
+END CLASS
+
+DIM c AS Counter
+c = NEW Counter()
+CALL c.Bump()
+CALL c.Bump()
+PRINT c.Read()
+DELETE c
+END

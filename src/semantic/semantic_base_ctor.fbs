@@ -1,0 +1,312 @@
+#ifndef UXB_SEMANTIC_BASE_CTOR_FBS
+#define UXB_SEMANTIC_BASE_CTOR_FBS
+
+' S-485 / S-487 / S-483 (P0.2, 2026-10-17): the base-class constructor call.
+'
+' Until now the engines chained constructors themselves when NEW ran: every one of them (AST, MIR interpreter, native x64, legacy x64, JS runtime,
+' WASM host) walked the base classes and called each parameterless base constructor (the JS and WASM runtimes even handed every constructor the
+' same leading NEW arguments). `SUPER(args)` - a base constructor that needs arguments - had no meaning at all: AST "object is not callable",
+' MIR / native x64 / JS unresolved call, WASM and legacy x64 silently ignored it (G-NESNE-25, G-NESNE-27).
+'
+' The contract (design: UXB_S485_OOP_BASE_CONSTRUCTOR_CHAIN_20261013_TR.md, OOP plan section 9; the Java rule) now lives in the constructor BODIES, so every
+' engine runs the same code:
+'   * the FIRST statement of a CONSTRUCTOR of a derived class may be `SUPER(args)`: it constructs the base-class part of THIS object with those arguments;
+'   * a constructor that does not start with SUPER(...) calls the base class's PARAMETERLESS constructor first (the call is inserted here);
+'     if the nearest base constructor needs arguments that is a compile error: UXB_BASE_CTOR_REQUIRED;
+'   * a derived class WITHOUT a constructor of its own, whose base chain declares one, gets a parameterless constructor that only calls SUPER();
+'   * `SUPER()` on a base class that declares no constructor anywhere simply gets an empty one;
+'   * NEW then runs ONLY the constructor of the class it creates; the engines no longer walk the bases.
+' The call is written `SUPER.CONSTRUCTOR(args)` (the same non-virtual "call the base class's implementation" form `SUPER.Method(args)` has on every engine;
+' CONSTRUCTOR is a reserved word, so it cannot clash with a user method).
+
+' the constructor declaration of a class, -1 when it declares none
+Private Function SemBaseCtorOf(ByRef ps As ParseState, ByVal classNode As Integer) As Integer
+    If classNode < 0 Then Return -1
+    Dim ctorChild As Integer
+    ctorChild = ps.ast.nodes(classNode).firstChild
+    Do While ctorChild <> -1
+        If UCase(ps.ast.nodes(ctorChild).kind) = "CLASS_CONSTRUCTOR_DECL" Then Return ctorChild
+        ctorChild = ps.ast.nodes(ctorChild).nextSibling
+    Loop
+    Return -1
+End Function
+
+Private Function SemBaseCtorParamCount(ByRef ps As ParseState, ByVal ctorNode As Integer) As Integer
+    Dim paramTotal As Integer
+    paramTotal = 0
+    Dim paramChild As Integer
+    paramChild = ps.ast.nodes(ctorNode).firstChild
+    Do While paramChild <> -1
+        If UCase(ps.ast.nodes(paramChild).kind) = "PARAM_DECL" Then paramTotal += 1
+        paramChild = ps.ast.nodes(paramChild).nextSibling
+    Loop
+    Return paramTotal
+End Function
+
+' the constructor of the nearest base class (starting at the base of classNode) that declares one; -1 when no base declares a constructor
+Private Function SemNearestBaseCtor(ByRef ps As ParseState, ByVal classNode As Integer, ByRef ownerNameOut As String) As Integer
+    ownerNameOut = ""
+    Dim walkName As String
+    If SemClassBaseName(ps, classNode, walkName) = 0 Then Return -1
+    Dim walkHop As Integer
+    walkHop = 0
+    Do While walkName <> "" And walkHop < 64
+        walkHop += 1
+        Dim walkClass As Integer
+        walkClass = SemFindClassNode(ps, walkName)
+        If walkClass = -1 Then Return -1
+        Dim walkCtor As Integer
+        walkCtor = SemBaseCtorOf(ps, walkClass)
+        If walkCtor <> -1 Then
+            ownerNameOut = UCase(Trim(ps.ast.nodes(walkClass).value))
+            Return walkCtor
+        End If
+        Dim nextName As String
+        If SemClassBaseName(ps, walkClass, nextName) = 0 Then Return -1
+        walkName = nextName
+    Loop
+    Return -1
+End Function
+
+' the first statement of a constructor body (kinds end in _STMT; PARAM_DECL / CLASS_ACCESS come before the body), -1 when the body is empty
+Private Function SemBaseCtorFirstStatement(ByRef ps As ParseState, ByVal ctorNode As Integer) As Integer
+    Dim stmtChild As Integer
+    stmtChild = ps.ast.nodes(ctorNode).firstChild
+    Do While stmtChild <> -1
+        If Right(UCase(ps.ast.nodes(stmtChild).kind), 5) = "_STMT" Then Return stmtChild
+        stmtChild = ps.ast.nodes(stmtChild).nextSibling
+    Loop
+    Return -1
+End Function
+
+' the CALL_EXPR of `SUPER(...)` (no dot) when the statement is exactly that call, -1 otherwise
+Private Function SemBaseCtorCallOf(ByRef ps As ParseState, ByVal stmtNode As Integer) As Integer
+    If stmtNode < 0 Then Return -1
+    Dim stmtKind As String
+    stmtKind = UCase(ps.ast.nodes(stmtNode).kind)
+    Dim callNode As Integer
+    callNode = -1
+    If stmtKind = "EXPR_STMT" Then
+        callNode = ps.ast.nodes(stmtNode).left
+        If callNode = -1 Then callNode = ps.ast.nodes(stmtNode).firstChild
+    ElseIf stmtKind = "CALL_STMT" Then
+        callNode = stmtNode
+    End If
+    If callNode < 0 Then Return -1
+    Dim callKind As String
+    callKind = UCase(ps.ast.nodes(callNode).kind)
+    If callKind <> "CALL_EXPR" And callKind <> "CALL_STMT" Then Return -1
+    If UCase(Trim(ps.ast.nodes(callNode).value)) <> "SUPER" Then Return -1
+    Return callNode
+End Function
+
+' turns `SUPER(args)` into the call `SUPER.CONSTRUCTOR(args)` (same node shape as SUPER.Method(args))
+Private Sub SemBaseCtorMakeDotted(ByRef ps As ParseState, ByVal callNode As Integer)
+    ps.ast.nodes(callNode).kind = "CALL_EXPR"
+    ps.ast.nodes(callNode).value = "super.constructor"
+    ps.ast.nodes(callNode).op = "."
+    ps.ast.nodes(callNode).symbolName = "SUPER.CONSTRUCTOR"
+    Dim superIdent As Integer
+    superIdent = SemStaticNode(ps, callNode, "IDENT", "super")
+    ps.ast.nodes(superIdent).typeName = "TYPE_OBJECT"
+    ps.ast.nodes(superIdent).symbolName = "SUPER"
+    ASTSetLeft ps.ast, callNode, superIdent
+End Sub
+
+' a new statement `SUPER.CONSTRUCTOR()` (no arguments), not yet linked into any body
+Private Function SemBaseCtorNewCallStmt(ByRef ps As ParseState, ByVal originNode As Integer) As Integer
+    Dim newCall As Integer
+    newCall = SemStaticNode(ps, originNode, "CALL_EXPR", "super.constructor", ".")
+    ps.ast.nodes(newCall).symbolName = "SUPER.CONSTRUCTOR"
+    Dim newIdent As Integer
+    newIdent = SemStaticNode(ps, originNode, "IDENT", "super")
+    ps.ast.nodes(newIdent).typeName = "TYPE_OBJECT"
+    ps.ast.nodes(newIdent).symbolName = "SUPER"
+    ASTSetLeft ps.ast, newCall, newIdent
+    Dim newStmt As Integer
+    newStmt = SemStaticNode(ps, originNode, "EXPR_STMT")
+    ASTSetLeft ps.ast, newStmt, newCall
+    Return newStmt
+End Function
+
+' links stmtNode in as the FIRST statement of the constructor body (after PARAM_DECL / CLASS_ACCESS)
+Private Sub SemBaseCtorInsertFirst(ByRef ps As ParseState, ByVal ctorNode As Integer, ByVal stmtNode As Integer)
+    Dim firstStmt As Integer
+    firstStmt = SemBaseCtorFirstStatement(ps, ctorNode)
+    If firstStmt = -1 Then
+        ASTAddChild ps.ast, ctorNode, stmtNode
+        Exit Sub
+    End If
+    Dim prevChild As Integer
+    prevChild = -1
+    Dim scanChild As Integer
+    scanChild = ps.ast.nodes(ctorNode).firstChild
+    Do While scanChild <> -1 And scanChild <> firstStmt
+        prevChild = scanChild
+        scanChild = ps.ast.nodes(scanChild).nextSibling
+    Loop
+    ps.ast.nodes(stmtNode).parent = ctorNode
+    ps.ast.nodes(stmtNode).nextSibling = firstStmt
+    If prevChild = -1 Then
+        ps.ast.nodes(ctorNode).firstChild = stmtNode
+    Else
+        ps.ast.nodes(prevChild).nextSibling = stmtNode
+    End If
+End Sub
+
+Private Function SemBaseCtorLine(ByRef ps As ParseState, ByVal nodeIdx As Integer) As String
+    Return " [line " & LTrim(Str(ps.ast.nodes(nodeIdx).lineNo)) & "]"
+End Function
+
+' the first plain `SUPER(...)` call anywhere under nodeIdx (a SUPER(...) that is NOT the first statement of the constructor), -1 when there is none
+Private Function SemBaseCtorFindSuperCall(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Return -1
+    Dim searchKind As String
+    searchKind = UCase(ps.ast.nodes(nodeIdx).kind)
+    If searchKind = "CALL_EXPR" Or searchKind = "CALL_STMT" Then
+        If UCase(Trim(ps.ast.nodes(nodeIdx).value)) = "SUPER" Then Return nodeIdx
+    End If
+    Dim foundCall As Integer
+    foundCall = SemBaseCtorFindSuperCall(ps, ps.ast.nodes(nodeIdx).left)
+    If foundCall <> -1 Then Return foundCall
+    foundCall = SemBaseCtorFindSuperCall(ps, ps.ast.nodes(nodeIdx).right)
+    If foundCall <> -1 Then Return foundCall
+    Dim searchChild As Integer
+    searchChild = ps.ast.nodes(nodeIdx).firstChild
+    Do While searchChild <> -1
+        foundCall = SemBaseCtorFindSuperCall(ps, searchChild)
+        If foundCall <> -1 Then Return foundCall
+        searchChild = ps.ast.nodes(searchChild).nextSibling
+    Loop
+    Return -1
+End Function
+
+' gives a class that declares no constructor an empty parameterless one: CONSTRUCTOR() [SUPER.CONSTRUCTOR()] END CONSTRUCTOR. The inner call is written only
+' when a base class declares a constructor (then that constructor must take no arguments, otherwise UXB_BASE_CTOR_REQUIRED). Returns 0 and sets errText on error.
+Private Function SemBaseCtorSynthesize(ByRef ps As ParseState, ByVal classNode As Integer, ByRef errText As String) As Integer
+    If SemBaseCtorOf(ps, classNode) <> -1 Then Return 1
+    Dim synthOwner As String
+    Dim synthBaseCtor As Integer
+    synthBaseCtor = SemNearestBaseCtor(ps, classNode, synthOwner)
+    If synthBaseCtor <> -1 Then
+        Dim synthNeed As Integer
+        synthNeed = SemBaseCtorParamCount(ps, synthBaseCtor)
+        If synthNeed > 0 Then
+            errText = "semantic: UXB_BASE_CTOR_REQUIRED: class " & UCase(Trim(ps.ast.nodes(classNode).value)) & " has no CONSTRUCTOR but its base class " & synthOwner & " needs " & LTrim(Str(synthNeed)) & " argument(s): write a CONSTRUCTOR in " & UCase(Trim(ps.ast.nodes(classNode).value)) & " that starts with SUPER(...)" & SemBaseCtorLine(ps, classNode)
+            Return 0
+        End If
+    End If
+    Dim synthCtor As Integer
+    synthCtor = SemStaticNode(ps, classNode, "CLASS_CONSTRUCTOR_DECL", "", "PUBLIC")
+    Dim synthAccess As Integer
+    synthAccess = SemStaticNode(ps, classNode, "CLASS_ACCESS", "PUBLIC")
+    ASTAddChild ps.ast, synthCtor, synthAccess
+    If synthBaseCtor <> -1 Then ASTAddChild ps.ast, synthCtor, SemBaseCtorNewCallStmt(ps, classNode)
+    ASTAddChild ps.ast, classNode, synthCtor
+    Return 1
+End Function
+
+Private Function SemNormalizeBaseConstructorCalls(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim classCountAtStart As Integer
+    classCountAtStart = ps.ast.count
+    Dim classIdx As Integer
+    For classIdx = 0 To classCountAtStart - 1
+        If UCase(ps.ast.nodes(classIdx).kind) <> "CLASS_STMT" Then Continue For
+        Dim className As String
+        className = UCase(Trim(ps.ast.nodes(classIdx).value))
+        Dim ownCtor As Integer
+        ownCtor = SemBaseCtorOf(ps, classIdx)
+        Dim baseNameText As String
+        baseNameText = ""
+        Dim hasBase As Integer
+        hasBase = SemClassBaseName(ps, classIdx, baseNameText)
+
+        If hasBase = 0 Then
+            ' no base class: SUPER(...) has nothing to call
+            If ownCtor <> -1 Then
+                Dim noBaseCall As Integer
+                noBaseCall = SemBaseCtorCallOf(ps, SemBaseCtorFirstStatement(ps, ownCtor))
+                If noBaseCall <> -1 Then
+                    errText = "semantic: SUPER(...) in class " & className & ": the class has no base class" & SemBaseCtorLine(ps, noBaseCall)
+                    Return 0
+                End If
+            End If
+            Continue For
+        End If
+
+        Dim baseOwner As String
+        Dim baseCtor As Integer
+        baseCtor = SemNearestBaseCtor(ps, classIdx, baseOwner)
+        Dim directBase As Integer
+        directBase = SemFindClassNode(ps, baseNameText)
+        Dim directCtor As Integer
+        directCtor = SemBaseCtorOf(ps, directBase)
+
+        If ownCtor = -1 Then
+            ' a constructor is only needed when some base class declares one (otherwise there is nothing to construct)
+            If baseCtor <> -1 Then
+                If SemBaseCtorSynthesize(ps, classIdx, errText) = 0 Then Return 0
+            End If
+            Continue For
+        End If
+
+        Dim firstBody As Integer
+        firstBody = SemBaseCtorFirstStatement(ps, ownCtor)
+        Dim explicitCall As Integer
+        explicitCall = SemBaseCtorCallOf(ps, firstBody)
+        If explicitCall <> -1 Then
+            Dim givenTotal As Integer
+            givenTotal = SemChildCount(ps, explicitCall)
+            Dim wantTotal As Integer
+            wantTotal = 0
+            If directCtor <> -1 Then wantTotal = SemBaseCtorParamCount(ps, directCtor)
+            If givenTotal <> wantTotal Then
+                If directCtor = -1 Then
+                    errText = "semantic: SUPER(...) passes " & LTrim(Str(givenTotal)) & " argument(s) but base class " & baseNameText & " declares no CONSTRUCTOR of its own" & SemBaseCtorLine(ps, explicitCall)
+                Else
+                    errText = "semantic: SUPER(...) passes " & LTrim(Str(givenTotal)) & " argument(s) but the CONSTRUCTOR of " & baseNameText & " takes " & LTrim(Str(wantTotal)) & SemBaseCtorLine(ps, explicitCall)
+                End If
+                Return 0
+            End If
+            ' SUPER() on a base without any constructor in its chain: that base gets an empty one so the call has a target
+            If directCtor = -1 Then
+                If SemBaseCtorSynthesize(ps, directBase, errText) = 0 Then Return 0
+            End If
+            SemBaseCtorMakeDotted ps, explicitCall
+            If UCase(ps.ast.nodes(firstBody).kind) = "CALL_STMT" Then ps.ast.nodes(firstBody).kind = "EXPR_STMT"
+        Else
+            ' a SUPER(...) further down the body is a mistake in its own right and says more than "UXB_BASE_CTOR_REQUIRED"
+            Dim lateCall As Integer
+            lateCall = SemBaseCtorFindSuperCall(ps, ownCtor)
+            If lateCall <> -1 Then
+                errText = "semantic: SUPER(...) is only allowed as the first statement of a CONSTRUCTOR of a derived class" & SemBaseCtorLine(ps, lateCall)
+                Return 0
+            End If
+            If baseCtor = -1 Then Continue For
+            Dim impliedTotal As Integer
+            impliedTotal = SemBaseCtorParamCount(ps, baseCtor)
+            If impliedTotal > 0 Then
+                errText = "semantic: UXB_BASE_CTOR_REQUIRED: the CONSTRUCTOR of class " & className & " must start with SUPER(...): its base class " & baseOwner & " needs " & LTrim(Str(impliedTotal)) & " argument(s)" & SemBaseCtorLine(ps, ownCtor)
+                Return 0
+            End If
+            If directCtor = -1 Then
+                If SemBaseCtorSynthesize(ps, directBase, errText) = 0 Then Return 0
+            End If
+            SemBaseCtorInsertFirst ps, ownCtor, SemBaseCtorNewCallStmt(ps, ownCtor)
+        End If
+    Next classIdx
+
+    ' every SUPER(...) that is still a plain call now stands where it must not: not the first statement of a constructor, or outside a constructor
+    Dim leftoverIdx As Integer
+    For leftoverIdx = 0 To ps.ast.count - 1
+        Dim leftKind As String
+        leftKind = UCase(ps.ast.nodes(leftoverIdx).kind)
+        If leftKind <> "CALL_EXPR" And leftKind <> "CALL_STMT" Then Continue For
+        If UCase(Trim(ps.ast.nodes(leftoverIdx).value)) <> "SUPER" Then Continue For
+        errText = "semantic: SUPER(...) is only allowed as the first statement of a CONSTRUCTOR of a derived class" & SemBaseCtorLine(ps, leftoverIdx)
+        Return 0
+    Next leftoverIdx
+    Return 1
+End Function
+
+#endif

@@ -236,6 +236,11 @@ Private Function X64EmitTryStmt(ByRef ps As ParseState, ByVal nodeIdx As Integer
     endLabel = X64NextLabel(cg, "try_end")
 
     X64EmitComment cg, "TRY enter"
+    ' The native lock stack belongs to the running task. A catch/finally may
+    ' only release blocks entered after this TRY, including callee blocks.
+    Dim lockMarkSlot As Integer = X64EnsureLocalSlot(cg, X64NextLabel(cg, "try_lock_mark"), 1, 8)
+    X64EmitCall0 cg, "__uxb_rt_lock_mark"
+    X64EmitText cg, "    mov " & X64FormatRbpRef(lockMarkSlot) & ", rax"
     X64EmitExceptionSave saveSlot, cg
     X64EmitText cg, "    mov dword [rel __uxb_exc_active], 0"
 
@@ -264,6 +269,8 @@ Private Function X64EmitTryStmt(ByRef ps As ParseState, ByVal nodeIdx As Integer
 
     If catchNode <> -1 Then
         X64EmitLabel cg, catchLabel
+        X64EmitText cg, "    mov rcx, " & X64FormatRbpRef(lockMarkSlot)
+        X64EmitCall0 cg, "__uxb_rt_lock_release_to"
         Dim catchVarName As String
         catchVarName = Trim(ps.ast.nodes(catchNode).value)
         X64EmitCatchPublish cg, catchVarName
@@ -286,6 +293,8 @@ Private Function X64EmitTryStmt(ByRef ps As ParseState, ByVal nodeIdx As Integer
 
     If finallyNode <> -1 Then
         X64EmitLabel cg, finallyLabel
+        X64EmitText cg, "    mov rcx, " & X64FormatRbpRef(lockMarkSlot)
+        X64EmitCall0 cg, "__uxb_rt_lock_release_to"
         If X64EmitTryPart(ps, finallyNode, cg, errText) = 0 Then
             gX64TryFrameDepth -= 1
             Return 0
@@ -314,6 +323,18 @@ Private Function X64EmitThrowStmt(ByRef ps As ParseState, ByVal nodeIdx As Integ
     isString = X64ExprIsStringLike(ps, valueNode, cg)
     If X64EmitExprToRax(ps, valueNode, cg, errText) = 0 Then Return 0
 
+    If gX64TryDepth = 0 And gX64CurrentRoutineNode >= 0 Then
+        If X64TaskUsesV2(ps) <> 0 Then
+            X64EmitText cg, "    mov rcx, rax"
+            X64EmitText cg, "    mov edx, " & LTrim(Str(IIf(isString <> 0, 1, 0)))
+            X64EmitCall0 cg, "__uxb_rt_exc_set_value"
+            X64EmitText cg, "    mov ecx, 1"
+            X64EmitCall0 cg, "__uxb_rt_exc_set_active"
+            X64EmitText cg, "    jmp " & cg.currentEpilogLabel
+            Return 1
+        End If
+    End If
+
     X64EmitComment cg, "THROW"
     X64EmitText cg, "    mov [rel __uxb_exc_value], rax"
     X64EmitText cg, "    mov dword [rel __uxb_exc_active], 1"
@@ -341,6 +362,21 @@ Private Function X64EmitThrowStmt(ByRef ps As ParseState, ByVal nodeIdx As Integ
 End Function
 
 Private Sub X64EmitAssertFailure(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String)
+    If gX64TryDepth = 0 And gX64CurrentRoutineNode >= 0 Then
+        If X64TaskLaneIsSpawned(ps, gX64CurrentRoutineNode) <> 0 Then
+            Dim taskMessage As Integer = X64ChildAt(ps, nodeIdx, 1)
+            If taskMessage <> -1 AndAlso X64ExprIsStringLike(ps, taskMessage, cg) <> 0 Then
+                If X64EmitExprToRax(ps, taskMessage, cg, errText) = 0 Then Exit Sub
+                X64EmitText cg, "    mov rcx, rax"
+            Else
+                Dim taskMsgLabel As String = X64CreateCStringConstant(cg, "ASSERT failed", "task_assert")
+                X64EmitText cg, "    lea rcx, [rel " & taskMsgLabel & "]"
+            End If
+            X64EmitCall0 cg, "__uxb_rt_task_fail_cstr"
+            X64EmitText cg, "    jmp " & cg.currentEpilogLabel
+            Exit Sub
+        End If
+    End If
     X64EmitText cg, "    mov dword [rel __uxb_exc_active], 1"
     X64EmitText cg, "    mov dword [rel __uxb_exc_is_string], 0"
     X64EmitText cg, "    mov qword [rel __uxb_exc_code], 1002"

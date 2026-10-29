@@ -1,0 +1,2 @@
+#include once "../hooks/uxb_hir_hook.fbs"
+#include once "../semantic/hir.fbs"

@@ -1,0 +1,9 @@
+' S-212: ayni kapsayicida ikinci ayni adli DIM acik derleme hatasidir (eskiden yalniz AST calisma aninda reddederdi, MIR ve x64 kabul ederdi).
+SUB T()
+    DIM a AS I32
+    a = 1
+    DIM a AS I32
+    PRINT a
+END SUB
+PRINT "yanlis"
+T()

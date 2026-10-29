@@ -1,0 +1,7 @@
+' Step 2 AST contract smoke
+SELECT CASE 2
+CASE 1
+ PRINT 1
+CASE ELSE
+ PRINT 2
+END SELECT

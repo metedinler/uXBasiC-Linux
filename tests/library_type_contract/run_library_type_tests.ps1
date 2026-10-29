@@ -11,7 +11,7 @@ try {
     $results = @()
     $outDir = Join-Path $root 'tmp/library_type_contract'
     [void](New-Item -ItemType Directory -Force $outDir)
-    foreach ($unit in @('test_library_type_contract', 'test_library_type_lifecycle', 'test_library_payload')) {
+    foreach ($unit in @('test_library_type_contract', 'test_library_type_lifecycle', 'test_library_payload', 'test_library_type_error_catalog')) {
         $exe = Join-Path $outDir ($unit + '.exe')
         & $fbc -lang fb -exx -x $exe (Join-Path $PSScriptRoot ($unit + '.bas'))
         if ($LASTEXITCODE -ne 0) { throw "Unit build failed: $unit" }
@@ -37,10 +37,16 @@ try {
         @{name='rational_mir_compare_value'; expected="EQ`nGT"},
         @{name='rational_lifecycle'; expected="3/1`n3/1`n3/1"},
         @{name='library_type_field_copy'; expected="hello`nhello`nhello"; lifecycle=$true; clones=$true},
+        @{name='library_byval_return'; expected="hello`nHELLO"; lifecycle=$true; clones=$true},
+        @{name='library_array_value_copy'; expected="hello`nHELLO"; lifecycle=$true; clones=$true},
+        @{name='library_scope_throw_cleanup'; expected="7`ncaught"; lifecycle=$true},
+        @{name='library_throw_propagation_cleanup'; expected='caught'; lifecycle=$true},
         @{name='rational_include_manifest_semantic'; expected='3/1'},
         @{name='rational_libtype_source_relative'; expected='12/1'},
         @{name='rational_libtype_package_search'; expected='13/1'},
-        @{name='rational_libtype_missing_provider_runtime'; error='library type provider missing'},
+        @{name='rational_libtype_missing_provider_runtime'; error='library type provider missing'; code='UXB_LIBTYPE_PROVIDER_MISSING'},
+        @{name='rational_libtype_unsupported_operation'; error='provider operation unavailable'; code='UXB_LIBTYPE_PROVIDER_OPERATION_UNAVAILABLE'},
+        @{name='rational_libtype_missing_mir_capability'; error='provider unavailable for MIR: RATIONAL'; code='UXB_LIBTYPE_PROVIDER_UNAVAILABLE'},
         @{name='rational_libtype_missing_manifest'; error='manifest not found'; semantic=$true},
         @{name='rational_libtype_bad_extension'; error='LIBTYPE: unsafe or unsupported manifest path'; semantic=$true},
         @{name='neg_dynamic_payload_lifecycle'; error='lifecycle lowering unavailable: DYNAMIC_PAYLOAD'; semantic=$true}
@@ -58,6 +64,7 @@ try {
         $actual = (($output | Where-Object { $_ -notmatch '^INFO:' -and $_.Trim() -ne '' }) -join "`n").Trim()
         if ($case.error) {
             $passed = $code -ne 0 -and $raw.Contains($case.error)
+            if ($case.code) { $passed = $passed -and $raw.Contains($case.code) }
         } else {
             $passed = $code -eq 0 -and $actual -ceq $case.expected
         }
@@ -75,19 +82,82 @@ try {
     $managedSource = Join-Path $PSScriptRoot 'library_shared_value.uxb'
     $targets = @(
         @{name='AST'; args=@('run', $managedSource, '--interpreter-backend', 'AST')},
-        @{name='NATIVE'; args=@('bld', $managedSource, '--build-x64')},
+        @{name='AST_X64'; args=@('bld', $managedSource, '--build-x64', '--x64-mode', 'AST'); diagnosticTarget='NATIVE'},
+        @{name='MIR_X64'; args=@('bld', $managedSource, '--build-x64', '--x64-mode', 'MIR'); diagnosticTarget='NATIVE'},
+        @{name='NATIVE'; args=@('bld', $managedSource, '--build-x64'); diagnosticTarget='NATIVE'},
         @{name='JS'; args=@('jsw', $managedSource)},
         @{name='WAT'; args=@('wat', $managedSource)},
         @{name='WASM'; args=@('wat', $managedSource, '--emit-wasm'); diagnosticTarget='WAT'}
     )
     foreach ($target in $targets) {
-        $cliArgs = $target.args
+        $diagPath = Join-Path $outDir ($target.name + '_diagnostics_' + [Guid]::NewGuid().ToString('N') + '.json')
+        $cliArgs = @($target.args) + @('--all-diagnostics-json-out', $diagPath)
         $raw = (@(& $compilerPath @cliArgs 2>&1 | ForEach-Object { "$_" }) -join "`n")
         $code = $LASTEXITCODE
         $diagnosticTarget = if ($target.diagnosticTarget) { $target.diagnosticTarget } else { $target.name }
-        $passed = $code -ne 0 -and $raw.Contains("library type lifecycle provider unavailable for $diagnosticTarget")
-        $results += [pscustomobject]@{name="managed_target_$($target.name)"; passed=$passed; exit_code=$code; output=$raw}
+        $diagnosticCode = ''
+        $diagnosticPhase = ''
+        $diagnosticMessage = ''
+        if (Test-Path -LiteralPath $diagPath) {
+            $diagnosticPayload = Get-Content -LiteralPath $diagPath -Raw | ConvertFrom-Json
+            $diagnostic = @($diagnosticPayload.diagnostics) | Where-Object { $_.code -eq 'UXB_LIBTYPE_PROVIDER_UNAVAILABLE' } | Select-Object -First 1
+            if ($null -ne $diagnostic) {
+                $diagnosticCode = $diagnostic.code
+                $diagnosticPhase = $diagnostic.phase
+                $diagnosticMessage = $diagnostic.message_en
+            }
+        }
+        $passed = $code -ne 0 -and
+                  $raw.Contains("library type lifecycle provider unavailable for $diagnosticTarget") -and
+                  $diagnosticCode -eq 'UXB_LIBTYPE_PROVIDER_UNAVAILABLE' -and
+                  $diagnosticPhase -eq 'target_validation' -and
+                  $diagnosticMessage.Contains($diagnosticTarget)
+        $results += [pscustomobject]@{name="managed_target_$($target.name)"; passed=$passed; exit_code=$code; output=$raw; diagnostic_code=$diagnosticCode; diagnostic_phase=$diagnosticPhase; diagnostic_message=$diagnosticMessage}
     }
+    $mirDiagPath = Join-Path $outDir ('MIR_diagnostics_' + [Guid]::NewGuid().ToString('N') + '.json')
+    $mirArgs = @('run', $managedSource, '--interpreter-backend', 'MIR', '--all-diagnostics-json-out', $mirDiagPath)
+    $mirOutputLines = @(& $compilerPath @mirArgs 2>&1 | ForEach-Object { "$_" })
+    $mirCode = $LASTEXITCODE
+    $mirActual = (($mirOutputLines | Where-Object { $_ -notmatch '^INFO:' -and $_.Trim() -ne '' }) -join "`n").Trim()
+    $mirExpected = "HELLO`nhello`nHELLO"
+    $mirDiagClean = $true
+    if (Test-Path -LiteralPath $mirDiagPath) {
+        $mirPayload = Get-Content -LiteralPath $mirDiagPath -Raw | ConvertFrom-Json
+        $mirDiagClean = @($mirPayload.diagnostics) | Where-Object { $_.code -like 'UXB_LIBTYPE_PROVIDER_*' } | Measure-Object | Select-Object -ExpandProperty Count
+        $mirDiagClean = $mirDiagClean -eq 0
+    }
+    $mirPassed = $mirCode -eq 0 -and $mirActual -ceq $mirExpected -and $mirDiagClean
+    $results += [pscustomobject]@{name='managed_target_MIR'; passed=$mirPassed; exit_code=$mirCode; output=($mirOutputLines -join "`n"); diagnostic_code=''; diagnostic_phase=''; diagnostic_message='provider supported; no provider error expected'}
+
+    $mirStructuralCases = @(
+        @{name='b3_owned_transfer'; source='library_owned_value.uxb'; required=@('TEXT_VALUE.CLONE'); forbidden=@('TEXT_VALUE.COPY')},
+        @{name='b3_shared_transfer'; source='library_shared_value.uxb'; required=@('TEXT_REF.RETAIN','TEXT_REF.CLONE'); forbidden=@()},
+        @{name='b3_return_drop'; source='library_byval_return.uxb'; required=@('TEXT_VALUE.CLONE','TEXT_VALUE.DROP'); forbidden=@()},
+        @{name='b3_throw_propagation_drop'; source='library_throw_propagation_cleanup.uxb'; required=@('TEXT_VALUE.DROP'); forbidden=@()}
+    )
+    foreach ($structuralCase in $mirStructuralCases) {
+        $mirPath = Join-Path $outDir ($structuralCase.name + '_' + [Guid]::NewGuid().ToString('N') + '.json')
+        $mirOutput = @(& $compilerPath mir (Join-Path $PSScriptRoot $structuralCase.source) --dump-mir --mir-full-json-out $mirPath 2>&1 | ForEach-Object { "$($_)" })
+        $mirCode = $LASTEXITCODE
+        $callNames = @()
+        if (Test-Path -LiteralPath $mirPath) {
+            $mirPayload = Get-Content -LiteralPath $mirPath -Raw | ConvertFrom-Json
+            foreach ($fn in @($mirPayload.module.functions)) {
+                foreach ($block in @($fn.blocks)) {
+                    foreach ($instruction in @($block.instructions)) {
+                        if ($instruction.opcode -eq 'CALL' -and $instruction.operands.Count -gt 0) {
+                            $callNames += [string]$instruction.operands[0]
+                        }
+                    }
+                }
+            }
+        }
+        $passed = $mirCode -eq 0
+        foreach ($requiredName in $structuralCase.required) { $passed = $passed -and ($callNames -contains $requiredName) }
+        foreach ($forbiddenName in $structuralCase.forbidden) { $passed = $passed -and (-not ($callNames -contains $forbiddenName)) }
+        $results += [pscustomobject]@{name=$structuralCase.name; passed=$passed; exit_code=$mirCode; output=(($mirOutput + ($callNames -join ', ')) -join "`n"); diagnostic_code=''; diagnostic_phase='canonical_mir'; diagnostic_message='lifecycle lowering structure'}
+    }
+
     $reportFile = [IO.Path]::GetFullPath((Join-Path $root $ReportPath))
     [void](New-Item -ItemType Directory -Force (Split-Path $reportFile -Parent))
     [pscustomobject]@{

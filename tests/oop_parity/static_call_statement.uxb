@@ -1,0 +1,17 @@
+' S-607 + S-601: the CALL statement (and the plain statement form) naming a STATIC method of the own class, from a static and from an instance method.
+CLASS Say
+    PUBLIC
+    STATIC METHOD Yaz(n AS I32)
+        PRINT n
+    END METHOD
+    STATIC METHOD Iki()
+        CALL Yaz(2)
+        Yaz(3)
+    END METHOD
+    METHOD Uc()
+        CALL Yaz(4)
+    END METHOD
+END CLASS
+Say.Iki()
+DIM x AS Say = NEW Say()
+x.Uc()

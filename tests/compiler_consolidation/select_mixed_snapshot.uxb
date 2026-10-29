@@ -1,0 +1,26 @@
+DIM g AS I32 = 5
+FUNCTION ChangeLower() AS I32
+    g = 100
+    RETURN 4
+END FUNCTION
+SELECT CASE g
+    CASE ChangeLower() TO 6
+        PRINT "snapshot"
+    CASE ELSE
+        PRINT "bad"
+END SELECT
+PRINT g
+DIM u AS U64 = U64(5)
+SELECT CASE u
+    CASE 4.2 TO 5.8
+        PRINT "mixed"
+    CASE ELSE
+        PRINT "bad"
+END SELECT
+u = U64(0) - U64(2)
+SELECT CASE u
+    CASE IS > U64(3)
+        PRINT "unsigned-is"
+    CASE ELSE
+        PRINT "bad"
+END SELECT

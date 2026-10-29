@@ -1,3 +1,0 @@
-#include once "../hooks/uxb_runtime_hook.fbs"
-#include once "../../src/build/main_runtime_include_bundle.fbs"
-#include once "../../src/runtime/memory_exec.fbs"

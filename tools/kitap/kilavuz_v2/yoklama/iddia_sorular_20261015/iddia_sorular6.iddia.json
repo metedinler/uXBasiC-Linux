@@ -1,0 +1,34 @@
+[
+ {
+  "ad": "k01 &H44 tek basina",
+  "kod": "PRINT &H44"
+ },
+ {
+  "ad": "k02 &h44 ifade icinde",
+  "kod": "PRINT &h44 + 1"
+ },
+ {
+  "ad": "k03 &H44 degiskene",
+  "kod": "DIM a AS I32 = &H44\nPRINT a"
+ },
+ {
+  "ad": "k04 &H44 POKEB adresi",
+  "kod": "POKEB &H20, 7\nPRINT PEEKB(32)"
+ },
+ {
+  "ad": "k05 &b1010 ifade icinde",
+  "kod": "PRINT &b1010 + 1"
+ },
+ {
+  "ad": "k06 &B1010 degiskene",
+  "kod": "DIM a AS I32 = &B1010\nPRINT a"
+ },
+ {
+  "ad": "k07 0x1F ifade icinde",
+  "kod": "PRINT 0x1F + 1"
+ },
+ {
+  "ad": "k08 0x1F degiskene",
+  "kod": "DIM a AS I32 = 0x1F\nPRINT a"
+ }
+]

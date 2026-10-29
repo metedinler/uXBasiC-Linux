@@ -1,0 +1,14 @@
+PRINT "BACKEND_ROUTE_OK"
+%%TARGET BROWSER
+%%OUTDIR dist/web
+%%HTML_BEGIN dist/web/index.html
+<html><body><canvas id="screen"></canvas><script src="program.js"></script></body></html>
+%%HTML_END
+%%JS_BEGIN dist/web/program.extra.js
+export function uxbHostPrint(x) { console.log(x); }
+%%JS_END
+%%WAT_IMPORT env print_i32 print_i32 I32->VOID
+%%WAT_EXPORT main
+%%WAT_BEGIN dist/wasm/program.extra.wat
+(module (func (export "main")))
+%%WAT_END

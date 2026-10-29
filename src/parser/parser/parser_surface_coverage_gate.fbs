@@ -13,7 +13,8 @@ Function UXBParserSurfaceKeywordCount() As Integer
     ' To UXBParserSurfaceKeywordCount()-1` loop, a pre-existing stale-count
     ' bug unrelated to the Q family being added here. Fixed while extending
     ' this table with the new PEEKQ/POKEQ/MEMCOPYQ/MEMFILLQ entries (221-224).
-    Return 227
+    ' S-196: Model D (LOCK/UNSAFE/TASK/TASKGROUP) and PEEK/MEMCOPY/MEMFILL added (227-233).
+    Return 234
 End Function
 
 Function UXBParserSurfaceKeywordAt(ByVal idx As Integer) As String
@@ -245,6 +246,13 @@ Function UXBParserSurfaceKeywordAt(ByVal idx As Integer) As String
     Case 224: Return "MEMFILLQ"
     Case 225: Return "LBOUND"
     Case 226: Return "UBOUND"
+    Case 227: Return "LOCK"
+    Case 228: Return "UNSAFE"
+    Case 229: Return "TASK"
+    Case 230: Return "TASKGROUP"
+    Case 231: Return "PEEK"
+    Case 232: Return "MEMCOPY"
+    Case 233: Return "MEMFILL"
     End Select
     Return ""
 End Function

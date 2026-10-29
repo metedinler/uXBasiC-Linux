@@ -1,0 +1,15 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    METHOD Al() AS I32
+        RETURN v
+    END METHOD
+END CLASS
+
+' S-564: reading a field through NOTHING is the same run-time error on every engine.
+DIM k AS Kutu
+k = NOTHING
+PRINT k.v

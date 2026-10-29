@@ -473,6 +473,16 @@ Function UXBMIRInterpExecTaskCall(instructions() As UXBMIRInstructionRecord, ByV
     If UXBMIRStep4CanonicalOpcode(ins.opcode) <> "MIR_CALL" Or ins.operandCount < 1 Then Return UXBInterpValueVoid()
     Dim callName As String = UCase(Trim(ins.operands(0)))
     Select Case callName
+    Case "CSRLIN", "POS"
+        handledOut = 1
+        Dim cursorResult As UXBInterpValue
+        If callName = "CSRLIN" Then
+            cursorResult = UXBInterpValueInt(ctx.runtime.cursorRow)
+        Else
+            cursorResult = UXBInterpValueInt(ctx.runtime.printColumnPos + 1)
+        End If
+        If Trim(ins.resultName) <> "" Then UXBMIRInterpSetVar st, ins.resultName, cursorResult
+        Return cursorResult
     Case "TASK_SPAWN", "TASK_WAIT", "TASK_JOIN", "TASK_CANCEL", "TASK_STATUS", "TASK_RESULT", "TASK_ERROR", _
          "TASK_GROUP_CREATE", "TASK_GROUP_ADD", "TASK_GROUP_JOIN", _
          "SYNC_ENTER", "SYNC_LEAVE", "STR_SNAPSHOT", "LOCK_ENTER", "LOCK_LEAVE", "LOCK_MARK", "LOCK_RELEASE_TO", "MUTEX_NEW", _
@@ -586,12 +596,16 @@ Function UXBMIRInterpExecTaskCall(instructions() As UXBMIRInstructionRecord, ByV
         Select Case callName
         Case "CLS"
             UxbConsoleCls
+            ctx.runtime.cursorRow = 1
+            ctx.runtime.printColumnPos = 0
         Case "COLOR"
             If ins.operandCount < 3 Then Return UXBMIRTaskError("MIR: COLOR on ve arka plan rengi ister")
             UxbConsoleColor CInt(UXBMIRInterpGetOperand(st, ins.operands(1)).intValue), CInt(UXBMIRInterpGetOperand(st, ins.operands(2)).intValue)
         Case "LOCATE"
             If ins.operandCount < 3 Then Return UXBMIRTaskError("MIR: LOCATE satir ve sutun ister")
             UxbConsoleLocate CInt(UXBMIRInterpGetOperand(st, ins.operands(1)).intValue), CInt(UXBMIRInterpGetOperand(st, ins.operands(2)).intValue)
+            ctx.runtime.cursorRow = gUxbConsole.row
+            ctx.runtime.printColumnPos = gUxbConsole.col - 1
         End Select
         Return UXBInterpValueVoid()
     Case "INPUT"

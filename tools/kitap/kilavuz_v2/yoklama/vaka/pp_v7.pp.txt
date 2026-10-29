@@ -1,0 +1,108 @@
+=== inc_baslik
+%%INCLUDE "yardim.uxbh"
+PRINT Topla(2, 3)
+--- yardim.uxbh
+FUNCTION Topla(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+=== inc_makro_tasir
+%%INCLUDE "ayar.uxbh"
+PRINT GENISLIK
+--- ayar.uxbh
+%%DEFINE GENISLIK 640
+=== inc_iki_kez
+%%INCLUDE "bir.uxbh"
+%%INCLUDE "bir.uxbh"
+--- bir.uxbh
+PRINT "bir"
+=== inc_dongu
+%%INCLUDE "a.uxbh"
+PRINT 1
+--- a.uxbh
+%%INCLUDE "b.uxbh"
+--- b.uxbh
+%%INCLUDE "a.uxbh"
+=== inc_alt_klasor
+%%INCLUDE "lib/ic.uxbh"
+PRINT Ic()
+--- lib/ic.uxbh
+FUNCTION Ic() AS I32
+    RETURN 7
+END FUNCTION
+=== inc_ic_ice_goreli
+%%INCLUDE "lib/ic.uxbh"
+PRINT Ic()
+--- lib/ic.uxbh
+%%INCLUDE "yan.uxbh"
+FUNCTION Ic() AS I32
+    RETURN Yan() + 1
+END FUNCTION
+--- lib/yan.uxbh
+FUNCTION Yan() AS I32
+    RETURN 6
+END FUNCTION
+=== inc_path_alias
+%%PATH_ALIAS "@lib" AS "lib"
+%%INCLUDE "@lib/ic.uxbh"
+PRINT Ic()
+--- lib/ic.uxbh
+FUNCTION Ic() AS I32
+    RETURN 7
+END FUNCTION
+=== inc_kosullu
+%%DEFINE HIZLI 1
+%%IF HIZLI
+%%INCLUDE "hizli.uxbh"
+%%ELSE
+%%INCLUDE "yavas.uxbh"
+%%ENDIF
+PRINT Sec()
+--- hizli.uxbh
+FUNCTION Sec() AS STRING
+    RETURN "hizli"
+END FUNCTION
+--- yavas.uxbh
+FUNCTION Sec() AS STRING
+    RETURN "yavas"
+END FUNCTION
+=== inc_disari_yol
+%%INCLUDE "../disari.uxbh"
+PRINT 1
+=== inc_mutlak_yol
+%%INCLUDE "C:/Windows/win.ini"
+PRINT 1
+=== inc_makro_icinde_foreach
+%%FOREACH N IN (1, 2)
+%%INCLUDE "gov%%N.uxbh"
+%%ENDFOREACH
+PRINT G1() + G2()
+--- gov1.uxbh
+FUNCTION G1() AS I32
+    RETURN 10
+END FUNCTION
+--- gov2.uxbh
+FUNCTION G2() AS I32
+    RETURN 20
+END FUNCTION
+=== duz_inc_uxb
+INCLUDE "duz.uxb"
+PRINT Duz()
+--- duz.uxb
+FUNCTION Duz() AS I32
+    RETURN 9
+END FUNCTION
+=== duz_inc_iki_kez
+INCLUDE "bir.uxb"
+INCLUDE "bir.uxb"
+--- bir.uxb
+PRINT "bir"
+=== duz_inc_dongu
+INCLUDE "a.uxb"
+PRINT 1
+--- a.uxb
+INCLUDE "b.uxb"
+--- b.uxb
+INCLUDE "a.uxb"
+=== duz_inc_yok
+INCLUDE "yok.uxb"
+PRINT 1

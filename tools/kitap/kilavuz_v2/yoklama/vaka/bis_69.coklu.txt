@@ -1,0 +1,42 @@
+CONST atama
+CONST A AS I32 = 3
+A = 4
+PRINT A
+=====
+CONST arttirma
+CONST A AS I32 = 3
+A += 1
+PRINT A
+=====
+CONST yordam icinde
+CONST A AS I32 = 3
+SUB Boz()
+    A = 99
+END SUB
+Boz()
+PRINT A
+=====
+CONST BYREF
+CONST A AS I32 = 3
+SUB Boz(BYREF x AS I32)
+    x = 99
+END SUB
+Boz(A)
+PRINT A
+=====
+CONST dizi siniri sabit
+CONST N AS I32 = 3
+DIM d(N) AS I32
+d(N) = 5
+PRINT d(N)
+=====
+CONST metin
+CONST S AS STRING = "ab"
+S = "cd"
+PRINT S
+=====
+READONLY gibi CONST kopya
+CONST A AS I32 = 3
+DIM b AS I32 = A
+b = b + 1
+PRINT A; " "; b

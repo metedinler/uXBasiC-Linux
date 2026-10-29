@@ -447,6 +447,17 @@ Private Function ExecResolveMethodRoutineIndex(ByRef ps As ParseState, ByRef es 
             Return 0
         End If
 
+        ' S-485 / S-487 (P0.2): SUPER.CONSTRUCTOR(args) is the base-class constructor call the front end wrote (semantic_base_ctor.fbs): the
+        ' base class's constructor routine, called on THIS with the hidden receiver like a method.
+        If methodUpper = "CONSTRUCTOR" Then
+            routineIdxOut = ExecRoutineIndexOf(es, UCase(baseClass) & "_CTOR")
+            If routineIdxOut = -1 Then
+                errText = "exec: SUPER base constructor missing " & UCase(baseClass)
+                Return 0
+            End If
+            Return 1
+        End If
+
         If ExecResolveMethodRoutineInHierarchy(ps, es, baseClass, methodUpper, routineIdxOut, declaringClass, methodDecl, 0, errText) = 0 Then
             If errText = "" Then errText = "exec: SUPER method missing " & baseClass & "_" & methodUpper
             Return 0
@@ -484,14 +495,24 @@ Private Function ExecResolveMethodRoutineIndex(ByRef ps As ParseState, ByRef es 
         End If
 
         Dim receiverType As String
-        If es.vars(receiverIdx).runtimeClassType <> "" Then
-            receiverType = UCase(Trim(es.vars(receiverIdx).runtimeClassType))
+        If ExecVarAt(es, receiverIdx).runtimeClassType <> "" Then
+            receiverType = UCase(Trim(ExecVarAt(es, receiverIdx).runtimeClassType))
         Else
-            receiverType = UCase(Trim(es.vars(receiverIdx).declType))
+            receiverType = UCase(Trim(ExecVarAt(es, receiverIdx).declType))
         End If
         prependReceiverOut = 1
-        receiverAddrOut = CInt(es.vars(receiverIdx).addr)
+        receiverAddrOut = CInt(ExecVarAt(es, receiverIdx).addr)
         ' Try to resolve runtime class from object header vtable handle (if present)
+        ' S-574 / S-472: a variable declared with a class whose VALUE (the object address) names a destroyed object (header dword zeroed by
+        ' DELETE) is not a live receiver. The VALUE is tested, not .addr: a parameter's .addr is its own slot.
+        Dim deadProbeAddr As UInteger
+        deadProbeAddr = CUInt(ExecValueToInteger(ExecVarAt(es, receiverIdx).value))
+        If deadProbeAddr <> 0 AndAlso ExecFindClassDeclNode(ps, UCase(Trim(ExecVarAt(es, receiverIdx).declType))) <> -1 Then
+            If ExecObjectIsDead(deadProbeAddr) <> 0 Then
+                errText = "exec: method call on a null object reference: " & ownerUpper
+                Return 0
+            End If
+        End If
         If receiverAddrOut <> 0 Then
             Dim hval As UInteger
             hval = CUInt(VMemPeekD(CUInt(receiverAddrOut)))
@@ -550,7 +571,7 @@ Private Function ExecResolveMethodRoutineIndex(ByRef ps As ParseState, ByRef es 
         ' requireVirtualChain=1 and refused ("non-virtual base dispatch blocked A.F") every
         ' inherited non-virtual method: plain inheritance did not work in the AST interpreter.
         Dim staticBindType As String
-        staticBindType = UCase(Trim(es.vars(receiverIdx).declType))
+        staticBindType = UCase(Trim(ExecVarAt(es, receiverIdx).declType))
         If staticBindType = "" Or ExecFindClassDeclNode(ps, staticBindType) = -1 Then staticBindType = receiverType
         routineName = staticBindType & "_" & methodUpper
         If ExecResolveMethodRoutineInHierarchy(ps, es, staticBindType, methodUpper, routineIdxOut, declaringClass, methodDecl, 0, errText) = 0 Then
@@ -584,7 +605,10 @@ Private Function ExecIsRoutineMetadataNode(ByRef ps As ParseState, ByVal nodeIdx
     Dim k As String
     k = UCase(ps.ast.nodes(nodeIdx).kind)
     Select Case k
-    Case "PARAM_DECL", "RETURN_TYPE", "SLOT_HEADER_ARGS", "CLASS_METHOD_FLAG", "CLASS_ACCESS"
+    ' S-600 (2026-10-17): the semantic pass appends a CLASS_METHOD_SLOT child (vtable slot metadata) AFTER the statements of every
+    ' VIRTUAL / OVERRIDE method. A body that falls off its end (a SUB-like virtual method with no RETURN) reached it and stopped with
+    ' "unsupported statement kind CLASS_METHOD_SLOT"; a body that ends in RETURN never got there, which hid the defect.
+    Case "PARAM_DECL", "RETURN_TYPE", "SLOT_HEADER_ARGS", "CLASS_METHOD_FLAG", "CLASS_ACCESS", "CLASS_METHOD_SLOT"
         Return 1
     End Select
     Return 0
@@ -595,105 +619,184 @@ Private Function ExecInferReceiverClassType(ByRef ps As ParseState, ByRef routin
     routineName = UCase(Trim(routineNameRaw))
     If routineName = "" Then Return ""
 
-    Dim sepPos As Integer
-    sepPos = InStr(routineName, "_")
-    If sepPos <= 1 Then Return ""
-
-    Dim className As String
-    className = Left(routineName, sepPos - 1)
-    If ExecFindClassDeclNode(ps, className) = -1 Then Return ""
-    Return className
+    ' Class names may contain underscores (including TYPE_Box). Splitting at
+    ' the first underscore loses their owner and leaves THIS untyped.
+    Dim bestOwner As String
+    For i As Integer = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "CLASS_STMT" Then Continue For
+        Dim className As String = UCase(Trim(ps.ast.nodes(i).value))
+        If Len(className) <= Len(bestOwner) Then Continue For
+        If Left(routineName, Len(className) + 1) = className & "_" Then bestOwner = className
+    Next i
+    Return bestOwner
 End Function
 
-Private Function ExecRoutineNameIsLocal(ByRef ps As ParseState, ByVal routineNodeIdx As Integer, ByRef nameText As String, paramNames() As String, ByVal paramCount As Integer) As Integer
-    Dim key As String = UCase(Trim(nameText))
-    If key = "" Then Return 1
-    If key = "THIS" Or key = "ME" Or key = UCase(Trim(ps.ast.nodes(routineNodeIdx).value)) Then Return 1
-    Dim routineKindLocal As String
-    routineKindLocal = UCase(Trim(ps.ast.nodes(routineNodeIdx).kind))
-    If routineKindLocal = "EVENT_STMT" Or routineKindLocal = "PIPE_STMT" Or routineKindLocal = "THREAD_STMT" Or routineKindLocal = "PARALEL_STMT" Then
-        If key = UXB_TASK_INPUT_NAME Or key = UXB_TASK_RESULT_NAME Then Return 1
-    End If
+' Callee locals are appended, so existing caller/global/BYREF cells retain
+' their indices. Preserve those values once; never resolve them again by name
+' or scan the AST for each cell. Refresh pinned storage before copying it.
+Private Sub ExecRestoreRoutineVars(ByRef es As ExecState, snapshotVars() As ExecVar, ByVal snapshotCount As Integer, ByVal snapshotNextAddr As UInteger)
+    Dim savedCount As Integer = snapshotCount
+    If es.count < savedCount Then savedCount = es.count
+    Dim callerValues(Any) As ExecValue
+    If savedCount > 0 Then ReDim callerValues(savedCount - 1)
+    For i As Integer = 0 To savedCount - 1
+        If ExecVarAt(es, i).pinned <> 0 Then ExecVarPinLoad es, i
+        callerValues(i) = ExecVarAt(es, i).value
+    Next
+    ExecRestoreVars es, snapshotVars(), snapshotCount, snapshotNextAddr
+    For i As Integer = 0 To savedCount - 1
+        ExecVarAt(es, i).value = callerValues(i)
+        If ExecVarAt(es, i).pinned <> 0 Then ExecVarPinStore es, i
+    Next
+End Sub
 
-    Dim i As Integer
-    For i = 0 To paramCount - 1
-        If UCase(Trim(paramNames(i))) = key Then Return 1
-    Next i
-
-    For i = 0 To ps.ast.count - 1
-        Dim nodeKind As String = UCase(Trim(ps.ast.nodes(i).kind))
-        If nodeKind <> "DIM_DECL" And nodeKind <> "REDIM_DECL" And nodeKind <> "CONST_DECL" Then Continue For
-        If UCase(Trim(ps.ast.nodes(i).value)) <> key Then Continue For
-        Dim parentIdx As Integer = ps.ast.nodes(i).parent
-        Dim guard As Integer
-        Do While parentIdx >= 0 And parentIdx < ps.ast.count And guard < ps.ast.count
-            If parentIdx = routineNodeIdx Then Return 1
-            parentIdx = ps.ast.nodes(parentIdx).parent
-            guard += 1
-        Loop
-    Next i
+' S-612 (2026-10-17): does a PARAMETER of this routine have the routine's own name (`METHOD Deger(deger AS I32) AS I32`)? The function-name
+' result variable must not overwrite such a parameter: the parameter wins.
+Private Function ExecRoutineHasParamNamedLikeItself(ByRef ps As ParseState, ByVal routineNodeIdx As Integer) As Integer
+    If routineNodeIdx < 0 Or routineNodeIdx >= ps.ast.count Then Return 0
+    Dim ownName As String
+    ownName = UCase(Trim(ps.ast.nodes(routineNodeIdx).value))
+    If ownName = "" Then Return 0
+    Dim paramChild As Integer
+    paramChild = ps.ast.nodes(routineNodeIdx).firstChild
+    Do While paramChild <> -1
+        If UCase(ps.ast.nodes(paramChild).kind) = "PARAM_DECL" Then
+            If UCase(Trim(ps.ast.nodes(paramChild).value)) = ownName Then Return 1
+        End If
+        paramChild = ps.ast.nodes(paramChild).nextSibling
+    Loop
     Return 0
 End Function
 
-' S-167: BYREF parametre cagiranin yuvasinin takma adidir (ExecVar.refIdxPlus1): rutin icindeki
-' her okuma/yazma dogrudan o yuvaya gider (native ile ayni anlam; eskiden kopyala/geri-yaz idi ve
-' rutin icinde depo degismis gorunmuyor, ayni depoya iki BYREF'in son yazimi digerini eziyordu).
-' aliasSlotPlus1(i) > 0: i. parametrenin baglandigi cagiran yuvasi + 1. Bu yuvalar anlik goruntunun
-' icindedir (cagridan once vardilar); geri yukleme onlari eski degere dondurmesin diye son degerleri
-' yeniden yazilir. Takma ad bilgisi olmayan cagri yollari aliasCount=0 verir.
-Private Sub ExecRestoreRoutineVars(ByRef ps As ParseState, ByRef es As ExecState, ByVal routineNodeIdx As Integer, paramNames() As String, ByVal paramCount As Integer, snapshotVars() As ExecVar, ByVal snapshotCount As Integer, ByVal snapshotNextAddr As UInteger, aliasSlotPlus1() As Integer, ByVal aliasCount As Integer)
-    Dim callerWrites(Any) As ExecVar
-    Dim writeFlags(Any) As Integer
-    If snapshotCount > 0 Then
-        ReDim callerWrites(snapshotCount - 1)
-        ReDim writeFlags(snapshotCount - 1)
-    End If
-
-    Dim i As Integer
-    For i = 0 To snapshotCount - 1
-        If ExecRoutineNameIsLocal(ps, routineNodeIdx, snapshotVars(i).nameText, paramNames(), paramCount) = 0 Then
-            Dim currentIdx As Integer = ExecFindVar(es, snapshotVars(i).nameText)
-            If currentIdx >= 0 Then
-                callerWrites(i) = es.vars(currentIdx)
-                writeFlags(i) = 1
-            End If
+' Model D: collect calls without executing or resolving a receiver/index.
+' Conditional/faulting/write-barrier expressions stay on their existing path.
+' A call is one unit: its own argument plan executes when that call is invoked.
+Private Function ExecPlanArgumentCalls(ByRef ps As ParseState, ByRef es As ExecState, ByVal n As Integer, calls() As Integer, ByRef callCount As Integer, ByRef hasShared As Integer, ByVal depth As Integer = 0) As Integer
+    If n < 0 Or n >= ps.ast.count Or depth > 256 Then Return 0
+    Dim k As String = UCase(ps.ast.nodes(n).kind)
+    Select Case k
+    Case "NUMBER", "INTEGER", "INT", "INT_LITERAL", "STRING", "STRING_LITERAL"
+        Return 1
+    Case "IDENT", "IDENTIFIER"
+        Dim decl As Integer = StiFindDeclAny(ps, ps.ast.nodes(n).value, n)
+        If UXBTaskIsSyncGlobal(ps.ast.nodes(n).value) <> 0 Then
+            If decl < 0 OrElse UXBTaskEnclosingRoutine(ps, decl) = -1 Then hasShared = 1
         End If
-    Next i
-
-    ' BYREF takma ad hedeflerinin son degerleri (geri yukleme onlari ezmeden once).
-    Dim aliasFinalValues(Any) As ExecValue
-    Dim aliasHasValue(Any) As Integer
-    If aliasCount > 0 Then
-        ReDim aliasFinalValues(aliasCount - 1)
-        ReDim aliasHasValue(aliasCount - 1)
-        For i = 0 To aliasCount - 1
-            Dim aliasSlot As Integer = aliasSlotPlus1(i) - 1
-            If aliasSlot >= 0 And aliasSlot < snapshotCount And aliasSlot < es.count Then
-                If es.vars(aliasSlot).pinned <> 0 Then ExecVarPinLoad es, aliasSlot
-                aliasFinalValues(i) = es.vars(aliasSlot).value
-                aliasHasValue(i) = 1
+        Return 1
+    Case "UNARY"
+        Select Case UCase(ps.ast.nodes(n).op)
+        Case "+", "-", "NOT", "~"
+        Case Else: Return 0
+        End Select
+        Dim operand As Integer = ps.ast.nodes(n).left
+        If operand < 0 Then operand = ps.ast.nodes(n).right
+        Return ExecPlanArgumentCalls(ps, es, operand, calls(), callCount, hasShared, depth + 1)
+    Case "BINARY", "BINARY_EXPR", "BINOP"
+        Select Case UCase(ps.ast.nodes(n).op)
+        Case "+", "-", "*", "AND", "OR", "XOR", "=", "<>", "<", ">", "<=", ">="
+        Case Else: Return 0
+        End Select
+        If ExecPlanArgumentCalls(ps, es, ps.ast.nodes(n).left, calls(), callCount, hasShared, depth + 1) = 0 Then Return 0
+        Return ExecPlanArgumentCalls(ps, es, ps.ast.nodes(n).right, calls(), callCount, hasShared, depth + 1)
+    Case "CALL_EXPR"
+        Dim valueType As String, typeErr As String
+        If UXBStep3InferExprType(ps, n, valueType, typeErr) = 0 Then Return 0
+        If UXBTaskSyncValueType(valueType) = 0 Then Return 0
+        Dim varIdx As Integer = ExecFindVar(es, ps.ast.nodes(n).value)
+        If varIdx >= 0 AndAlso es.vars(varIdx).isArray <> 0 Then
+            ' Index values are calls too, but reading an element is not a call.
+            Dim decl As Integer = StiFindDeclAny(ps, ps.ast.nodes(n).value, n)
+            If UXBTaskIsSyncGlobal(ps.ast.nodes(n).value) <> 0 Then
+                If decl < 0 OrElse UXBTaskEnclosingRoutine(ps, decl) = -1 Then hasShared = 1
             End If
-        Next i
-    End If
-
-    ExecRestoreVars es, snapshotVars(), snapshotCount, snapshotNextAddr
-    For i = 0 To snapshotCount - 1
-        If writeFlags(i) <> 0 Then
-            Dim restoredIdx As Integer = ExecFindVar(es, snapshotVars(i).nameText)
-            If restoredIdx >= 0 Then
-                es.vars(restoredIdx).value = callerWrites(i).value
-                If es.vars(restoredIdx).pinned <> 0 Then ExecVarPinStore es, restoredIdx
+        ElseIf UXBTaskBuiltinCanStayInSync(ps.ast.nodes(n).value) = 0 Then
+            If ps.ast.nodes(n).left >= 0 Then Return 0 ' receiver/property lifetime is the next plan gate
+            Dim routine As Integer = ExecRoutineIndexOf(es, ps.ast.nodes(n).value)
+            If routine < 0 Then Return 0
+            For i As Integer = 0 To callCount - 1
+                If calls(i) = n Then Return 1
+            Next
+            If (callCount Mod 32) = 0 Then
+                If callCount = 0 Then ReDim calls(31) Else ReDim Preserve calls(callCount + 31)
             End If
+            calls(callCount) = n: callCount += 1
+            Return 1
         End If
-    Next i
+        Dim arg As Integer = ps.ast.nodes(n).firstChild
+        Do While arg <> -1
+            If ExecPlanArgumentCalls(ps, es, arg, calls(), callCount, hasShared, depth + 1) = 0 Then Return 0
+            arg = ps.ast.nodes(arg).nextSibling
+        Loop
+        Return 1
+    End Select
+    Return 0
+End Function
 
-    For i = 0 To aliasCount - 1
-        If aliasHasValue(i) <> 0 Then
-            Dim restoredSlot As Integer = aliasSlotPlus1(i) - 1
-            es.vars(restoredSlot).value = aliasFinalValues(i)
-            If es.vars(restoredSlot).pinned <> 0 Then ExecVarPinStore es, restoredSlot
+Private Function ExecCapturePlannedCalls(ByRef ps As ParseState, ByRef es As ExecState, calls() As Integer, ByVal callCount As Integer, ByVal firstSnapshot As Integer, ByRef errText As String) As Integer
+    For i As Integer = 0 To callCount - 1
+        Dim v As ExecValue
+        If ExecFindArgumentSnapshot(es, calls(i), v) <> 0 Then Continue For
+        If ExecEvalExpression(ps, calls(i), es, v, errText) = 0 Then
+            ExecReleaseArgumentSnapshots es, firstSnapshot
+            Return 0
         End If
-    Next i
+        Dim slot As Integer = es.runtime.argumentSnapshotCount
+        If slot >= es.runtime.argumentSnapshotCap Then
+            Dim newCap As Integer = es.runtime.argumentSnapshotCap * 2
+            If newCap < 32 Then newCap = 32
+            ReDim Preserve es.runtime.argumentSnapshots(newCap - 1)
+            es.runtime.argumentSnapshotCap = newCap
+        End If
+        es.runtime.argumentSnapshots(slot).nodeIdx = calls(i)
+        es.runtime.argumentSnapshots(slot).callDepth = es.runtime.callContextDepth
+        es.runtime.argumentSnapshots(slot).value = v
+        es.runtime.argumentSnapshotCount += 1
+    Next
+    Return 1
+End Function
+
+' Reuse the typed argument cache at ordinary expression consumers. A rejected
+' plan executes normally; recursive evaluation visits only the selected branch.
+Private Function ExecPrepareExpressionCalls(ByRef ps As ParseState, ByRef es As ExecState, ByVal nodeIdx As Integer, ByRef firstSnapshot As Integer, ByRef errText As String) As Integer
+    firstSnapshot = es.runtime.argumentSnapshotCount
+    If nodeIdx < 0 OrElse UXBTaskSyncActive() = 0 OrElse UXBTaskNodeInsideUnsafe(ps, nodeIdx) <> 0 Then Return 1
+    Dim calls(Any) As Integer, callCount As Integer, hasShared As Integer
+    If ExecPlanArgumentCalls(ps, es, nodeIdx, calls(), callCount, hasShared) = 0 Or hasShared = 0 Then Return 1
+    Return ExecCapturePlannedCalls(ps, es, calls(), callCount, firstSnapshot, errText)
+End Function
+
+Private Function ExecPrepareArgumentCalls(ByRef ps As ParseState, ByRef es As ExecState, ByVal callNodeIdx As Integer, ByVal firstExplicitArg As Integer, ByVal explicitArgCount As Integer, ByVal paramOffset As Integer, paramByRef() As Integer, paramTypes() As String, ByVal paramCount As Integer, ByRef firstSnapshot As Integer, ByRef errText As String) As Integer
+    firstSnapshot = es.runtime.argumentSnapshotCount
+    If UXBTaskSyncActive() = 0 OrElse UXBTaskNodeInsideUnsafe(ps, callNodeIdx) <> 0 Then Return 1
+    Dim calls(Any) As Integer, callCount As Integer, hasShared As Integer
+    For i As Integer = 0 To explicitArgCount - 1
+        Dim p As Integer = i + paramOffset
+        If p >= paramCount Then Return 1
+        If paramByRef(p) <> 0 Or Right(paramTypes(p), 2) = "[]" Then Continue For
+        If ExecPlanArgumentCalls(ps, es, ExecChildAt(ps, callNodeIdx, i + firstExplicitArg), calls(), callCount, hasShared) = 0 Then Return 1
+    Next
+    If hasShared = 0 Then Return 1
+    Return ExecCapturePlannedCalls(ps, es, calls(), callCount, firstSnapshot, errText)
+End Function
+
+' S-712: do not initialize an unassigned STRING result with integer zero
+' (which later becomes the text "0"). Both invocation paths use this owner.
+Private Sub ExecInitRoutineResult(ByRef ps As ParseState, ByRef es As ExecState, ByVal routineNodeIdx As Integer)
+    Dim initialValue As ExecValue
+    ExecValueSetInteger initialValue, 0
+    Dim child As Integer = ps.ast.nodes(routineNodeIdx).firstChild
+    Do While child >= 0
+        If UCase(Trim(ps.ast.nodes(child).kind)) = "RETURN_TYPE" Then
+            Dim resultType As String = UXBStep3TypeCanonical(ps.ast.nodes(child).value)
+            If resultType = TYPE_STRING Or resultType = TYPE_WSTRING Then
+                Dim emptyText As String = ""
+                ExecValueSetString initialValue, emptyText
+            End If
+            Exit Do
+        End If
+        child = ps.ast.nodes(child).nextSibling
+    Loop
+    ExecSetVarValue es, ps.ast.nodes(routineNodeIdx).value, initialValue
 End Sub
 
 Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es As ExecState, ByVal routineIdx As Integer, ByVal callNodeIdx As Integer, ByVal firstExplicitArg As Integer, ByVal expectValue As Integer, ByVal prependReceiver As Integer, ByVal receiverAddr As Integer, ByRef valueOut As Integer, ByRef errText As String) As Integer
@@ -757,7 +860,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
         bodyStart = ps.ast.nodes(bodyStart).nextSibling
     Loop
 
-    Do While bodyStart <> -1 And ExecIsRoutineMetadataNode(ps, bodyStart) <> 0
+    Do While bodyStart <> -1 AndAlso ExecIsRoutineMetadataNode(ps, bodyStart) <> 0
         bodyStart = ps.ast.nodes(bodyStart).nextSibling
     Loop
 
@@ -818,12 +921,17 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
     Dim aliasSlotPlus1(Any) As Integer
     If paramCount > 0 Then ReDim aliasSlotPlus1(paramCount - 1) Else ReDim aliasSlotPlus1(0)
 
+    Dim firstSnapshot As Integer = es.runtime.argumentSnapshotCount
+    If prependReceiver = 0 Then
+        If ExecPrepareArgumentCalls(ps, es, callNodeIdx, firstExplicitArg, explicitArgCount, writePos, paramByRef(), paramTypes(), paramCount, firstSnapshot, errText) = 0 Then Return 0
+    End If
     Dim ai As Integer
     For ai = 0 To explicitArgCount - 1
         Dim argNode As Integer
         argNode = ExecChildAt(ps, callNodeIdx, ai + firstExplicitArg)
         If argNode = -1 Then
             errText = "exec: call argument missing"
+            ExecReleaseArgumentSnapshots es, firstSnapshot
             Return 0
         End If
 
@@ -832,7 +940,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
             If Not (Len(byRefParamType) > 2 AndAlso Right(byRefParamType, 2) = "[]") Then
                 Dim byRefSlot As Integer = ExecFindVar(es, ps.ast.nodes(argNode).value)
                 If byRefSlot < 0 Then byRefSlot = ExecEnsureVar(es, ps.ast.nodes(argNode).value)
-                If byRefSlot >= 0 AndAlso es.vars(byRefSlot).isArray = 0 Then
+                If byRefSlot >= 0 AndAlso ExecVarAt(es, byRefSlot).isArray = 0 Then
                     aliasSlotPlus1(writePos) = byRefSlot + 1
                     ExecValueInit argValues(writePos)
                     writePos += 1
@@ -847,12 +955,14 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
             If Len(paramTypeForArg) > 2 And Right(paramTypeForArg, 2) = "[]" Then
                 If UCase(Trim(ps.ast.nodes(argNode).kind)) <> "IDENT" Then
                     errText = "exec: array parameter " & UCase(Trim(paramNames(writePos))) & " requires an array variable argument"
+                    ExecReleaseArgumentSnapshots es, firstSnapshot
                     Return 0
                 End If
                 Dim callerArrayIdx As Integer
                 callerArrayIdx = ExecFindVar(es, ps.ast.nodes(argNode).value)
-                If callerArrayIdx < 0 Or callerArrayIdx >= es.count Or es.vars(callerArrayIdx).isArray = 0 Then
+                If callerArrayIdx < 0 Or callerArrayIdx >= es.count Or ExecVarAt(es, callerArrayIdx).isArray = 0 Then
                     errText = "exec: array parameter " & UCase(Trim(paramNames(writePos))) & " requires an array variable argument"
+                    ExecReleaseArgumentSnapshots es, firstSnapshot
                     Return 0
                 End If
                 arrayArgVarIdx(writePos) = callerArrayIdx
@@ -862,9 +972,13 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
             End If
         End If
 
-        If ExecEvalExpression(ps, argNode, es, argValues(writePos), errText) = 0 Then Return 0
+        If ExecEvalExpression(ps, argNode, es, argValues(writePos), errText) = 0 Then
+            ExecReleaseArgumentSnapshots es, firstSnapshot
+            Return 0
+        End If
         writePos += 1
     Next ai
+    ExecReleaseArgumentSnapshots es, firstSnapshot
 
     ' Convert every argument before mutating the callee frame.  This keeps
     ' parameter binding atomic when a declared conversion fails.
@@ -885,7 +999,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
 
     ' Enter the activation record before binding parameters so parameters,
     ' receiver aliases and DIM locals can shadow outer names safely.
-    If es.runtime.callContextDepth >= 63 Then
+    If es.runtime.callContextDepth >= UXBExecCallDepthLimit() Then   ' S-543
         errText = "exec: call stack limit exceeded"
         Return 0
     End If
@@ -901,8 +1015,8 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
                 es.runtime.callContextDepth -= 1
                 Return 0
             End If
-            es.vars(aliasNameSlot).declType = es.vars(aliasSlotPlus1(ai) - 1).declType
-            es.vars(aliasNameSlot).refIdxPlus1 = aliasSlotPlus1(ai)
+            ExecVarAt(es, aliasNameSlot).declType = ExecVarAt(es, aliasSlotPlus1(ai) - 1).declType
+            ExecVarAt(es, aliasNameSlot).refIdxPlus1 = aliasSlotPlus1(ai)
             Continue For
         End If
         If ExecFindVar(es, paramNames(ai)) < es.runtime.callFrameBase(es.runtime.callContextDepth) Then
@@ -918,24 +1032,24 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
             If boundVarIdx <> -1 Then
                 Dim arrayElementType As String
                 arrayElementType = Left(UCase(Trim(paramTypes(ai))), Len(UCase(Trim(paramTypes(ai)))) - 2)
-                es.vars(boundVarIdx).value = es.vars(arrayArgVarIdx(ai)).value
-                es.vars(boundVarIdx).declType = arrayElementType
-                es.vars(boundVarIdx).runtimeClassType = es.vars(arrayArgVarIdx(ai)).runtimeClassType
-                es.vars(boundVarIdx).isArray = 1
-                es.vars(boundVarIdx).arrayId = es.vars(arrayArgVarIdx(ai)).arrayId
-                es.vars(boundVarIdx).arrayDims = es.vars(arrayArgVarIdx(ai)).arrayDims
-                es.vars(boundVarIdx).arrayLower = es.vars(arrayArgVarIdx(ai)).arrayLower
-                es.vars(boundVarIdx).arrayUpper = es.vars(arrayArgVarIdx(ai)).arrayUpper
-                es.vars(boundVarIdx).arrayBytes = es.vars(arrayArgVarIdx(ai)).arrayBytes
+                ExecVarAt(es, boundVarIdx).value = ExecVarAt(es, arrayArgVarIdx(ai)).value
+                ExecVarAt(es, boundVarIdx).declType = arrayElementType
+                ExecVarAt(es, boundVarIdx).runtimeClassType = ExecVarAt(es, arrayArgVarIdx(ai)).runtimeClassType
+                ExecVarAt(es, boundVarIdx).isArray = 1
+                ExecVarAt(es, boundVarIdx).arrayId = ExecVarAt(es, arrayArgVarIdx(ai)).arrayId
+                ExecVarAt(es, boundVarIdx).arrayDims = ExecVarAt(es, arrayArgVarIdx(ai)).arrayDims
+                ExecVarAt(es, boundVarIdx).arrayLower = ExecVarAt(es, arrayArgVarIdx(ai)).arrayLower
+                ExecVarAt(es, boundVarIdx).arrayUpper = ExecVarAt(es, arrayArgVarIdx(ai)).arrayUpper
+                ExecVarAt(es, boundVarIdx).arrayBytes = ExecVarAt(es, arrayArgVarIdx(ai)).arrayBytes
                 ' S-103: the elements of a TYPE array live in memory at the array variable's
                 ' own address (ExecResolveFieldAccess: addr + index * elemSize). The parameter
                 ' is an ALIAS of the caller's array, so it must share that address; without it
                 ' arr(0).X read/wrote the parameter's private slot (always 0, caller unchanged).
-                es.vars(boundVarIdx).addr = es.vars(arrayArgVarIdx(ai)).addr
+                ExecVarAt(es, boundVarIdx).addr = ExecVarAt(es, arrayArgVarIdx(ai)).addr
             End If
         Else
             ExecSetVarValue es, paramNames(ai), boundValues(ai)
-            If boundVarIdx <> -1 Then es.vars(boundVarIdx).declType = paramTypes(ai)
+            If boundVarIdx <> -1 Then ExecVarAt(es, boundVarIdx).declType = paramTypes(ai)
         End If
     Next ai
 
@@ -945,7 +1059,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
         Dim compatibilityInput As ExecValue
         ExecValueInit compatibilityInput
         If paramCount > 0 AndAlso aliasSlotPlus1(0) > 0 Then
-            compatibilityInput = es.vars(aliasSlotPlus1(0) - 1).value
+            compatibilityInput = ExecVarAt(es, aliasSlotPlus1(0) - 1).value
         ElseIf paramCount > 0 Then
             compatibilityInput = boundValues(0)
         ElseIf legacyTaskPayload <> 0 Then
@@ -969,28 +1083,28 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
             Dim thisIdx As Integer
             thisIdx = ExecFindVar(es, "THIS")
             If thisIdx <> -1 Then
-                es.vars(thisIdx).declType = receiverClassType
-                es.vars(thisIdx).runtimeClassType = receiverClassType
+                ExecVarAt(es, thisIdx).declType = receiverClassType
+                ExecVarAt(es, thisIdx).runtimeClassType = receiverClassType
             End If
 
             Dim meIdx As Integer
             meIdx = ExecFindVar(es, "ME")
             If meIdx <> -1 Then
-                es.vars(meIdx).declType = receiverClassType
-                es.vars(meIdx).runtimeClassType = receiverClassType
+                ExecVarAt(es, meIdx).declType = receiverClassType
+                ExecVarAt(es, meIdx).runtimeClassType = receiverClassType
             End If
 
             Dim superIdx As Integer
             superIdx = ExecFindVar(es, "SUPER")
             If superIdx <> -1 Then
-                es.vars(superIdx).declType = receiverClassType
-                es.vars(superIdx).runtimeClassType = receiverClassType
+                ExecVarAt(es, superIdx).declType = receiverClassType
+                ExecVarAt(es, superIdx).runtimeClassType = receiverClassType
             End If
         End If
     End If
 
-    If hasReturnValue <> 0 Then
-        ExecSetVar es, ps.ast.nodes(routineNodeIdx).value, 0
+    If hasReturnValue <> 0 And ExecRoutineHasParamNamedLikeItself(ps, routineNodeIdx) = 0 Then
+        ExecInitRoutineResult ps, es, routineNodeIdx
     End If
 
     Dim savedReturnValue As Integer
@@ -1026,13 +1140,24 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
             es.runtime.callReturnHasValue = savedReturnHasValue
             es.runtime.currentRoutineName = savedRoutineName
             es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-            ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, aliasSlotPlus1(), paramCount
+            ExecRestoreRoutineVars es, snapshotVars(), snapshotCount, snapshotNextAddr
             Return 0
         End If
 
         If es.runtime.exitRequest <> "" Then
             Dim callReq As String
             callReq = UCase(es.runtime.exitRequest)
+
+            ' S-566: rutinin KENDI govdesindeki bir etikete GOTO burada cozulur; bulunamazsa istek eskisi gibi cagirana tasinir.
+            If Left(callReq, 5) = "GOTO:" Then
+                Dim bodyGotoNode As Integer
+                bodyGotoNode = ExecFindBodyLabel(ps, bodyStart, Trim(Mid(callReq, 6)))
+                If bodyGotoNode <> -1 Then
+                    es.runtime.exitRequest = ""
+                    bodyNode = bodyGotoNode
+                    Continue Do
+                End If
+            End If
 
             If callReq = "RETURN_CALL" Then
                 es.runtime.exitRequest = ""
@@ -1064,7 +1189,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
         es.runtime.callReturnHasValue = savedReturnHasValue
         es.runtime.currentRoutineName = savedRoutineName
         es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-        ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, aliasSlotPlus1(), paramCount
+        ExecRestoreRoutineVars es, snapshotVars(), snapshotCount, snapshotNextAddr
         errText = UXB_EXEC_END_SIGNAL_TEXT
         Return 0
     End If
@@ -1080,6 +1205,15 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
         Dim declaredReturnType As String
         declaredReturnType = UCase(Trim(ps.ast.nodes(routineNodeIdx).typeName))
         If declaredReturnType = "FUNCTION" Or declaredReturnType = "PIPE" Then declaredReturnType = ""
+        ' Parser routine tags are not result types; AS T lives in RETURN_TYPE.
+        Dim returnTypeChild As Integer = ps.ast.nodes(routineNodeIdx).firstChild
+        Do While returnTypeChild <> -1
+            If UCase(Trim(ps.ast.nodes(returnTypeChild).kind)) = "RETURN_TYPE" Then
+                declaredReturnType = UCase(Trim(ps.ast.nodes(returnTypeChild).value))
+                Exit Do
+            End If
+            returnTypeChild = ps.ast.nodes(returnTypeChild).nextSibling
+        Loop
         If declaredReturnType <> "" Then
             Dim convertedReturn As ExecValue
             If ExecApplyDeclaredType(routineResultEx, declaredReturnType, convertedReturn, errText) = 0 Then
@@ -1089,10 +1223,11 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
                 es.runtime.callReturnHasValue = savedReturnHasValue
                 es.runtime.currentRoutineName = savedRoutineName
                 es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-                ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, aliasSlotPlus1(), paramCount
+                ExecRestoreRoutineVars es, snapshotVars(), snapshotCount, snapshotNextAddr
                 Return 0
             End If
             routineResultEx = convertedReturn
+            If callNodeIdx >= 0 And callNodeIdx < ps.ast.count Then ps.ast.nodes(callNodeIdx).typeName = declaredReturnType
         End If
 
         valueOut = ExecValueToInteger(routineResultEx)
@@ -1108,7 +1243,7 @@ Private Function ExecInvokeRoutineByIndexOffset(ByRef ps As ParseState, ByRef es
     es.runtime.callReturnHasValue = savedReturnHasValue
     es.runtime.currentRoutineName = savedRoutineName
     es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-    ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, aliasSlotPlus1(), paramCount
+    ExecRestoreRoutineVars es, snapshotVars(), snapshotCount, snapshotNextAddr
     Return 1
 End Function
 
@@ -1134,11 +1269,11 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
     End If
 
     Dim paramNames(Any) As String
+    Dim paramTypes(Any) As String
     Dim paramCount As Integer
     ' This calling convention (pre-evaluated argument handles, no original call-site
     ' AST) carries no caller-variable identity, so there is no BYREF alias to bind
     ' here; pass a zero-count alias list to the shared restore helper.
-    Dim noByRefFlags(0) As Integer
 
     Dim bodyStart As Integer
     bodyStart = ps.ast.nodes(routineNodeIdx).firstChild
@@ -1149,16 +1284,29 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
 
         If paramCount = 0 Then
             ReDim paramNames(0)
+            ReDim paramTypes(0)
         Else
             ReDim Preserve paramNames(paramCount)
+            ReDim Preserve paramTypes(paramCount)
         End If
 
         paramNames(paramCount) = ps.ast.nodes(bodyStart).value
+        paramTypes(paramCount) = UCase(Trim(ps.ast.nodes(bodyStart).typeName))
+        If paramTypes(paramCount) = "" Then
+            Dim paramTypeNode As Integer = ps.ast.nodes(bodyStart).firstChild
+            Do While paramTypeNode <> -1
+                If UCase(Trim(ps.ast.nodes(paramTypeNode).kind)) = "TYPE_REF" Then
+                    paramTypes(paramCount) = UCase(Trim(ps.ast.nodes(paramTypeNode).value))
+                    Exit Do
+                End If
+                paramTypeNode = ps.ast.nodes(paramTypeNode).nextSibling
+            Loop
+        End If
         paramCount += 1
         bodyStart = ps.ast.nodes(bodyStart).nextSibling
     Loop
 
-    Do While bodyStart <> -1 And ExecIsRoutineMetadataNode(ps, bodyStart) <> 0
+    Do While bodyStart <> -1 AndAlso ExecIsRoutineMetadataNode(ps, bodyStart) <> 0
         bodyStart = ps.ast.nodes(bodyStart).nextSibling
     Loop
 
@@ -1204,7 +1352,7 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
     Dim snapshotNextAddr As UInteger
     ExecSnapshotVars es, snapshotVars(), snapshotCount, snapshotNextAddr
 
-    If es.runtime.callContextDepth >= 63 Then
+    If es.runtime.callContextDepth >= UXBExecCallDepthLimit() Then   ' S-543
         errText = "exec: call stack limit exceeded"
         Return 0
     End If
@@ -1219,6 +1367,8 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
                 Return 0
             End If
         End If
+        Dim preparedParamSlot As Integer = ExecFindVar(es, paramNames(ai))
+        If preparedParamSlot <> -1 Then ExecVarAt(es, preparedParamSlot).declType = paramTypes(ai)
         ExecSetVarValue es, paramNames(ai), argValues(ai)
     Next ai
 
@@ -1249,21 +1399,21 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
             Dim thisIdx As Integer
             thisIdx = ExecFindVar(es, "THIS")
             If thisIdx <> -1 Then
-                es.vars(thisIdx).declType = receiverClassType
-                es.vars(thisIdx).runtimeClassType = receiverClassType
+                ExecVarAt(es, thisIdx).declType = receiverClassType
+                ExecVarAt(es, thisIdx).runtimeClassType = receiverClassType
             End If
 
             Dim meIdx As Integer
             meIdx = ExecFindVar(es, "ME")
             If meIdx <> -1 Then
-                es.vars(meIdx).declType = receiverClassType
-                es.vars(meIdx).runtimeClassType = receiverClassType
+                ExecVarAt(es, meIdx).declType = receiverClassType
+                ExecVarAt(es, meIdx).runtimeClassType = receiverClassType
             End If
         End If
     End If
 
-    If hasReturnValue <> 0 Then
-        ExecSetVar es, ps.ast.nodes(routineNodeIdx).value, 0
+    If hasReturnValue <> 0 And ExecRoutineHasParamNamedLikeItself(ps, routineNodeIdx) = 0 Then
+        ExecInitRoutineResult ps, es, routineNodeIdx
     End If
 
     Dim savedReturnValue As Integer
@@ -1299,13 +1449,24 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
             es.runtime.callReturnHasValue = savedReturnHasValue
             es.runtime.currentRoutineName = savedRoutineName
             es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-            ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0
+            ExecRestoreRoutineVars es, snapshotVars(), snapshotCount, snapshotNextAddr
             Return 0
         End If
 
         If es.runtime.exitRequest <> "" Then
             Dim callReq As String
             callReq = UCase(es.runtime.exitRequest)
+
+            ' S-566: rutinin KENDI govdesindeki bir etikete GOTO burada cozulur; bulunamazsa istek eskisi gibi cagirana tasinir.
+            If Left(callReq, 5) = "GOTO:" Then
+                Dim bodyGotoNode As Integer
+                bodyGotoNode = ExecFindBodyLabel(ps, bodyStart, Trim(Mid(callReq, 6)))
+                If bodyGotoNode <> -1 Then
+                    es.runtime.exitRequest = ""
+                    bodyNode = bodyGotoNode
+                    Continue Do
+                End If
+            End If
 
             If callReq = "RETURN_CALL" Then
                 es.runtime.exitRequest = ""
@@ -1336,7 +1497,7 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
         es.runtime.callReturnHasValue = savedReturnHasValue
         es.runtime.currentRoutineName = savedRoutineName
         es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-        ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0
+        ExecRestoreRoutineVars es, snapshotVars(), snapshotCount, snapshotNextAddr
         errText = UXB_EXEC_END_SIGNAL_TEXT
         Return 0
     End If
@@ -1361,7 +1522,7 @@ Private Function ExecInvokeRoutineByPreparedArgs(ByRef ps As ParseState, ByRef e
     es.runtime.callReturnHasValue = savedReturnHasValue
     es.runtime.currentRoutineName = savedRoutineName
     es.runtime.currentRoutineNodeIdx = savedRoutineNodeIdx
-    ExecRestoreRoutineVars ps, es, routineNodeIdx, paramNames(), paramCount, snapshotVars(), snapshotCount, snapshotNextAddr, noByRefFlags(), 0
+    ExecRestoreRoutineVars es, snapshotVars(), snapshotCount, snapshotNextAddr
     Return 1
 End Function
 
@@ -1400,8 +1561,12 @@ Private Function ExecMethodLeafName(ByRef callNameRaw As String) As String
     Return s
 End Function
 
-Private Function ExecResolveReceiverExpr(ByRef ps As ParseState, ByRef es As ExecState, ByVal receiverNodeIdx As Integer, ByRef receiverTypeOut As String, ByRef receiverAddrOut As Integer, ByRef errText As String) As Integer
+' receiverTypeOut = class that DISPATCHES virtual calls (the real class read from the object header); staticTypeOut = class that
+' binds NON-virtual calls (the declared class); directBindOut = 1 for THIS (never through the vtable) - S-484 / S-596.
+Private Function ExecResolveReceiverExpr(ByRef ps As ParseState, ByRef es As ExecState, ByVal receiverNodeIdx As Integer, ByRef receiverTypeOut As String, ByRef staticTypeOut As String, ByRef directBindOut As Integer, ByRef receiverAddrOut As Integer, ByRef errText As String) As Integer
     receiverTypeOut = ""
+    staticTypeOut = ""
+    directBindOut = 0
     receiverAddrOut = 0
 
     If receiverNodeIdx < 0 Or receiverNodeIdx >= ps.ast.count Then
@@ -1430,16 +1595,21 @@ Private Function ExecResolveReceiverExpr(ByRef ps As ParseState, ByRef es As Exe
             Return 0
         End If
 
-        If es.vars(receiverIdx).runtimeClassType <> "" Then
-            receiverTypeOut = UCase(Trim(es.vars(receiverIdx).runtimeClassType))
+        If ExecVarAt(es, receiverIdx).runtimeClassType <> "" Then
+            receiverTypeOut = UCase(Trim(ExecVarAt(es, receiverIdx).runtimeClassType))
         Else
-            receiverTypeOut = UCase(Trim(es.vars(receiverIdx).declType))
+            receiverTypeOut = UCase(Trim(ExecVarAt(es, receiverIdx).declType))
         End If
 
-        receiverAddrOut = ExecValueToInteger(es.vars(receiverIdx).value)
+        receiverAddrOut = ExecValueToInteger(ExecVarAt(es, receiverIdx).value)
         ' S-108: a class variable's value IS the object address; 0 = NULL reference (the old fallback
         ' to the variable's own slot address served the removed "DIM allocates a default object" model)
         If receiverAddrOut = 0 Then
+            errText = "exec: method call on a null object reference: " & receiverName
+            Return 0
+        End If
+        ' S-574 / S-472: an alias of an object DELETE has destroyed (header dword zeroed) is not a live receiver
+        If ExecObjectIsDead(CUInt(receiverAddrOut)) <> 0 Then
             errText = "exec: method call on a null object reference: " & receiverName
             Return 0
         End If
@@ -1457,6 +1627,23 @@ Private Function ExecResolveReceiverExpr(ByRef ps As ParseState, ByRef es As Exe
             Return 0
         End If
 
+        ' S-596: the object header, not the variable's tracked type, tells the real class. A SUB parameter declared as the base
+        ' class (or any alias that never went through `= NEW X`) used to dispatch to the base implementation. The declared
+        ' class (when it is a class) binds the non-virtual calls, exactly like the other engines.
+        Dim headerClass As String
+        headerClass = ""
+        If ExecTryResolveRuntimeClassByObjectAddr(ps, es, CUInt(receiverAddrOut), headerClass) <> 0 Then
+            If headerClass <> "" Then receiverTypeOut = headerClass
+        End If
+        staticTypeOut = receiverTypeOut
+        Dim declaredClassText As String
+        declaredClassText = UCase(Trim(ExecVarAt(es, receiverIdx).declType))
+        If declaredClassText <> "" And declaredClassText <> "OBJECT" Then
+            If ExecFindClassDeclNode(ps, declaredClassText) <> -1 Then staticTypeOut = declaredClassText
+        End If
+        ' S-484: THIS.m() is a DIRECT call of the implementation visible from the class whose method is running (THIS is declared
+        ' as that class); ME.m() and the bare m() the front end rewrites to ME.m() dispatch on the real class above.
+        If receiverName = "THIS" Then directBindOut = 1
         Return 1
     End If
 
@@ -1470,7 +1657,7 @@ Private Function ExecResolveReceiverExpr(ByRef ps As ParseState, ByRef es As Exe
             Return 0
         End If
 
-        If receiverAddrOut = 0 Then
+        If receiverAddrOut = 0 Or ExecObjectIsDead(CUInt(receiverAddrOut)) <> 0 Then
             errText = "exec: method call on a null object reference: field receiver"
             Return 0
         End If
@@ -1478,6 +1665,7 @@ Private Function ExecResolveReceiverExpr(ByRef ps As ParseState, ByRef es As Exe
             errText = "exec: method receiver field type unresolved"
             Return 0
         End If
+        staticTypeOut = receiverTypeOut
         Return 1
     End If
 
@@ -1488,7 +1676,7 @@ Private Function ExecResolveReceiverExpr(ByRef ps As ParseState, ByRef es As Exe
         If ExecEvalExpression(ps, receiverNodeIdx, es, receiverValue, errText) = 0 Then Return 0
 
         receiverAddrOut = ExecValueToInteger(receiverValue)
-        If receiverAddrOut = 0 Then
+        If receiverAddrOut = 0 Or ExecObjectIsDead(CUInt(receiverAddrOut)) <> 0 Then
             errText = "exec: method call on a null object reference: receiver expression"
             Return 0
         End If
@@ -1501,6 +1689,16 @@ Private Function ExecResolveReceiverExpr(ByRef ps As ParseState, ByRef es As Exe
         End If
 
         receiverTypeOut = inferredExprType
+        staticTypeOut = receiverTypeOut
+        If rk = "CALL_EXPR" Then
+            Dim indexedStaticVar As Integer = ExecFindVar(es, ps.ast.nodes(receiverNodeIdx).value)
+            If indexedStaticVar >= 0 Then
+                If ExecVarAt(es, indexedStaticVar).isArray <> 0 Then
+                    Dim indexedStaticType As String = UCase(Trim(ExecVarAt(es, indexedStaticVar).declType))
+                    If ExecFindClassDeclNode(ps, indexedStaticType) <> -1 Then staticTypeOut = indexedStaticType
+                End If
+            End If
+        End If
         Return 1
     End Select
 
@@ -1508,10 +1706,13 @@ Private Function ExecResolveReceiverExpr(ByRef ps As ParseState, ByRef es As Exe
     Return 0
 End Function
 
-Private Function ExecResolveReceiverMethodRoutineIndex(ByRef ps As ParseState, ByRef es As ExecState, ByRef receiverTypeRaw As String, ByRef methodNameRaw As String, ByRef routineIdxOut As Integer, ByRef errText As String) As Integer
+Private Function ExecResolveReceiverMethodRoutineIndex(ByRef ps As ParseState, ByRef es As ExecState, ByRef receiverTypeRaw As String, ByRef staticTypeRaw As String, ByVal directBind As Integer, ByRef methodNameRaw As String, ByRef routineIdxOut As Integer, ByRef errText As String) As Integer
     Dim receiverType As String
+    Dim staticType As String
     Dim methodUpper As String
     receiverType = UCase(Trim(receiverTypeRaw))
+    staticType = UCase(Trim(staticTypeRaw))
+    If staticType = "" Then staticType = receiverType
     methodUpper = UCase(Trim(methodNameRaw))
     routineIdxOut = -1
 
@@ -1525,8 +1726,8 @@ Private Function ExecResolveReceiverMethodRoutineIndex(ByRef ps As ParseState, B
         Return 0
     End If
 
-    ' Runtime vtable dispatch once denenir; override zincirleri icin onceliklidir.
-    If ExecFindVTableRoutineIdx(ps, es, receiverType, methodUpper, routineIdxOut) <> 0 Then
+    ' Runtime vtable dispatch once denenir; override zincirleri icin onceliklidir. THIS.m() (directBind) never goes through the vtable.
+    If directBind = 0 AndAlso ExecFindVTableRoutineIdx(ps, es, receiverType, methodUpper, routineIdxOut) <> 0 Then
         If routineIdxOut = -1 Then
             errText = "exec: method body missing for vtable entry " & receiverType & "_" & methodUpper
             Return 0
@@ -1561,8 +1762,9 @@ Private Function ExecResolveReceiverMethodRoutineIndex(ByRef ps As ParseState, B
     Dim methodDecl As Integer
     ' S-037: not in the vtable = non-virtual: inherited methods are callable (see the
     ' receiver-variable path above).
-    If ExecResolveMethodRoutineInHierarchy(ps, es, receiverType, methodUpper, routineIdxOut, declaringClass, methodDecl, 0, errText) = 0 Then
-        If errText = "" Then errText = "exec: unsupported call " & receiverType & "_" & methodUpper
+    If ExecFindClassDeclNode(ps, staticType) = -1 Then staticType = receiverType
+    If ExecResolveMethodRoutineInHierarchy(ps, es, staticType, methodUpper, routineIdxOut, declaringClass, methodDecl, 0, errText) = 0 Then
+        If errText = "" Then errText = "exec: unsupported call " & staticType & "_" & methodUpper
         Return 0
     End If
 
@@ -1622,14 +1824,16 @@ Private Function ExecTryEvalReceiverMethodCall(ByRef ps As ParseState, ByRef es 
     End If
 
     Dim receiverType As String
+    Dim receiverStaticType As String
+    Dim receiverDirectBind As Integer
     Dim receiverAddr As Integer
     Dim receiverRv As Integer
-    receiverRv = ExecResolveReceiverExpr(ps, es, receiverNodeIdx, receiverType, receiverAddr, errText)
+    receiverRv = ExecResolveReceiverExpr(ps, es, receiverNodeIdx, receiverType, receiverStaticType, receiverDirectBind, receiverAddr, errText)
     If receiverRv < 0 Then Return -1
     If receiverRv = 0 Then Return 0
 
     Dim routineIdx As Integer
-    If ExecResolveReceiverMethodRoutineIndex(ps, es, receiverType, methodName, routineIdx, errText) = 0 Then Return 0
+    If ExecResolveReceiverMethodRoutineIndex(ps, es, receiverType, receiverStaticType, receiverDirectBind, methodName, routineIdx, errText) = 0 Then Return 0
 
     Return ExecInvokeRoutineByIndex(ps, es, routineIdx, callNodeIdx, expectValue, 1, receiverAddr, valueOut, errText)
 End Function
@@ -1644,17 +1848,17 @@ Private Function ExecTryEvalMagicCall(ByRef ps As ParseState, ByRef es As ExecSt
     If receiverIdx = -1 Then Return -1
 
     Dim receiverType As String
-    If es.vars(receiverIdx).runtimeClassType <> "" Then
-        receiverType = UCase(Trim(es.vars(receiverIdx).runtimeClassType))
+    If ExecVarAt(es, receiverIdx).runtimeClassType <> "" Then
+        receiverType = UCase(Trim(ExecVarAt(es, receiverIdx).runtimeClassType))
     Else
-        receiverType = UCase(Trim(es.vars(receiverIdx).declType))
+        receiverType = UCase(Trim(ExecVarAt(es, receiverIdx).declType))
     End If
 
     ' A FUNCTION invocation can have a same-named numeric result variable in
     ' the current frame. Never reinterpret that scalar variable's storage as an
     ' object header. Callable-object dispatch is eligible only for a declared
     ' class/interface/OBJECT value or an explicit runtime class binding.
-    If Trim(es.vars(receiverIdx).runtimeClassType) = "" Then
+    If Trim(ExecVarAt(es, receiverIdx).runtimeClassType) = "" Then
         If receiverType <> "OBJECT" Then
             If ExecFindClassDeclNode(ps, receiverType) = -1 And ExecFindInterfaceDeclNode(ps, receiverType) = -1 Then
                 Return -1
@@ -1663,8 +1867,8 @@ Private Function ExecTryEvalMagicCall(ByRef ps As ParseState, ByRef es As ExecSt
     End If
 
     Dim receiverAddr As Integer
-    receiverAddr = ExecValueToInteger(es.vars(receiverIdx).value)
-    If receiverAddr = 0 Then receiverAddr = CInt(es.vars(receiverIdx).addr)
+    receiverAddr = ExecValueToInteger(ExecVarAt(es, receiverIdx).value)
+    If receiverAddr = 0 Then receiverAddr = CInt(ExecVarAt(es, receiverIdx).addr)
     If receiverAddr = 0 Then
         If receiverType = "OBJECT" Or ExecFindClassDeclNode(ps, receiverType) <> -1 Or ExecFindInterfaceDeclNode(ps, receiverType) <> -1 Then
             errText = "exec: MAGIC_CALL receiver is null " & receiverName

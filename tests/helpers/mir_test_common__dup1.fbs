@@ -1,0 +1,32 @@
+Private Function RTMIRAssertEq(ByVal actualValue As Integer, ByVal expectedValue As Integer, ByRef msg As String) As Integer
+    If actualValue <> expectedValue Then
+        Print "FAIL "; msg; " expected="; expectedValue; " actual="; actualValue
+        Return 0
+    End If
+    Return 1
+End Function
+
+Private Function RTMIRParseProgram(ByRef src As String, ByRef psOut As ParseState, ByRef errOut As String) As Integer
+    Dim st As LexerState
+    LexerInit st, src
+
+    ParserInit psOut, st
+    If ParseProgram(psOut) = 0 Then
+        errOut = psOut.lastError
+        Return 0
+    End If
+
+    Return 1
+End Function
+
+Private Function RTMIRRunProgram(ByRef ps As ParseState, ByRef errOut As String, ByRef resultOut As MIRValue) As Integer
+    Dim module As MIRModule
+    If MIRBuildModuleFromAST(ps, module, errOut) = 0 Then Return 0
+    If MIRRunModule(module, resultOut, errOut) = 0 Then Return 0
+    Return 1
+End Function
+
+Function ExecResolveRuntimeClassByObjectAddr(ByVal objAddr As ULongInt, ByRef classNameOut As String) As Integer
+    classNameOut = ""
+    Return 0
+End Function

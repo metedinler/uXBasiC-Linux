@@ -1,0 +1,76 @@
+THROW degersiz
+TRY
+    THROW
+CATCH
+    PRINT "yakalandi"
+END TRY
+=====
+yakalanmayan THROW
+PRINT "once"
+THROW "hata"
+PRINT "sonra"
+=====
+THROW tamsayi ondalik
+TRY
+    THROW 42
+CATCH
+    PRINT "i"
+END TRY
+TRY
+    THROW 2.5
+CATCH
+    PRINT "f"
+END TRY
+=====
+FINALLY yok
+TRY
+    THROW "x"
+CATCH
+    PRINT "c"
+END TRY
+PRINT "d"
+=====
+yordamdan throw
+SUB At()
+    THROW "ic"
+END SUB
+TRY
+    At()
+CATCH
+    PRINT "yakalandi"
+END TRY
+=====
+ic ice TRY yeniden throw
+TRY
+    TRY
+        THROW "a"
+    CATCH
+        PRINT "ic"
+        THROW "b"
+    END TRY
+CATCH
+    PRINT "dis"
+END TRY
+=====
+ASSERT dogru
+ASSERT 1 = 1, "tamam"
+PRINT "devam"
+=====
+ASSERT yanlis
+PRINT "once"
+ASSERT 1 = 2, "bozuk"
+PRINT "sonra"
+=====
+ASSERT iletisiz
+ASSERT 1 = 2
+PRINT "sonra"
+=====
+CATCH sonrasi program devam
+TRY
+    THROW "x"
+CATCH
+    PRINT "c"
+FINALLY
+    PRINT "f"
+END TRY
+PRINT "son"

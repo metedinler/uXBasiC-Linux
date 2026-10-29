@@ -1,0 +1,5 @@
+DIM l AS LIST
+CALL LISTADD(l, 10)
+DIM x AS I32
+x = LISTGET(l, 0)
+PRINT x

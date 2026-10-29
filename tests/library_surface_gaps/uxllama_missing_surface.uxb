@@ -1,0 +1,20 @@
+INCLUDE "include/modules/uxllama.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxllama.LastCommand(0, 0, 0)
+        PRINT uxllama.LastError(0, 0, 0)
+        PRINT uxllama.Prompt(0, "", 0, 0)
+        PRINT uxllama.PromptFile(0, "", 0, 0)
+        PRINT uxllama.SetCliPath(0, "")
+        PRINT uxllama.SetContext(0, 0)
+        PRINT uxllama.SetModelPath(0, "")
+        PRINT uxllama.SetPredict(0, 0)
+        PRINT uxllama.SetSeed(0, 0)
+        PRINT uxllama.SetTemperature(0, 0.0)
+        PRINT uxllama.SetThreads(0, 0)
+        PRINT uxllama.SetTopK(0, 0)
+        PRINT uxllama.SetTopP(0, 0.0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXLLAMA"
+END MAIN

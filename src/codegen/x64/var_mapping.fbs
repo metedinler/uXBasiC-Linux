@@ -1,8 +1,10 @@
+' S-618: 2048 -> 4096 entries. The program-wide table holds every local of every routine; since S-599 each FUNCTION also owns a result slot named after it,
+' which consumed one entry of the user's budget (a function with exactly 2048 locals no longer fit: tests/compiler_consolidation/large_local_frame).
 Type VarMapping
     count As Integer
-    keys(0 To 2047) As String
-    offsets(0 To 2047) As Integer
-    slots(0 To 2047) As Integer
+    keys(0 To 4095) As String
+    offsets(0 To 4095) As Integer
+    slots(0 To 4095) As Integer
 End Type
 
 Private Function VarMappingMakeKey(ByRef routineLabel As String, ByRef varName As String) As String
@@ -29,7 +31,7 @@ Sub VarMappingInit(ByRef vm As VarMapping)
     vm.count = 0
 
     Dim i As Integer
-    For i = 0 To 2047
+    For i = 0 To 4095
         vm.keys(i) = ""
         vm.offsets(i) = 0
         vm.slots(i) = 0
@@ -51,7 +53,7 @@ Function VarMappingAddLocalChecked(ByRef vm As VarMapping, ByVal routineLabel As
         Return 1
     End If
 
-    If vm.count > 2047 Then
+    If vm.count > 4095 Then
         errText = "X64_VAR_MAPPING_CAPACITY_EXCEEDED: " & keyText
         Return 0
     End If

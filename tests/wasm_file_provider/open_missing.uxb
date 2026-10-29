@@ -1,0 +1,3 @@
+DIM f AS FILE_HANDLE
+OPEN "does_not_exist.txt" FOR INPUT AS f
+PRINT "UNREACHABLE"

@@ -1,0 +1,4 @@
+#ifndef UXB_TYPE_STORAGE_CONTRACT_FBS
+#define UXB_TYPE_STORAGE_CONTRACT_FBS
+Declare Function UXBStep3StorageType(ByVal rawType As String) As String
+#endif

@@ -12,6 +12,15 @@ End Function
 
 Function UXBStep3RequireImplicitAssignment(ByVal fromType As String, ByVal toType As String, ByRef errText As String) As Integer
     Dim explicitNeeded As Integer
+    ' S-564: NULL / NOTHING is for pointers and objects only.
+    If UXBStep3TypeCanonical(fromType) = TYPE_NULL Then
+        If UXBStep3TypeCanCoerce(fromType, toType, explicitNeeded) = 0 Then
+            errText = "UXB_NULL_TYPE: NULL / NOTHING can only be used with pointer and object types, not with " & toType
+            Return 0
+        End If
+        errText = ""
+        Return 1
+    End If
     If UXBLibraryTypeCanConvertTo(fromType, toType, 1) <> 0 Then errText = "": Return 1
     If UXBStep3TypeCanCoerce(fromType, toType, explicitNeeded) = 0 Then errText = "type: assignment cannot convert " & fromType & " to " & toType: Return 0
     If explicitNeeded <> 0 Then errText = "type: assignment requires explicit cast " & fromType & " to " & toType: Return 0

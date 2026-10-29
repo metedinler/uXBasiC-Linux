@@ -1,0 +1,5 @@
+DIM x AS I32
+x = 10
+INC x
+DEC x
+PRINT x

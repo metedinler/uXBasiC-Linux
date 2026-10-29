@@ -37,7 +37,7 @@ function makeCoreImports(overrides = {}) {
     switch (id | 0) {
       case 1: write(a | 0); return a | 0;
       case 1000: newline(); return 0;
-      case 3: return (Date.now() / 1000) | 0;
+      case 3: { const d = new Date(); return (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) | 0; } // S-624: tamsayi yolu = yerel gece yarisindan beri tam saniye
       case 4: return nextRandomI32();
       case 5: rngState = (a | 0) || (0x6d2b79f5 | 0); return a | 0;
       case 10:

@@ -1,0 +1,17 @@
+TYPE Pair
+    left AS I32
+    right AS I32
+END TYPE
+
+FUNCTION Topla(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+
+MAIN
+    DIM left AS I32 = 7
+    DIM right AS I32 = 4
+    PRINT left
+    PRINT right
+    PRINT LEFT("abcd", 2)
+    PRINT Topla(3, 4)
+END MAIN

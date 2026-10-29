@@ -1,0 +1,20 @@
+CLASS Taban
+    PUBLIC
+    DIM t AS I32
+    CONSTRUCTOR()
+        t = 5
+        PRINT 1
+    END CONSTRUCTOR
+END CLASS
+CLASS Alt EXTENDS Taban
+    PUBLIC
+    DIM u AS I32
+    CONSTRUCTOR(k AS I32)
+        u = k + t
+        PRINT 2
+    END CONSTRUCTOR
+END CLASS
+' S-485 (P0.2): a constructor that does not start with SUPER(...) first calls the base class's PARAMETERLESS constructor (written by the front end),
+' even when the derived constructor itself takes arguments.
+DIM z AS Alt = NEW Alt(3)
+PRINT z.u

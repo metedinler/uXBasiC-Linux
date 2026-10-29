@@ -1,0 +1,22 @@
+OPEN "consolidation_eof.txt" FOR OUTPUT AS #7
+PRINT #7, "a"
+PRINT #7, "b"
+PRINT #7, "c"
+CLOSE #7
+OPEN "consolidation_eof.txt" FOR INPUT AS #7
+PRINT EOF(7)
+DIM size AS I64 = LOF(7)
+PRINT size > 0
+DIM count AS I32 = 0
+DIM line AS STRING
+DO WHILE NOT EOF(7)
+    INPUT #7, line
+    count += 1
+    IF count > 5 THEN
+        PRINT "EOF_LOOP_FAILURE"
+        EXIT DO
+    END IF
+LOOP
+PRINT count
+PRINT EOF(7)
+CLOSE #7

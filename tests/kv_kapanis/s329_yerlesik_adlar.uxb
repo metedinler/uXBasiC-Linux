@@ -1,0 +1,4 @@
+' S-329 koruma: yerlesik yordamlar "tanimsiz" sayilmaz.
+PRINT LEN("abc")
+PRINT Left("Merhaba", 3)
+PRINT UCASE("ab")

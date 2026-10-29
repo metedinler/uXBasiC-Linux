@@ -1,0 +1,7 @@
+' S-544: a qualified call (Mat.Kare) written before the block that defines it is a use before the definition as well.
+PRINT Mat.Kare(3)
+NAMESPACE Mat
+    FUNCTION Kare(x AS I32) AS I32
+        RETURN x * x
+    END FUNCTION
+END NAMESPACE

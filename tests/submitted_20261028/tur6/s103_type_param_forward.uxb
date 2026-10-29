@@ -1,0 +1,16 @@
+TYPE Pair
+    x AS I32
+    y AS I32
+END TYPE
+DECLARE SUB Store(a AS Pair[])
+DECLARE SUB PassOn(a AS Pair[])
+SUB Store(a AS Pair[])
+    a(0).x = 17
+END SUB
+SUB PassOn(a AS Pair[])
+    Store(a)
+END SUB
+DIM cells(0 TO 1) AS Pair
+PassOn(cells)
+PRINT cells(0).x
+' EXPECT: 17 (descriptor forwarded, not copied)

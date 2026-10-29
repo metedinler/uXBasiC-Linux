@@ -1,0 +1,12 @@
+' S-584: the relaxed DIM initializer is still type checked: a Top object cannot start a Kutu variable.
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+END CLASS
+CLASS Top
+    PUBLIC
+    DIM r AS I32
+END CLASS
+DIM t1 AS Top = NEW Top()
+DIM k1 AS Kutu = t1
+PRINT 1

@@ -1,0 +1,34 @@
+INCLUDE "include/modules/uxmatrix.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxmatrix.Add(0, 0)
+        PRINT uxmatrix.Cholesky(0)
+        PRINT uxmatrix.Clone(0)
+        PRINT uxmatrix.Cols(0)
+        PRINT uxmatrix.Cond2(0)
+        PRINT uxmatrix.DataPtr(0)
+        PRINT uxmatrix.Det(0)
+        PRINT uxmatrix.Dot(0, 0)
+        PRINT uxmatrix.EigenSymmetric(0, 0, 0)
+        PRINT uxmatrix.Eye(0)
+        PRINT uxmatrix.Fill(0, 0.0)
+        PRINT uxmatrix.Inverse(0)
+        PRINT uxmatrix.MatVec(0, 0)
+        PRINT uxmatrix.NormFro(0)
+        PRINT uxmatrix.NormL1(0)
+        PRINT uxmatrix.NormL2(0)
+        PRINT uxmatrix.PrintMatrix(0)
+        PRINT uxmatrix.QR(0, 0, 0)
+        PRINT uxmatrix.RankSVD(0, 0.0)
+        PRINT uxmatrix.Rows(0)
+        PRINT uxmatrix.SVD(0, 0, 0, 0)
+        PRINT uxmatrix.Scale(0, 0.0)
+        PRINT uxmatrix.Size(0)
+        PRINT uxmatrix.Solve(0, 0)
+        PRINT uxmatrix.Sub(0, 0)
+        PRINT uxmatrix.Transpose(0)
+        PRINT uxmatrix.Zero(0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXMATRIX"
+END MAIN

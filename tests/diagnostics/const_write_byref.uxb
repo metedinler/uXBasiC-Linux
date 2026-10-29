@@ -1,0 +1,5 @@
+CONST A = 3
+SUB Bump(BYREF x AS I32)
+    x += 1
+END SUB
+CALL Bump(A)

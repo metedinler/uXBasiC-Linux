@@ -1,0 +1,23 @@
+' S-611: the local variables of one class member are private to that member (same name, different types in three methods).
+CLASS Say
+    PUBLIC
+    METHOD A1() AS I32
+        DIM t AS I32
+        t = 4
+        RETURN t * 2
+    END METHOD
+    METHOD A2() AS F64
+        DIM t AS F64
+        t = 1.5
+        RETURN t * 2.0
+    END METHOD
+    METHOD A3() AS STRING
+        DIM t AS STRING
+        t = "x"
+        RETURN t + "y"
+    END METHOD
+END CLASS
+DIM s AS Say = NEW Say()
+PRINT s.A1()
+PRINT s.A2()
+PRINT s.A3()

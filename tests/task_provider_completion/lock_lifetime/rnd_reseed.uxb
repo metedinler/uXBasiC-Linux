@@ -1,0 +1,8 @@
+RANDOMIZE 7
+DIM firstValue AS F64 = RND()
+PRINT RND(0) = firstValue
+RANDOMIZE 7
+PRINT RND() = firstValue
+DIM reseeded AS F64 = RND(-7)
+PRINT RND(0) = reseeded
+PRINT RND(1) <> reseeded

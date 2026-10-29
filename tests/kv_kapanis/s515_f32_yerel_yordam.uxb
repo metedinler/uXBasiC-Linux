@@ -1,0 +1,15 @@
+' S-515: yordam (SUB/FUNCTION) icindeki YEREL F32 degiskene yazilan deger her motorda tek duyarliga yuvarlanir;
+' MIR yorumlayici eskiden bildirimsiz (ilk degeri verilmemis) yerel F32'yi F64 gibi saklayip 1 yaziyordu (beklenen 0).
+SUB Yerel()
+    DIM y AS F32 = 16777217
+    PRINT y - 16777216
+    DIM z AS F32
+    z = 16777217
+    PRINT z - 16777216
+END SUB
+Yerel()
+FUNCTION F() AS F32
+    DIM t AS F32 = 16777217
+    RETURN t
+END FUNCTION
+PRINT F() - 16777216

@@ -1,0 +1,31 @@
+list_metin_atama | DIM l AS LIST\nLISTADD(l, "elma")\nLISTADD(l, "armut")\nDIM s AS STRING | s = LISTGET(l, 1)\nPRINT s
+list_metin_foreach | DIM l AS LIST\nLISTADD(l, "elma")\nLISTADD(l, "armut")\nDIM s AS STRING | FOR EACH s IN l\n    PRINT s\nNEXT
+dict_metin_atama | DIM d AS DICT\nDICTSET(d, "a", "yedi")\nDIM s AS STRING | s = DICTGET(d, "a")\nPRINT s
+dict_ve_ayni | DIM d AS DICT\nDICTSET(d, "x", 5)\nDIM n AS I32 | n = I32(DICTGET(d, "x"))\nPRINT n + 1
+instr_son | | PRINT INSTR("abcabc", "b", 3)
+instr_bas | | PRINT INSTR(3, "abcabc", "b")
+list_ondalik | DIM l AS LIST\nLISTADD(l, 2.5)\nDIM x AS F64 | x = LISTGET(l, 0)\nPRINT x
+list_dongu_topla | DIM l AS LIST\nLISTADD(l, 3)\nLISTADD(l, 4)\nDIM v AS I32\nDIM t AS I32 | FOR EACH v IN l\n    t += v\nNEXT\nPRINT t
+dict_foreach | DIM d AS DICT\nDICTSET(d, "a", 1)\nDICTSET(d, "b", 2)\nDIM k AS STRING | FOR EACH k IN d\n    PRINT k\nNEXT
+set_foreach | DIM s AS SET\nSETADD(s, "z")\nSETADD(s, "y")\nDIM k AS STRING | FOR EACH k IN s\n    PRINT k\nNEXT
+dizi_foreach | DIM a(2) AS I32\na(0) = 5\na(1) = 6\na(2) = 7\nDIM v AS I32 | FOR EACH v IN a\n    PRINT v\nNEXT
+dizi_boyut_degisken | DIM n AS I32 = 3\nDIM a(n) AS I32 | a(3) = 9\nPRINT a(3); UBOUND(a)
+dizi_ilk_deger | | DIM a(2) AS I32 = {1, 2, 3}\nPRINT a(0); a(1); a(2)
+dizi_ilk_deger2 | | DIM a(0 TO 2) AS I32 = (1, 2, 3)\nPRINT a(2)
+cok_degisken | | DIM a, b AS I32\na = 1\nb = 2\nPRINT a + b
+cok_degisken2 | | DIM a AS I32, b AS F64\na = 1\nb = 2.5\nPRINT a + b
+sabit_ifade | CONST A AS I32 = 5\nCONST B = A * 2 | PRINT B
+sabit_metin | CONST S AS STRING = "x" + "y" | PRINT S
+sabit_ondalik | CONST PI2 AS F64 = 3.14159 * 2 | PRINT PI2
+sabit_tipsiz | CONST K = 7 | PRINT K + 1
+ilk_deger | DIM i AS I32\nDIM f AS F64\nDIM s AS STRING\nDIM b AS BOOLEAN\nDIM a(2) AS I32 | PRINT i; "|"; f; "|"; s; "|"; b; "|"; a(1)
+global_yerel | DIM x AS I32 = 10\nSUB Oku()\n    DIM x AS I32 = 99\n    PRINT x\nEND SUB | Oku()\nPRINT x
+parametre_golge | DIM x AS I32 = 10\nSUB Oku(x AS I32)\n    x = x + 1\n    PRINT x\nEND SUB | Oku(5)\nPRINT x
+blok_kapsami | | DIM i AS I32\nFOR i = 1 TO 2\n    DIM y AS I32 = i * 10\n    PRINT y\nNEXT\nPRINT i
+static_dene | SUB Say()\n    STATIC n AS I32\n    n += 1\n    PRINT n\nEND SUB | Say()\nSay()\nSay()
+redim_preserve | DIM v(0 TO 1) AS I32\nv(0) = 7 | REDIM PRESERVE v(0 TO 3)\nv(3) = 9\nPRINT v(0); v(1); v(3); UBOUND(v)
+redim_sil | DIM v(0 TO 1) AS I32\nv(0) = 7 | REDIM v(0 TO 3)\nPRINT v(0); UBOUND(v)
+cok_boyut_redim | DIM m(1, 1) AS I32\nm(1, 1) = 5 | REDIM m(2, 2)\nPRINT m(1, 1)
+eksi_indeks | DIM a(-2 TO 2) AS I32 | a(-2) = 4\nPRINT a(-2); LBOUND(a); UBOUND(a)
+dizi_tur | DIM a(2) AS F64\nDIM s(1) AS STRING | a(1) = 2.5\ns(0) = "x"\nPRINT a(1); s(0)
+sinir_disi_oku | DIM a(2) AS I32 | PRINT a(3)

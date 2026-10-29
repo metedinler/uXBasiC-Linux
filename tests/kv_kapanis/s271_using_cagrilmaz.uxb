@@ -1,0 +1,14 @@
+' S-271: belirsizlik CAGRI yerindedir; cakisan ad nitelikli cagrilirsa program calisir.
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+PRINT A.Topla(3, 4)

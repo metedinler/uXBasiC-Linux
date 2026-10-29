@@ -1,5 +1,15 @@
 #ifndef UXB_WASM_EMITTER_FBS
 #define UXB_WASM_EMITTER_FBS
+#include once "runtime/wasm_string_runtime_generated.fbs"
+#include once "../web_control_flow.fbs"
+#include once "../../preprocessor/preprocess_package.fbs"
+Dim Shared gUxbWasmHasGosub As Integer
+Dim Shared gUxbWasmUnionRoots As String
+Dim Shared gUxbWasmUnionRootCount As Integer
+
+Private Const UXB_WASM_UNION_BASE As ULongInt = 1114112ULL
+Private Const UXB_WASM_UNION_CELL_BYTES As Integer = 256
+Private Const UXB_WASM_UNION_CELL_LIMIT As Integer = 768
 
 Private Const UXB_WASM_FB_DIRECTORY_ATTR As Integer = 16
 
@@ -118,6 +128,143 @@ Private Function UXBWasmSourceComment(ByRef ins As MIRIRInstruction) As String
     Return outText & Chr(10)
 End Function
 
+Private Function UXBWasmUnionIsUnsigned(ByRef typeText As String) As Integer
+    Select Case UCase(Trim(typeText))
+    Case "U8", "UBYTE", "BOOLEAN", "BOOL", "U16", "USHORT", "U32", "UINTEGER", "UINT", "ULONG"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Private Function UXBWasmUnionIsInteger(ByRef typeText As String) As Integer
+    Select Case UCase(Trim(typeText))
+    Case "I8", "BYTE", "SBYTE", "I16", "SHORT", "I32", "INTEGER", "INT", "LONG", "U8", "UBYTE", "BOOLEAN", "BOOL", "U16", "USHORT", "U32", "UINTEGER", "UINT", "ULONG"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+Private Function UXBWasmUnionRootIndex(ByRef rootRaw As String) As Integer
+    Dim safeRoot As String
+    Dim i As Integer
+    Dim startPos As Integer
+    Dim itemIndex As Integer
+    Dim itemText As String
+    safeRoot = UXBWasmSafeName(rootRaw)
+    If safeRoot = "" Then Return -1
+    startPos = 2
+    itemIndex = 0
+    For i = 2 To Len(gUxbWasmUnionRoots)
+        If Mid(gUxbWasmUnionRoots, i, 1) = "|" Then
+            itemText = Mid(gUxbWasmUnionRoots, startPos, i - startPos)
+            If itemText = safeRoot Then Return itemIndex
+            itemIndex += 1
+            startPos = i + 1
+        End If
+    Next i
+    Return -1
+End Function
+
+Private Function UXBWasmUnionRootAt(ByVal wantedIndex As Integer) As String
+    Dim i As Integer
+    Dim startPos As Integer
+    Dim itemIndex As Integer
+    Dim itemText As String
+    If wantedIndex < 0 Then Return ""
+    startPos = 2
+    itemIndex = 0
+    For i = 2 To Len(gUxbWasmUnionRoots)
+        If Mid(gUxbWasmUnionRoots, i, 1) = "|" Then
+            itemText = Mid(gUxbWasmUnionRoots, startPos, i - startPos)
+            If itemIndex = wantedIndex Then Return itemText
+            itemIndex += 1
+            startPos = i + 1
+        End If
+    Next i
+    Return ""
+End Function
+
+Private Sub UXBWasmCollectUnionRoot(ByRef rootRaw As String)
+    Dim safeRoot As String
+    safeRoot = UXBWasmSafeName(rootRaw)
+    If safeRoot = "" Then Exit Sub
+    If InStr(gUxbWasmUnionRoots, "|" & safeRoot & "|") > 0 Then Exit Sub
+    gUxbWasmUnionRoots &= safeRoot & "|"
+    gUxbWasmUnionRootCount += 1
+End Sub
+
+Private Sub UXBWasmCollectUnionRoots(ByRef module As MIRModule)
+    Dim fi As Integer
+    Dim bi As Integer
+    Dim ii As Integer
+    Dim ins As MIRIRInstruction
+    gUxbWasmUnionRoots = "|"
+    gUxbWasmUnionRootCount = 0
+    For fi = 0 To module.functionCount - 1
+        For bi = 0 To module.functions(fi).blockCount - 1
+            For ii = 0 To module.functions(fi).blocks(bi).instructionCount - 1
+                ins = module.functions(fi).blocks(bi).instructions(ii)
+                Select Case UXBWasmCanonicalOpcode(ins.opcode)
+                Case "UNION_FIELD_LOAD", "UNION_FIELD_STORE"
+                    If ins.operandCount >= 1 Then UXBWasmCollectUnionRoot ins.operands(0)
+                End Select
+            Next ii
+        Next bi
+    Next fi
+End Sub
+
+Private Function UXBWasmUnionAddress(ByRef rootRaw As String, ByRef errText As String) As String
+    Dim rootIndex As Integer
+    rootIndex = UXBWasmUnionRootIndex(rootRaw)
+    If rootIndex < 0 Then
+        errText = "WASM UNION root was not registered: " & Trim(rootRaw)
+        Return ""
+    End If
+    Return "      global.get $__U_" & UXBWasmSafeName(rootRaw) & Chr(10)
+End Function
+
+Private Function UXBWasmEmitUnionFieldLoad(ByRef ins As MIRIRInstruction, ByRef errText As String) As String
+    Dim outText As String
+    Dim unionWidth As Integer
+    Dim typeText As String
+    If ins.operandCount <> 5 Or Trim(ins.result) = "" Then errText = "WASM UNION_FIELD_LOAD requires root,field,offset,width,type and result": Return ""
+    unionWidth = Val(Trim(ins.operands(3)))
+    typeText = Trim(ins.operands(4))
+    If unionWidth <> 1 And unionWidth <> 2 And unionWidth <> 4 Then errText = "WASM UNION_FIELD_LOAD supports only 1, 2 or 4 byte integer fields": Return ""
+    If UXBWasmUnionIsInteger(typeText) = 0 Then errText = "WASM UNION_FIELD_LOAD supports only integer fields in the i32 union storage lane": Return ""
+    outText = UXBWasmUnionAddress(ins.operands(0), errText)
+    If errText <> "" Then Return ""
+    If unionWidth = 1 Then
+        If UXBWasmUnionIsUnsigned(typeText) <> 0 Then outText &= "      i32.load8_u offset=" & Trim(ins.operands(2)) & Chr(10) Else outText &= "      i32.load8_s offset=" & Trim(ins.operands(2)) & Chr(10)
+    ElseIf unionWidth = 2 Then
+        If UXBWasmUnionIsUnsigned(typeText) <> 0 Then outText &= "      i32.load16_u offset=" & Trim(ins.operands(2)) & Chr(10) Else outText &= "      i32.load16_s offset=" & Trim(ins.operands(2)) & Chr(10)
+    Else
+        outText &= "      i32.load offset=" & Trim(ins.operands(2)) & Chr(10)
+    End If
+    outText &= UXBWasmEmitVarSet(ins.result)
+    Return outText
+End Function
+
+Private Function UXBWasmEmitUnionFieldStore(ByRef ins As MIRIRInstruction, ByRef errText As String) As String
+    Dim outText As String
+    Dim unionWidth As Integer
+    Dim typeText As String
+    If ins.operandCount <> 6 Then errText = "WASM UNION_FIELD_STORE requires root,field,value,offset,width,type": Return ""
+    unionWidth = Val(Trim(ins.operands(4)))
+    typeText = Trim(ins.operands(5))
+    If unionWidth <> 1 And unionWidth <> 2 And unionWidth <> 4 Then errText = "WASM UNION_FIELD_STORE supports only 1, 2 or 4 byte integer fields": Return ""
+    If UXBWasmUnionIsInteger(typeText) = 0 Then errText = "WASM UNION_FIELD_STORE supports only integer fields in the i32 union storage lane": Return ""
+    outText = UXBWasmUnionAddress(ins.operands(0), errText)
+    If errText <> "" Then Return ""
+    outText &= UXBWasmEmitValue(ins.operands(2))
+    If unionWidth = 1 Then outText &= "      i32.store8 offset=" & Trim(ins.operands(3)) & Chr(10)
+    If unionWidth = 2 Then outText &= "      i32.store16 offset=" & Trim(ins.operands(3)) & Chr(10)
+    If unionWidth = 4 Then outText &= "      i32.store offset=" & Trim(ins.operands(3)) & Chr(10)
+    Return outText
+End Function
+
+#include once "wasm_typed_instructions.fbs"
+
 Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins As MIRIRInstruction, ByVal nextBlockId As Integer, ByRef errText As String) As String
     Dim op As String
     Dim outText As String
@@ -142,6 +289,12 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
         End If
     End If
 
+    Dim typedIns As MIRIRInstruction = ins
+    If op = "CALL" Then typedIns.opcode = "CALL"
+    Dim typedHandled As Integer
+    Dim typedWat As String = UXBWasmTypedInstruction(module, typedIns, typedHandled, errText)
+    If typedHandled <> 0 Or errText <> "" Then Return outText & typedWat
+
     Select Case op
     Case "NOP", "DECL"
         outText &= "      nop" & Chr(10)
@@ -149,21 +302,26 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
 
     Case "DIM"
         If ins.operandCount >= 5 Then
-            Dim wasmArrayLower As Integer
-            Dim wasmArrayUpper As Integer
-            wasmArrayLower = ValInt(ins.operands(1))
-            wasmArrayUpper = ValInt(ins.operands(2))
-            If wasmArrayUpper < wasmArrayLower Then errText = "WASM DIM array upper bound is smaller than lower bound": Return ""
             outText &= "      i32.const 80" & Chr(10)
-            outText &= "      i32.const " & LTrim(Str((wasmArrayUpper - wasmArrayLower) + 1)) & Chr(10)
+            outText &= UXBWasmTypedValue(ins.operands(2), "I32") & UXBWasmTypedValue(ins.operands(1), "I32")
+            outText &= "      i32.sub" & Chr(10) & "      i32.const 1" & Chr(10) & "      i32.add" & Chr(10)
             outText &= "      i32.const 0" & Chr(10)
-            outText &= "      i32.const " & LTrim(Str(wasmArrayLower)) & Chr(10)
+            outText &= UXBWasmTypedValue(ins.operands(1), "I32")
             outText &= "      i32.const 0" & Chr(10)
             outText &= "      call $uxb_host_call4" & Chr(10)
             outText &= UXBWasmEmitVarSet(ins.operands(0))
         Else
             outText &= "      nop" & Chr(10)
         End If
+        Return outText
+
+    Case "REDIM"
+        If ins.operandCount <> 4 Then errText = "WASM REDIM requires array,lower,upper,preserve": Return ""
+        outText &= "      i32.const 85" & Chr(10)
+        For arg As Integer = 0 To 3
+            outText &= UXBWasmTypedValue(ins.operands(arg), "I32")
+        Next arg
+        outText &= "      call $uxb_host_call4" & Chr(10) & "      drop" & Chr(10)
         Return outText
 
     Case "LOAD_CONST"
@@ -178,6 +336,31 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
             outText &= UXBWasmEmitValue(ins.operands(0))
             outText &= UXBWasmEmitVarSet(ins.result)
         End If
+        Return outText
+
+    Case "CAST"
+        If ins.operandCount <> 1 Or Trim(ins.result) = "" Then errText = "WASM CAST requires one operand and a result": Return ""
+        Dim castType As String = UCase(Trim(ins.resultType))
+        If Left(castType, 5) = "TYPE_" Then castType = Mid(castType, 6)
+        outText &= UXBWasmEmitValue(ins.operands(0))
+        Select Case castType
+        Case "I8", "BYTE", "SBYTE"
+            outText &= "      i32.const 24" & Chr(10) & "      i32.shl" & Chr(10) & "      i32.const 24" & Chr(10) & "      i32.shr_s" & Chr(10)
+        Case "U8", "UBYTE"
+            outText &= "      i32.const 255" & Chr(10) & "      i32.and" & Chr(10)
+        Case "I16", "SHORT"
+            outText &= "      i32.const 16" & Chr(10) & "      i32.shl" & Chr(10) & "      i32.const 16" & Chr(10) & "      i32.shr_s" & Chr(10)
+        Case "U16", "USHORT"
+            outText &= "      i32.const 65535" & Chr(10) & "      i32.and" & Chr(10)
+        Case "I32", "INTEGER", "LONG", "U32", "UINTEGER", "ULONG"
+            ' All supported operands occupy an i32 cell already.
+        Case "BOOL", "BOOLEAN"
+            outText &= "      i32.const 0" & Chr(10) & "      i32.ne" & Chr(10) & "      i32.const -1" & Chr(10) & "      i32.mul" & Chr(10)
+        Case Else
+            errText = "WASM CAST target type is not supported by the i32 model: " & ins.resultType
+            Return ""
+        End Select
+        outText &= UXBWasmEmitVarSet(ins.result)
         Return outText
 
     Case "STORE_VAR"
@@ -209,9 +392,12 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
             End If
             Return outText
         End If
-        Return UXBWasmEmitHostCall4(wasmCallTarget, ins, 1, ins.result)
+        Return UXBWasmEmitHostCall4(wasmCallTarget, ins, 1, ins.result, errText)
 
-    Case "ADD", "SUB", "MUL", "DIV", "MOD", "UIDIV", "UMOD", "EQ", "NE", "LT", "LE", "GT", "GE", "ULT", "ULE", "UGT", "UGE", "AND", "OR", "XOR", "SHL", "SHR"
+    Case "ROL", "ROR"
+        Return outText & UXBWasmEmitRotate(ins, op, errText)
+
+    Case "ADD", "SUB", "MUL", "DIV", "MOD", "UIDIV", "UMOD", "EQ", "NE", "LT", "LE", "GT", "GE", "ULT", "ULE", "UGT", "UGE", "AND", "OR", "XOR", "SHL", "SHR", "USHR"
         watInstr = UXBWasmBinaryInstr(op)
         If watInstr = "" Then
             errText = "WAT binary mapping missing: " & op
@@ -221,12 +407,19 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
             outText &= UXBWasmEmitValue(ins.operands(0))
             outText &= UXBWasmEmitValue(ins.operands(1))
             outText &= "      " & watInstr & Chr(10)
+            ' S-628: WebAssembly comparisons produce 0/1; uXBasic TRUE is
+            ' the full -1 mask, as in the other engines and bitwise logic.
+            Select Case op
+            Case "EQ", "NE", "LT", "LE", "GT", "GE", "ULT", "ULE", "UGT", "UGE"
+                outText &= "      i32.const -1" & Chr(10)
+                outText &= "      i32.mul" & Chr(10)
+            End Select
             outText &= UXBWasmEmitVarSet(ins.result)
         End If
         Return outText
 
     Case "POW"
-        Return UXBWasmEmitHostCall4("POW", ins, 0, ins.result)
+        Return UXBWasmEmitHostCall4("POW", ins, 0, ins.result, errText)
 
     Case "NAND", "NOR", "XNOR", "IMP", "CIMP", "NIMP", "NCIMP", "IDA", "IDB", "NOTA", "NOTB"
         If Trim(ins.result) <> "" And ins.operandCount >= 2 Then
@@ -247,7 +440,7 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
     Case "NOT"
         If Trim(ins.result) <> "" And ins.operandCount >= 1 Then
             outText &= UXBWasmEmitValue(ins.operands(0))
-            outText &= "      i32.eqz" & Chr(10)
+            outText &= UXBWasmEmitBitNot32()
             outText &= UXBWasmEmitVarSet(ins.result)
         End If
         Return outText
@@ -287,6 +480,17 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
         Return outText
 
     Case "RET"
+        If ins.bareReturn <> 0 And gUxbWasmHasGosub <> 0 Then
+            outText &= "      (if (i32.gt_u (global.get $__gosub_sp) (local.get $__gosub_base)) (then" & Chr(10)
+            outText &= "        (global.set $__gosub_sp (i32.sub (global.get $__gosub_sp) (i32.const 4)))" & Chr(10)
+            outText &= "        (local.set $__pc (i32.load (global.get $__gosub_sp)))" & Chr(10)
+            outText &= "        br $dispatch))" & Chr(10)
+            ' S-537: ana programda (MAIN) kaynak RETURN'u yalniz bir GOSUB'tan doner; yigin bossa sessizce bitmek yerine
+            ' acik calisma ani hatasidir (WASM'da tuzak: unreachable; GOSUB yigin tasmasi da ayni yolu kullanir).
+            If gWasmValueFunction <> 0 Then
+                If UCase(Trim(gWasmValueFunction->name)) = "MAIN" Then outText &= "      unreachable" & Chr(10)
+            End If
+        End If
         If ins.operandCount >= 1 Then
             If UCase(Trim(ins.operands(0))) = "__RESULT__" Then
                 outText &= "      i32.const 0" & Chr(10)
@@ -312,7 +516,11 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
             errText = "WASM OBJECT_NEW class is absent from MIR vtable metadata: " & ins.operands(0)
             Return ""
         End If
-        Return UXBWasmEmitHostCall16(90, ins, 1, ins.result, LTrim(Str(classId)))
+        ' S-575 (2026-10-16): UXBWasmEmitHostCall16 puts `encodedFirst` at position 0 and `encodedSecond` at position 1 and
+        ' fills position k >= 2 from operands(startIndex + k). OBJECT_NEW operands are (class, class size, ctor args...), and the
+        ' host (wasm_runtime_bridge.fbs, id 90) reads the constructor arguments from x[2...]. startIndex was 1, which shifted every
+        ' constructor argument one place to the left (the first one was lost); position 0 stands for operands(0), so the base is 0.
+        Return UXBWasmEmitHostCall16(90, ins, 0, ins.result, LTrim(Str(classId)))
 
     Case "FIELD_LOAD"
         If ins.operandCount < 2 Then
@@ -326,7 +534,15 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
             errText = "WASM FIELD_STORE requires receiver, field and value"
             Return ""
         End If
-        Return UXBWasmEmitHostCall16(92, ins, 3, ins.result, ins.operands(0), LTrim(Str(UXBWasmFieldKey(ins.operands(1)))))
+        ' S-575: FIELD_STORE operands are (object, field, value); the host (id 92) stores x[2]. With startIndex 3 position 2 read
+        ' operands(5), which does not exist, so every field write stored 0 (G-WASM-1: "fields of a NEW object read 0").
+        Return UXBWasmEmitHostCall16(92, ins, 0, ins.result, ins.operands(0), LTrim(Str(UXBWasmFieldKey(ins.operands(1)))))
+
+    Case "UNION_FIELD_LOAD"
+        Return UXBWasmEmitUnionFieldLoad(ins, errText)
+
+    Case "UNION_FIELD_STORE"
+        Return UXBWasmEmitUnionFieldStore(ins, errText)
 
     Case "LOAD_INDEXED"
         If ins.operandCount < 2 Or Trim(ins.result) = "" Then errText = "WASM LOAD_INDEXED requires array, index and result": Return ""
@@ -370,19 +586,39 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
                 errText = "WASM METHOD_CALL virtual slot is invalid: " & targetName
                 Return ""
             End If
-            Return UXBWasmEmitHostCall16(94, ins, 4, ins.result, ins.operands(1), LTrim(Str(slotId)))
+            ' S-575: METHOD_CALL operands are (target, receiver, method, receiver type, args...); the host (id 94) passes x[2...]
+            ' to the callee, and position 2 reads operands(startIndex + 2) -- so the base that makes the first argument operands(4)
+            ' is 2. With 4 the first two arguments were skipped (`c.Scale(7)` ran with 0).
+            Return UXBWasmEmitHostCall16(94, ins, 2, ins.result, ins.operands(1), LTrim(Str(slotId)))
         End If
         If Left(targetName, 15) = "__METHOD_CALL__:" Or targetName = "" Then
             errText = "WASM METHOD_CALL unresolved target: " & targetName
             Return ""
         End If
         Dim ai As Integer
-        If Trim(ins.operands(1)) <> "" Then outText &= UXBWasmEmitValue(ins.operands(1))
+        If Trim(ins.operands(1)) <> "" Then
+            ' Direct instance calls also require a live receiver, even if the
+            ' method body never reads a field (S-617 null array element probe).
+            outText &= "      i32.const 96" & Chr(10)
+            outText &= UXBWasmEmitValue(ins.operands(1))
+            outText &= "      i32.const 0" & Chr(10)
+            outText &= "      i32.const 0" & Chr(10)
+            outText &= "      i32.const 0" & Chr(10)
+            outText &= "      call $uxb_host_call4" & Chr(10)
+        End If
         For ai = 4 To ins.operandCount - 1
-            outText &= UXBWasmEmitValue(ins.operands(ai))
+            Dim directFn As Integer = UXBWasmFindFunctionIndex(module, targetName)
+            If directFn < 0 Then errText = "WASM method target not found": Return ""
+            Dim paramOffset As Integer = IIf(Trim(ins.operands(1)) <> "", 1, 0)
+            outText &= UXBWasmTypedValue(ins.operands(ai), module.functions(directFn).paramVarTypes(ai - 4 + paramOffset))
         Next ai
         outText &= "      call $" & UXBWasmSafeName(targetName) & Chr(10)
-        If Trim(ins.result) <> "" Then outText &= UXBWasmEmitVarSet(ins.result) Else outText &= "      drop" & Chr(10)
+        If Trim(ins.result) <> "" Then
+            Dim resultFn As Integer = UXBWasmFindFunctionIndex(module, targetName)
+            outText &= UXBWasmConvert(module.functions(resultFn).returnType, UXBWasmValueType(ins.result)) & UXBWasmEmitVarSet(ins.result)
+        Else
+            outText &= "      drop" & Chr(10)
+        End If
         Return outText
 
     Case "VIRTUAL_CALL"
@@ -408,7 +644,7 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
             errText = "WASM VIRTUAL_CALL slot is invalid: " & virtualTargetName
             Return ""
         End If
-        Return UXBWasmEmitHostCall16(94, ins, 4, ins.result, ins.operands(1), LTrim(Str(virtualSlotId)))
+        Return UXBWasmEmitHostCall16(94, ins, 2, ins.result, ins.operands(1), LTrim(Str(virtualSlotId)))
 
     ' S-129: UXBWasmCanonicalOpcode strips the MIR_ prefix and files ARRAY_SIZEOF under "DIRECT"; this
     ' case used to be spelled "MIR_ARRAY_SIZEOF", could never match, and SIZEOF(array) fell into the
@@ -535,23 +771,26 @@ Private Function UXBWasmEmitOneInstruction(ByRef module As MIRModule, ByRef ins 
     Case "HOST_IMPORT"
         callName = UXBWasmCanonicalOpcode(ins.opcode)
         If callName = "HOST_IMPORT" And ins.operandCount >= 1 Then callName = UCase(Trim(ins.operands(0)))
-        Return UXBWasmEmitHostCall4(callName, ins, 1, ins.result)
+        Return UXBWasmEmitHostCall4(callName, ins, 1, ins.result, errText)
 
     Case "WASM_BLOCKED"
         errText = "WASM backend blocked native opcode: " & ins.opcode
         Return ""
 
     Case "GOSUB"
-        ' S-123: there is no return-address stack in the generated dispatcher; the label used
-        ' to be treated as a variable (`undefined local variable`). Fail closed with a clear text.
-        errText = "WASM backend does not support GOSUB/RETURN (no return-address stack in the WAT dispatcher): " & ins.opcode
-        Return ""
+        If ins.operandCount <> 2 Then errText = "WASM GOSUB requires a resolved label and continuation": Return ""
+        outText &= "      (if (i32.ge_u (global.get $__gosub_sp) (global.get $__gosub_limit)) (then unreachable))" & Chr(10)
+        outText &= "      (i32.store (global.get $__gosub_sp) (i32.const " & ins.operands(1) & "))" & Chr(10)
+        outText &= "      (global.set $__gosub_sp (i32.add (global.get $__gosub_sp) (i32.const 4)))" & Chr(10)
+        outText &= "      (local.set $__pc (i32.const " & ins.operands(0) & "))" & Chr(10)
+        outText &= "      br $dispatch" & Chr(10)
+        Return outText
 
     Case Else
         If op = "FADD" Or op = "FSUB" Or op = "FMUL" Or op = "FDIV" Or op = "POW" Or op = "ROL" Or op = "ROR" Or op = "OPEN" Or op = "CLOSE" Or op = "GET" Or op = "PUT" Or op = "SEEK" Or op = "EOF" Or op = "LOF" Or op = "MEMCOPY" Or op = "MEMFILL" Or op = "PEEK" Or op = "POKE" Or op = "ARRAY_NEW" Or op = "ARRAY_LOAD" Or op = "ARRAY_STORE" Or op = "OBJECT_NEW" Or op = "FIELD_LOAD" Or op = "FIELD_STORE" Then
-            Return UXBWasmEmitHostCall4(op, ins, 0, ins.result)
+            Return UXBWasmEmitHostCall4(op, ins, 0, ins.result, errText)
         End If
-        Return UXBWasmEmitHostCall4(op, ins, 0, ins.result)
+        Return UXBWasmEmitHostCall4(op, ins, 0, ins.result, errText)
     End Select
 End Function
 
@@ -562,7 +801,7 @@ Private Sub UXBWasmCollectInstructionNames(ByRef ins As MIRIRInstruction, ByRef 
         safeName = UXBWasmSafeName(ins.result)
         If UXBWasmNameIsModuleGlobal(safeName) = 0 And UXBWasmNameSetHas(knownNames, safeName) = 0 Then
             UXBWasmNameSetAdd knownNames, safeName
-            localDecls &= "    (local $" & safeName & " i32)" & Chr(10)
+            localDecls &= "    (local $" & safeName & " " & UXBWasmCarrier(UXBWasmValueType(safeName)) & ")" & Chr(10)
         End If
     End If
     Select Case UXBWasmCanonicalOpcode(ins.opcode)
@@ -571,21 +810,23 @@ Private Sub UXBWasmCollectInstructionNames(ByRef ins As MIRIRInstruction, ByRef 
             safeName = UXBWasmSafeName(ins.operands(0))
             If UXBWasmNameIsModuleGlobal(safeName) = 0 And UXBWasmNameSetHas(knownNames, safeName) = 0 Then
                 UXBWasmNameSetAdd knownNames, safeName
-                localDecls &= "    (local $" & safeName & " i32)" & Chr(10)
+                localDecls &= "    (local $" & safeName & " " & UXBWasmCarrier(UXBWasmValueType(safeName)) & ")" & Chr(10)
             End If
         End If
-    Case "STORE_VAR"
+    Case "STORE_VAR", "UNION_FIELD_LOAD", "UNION_FIELD_STORE"
         If ins.operandCount >= 1 Then
             safeName = UXBWasmSafeName(ins.operands(0))
             If UXBWasmNameIsModuleGlobal(safeName) = 0 And UXBWasmNameSetHas(knownNames, safeName) = 0 Then
                 UXBWasmNameSetAdd knownNames, safeName
-                localDecls &= "    (local $" & safeName & " i32)" & Chr(10)
+                localDecls &= "    (local $" & safeName & " " & UXBWasmCarrier(UXBWasmValueType(safeName)) & ")" & Chr(10)
             End If
         End If
     End Select
 End Sub
 
-Private Function UXBWasmEmitFunction(ByRef module As MIRModule, ByRef fn As MIRFunction, ByRef errText As String) As String
+Private Function UXBWasmEmitFunction(ByRef module As MIRModule, ByRef originalFn As MIRFunction, ByRef errText As String) As String
+    Dim fn As MIRFunction
+    If UXBWebPrepareControlFlow(originalFn, fn, errText) = 0 Then Return ""
     Dim outText As String
     Dim b As Integer
     Dim j As Integer
@@ -598,6 +839,7 @@ Private Function UXBWasmEmitFunction(ByRef module As MIRModule, ByRef fn As MIRF
     Dim safeName As String
     Dim nextBlockId As Integer
 
+    UXBWasmPrepareValueTypes module, fn
     fnName = UXBWasmSafeName(fn.name)
     knownNames = ""
     localDecls = ""
@@ -623,18 +865,19 @@ Private Function UXBWasmEmitFunction(ByRef module As MIRModule, ByRef fn As MIRF
         End If
         safeName = UXBWasmSafeName(fn.paramVars(p))
         UXBWasmNameSetAdd knownNames, safeName
-        outText &= " (param $" & safeName & " i32)"
+        outText &= " (param $" & safeName & " " & UXBWasmCarrier(fn.paramVarTypes(p)) & ")"
     Next p
 
-    outText &= " (result i32)" & Chr(10)
+    outText &= " (result " & UXBWasmCarrier(fn.returnType) & ")" & Chr(10)
     outText &= "    (local $__pc i32)" & Chr(10)
-    outText &= "    (local $__result i32)" & Chr(10)
+    outText &= "    (local $__result " & UXBWasmCarrier(fn.returnType) & ")" & Chr(10)
+    If gUxbWasmHasGosub <> 0 Then outText &= "    (local $__gosub_base i32)" & Chr(10)
 
     For p = 0 To fn.localVarCount - 1
         safeName = UXBWasmSafeName(fn.localVars(p))
         If UXBWasmNameSetHas(knownNames, safeName) = 0 Then
             UXBWasmNameSetAdd knownNames, safeName
-            localDecls &= "    (local $" & safeName & " i32)" & Chr(10)
+            localDecls &= "    (local $" & safeName & " " & UXBWasmCarrier(UXBWasmValueType(safeName)) & ")" & Chr(10)
         End If
     Next p
 
@@ -646,6 +889,13 @@ Private Function UXBWasmEmitFunction(ByRef module As MIRModule, ByRef fn As MIRF
     Next b
 
     outText &= localDecls
+    ' S-001: normalize a BYVAL parameter at entry, also for exported/virtual calls.
+    For p = 0 To fn.paramVarCount - 1
+        If UXBWasmCarrier(fn.paramVarTypes(p)) = "i32" Then
+            outText &= UXBWasmEmitVarGet(fn.paramVars(p)) & UXBWasmNarrowI32(fn.paramVarTypes(p)) & UXBWasmEmitVarSet(fn.paramVars(p))
+        End If
+    Next p
+    If gUxbWasmHasGosub <> 0 Then outText &= "    (local.set $__gosub_base (global.get $__gosub_sp))" & Chr(10)
 
     If fn.blockCount > 0 Then
         outText &= "    i32.const " & Str(fn.entryBlock) & Chr(10)
@@ -653,6 +903,10 @@ Private Function UXBWasmEmitFunction(ByRef module As MIRModule, ByRef fn As MIRF
         outText &= "    i32.const 0" & Chr(10)
     End If
     outText &= "    local.set $__pc" & Chr(10)
+    If gUxbWasmExceptionState <> 0 And UCase(fn.name) = "MAIN" Then
+        outText &= "    i32.const 0" & Chr(10) & UXBWasmEmitVarSet("__mir_exc_active")
+        outText &= "    i32.const 0" & Chr(10) & UXBWasmEmitVarSet("__mir_exc_value")
+    End If
     outText &= "    block $exit" & Chr(10)
     outText &= "      loop $dispatch" & Chr(10)
 
@@ -686,23 +940,20 @@ Private Function UXBWasmEmitFunction(ByRef module As MIRModule, ByRef fn As MIRF
     outText &= "      end" & Chr(10)
     outText &= "    end" & Chr(10)
     outText &= "    local.get $__result" & Chr(10)
+    If gUxbWasmHasGosub <> 0 Then outText &= "    (global.set $__gosub_sp (local.get $__gosub_base))" & Chr(10)
     outText &= "  )" & Chr(10)
     Return outText
 End Function
 
-' S-150: every value this WAT emitter produces is an i32 (variables, globals, parameters, results, the
-' `i32.const` of every literal). A floating value (F32/F64, or a literal such as 0.1 / 1.0E20) therefore
-' cannot be represented: a literal used to be emitted as a variable read (`local.get $0_1`, invalid WAT)
-' and an F64 variable holding an integer value would divide as an integer -- silently wrong. Fail closed
-' with a clear message until typed f32/f64 locals, globals and arithmetic exist.
-Private Function UXBWasmTypeIsFloat(ByVal typeText As String) As Integer
+' S-150: native WAT f32/f64 values are supported; extended precision needs a separate representation.
+Private Function UXBWasmTypeIsExtendedFloat(ByVal typeText As String) As Integer
     Dim t As String
     t = UCase(Trim(typeText))
     If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
-    Return IIf(t = "F32" Or t = "F64" Or t = "F80" Or t = "SINGLE" Or t = "DOUBLE" Or t = "EXTENDED", 1, 0)
+    Return IIf(t = "F80" Or t = "F128" Or t = "EXTENDED", 1, 0)
 End Function
 
-Private Function UXBWasmFloatRefusal(ByRef module As MIRModule) As String
+Private Function UXBWasmExtendedFloatRefusal(ByRef module As MIRModule) As String
     Dim gi As Integer
     Dim fi As Integer
     Dim k As Integer
@@ -715,21 +966,21 @@ Private Function UXBWasmFloatRefusal(ByRef module As MIRModule) As String
 
     For gi = 0 To module.globalVarCount - 1
         If gi <= UBound(module.globalVarTypes) Then
-            If UXBWasmTypeIsFloat(module.globalVarTypes(gi)) <> 0 Then why = "variable " & module.globalVars(gi) & " is " & Trim(module.globalVarTypes(gi)): Return why
+            If UXBWasmTypeIsExtendedFloat(module.globalVarTypes(gi)) <> 0 Then why = "variable " & module.globalVars(gi) & " is " & Trim(module.globalVarTypes(gi)): Return why
         End If
     Next gi
     For fi = 0 To module.functionCount - 1
         For k = 0 To module.functions(fi).paramVarCount - 1
             If k <= UBound(module.functions(fi).paramVarTypes) Then
-                If UXBWasmTypeIsFloat(module.functions(fi).paramVarTypes(k)) <> 0 Then why = "parameter " & module.functions(fi).paramVars(k) & " of " & module.functions(fi).name & " is " & Trim(module.functions(fi).paramVarTypes(k)): Return why
+                If UXBWasmTypeIsExtendedFloat(module.functions(fi).paramVarTypes(k)) <> 0 Then why = "parameter " & module.functions(fi).paramVars(k) & " of " & module.functions(fi).name & " is " & Trim(module.functions(fi).paramVarTypes(k)): Return why
             End If
         Next k
         For k = 0 To module.functions(fi).localVarCount - 1
             If k <= UBound(module.functions(fi).localVarTypes) Then
-                If UXBWasmTypeIsFloat(module.functions(fi).localVarTypes(k)) <> 0 Then why = "variable " & module.functions(fi).localVars(k) & " of " & module.functions(fi).name & " is " & Trim(module.functions(fi).localVarTypes(k)): Return why
+                If UXBWasmTypeIsExtendedFloat(module.functions(fi).localVarTypes(k)) <> 0 Then why = "variable " & module.functions(fi).localVars(k) & " of " & module.functions(fi).name & " is " & Trim(module.functions(fi).localVarTypes(k)): Return why
             End If
         Next k
-        If UXBWasmTypeIsFloat(module.functions(fi).returnType) <> 0 Then why = "function " & module.functions(fi).name & " returns " & Trim(module.functions(fi).returnType): Return why
+        If UXBWasmTypeIsExtendedFloat(module.functions(fi).returnType) <> 0 Then why = "function " & module.functions(fi).name & " returns " & Trim(module.functions(fi).returnType): Return why
         For bi = 0 To module.functions(fi).blockCount - 1
             For ii = 0 To module.functions(fi).blocks(bi).instructionCount - 1
                 For oi = 0 To module.functions(fi).blocks(bi).instructions(ii).operandCount - 1
@@ -737,7 +988,7 @@ Private Function UXBWasmFloatRefusal(ByRef module As MIRModule) As String
                     If operandText <> "" Then
                         firstChar = Left(operandText, 1)
                         If (firstChar >= "0" And firstChar <= "9") Or firstChar = "." Then
-                            If UXBNumberLiteralIsFloat(operandText) <> 0 Then why = "the literal " & operandText & " is a floating-point number": Return why
+                            ' Decimal literals are supported by typed F32/F64 emission.
                         End If
                     End If
                 Next oi
@@ -755,49 +1006,96 @@ Public Function UXBWasmEmitWatFromMIR(ByRef module As MIRModule, ByRef watPath A
 
     errText = ""
 
-    Dim floatRefusal As String
-    floatRefusal = UXBWasmFloatRefusal(module)
-    If floatRefusal <> "" Then
-        errText = "WASM backend does not support floating-point values (F32/F64): " & floatRefusal & "; every WAT value is an i32 today, so float arithmetic and printing would be silently wrong. Use the AST/MIR interpreter, native x64 or JS target (S-150)"
+    gWasmStringData = ""
+    gWasmStringCursor = 1310720 ' first byte after VIRTUAL/scratch/UNION lanes
+    gWasmValueModule = @module
+    gWasmValueFunction = 0
+    gWasmValueTypes = ""
+    ' Extended precision still needs its own representation; never narrow silently.
+    Dim unsupported As String = UXBWasmExtendedFloatRefusal(module)
+    If unsupported <> "" Then errText = "WASM extended floating-point type is not implemented: " & unsupported: Return 0
+
+    UXBWasmCollectUnionRoots module
+    If gUxbWasmUnionRootCount > UXB_WASM_UNION_CELL_LIMIT Then
+        errText = "WASM UNION storage requires more than " & Trim(Str(UXB_WASM_UNION_CELL_LIMIT)) & " roots; increase the reserved linear-memory lane"
         Return 0
     End If
-
-    ' Do not encode strings as the old fake null host handle. Until linear-memory
-    ' string lowering is available, reject such MIR before writing a WAT artifact.
-    Dim stringFn As Integer
-    For stringFn = 0 To module.functionCount - 1
-        Dim stringBlock As Integer
-        For stringBlock = 0 To module.functions(stringFn).blockCount - 1
-            Dim stringIns As Integer
-            For stringIns = 0 To module.functions(stringFn).blocks(stringBlock).instructionCount - 1
-                Dim stringOp As Integer
-                For stringOp = 0 To module.functions(stringFn).blocks(stringBlock).instructions(stringIns).operandCount - 1
-                    Dim operandText As String
-                    operandText = Trim(module.functions(stringFn).blocks(stringBlock).instructions(stringIns).operands(stringOp))
-                    If Len(operandText) >= 2 And Left(operandText, 1) = Chr(34) And Right(operandText, 1) = Chr(34) Then
-                        errText = "WAT string linear-memory lowering is not implemented; refusing fake null handle for " & operandText
-                        Return 0
-                    End If
-                Next stringOp
-            Next stringIns
-        Next stringBlock
-    Next stringFn
 
     outText = "(module" & Chr(10)
     outText &= UXBWasmEmitHostImports()
     outText &= UXBWatDefaultMemory()
+    outText &= UXBWasmStringRuntimeWat()
+    gUxbWasmHasGosub = 0
+    Dim gsFn As Integer, gsBlock As Integer, gsIns As Integer
+    For gsFn = 0 To module.functionCount - 1
+        For gsBlock = 0 To module.functions(gsFn).blockCount - 1
+            For gsIns = 0 To module.functions(gsFn).blocks(gsBlock).instructionCount - 1
+                If UCase(Trim(module.functions(gsFn).blocks(gsBlock).instructions(gsIns).opcode)) = "GOSUB" Then gUxbWasmHasGosub = 1
+            Next gsIns
+        Next gsBlock
+    Next gsFn
+    If gUxbWasmHasGosub <> 0 Then
+        ' One reusable page beyond VIRTUAL and sequence scratch memory.
+        ' Each activation saves its base; RETURN cannot pop its caller's GOSUB.
+        outText &= "  (global $__gosub_sp (mut i32) (i32.const 0))" & Chr(10)
+        outText &= "  (global $__gosub_limit (mut i32) (i32.const 0))" & Chr(10)
+        outText &= "  (func $__gosub_init (local $page i32)" & Chr(10)
+        outText &= "    (local.set $page (memory.grow (i32.const 1)))" & Chr(10)
+        outText &= "    (if (i32.eq (local.get $page) (i32.const -1)) (then unreachable))" & Chr(10)
+        outText &= "    (global.set $__gosub_sp (i32.shl (local.get $page) (i32.const 16)))" & Chr(10)
+        outText &= "    (global.set $__gosub_limit (i32.add (global.get $__gosub_sp) (i32.const 65536))))" & Chr(10)
+        outText &= "  (start $__gosub_init)" & Chr(10)
+    End If
 
     ' module-level variables (S-120): one mutable WASM global each (array variables hold the host handle)
     gUxbWasmGlobalNames = "|"
     gUxbWasmLocalNames = "|"
+    gUxbWasmExceptionState = 0
+    For fnIndex As Integer = 0 To module.functionCount - 1
+        For blockIndex As Integer = 0 To module.functions(fnIndex).blockCount - 1
+            For instrIndex As Integer = 0 To module.functions(fnIndex).blocks(blockIndex).instructionCount - 1
+                With module.functions(fnIndex).blocks(blockIndex).instructions(instrIndex)
+                    If UCase(.result) = "__MIR_EXC_ACTIVE" Or UCase(.result) = "__MIR_EXC_VALUE" Then gUxbWasmExceptionState = 1
+                    For operandIndex As Integer = 0 To .operandCount - 1
+                        If UCase(.operands(operandIndex)) = "__MIR_EXC_ACTIVE" Or UCase(.operands(operandIndex)) = "__MIR_EXC_VALUE" Then gUxbWasmExceptionState = 1
+                    Next operandIndex
+                End With
+            Next instrIndex
+        Next blockIndex
+    Next fnIndex
     For i = 0 To module.globalVarCount - 1
         Dim globalSafe As String
         globalSafe = UXBWasmSafeName(module.globalVars(i))
         If InStr(gUxbWasmGlobalNames, "|" & globalSafe & "|") = 0 Then
             gUxbWasmGlobalNames &= globalSafe & "|"
-            outText &= "  (global $__G_" & globalSafe & " (mut i32) (i32.const 0))" & Chr(10)
+            Dim carrier As String = UXBWasmCarrier(module.globalVarTypes(i))
+            If module.globalVarIsArray(i) <> 0 Then carrier = "i32"
+            outText &= "  (global $__G_" & globalSafe & " (mut " & carrier & ") (" & carrier & ".const 0))" & Chr(10)
         End If
     Next i
+
+    ' UNION fields use real linear-memory overlays rather than the scalar
+    If gUxbWasmExceptionState <> 0 Then
+        Dim exceptionNames(0 To 1) As String = {"__MIR_EXC_ACTIVE", "__MIR_EXC_VALUE"}
+        For exceptionIndex As Integer = 0 To 1
+            Dim exceptionName As String = exceptionNames(exceptionIndex)
+            If InStr(gUxbWasmGlobalNames, "|" & exceptionName & "|") = 0 Then
+                gUxbWasmGlobalNames &= exceptionName & "|"
+                outText &= "  (global $__G_" & exceptionName & " (mut i32) (i32.const 0))" & Chr(10)
+            End If
+        Next exceptionIndex
+    End If
+
+    ' variable cell. Each root gets an immutable pointer into the reserved
+    ' storage lane, so byte/word writes preserve neighboring bytes naturally.
+    Dim unionRootIndex As Integer
+    Dim unionRootStart As Integer
+    Dim unionRootSafe As String
+    For unionRootIndex = 0 To gUxbWasmUnionRootCount - 1
+        unionRootSafe = UXBWasmUnionRootAt(unionRootIndex)
+        unionRootStart = CInt(UXB_WASM_UNION_BASE + (CLngInt(unionRootIndex) * UXB_WASM_UNION_CELL_BYTES))
+        outText &= "  (global $__U_" & unionRootSafe & " i32 (i32.const " & Trim(Str(unionRootStart)) & "))" & Chr(10)
+    Next unionRootIndex
 
     For i = 0 To module.functionCount - 1
         fnText = UXBWasmEmitFunction(module, module.functions(i), errText)
@@ -806,7 +1104,11 @@ Public Function UXBWasmEmitWatFromMIR(ByRef module As MIRModule, ByRef watPath A
         outText &= "  (export " & Chr(34) & UXBWasmSafeName(module.functions(i).name) & Chr(34) & " (func $" & UXBWasmSafeName(module.functions(i).name) & "))" & Chr(10)
     Next i
 
-    outText &= ")" & Chr(10)
+    outText &= gWasmStringData & ")" & Chr(10)
+    ' Literal pages precede memory.grow (GOSUB); never overlap VIRTUAL or UNION.
+    Dim memoryPages As Integer = (gWasmStringCursor + 65535) \ 65536
+    Dim memoryAt As Integer = InStr(outText, "(memory $memory 20)")
+    If memoryAt > 0 Then outText = Left(outText, memoryAt - 1) & "(memory $memory " & LTrim(Str(memoryPages)) & ")" & Mid(outText, memoryAt + Len("(memory $memory 20)"))
 
     UXBWasmEnsureDir UXBWasmDirOf(watPath)
     ff = FreeFile
@@ -817,6 +1119,9 @@ Public Function UXBWasmEmitWatFromMIR(ByRef module As MIRModule, ByRef watPath A
     End If
     Print #ff, outText;
     Close #ff
+
+    ' %%WAT_IMPORT / %%HOST_IMPORT imports, %%WAT_FUNC_BEGIN functions, %%WAT_EXPORT exports and %%EMITNOTE comments
+    If UXBPkgDecorateWatFile(gLastPreprocessResult, watPath, errText) = 0 Then Return 0
 
     If Trim(manifestPath) <> "" Then
         If UXBWasmWriteManifest(module, watPath, manifestPath, errText) = 0 Then Return 0

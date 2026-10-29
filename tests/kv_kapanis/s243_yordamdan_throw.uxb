@@ -1,0 +1,16 @@
+' S-243: bir yordamdan (ve onu cagiran yordamdan) atilan THROW, en dis cagirandaki TRY ile yakalanir (JS'te yakalanmiyordu).
+SUB Patla()
+    PRINT "patla"
+    THROW "boom"
+END SUB
+SUB Ara()
+    Patla()
+    PRINT "yanlis-ara"
+END SUB
+TRY
+    Ara()
+    PRINT "yanlis"
+CATCH
+    PRINT "yakalandi"
+END TRY
+PRINT "son"

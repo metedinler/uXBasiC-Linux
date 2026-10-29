@@ -1,0 +1,14 @@
+' S-544: every routine used before its definition is reported in one round (once each, at its first use), so a large program is repaired in one pass.
+Birinci()
+Ikinci(1)
+Birinci()
+PRINT Ucuncu(2)
+SUB Birinci()
+    PRINT 1
+END SUB
+SUB Ikinci(x AS I32)
+    PRINT x
+END SUB
+FUNCTION Ucuncu(x AS I32) AS I32
+    RETURN x
+END FUNCTION

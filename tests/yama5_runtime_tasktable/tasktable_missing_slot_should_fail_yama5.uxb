@@ -1,0 +1,5 @@
+EVENT Kayitsiz
+    PRINT "CALISMAMALI"
+END EVENT
+
+TRIGGER Kayitsiz

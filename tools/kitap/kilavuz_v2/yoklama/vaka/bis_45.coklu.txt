@@ -1,0 +1,47 @@
+W1 RESTRICTED alana disaridan yazma (zorlaniyorsa hata)
+CLASS Kutu
+RESTRICTED
+    DIM x AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.x = 5
+PRINT k.x
+=====
+W2 RESTRICTED metot disaridan cagri
+CLASS Kutu
+RESTRICTED
+    METHOD Gizli() AS I32
+        RETURN 7
+    END METHOD
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+PRINT k.Gizli()
+=====
+W3 PRIVATE metot disaridan cagri (karsilastirma)
+CLASS Kutu
+PRIVATE
+    METHOD Gizli() AS I32
+        RETURN 7
+    END METHOD
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+PRINT k.Gizli()
+=====
+W4 FRIEND modul adiyla
+MODULE Dost
+END MODULE
+CLASS Kutu
+FRIEND Dost
+    DIM x AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+PRINT "tamam"
+=====
+W5 PROTECTED alana disaridan yazma (karsilastirma)
+CLASS Kutu
+PROTECTED
+    DIM x AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.x = 5
+PRINT k.x

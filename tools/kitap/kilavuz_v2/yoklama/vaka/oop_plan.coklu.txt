@@ -1,0 +1,203 @@
+THIS ME SUPER ayirt edici ornek (plan: THIS dogrudan, ME sanal => 1020; THIS=ME ise 2020)
+CLASS Base
+    PUBLIC
+    VIRTUAL METHOD Value() AS I32
+        RETURN 10
+    END METHOD
+    METHOD Inspect() AS I32
+        RETURN THIS.Value() * 100 + ME.Value()
+    END METHOD
+END CLASS
+CLASS Child EXTENDS Base
+    PUBLIC
+    OVERRIDE METHOD Value() AS I32
+        RETURN SUPER.Value() + 10
+    END METHOD
+END CLASS
+DIM c AS Child = NEW Child()
+PRINT c.Inspect()
+PRINT c.Value()
+=====
+Niteliksiz cagri ve THIS ile sanal cagri
+CLASS Base
+    PUBLIC
+    VIRTUAL METHOD Value() AS I32
+        RETURN 10
+    END METHOD
+    METHOD A() AS I32
+        RETURN Value()
+    END METHOD
+    METHOD B() AS I32
+        RETURN THIS.Value()
+    END METHOD
+    METHOD C() AS I32
+        RETURN ME.Value()
+    END METHOD
+END CLASS
+CLASS Child EXTENDS Base
+    PUBLIC
+    OVERRIDE METHOD Value() AS I32
+        RETURN 20
+    END METHOD
+END CLASS
+DIM c AS Child = NEW Child()
+PRINT c.A()
+PRINT c.B()
+PRINT c.C()
+=====
+ME ile turetilmis siniftaki uyeye erisim (plan: yasak)
+CLASS Base
+    PUBLIC
+    METHOD Oku() AS I32
+        RETURN ME.sadeceCocukta
+    END METHOD
+END CLASS
+CLASS Child EXTENDS Base
+    PUBLIC
+    DIM sadeceCocukta AS I32
+END CLASS
+DIM c AS Child = NEW Child()
+PRINT c.Oku()
+=====
+SUPER tek basina deger (plan: yasak)
+CLASS Base
+    PUBLIC
+    METHOD F() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+CLASS Child EXTENDS Base
+    PUBLIC
+    METHOD G() AS I32
+        DIM x AS I32
+        x = SUPER
+        RETURN x
+    END METHOD
+END CLASS
+DIM c AS Child = NEW Child()
+PRINT c.G()
+=====
+THIS yeniden atama (plan: yasak)
+CLASS K
+    PUBLIC
+    METHOD F() AS I32
+        THIS = NEW K()
+        RETURN 1
+    END METHOD
+END CLASS
+DIM kk AS K = NEW K()
+PRINT kk.F()
+=====
+STATIC uyede THIS (plan: yasak)
+CLASS K
+    PUBLIC
+    DIM v AS I32
+    STATIC METHOD F() AS I32
+        RETURN THIS.v
+    END METHOD
+END CLASS
+PRINT K.F()
+=====
+gerceklenmemis SUPER ile abstract govdesiz uye
+CLASS Soyut
+    PUBLIC
+    ABSTRACT METHOD F() AS I32
+END CLASS
+CLASS Somut EXTENDS Soyut
+    PUBLIC
+    OVERRIDE METHOD F() AS I32
+        RETURN 5
+    END METHOD
+END CLASS
+DIM s AS Somut = NEW Somut()
+PRINT s.F()
+=====
+kurucu icinde ME ile sanal cagri (plan: yasak)
+CLASS Base
+    PUBLIC
+    DIM v AS I32
+    VIRTUAL METHOD Deger() AS I32
+        RETURN 1
+    END METHOD
+    CONSTRUCTOR()
+        v = ME.Deger()
+    END CONSTRUCTOR
+END CLASS
+CLASS Child EXTENDS Base
+    PUBLIC
+    OVERRIDE METHOD Deger() AS I32
+        RETURN 2
+    END METHOD
+END CLASS
+DIM c AS Child = NEW Child()
+PRINT c.v
+=====
+FINAL sinif turetme (plan: yasak)
+FINAL CLASS Kapali
+    PUBLIC
+    DIM v AS I32
+END CLASS
+CLASS Acik EXTENDS Kapali
+    PUBLIC
+    DIM w AS I32
+END CLASS
+DIM a AS Acik = NEW Acik()
+PRINT a.w
+=====
+override imza uyusmazligi (plan: yasak)
+CLASS Base
+    PUBLIC
+    VIRTUAL METHOD F(x AS I32) AS I32
+        RETURN x
+    END METHOD
+END CLASS
+CLASS Child EXTENDS Base
+    PUBLIC
+    OVERRIDE METHOD F(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END METHOD
+END CLASS
+DIM c AS Child = NEW Child()
+PRINT c.F(1, 2)
+=====
+abstract sinif dogrudan olusturma (plan: yasak)
+ABSTRACT CLASS Soyut
+    PUBLIC
+    VIRTUAL METHOD F() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+DIM s AS Soyut = NEW Soyut()
+PRINT s.F()
+=====
+INTERFACE eksik metot (plan: derleme hatasi)
+INTERFACE IA
+    METHOD F() AS I32
+END INTERFACE
+CLASS K IMPLEMENTS IA
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM kk AS K = NEW K()
+PRINT 1
+=====
+TYPE atamasi deger kopyasi CLASS atamasi referans
+TYPE T
+    a AS I32
+END TYPE
+CLASS C
+    PUBLIC
+    DIM a AS I32
+END CLASS
+DIM t1 AS T
+DIM t2 AS T
+t1.a = 1
+t2 = t1
+t2.a = 2
+PRINT t1.a
+DIM c1 AS C = NEW C()
+DIM c2 AS C
+c1.a = 1
+c2 = c1
+c2.a = 2
+PRINT c1.a

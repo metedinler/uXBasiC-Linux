@@ -1,0 +1,94 @@
+G1 LIST argumani SPAWN sinirinda (adim 5)
+THREAD W(l AS LIST) AS I32
+    RETURN LISTLEN(l)
+END THREAD
+DIM l AS LIST
+LISTADD(l, 1)
+DIM t AS TASK OF I32 = SPAWN W(l)
+PRINT t.JOIN()
+=====
+G2 CLASS nesnesi SPAWN argumani (adim 5)
+CLASS K
+PUBLIC
+    DIM x AS I32
+END CLASS
+THREAD W(k AS K) AS I32
+    RETURN k.x
+END THREAD
+DIM a AS K = NEW K()
+a.x = 3
+DIM t AS TASK OF I32 = SPAWN W(a)
+PRINT t.JOIN()
+=====
+G3 CLONE(l) ve MOVE(l) (tasarim)
+DIM l AS LIST
+LISTADD(l, 1)
+DIM m AS LIST
+m = CLONE(l)
+PRINT LISTLEN(m)
+=====
+G4 yerel MUTEX LOCK (adim 4)
+SUB S()
+    DIM m AS MUTEX
+    LOCK m
+        PRINT "ic"
+    END LOCK
+END SUB
+S()
+=====
+G5 BYREF parametre SPAWN (adim 4)
+THREAD W(BYREF x AS I32)
+    x = 5
+END THREAD
+DIM a AS I32 = 1
+DIM t AS TASK = SPAWN W(a)
+t.WAIT()
+PRINT a
+=====
+G6 VARPTR(global) gorevde (adim 7)
+DIM g AS I32
+THREAD W()
+    DIM p AS PTR = VARPTR(g)
+    POKED p, 5
+END THREAD
+DIM t AS TASK = SPAWN W()
+t.WAIT()
+PRINT g
+=====
+G7 ATOMIC dogal yazim: += ve x = x + 1 (beklenen 2)
+DIM ATOMIC c AS I64 = 0
+c += 1
+c = c + 1
+PRINT c.LOAD()
+=====
+G8 ATOMIC dogal okuma ve yazma (beklenen 7 / 8)
+DIM ATOMIC c AS I64 = 0
+c = 7
+PRINT c
+DIM x AS I64
+x = c + 1
+PRINT x
+=====
+G9 DECLARE ... THREADSAFE bildirimi (tasarim)
+DECLARE FUNCTION Topla(a AS I32, b AS I32) AS I32 LIB "x.dll" ALIAS "topla" THREADSAFE
+PRINT "tamam"
+=====
+G10 UNSAFE blogu (var)
+DIM g AS I32
+UNSAFE
+    PRINT "tamam"
+END UNSAFE
+=====
+G11 LOCK CONSOLE (var)
+LOCK CONSOLE
+    PRINT "a"
+    PRINT "b"
+END LOCK
+=====
+G12 SHARED yerel deger (adim 4)
+SUB S()
+    DIM SHARED x AS I32
+    x = 1
+END SUB
+S()
+PRINT "tamam"

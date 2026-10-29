@@ -3,7 +3,12 @@
 
 Function UXBWatDefaultMemory() As String
     Dim s As String
-    s = "  (memory $memory 17)" & Chr(10)
+    ' Pages 0-15 are the VIRTUAL sandbox, page 16 is the read-sequence
+    ' scratch area, and pages 17-19 reserve compile-time UNION cells.
+    ' UNION roots are assigned 256-byte cells starting at 1114112 by the
+    ' emitter. Keeping this space outside VIRTUAL prevents overlay writes
+    ' from changing user-visible raw memory.
+    s = "  (memory $memory 20)" & Chr(10)
     s &= "  (export " & Chr(34) & "memory" & Chr(34) & " (memory $memory))" & Chr(10)
     ' S-070: the low 1 MiB of linear memory is the VIRTUAL sandbox (the 64K
     ' scratch page above it belongs to read_sequence). Its usable size starts

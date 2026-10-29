@@ -1,0 +1,261 @@
+#ifndef UXB_SEMANTIC_DELETE_LVALUE_FBS
+#define UXB_SEMANTIC_DELETE_LVALUE_FBS
+
+' S-615 (2026-10-17): DELETE of an object FIELD (`DELETE c.ic`, and the bare `DELETE ic` inside a member body, which the implicit-THIS rewrite has
+' already turned into `DELETE THIS.ic`). Until now DELETE accepted only a plain variable name; a parent object that owns a child object could not
+' release it except through a helper variable, and the field kept pointing at the destroyed child.
+'
+' One front-end rewrite serves all six engines, exactly like the MID assignment rewrite: the statement becomes a small block
+'     IF 1 THEN
+'         DIM _UXB_DEL_n AS <declared type of the field>
+'         _UXB_DEL_n = <the field>
+'         DELETE _UXB_DEL_n          ' destroys by the REAL class, derived to base, once (S-574)
+'         <the field> = NOTHING      ' the field is empty afterwards, like a deleted variable
+'     END IF
+' so no engine needs a new DELETE form. The field path has to be a variable (or THIS / ME) followed by fields: it is evaluated twice, so a call in
+' the path (whose side effects would repeat) is refused. Array elements are not accepted (arrays of class references are not reliable on every
+' engine yet, S-617); copy the element into a variable and DELETE the variable.
+
+Private Function SemDeleteEnclosingClass(ByRef ps As ParseState, ByVal nodeIdx As Integer) As String
+    Dim ownerNode As Integer
+    ownerNode = ps.ast.nodes(nodeIdx).parent
+    Dim ownerHop As Integer
+    ownerHop = 0
+    Do While ownerNode >= 0 And ownerHop < 256
+        ownerHop += 1
+        If UCase(ps.ast.nodes(ownerNode).kind) = "CLASS_STMT" Then Return UCase(Trim(ps.ast.nodes(ownerNode).value))
+        ownerNode = ps.ast.nodes(ownerNode).parent
+    Loop
+    Return ""
+End Function
+
+' Declared type (upper case) of a variable, of THIS / ME, or of a chain of object fields; "" when it cannot be told.
+Private Function SemDeleteExprType(ByRef ps As ParseState, ByVal exprNode As Integer) As String
+    If exprNode < 0 Then Return ""
+    Dim exprKind As String
+    exprKind = UCase(ps.ast.nodes(exprNode).kind)
+    If exprKind = "IDENT" Or exprKind = "IDENTIFIER" Or exprKind = "KEYWORD_REF" Then
+        Dim exprName As String
+        exprName = UCase(Trim(ps.ast.nodes(exprNode).value))
+        If exprName = "THIS" Or exprName = "ME" Then Return SemDeleteEnclosingClass(ps, exprNode)
+        Return SemMidReceiverType(ps, exprNode)
+    End If
+    If exprKind = "FIELD_EXPR" Then
+        Dim receiverType As String
+        receiverType = SemDeleteExprType(ps, ps.ast.nodes(exprNode).left)
+        Dim fieldClass As Integer
+        fieldClass = SemFindClassNode(ps, receiverType)
+        Dim fieldWanted As String
+        fieldWanted = UCase(Trim(ps.ast.nodes(exprNode).value))
+        Dim classHop As Integer
+        classHop = 0
+        Do While fieldClass >= 0 And classHop < 64
+            classHop += 1
+            Dim memberNode As Integer
+            memberNode = ps.ast.nodes(fieldClass).firstChild
+            Do While memberNode <> -1
+                Dim memberKind As String
+                memberKind = UCase(ps.ast.nodes(memberNode).kind)
+                If (memberKind = "CLASS_FIELD" Or memberKind = "CLASS_PROPERTY_DECL") And UCase(Trim(ps.ast.nodes(memberNode).value)) = fieldWanted Then
+                    Dim typeChild As Integer
+                    typeChild = ps.ast.nodes(memberNode).firstChild
+                    Do While typeChild <> -1
+                        If UCase(ps.ast.nodes(typeChild).kind) = "TYPE_REF" Then Return UCase(Trim(ps.ast.nodes(typeChild).value))
+                        typeChild = ps.ast.nodes(typeChild).nextSibling
+                    Loop
+                End If
+                memberNode = ps.ast.nodes(memberNode).nextSibling
+            Loop
+            Dim fieldBase As String
+            If SemClassBaseName(ps, fieldClass, fieldBase) = 0 Then Exit Do
+            fieldClass = SemFindClassNode(ps, fieldBase)
+        Loop
+    End If
+    Return ""
+End Function
+
+' 1 when the expression is a variable (or THIS / ME) followed by fields only: no call, no index, so evaluating it twice is harmless.
+Private Function SemDeleteFieldPathIsPlain(ByRef ps As ParseState, ByVal exprNode As Integer) As Integer
+    If exprNode < 0 Then Return 0
+    Dim plainKind As String
+    plainKind = UCase(ps.ast.nodes(exprNode).kind)
+    If plainKind = "IDENT" Or plainKind = "IDENTIFIER" Or plainKind = "KEYWORD_REF" Then Return 1
+    If plainKind = "FIELD_EXPR" Then Return SemDeleteFieldPathIsPlain(ps, ps.ast.nodes(exprNode).left)
+    Return 0
+End Function
+
+Private Function SemClassArrayTargetType(ByRef ps As ParseState, ByVal exprNode As Integer) As String
+    If exprNode < 0 Then Return ""
+    If UCase(ps.ast.nodes(exprNode).kind) <> "CALL_EXPR" Then Return ""
+    If SemChildAt(ps, exprNode, 0) = -1 Then Return ""
+    Dim arrayOwner As Integer = SemStaticRoutineOwner(ps, exprNode)
+    Dim arrayName As String = UCase(Trim(ps.ast.nodes(exprNode).value))
+    For arrayPass As Integer = 0 To 1
+        For arrayDecl As Integer = ps.ast.count - 1 To 0 Step -1
+            If UCase(ps.ast.nodes(arrayDecl).kind) <> "DIM_DECL" Then Continue For
+            If UCase(Trim(ps.ast.nodes(arrayDecl).value)) <> arrayName Then Continue For
+            Dim declOwner As Integer = SemStaticRoutineOwner(ps, arrayDecl)
+            If (arrayPass = 0 And declOwner <> arrayOwner) Or (arrayPass = 1 And declOwner <> -1) Then Continue For
+            Dim hasBounds As Integer = 0
+            Dim declaredType As String = ""
+            Dim declChild As Integer = ps.ast.nodes(arrayDecl).firstChild
+            Do While declChild <> -1
+                If UCase(ps.ast.nodes(declChild).kind) = "DIM_BOUNDS" Then hasBounds = 1
+                If UCase(ps.ast.nodes(declChild).kind) = "TYPE_REF" Then declaredType = UCase(Trim(ps.ast.nodes(declChild).value))
+                declChild = ps.ast.nodes(declChild).nextSibling
+            Loop
+            If hasBounds <> 0 And SemHasClassName(ps, declaredType) <> 0 Then Return declaredType
+            Return "" ' a local declaration shadows globals even when it is not a class array
+        Next arrayDecl
+    Next arrayPass
+    Return ""
+End Function
+
+' Capture the RHS, then each target index, before a read-modify-write. This
+' preserves canonical MIR's RHS-first order and makes repeated backend address
+' resolution harmless without reevaluating source calls (S-617).
+Private Function SemNormalizeClassArrayCompoundTargets(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim sourceCount As Integer = ps.ast.count
+    For stmtIdx As Integer = 0 To sourceCount - 1
+        If UCase(ps.ast.nodes(stmtIdx).kind) <> "ASSIGN_STMT" Then Continue For
+        Dim assignOp As String = Trim(ps.ast.nodes(stmtIdx).op)
+        If assignOp = "" Or assignOp = "=" Then Continue For
+        Dim target As Integer = ps.ast.nodes(stmtIdx).left
+        If target < 0 Then Continue For
+        If UCase(ps.ast.nodes(target).kind) <> "FIELD_EXPR" Then Continue For
+        Dim arrayRoot As Integer = target
+        Do While arrayRoot >= 0
+            If UCase(ps.ast.nodes(arrayRoot).kind) <> "FIELD_EXPR" Then Exit Do
+            arrayRoot = ps.ast.nodes(arrayRoot).left
+        Loop
+        If SemClassArrayTargetType(ps, arrayRoot) = "" Then Continue For
+        Dim rhsType As String, rhsErr As String
+        If UXBStep3InferExprType(ps, ps.ast.nodes(stmtIdx).right, rhsType, rhsErr) = 0 Then
+            errText = "semantic: class array compound RHS type unresolved: " & rhsErr
+            Return 0
+        End If
+        Dim innerStmt As Integer = SemMidCloneExpr(ps, stmtIdx)
+        ps.ast.nodes(stmtIdx).kind = "IF_STMT"
+        ps.ast.nodes(stmtIdx).op = "CLASS_ARRAY_COMPOUND"
+        ps.ast.nodes(stmtIdx).left = -1
+        ps.ast.nodes(stmtIdx).right = -1
+        ps.ast.nodes(stmtIdx).firstChild = -1
+        ASTAddChild ps.ast, stmtIdx, SemStaticNode(ps, stmtIdx, "NUMBER", "1")
+        Dim capturedRhs As Integer = SemMidCapture(ps, stmtIdx, ps.ast.nodes(innerStmt).right, rhsType)
+        ASTSetRight ps.ast, innerStmt, capturedRhs
+        arrayRoot = ps.ast.nodes(innerStmt).left
+        Do While UCase(ps.ast.nodes(arrayRoot).kind) = "FIELD_EXPR"
+            arrayRoot = ps.ast.nodes(arrayRoot).left
+        Loop
+        If SemMidCaptureTarget(ps, stmtIdx, arrayRoot, errText) = 0 Then Return 0
+        ASTAddChild ps.ast, stmtIdx, innerStmt
+    Next stmtIdx
+    Return 1
+End Function
+
+Private Function SemNormalizeDeleteFieldTargets(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim sourceNodeCount As Integer
+    sourceNodeCount = ps.ast.count
+    Dim deleteIdx As Integer
+    For deleteIdx = 0 To sourceNodeCount - 1
+        If UCase(ps.ast.nodes(deleteIdx).kind) <> "DELETE_STMT" Then Continue For
+        Dim targetNode As Integer
+        targetNode = SemChildAt(ps, deleteIdx, 0)
+        If targetNode = -1 Then Continue For
+        Dim indexedTarget As Integer = 0
+        Dim fieldType As String = ""
+        If UCase(ps.ast.nodes(targetNode).kind) = "CALL_EXPR" Then
+            ' S-617: accept a declared CLASS array, respecting routine scope.
+            ' Ordinary calls remain invalid DELETE lvalues.
+            fieldType = SemClassArrayTargetType(ps, targetNode)
+            indexedTarget = IIf(fieldType <> "", 1, 0)
+            If indexedTarget = 0 Then Continue For
+        ElseIf UCase(ps.ast.nodes(targetNode).kind) <> "FIELD_EXPR" Then
+            Continue For
+        End If
+
+        If indexedTarget = 0 And SemDeleteFieldPathIsPlain(ps, targetNode) = 0 Then
+            errText = "semantic: DELETE target field must be reached through a variable or THIS (a call or an index in the path would be evaluated twice)"
+            Return 0
+        End If
+        If indexedTarget = 0 Then fieldType = SemDeleteExprType(ps, targetNode)
+        If fieldType = "" Then
+            errText = "semantic: DELETE target field " & UCase(Trim(ps.ast.nodes(targetNode).value)) & " has no declared type the compiler can find (declare the owner with a class type)"
+            Return 0
+        End If
+        If fieldType <> "OBJECT" And SemHasClassName(ps, fieldType) = 0 And SemFindInterfaceNode(ps, fieldType) = -1 Then
+            errText = "semantic: DELETE target must be class or OBJECT or INTERFACE: field " & UCase(Trim(ps.ast.nodes(targetNode).value)) & " is " & fieldType
+            Return 0
+        End If
+
+        ' the statement node becomes the block: IF 1 THEN <capture> <delete> <empty the field> END IF (same shape as the MID assignment rewrite)
+        ps.ast.nodes(targetNode).nextSibling = -1
+        ps.ast.nodes(deleteIdx).firstChild = -1
+        ps.ast.nodes(deleteIdx).kind = "IF_STMT"
+        ps.ast.nodes(deleteIdx).op = "DELETE_FIELD"
+        ps.ast.nodes(deleteIdx).left = -1
+        ps.ast.nodes(deleteIdx).right = -1
+        Dim alwaysNode As Integer
+        alwaysNode = SemStaticNode(ps, deleteIdx, "NUMBER", "1")
+        ASTAddChild ps.ast, deleteIdx, alwaysNode
+
+        Dim tempName As String
+        tempName = "_UXB_DEL_" & LTrim(Str(deleteIdx)) & "_" & LTrim(Str(ps.ast.count))
+        Dim tempDim As Integer
+        tempDim = SemStaticNode(ps, deleteIdx, "DIM_STMT")
+        Dim tempDecl As Integer
+        tempDecl = SemStaticNode(ps, deleteIdx, "DIM_DECL", tempName)
+        Dim tempType As Integer
+        tempType = SemStaticNode(ps, deleteIdx, "TYPE_REF", fieldType)
+        ASTAddChild ps.ast, tempDecl, tempType
+        ASTAddChild ps.ast, tempDim, tempDecl
+        ASTAddChild ps.ast, deleteIdx, tempDim
+
+        If indexedTarget <> 0 Then
+            ' Capture each index before capturing the reference. DELETE and
+            ' clearing the cell must use exactly the same index, evaluated once.
+            Dim indexNode As Integer = ps.ast.nodes(targetNode).firstChild
+            ps.ast.nodes(targetNode).firstChild = -1
+            Dim indexOrdinal As Integer = 0
+            Do While indexNode <> -1
+                Dim nextIndex As Integer = ps.ast.nodes(indexNode).nextSibling
+                Dim indexName As String = tempName & "_IDX_" & LTrim(Str(indexOrdinal))
+                Dim indexDim As Integer = SemStaticNode(ps, deleteIdx, "DIM_STMT")
+                Dim indexDecl As Integer = SemStaticNode(ps, deleteIdx, "DIM_DECL", indexName)
+                ASTAddChild ps.ast, indexDecl, SemStaticNode(ps, deleteIdx, "TYPE_REF", "I64")
+                ASTAddChild ps.ast, indexDim, indexDecl
+                ASTAddChild ps.ast, deleteIdx, indexDim
+                Dim indexCapture As Integer = SemStaticNode(ps, deleteIdx, "ASSIGN_STMT", "", "=")
+                ASTSetLeft ps.ast, indexCapture, SemStaticNode(ps, deleteIdx, "IDENT", indexName)
+                ASTSetRight ps.ast, indexCapture, SemMidCloneExpr(ps, indexNode)
+                ASTAddChild ps.ast, deleteIdx, indexCapture
+                ASTAddChild ps.ast, targetNode, SemStaticNode(ps, deleteIdx, "IDENT", indexName)
+                indexNode = nextIndex
+                indexOrdinal += 1
+            Loop
+        End If
+
+        Dim captureStmt As Integer
+        captureStmt = SemStaticNode(ps, deleteIdx, "ASSIGN_STMT", "", "=")
+        ASTSetLeft ps.ast, captureStmt, SemStaticNode(ps, deleteIdx, "IDENT", tempName)
+        ASTSetRight ps.ast, captureStmt, SemMidCloneExpr(ps, targetNode)
+        ASTAddChild ps.ast, deleteIdx, captureStmt
+
+        Dim innerDelete As Integer
+        innerDelete = SemStaticNode(ps, deleteIdx, "DELETE_STMT")
+        ASTAddChild ps.ast, innerDelete, SemStaticNode(ps, deleteIdx, "IDENT", tempName)
+        ASTAddChild ps.ast, deleteIdx, innerDelete
+
+        Dim emptyStmt As Integer
+        emptyStmt = SemStaticNode(ps, deleteIdx, "ASSIGN_STMT", "", "=")
+        ASTSetLeft ps.ast, emptyStmt, targetNode
+        Dim emptyValue As Integer
+        emptyValue = SemStaticNode(ps, deleteIdx, "NUMBER", "0")
+        ps.ast.nodes(emptyValue).typeName = TYPE_NULL
+        ASTSetRight ps.ast, emptyStmt, emptyValue
+        ASTAddChild ps.ast, deleteIdx, emptyStmt
+    Next deleteIdx
+    Return 1
+End Function
+
+#endif

@@ -1,0 +1,27 @@
+' S-584 (2026-10-16): a class variable may start from any class-typed expression, not only NEW: a factory function,
+' another variable (same object) and a MAGIC operator result. The type is checked at compile time.
+CLASS Vek
+    PUBLIC
+    DIM x AS I32
+    DIM y AS I32
+    CONSTRUCTOR(ax AS I32, ay AS I32)
+        x = ax
+        y = ay
+    END CONSTRUCTOR
+    MAGIC ADD(diger AS Vek) AS Vek
+        RETURN NEW Vek(THIS.x + diger.x, THIS.y + diger.y)
+    END MAGIC
+END CLASS
+FUNCTION Uret(n AS I32) AS Vek
+    RETURN NEW Vek(n, n + 1)
+END FUNCTION
+DIM a1 AS Vek = Uret(8)
+PRINT a1.x
+DIM a2 AS Vek = a1
+a2.x = 9
+PRINT a1.x
+DIM v1 AS Vek = NEW Vek(2, 3)
+DIM v2 AS Vek = NEW Vek(4, 1)
+DIM v3 AS Vek = v1 + v2
+PRINT v3.x
+PRINT v3.y

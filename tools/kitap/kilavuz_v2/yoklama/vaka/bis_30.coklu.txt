@@ -1,0 +1,60 @@
+H1 CLASS nesnesi SPAWN argumani (adim 5)
+CLASS Kutu
+PUBLIC
+    DIM x AS I32
+END CLASS
+THREAD W(o AS Kutu) AS I32
+    RETURN o.x
+END THREAD
+DIM a AS Kutu = NEW Kutu()
+a.x = 3
+DIM t AS TASK OF I32 = SPAWN W(a)
+PRINT t.JOIN()
+=====
+H2 CLONE ve MOVE yerlesik mi
+DIM l AS LIST
+LISTADD(l, 1)
+PRINT LISTLEN(CLONE(l))
+=====
+H3 MOVE
+DIM l AS LIST
+LISTADD(l, 1)
+PRINT LISTLEN(MOVE(l))
+=====
+H4 TASK OF LIST (adim 5)
+THREAD W() AS LIST
+    DIM l AS LIST
+    LISTADD(l, 1)
+    RETURN l
+END THREAD
+DIM t AS TASK OF LIST = SPAWN W()
+PRINT "tamam"
+=====
+H5 DECLARE ... LIB ... ALIAS ... THREADSAFE (adim 6)
+DECLARE FUNCTION Topla LIB "x.dll" ALIAS "topla" (a AS I32, b AS I32) AS I32 THREADSAFE
+PRINT "tamam"
+=====
+H6 sinif STATIC alani gorevde (adim 5)
+CLASS Sayac
+PUBLIC
+    STATIC DIM n AS I32
+END CLASS
+THREAD W()
+    Sayac.n = 1
+END THREAD
+DIM t AS TASK = SPAWN W()
+t.WAIT()
+PRINT "tamam"
+=====
+H7 paylasilan global CLASS nesnesi gorevde (adim 5)
+CLASS Kutu
+PUBLIC
+    DIM x AS I32
+END CLASS
+DIM g AS Kutu = NEW Kutu()
+THREAD W()
+    g.x = 5
+END THREAD
+DIM t AS TASK = SPAWN W()
+t.WAIT()
+PRINT g.x

@@ -1,0 +1,16 @@
+CLASS TYPE_Box
+    value AS I32
+    METHOD GetValue() AS I32
+        RETURN value
+    END METHOD
+END CLASS
+DIM instance AS TYPE_Box = NEW TYPE_Box()
+instance.value = 7
+PRINT instance.value
+PRINT instance.GetValue()
+ENUM TYPE_Palette
+    First
+    Second
+END ENUM
+DIM selectedValue AS TYPE_Palette = TYPE_Palette.Second
+PRINT selectedValue

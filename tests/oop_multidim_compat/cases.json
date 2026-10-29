@@ -1,0 +1,20 @@
+{
+  "redim_existing_ast": {
+    "error": "array index out of bounds",
+    "engines": [
+      "AST"
+    ]
+  },
+  "expression_bounds_ast": {
+    "output": "17",
+    "engines": [
+      "AST"
+    ]
+  },
+  "runtime_bounds_ast": {
+    "error": "multi-dimensional array bounds must be compile-time integer constants",
+    "engines": [
+      "AST"
+    ]
+  }
+}

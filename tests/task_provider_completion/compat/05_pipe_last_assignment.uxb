@@ -1,0 +1,7 @@
+PIPE LastWins(value AS I32) AS I32
+    TASKOUT = value + 1
+    LastWins = value + 2
+END PIPE
+
+TRIGGER PIPE LastWins, 40
+PRINT TASKOUT

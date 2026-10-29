@@ -1,0 +1,84 @@
+DIM iki tanim bir satir
+DIM a AS I32, b AS F64
+a = 3
+b = 2.5
+PRINT a; " "; b
+=====
+DIM ortak tip virgul
+DIM a, b AS I32
+a = 1
+PRINT a
+=====
+DIM dizi ilk deger listesi
+DIM d(3) AS I32 = {1, 2, 3, 4}
+PRINT d(2)
+=====
+iki boyutlu UBOUND
+DIM m(1 TO 3, 1 TO 4) AS I32
+PRINT LBOUND(m, 1); " "; UBOUND(m, 1); " "; LBOUND(m, 2); " "; UBOUND(m, 2)
+m(2, 3) = 9
+PRINT m(2, 3)
+=====
+negatif alt sinir
+DIM d(-3 TO 3) AS I32
+d(-3) = 5
+d(3) = 7
+PRINT d(-3) + d(3)
+PRINT LBOUND(d); " "; UBOUND(d)
+=====
+bildirimsiz atama
+a = 7
+PRINT a
+=====
+bildirimsiz atama FOR
+FOR i = 1 TO 3
+    PRINT i
+NEXT
+=====
+yerel sifirlanir
+SUB Say()
+    DIM n AS I32
+    n = n + 1
+    PRINT n
+END SUB
+Say()
+Say()
+=====
+genel yordamda gorunur
+DIM g AS I32 = 5
+SUB Goster()
+    PRINT g
+    g = g + 1
+END SUB
+Goster()
+Goster()
+PRINT g
+=====
+CONST ifade
+CONST A AS I32 = 3
+CONST B AS I32 = A * 4
+CONST S = "x"
+PRINT B
+PRINT S
+=====
+CONST degistirme
+CONST A AS I32 = 3
+A = 4
+PRINT A
+=====
+tanimsiz oku
+PRINT yok
+=====
+ayni ad iki kez DIM
+DIM a AS I32 = 1
+DIM a AS I32 = 2
+PRINT a
+=====
+REDIM PRESERVE
+DIM d(2) AS I32
+d(0) = 1
+d(1) = 2
+REDIM PRESERVE d(5) AS I32
+PRINT d(1); " "; d(5); " "; UBOUND(d)
+REDIM d(1) AS I32
+PRINT d(1); " "; UBOUND(d)

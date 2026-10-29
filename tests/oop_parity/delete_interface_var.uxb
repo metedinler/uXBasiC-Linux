@@ -1,0 +1,17 @@
+INTERFACE IKapat
+    METHOD Kapat() AS I32
+END INTERFACE
+CLASS Dos IMPLEMENTS IKapat
+    PUBLIC
+    METHOD Kapat() AS I32
+        RETURN 3
+    END METHOD
+    DESTRUCTOR()
+        PRINT 5
+    END DESTRUCTOR
+END CLASS
+' S-574: a variable declared with an INTERFACE can be DELETEd too; the destructor of the object's real class runs.
+DIM i AS IKapat = NEW Dos()
+PRINT i.Kapat()
+DELETE i
+IF i = NOTHING THEN PRINT 1

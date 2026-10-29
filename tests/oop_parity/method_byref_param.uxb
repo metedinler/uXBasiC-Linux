@@ -1,0 +1,21 @@
+' S-602 (2026-10-17): BYREF parameters of a METHOD. The JS back end passed the caller's variable by value (the callee wrote into a
+' copy, so the caller kept 5); an earlier build crashed with "Cannot read properties of undefined (reading 'value')".
+' WASM and legacy AST-x64 reject BYREF parameters with an explicit message (S-167-L and the WASM limit in the book), so this test lists
+' the four engines that run it.
+CLASS Kutu
+    PUBLIC
+    METHOD Artir(BYREF n AS I32)
+        n = n + 1
+    END METHOD
+    METHOD Iki(BYREF a AS I32, b AS I32)
+        a = a + b
+    END METHOD
+END CLASS
+DIM x AS Kutu = NEW Kutu()
+DIM k AS I32
+k = 5
+x.Artir(k)
+x.Artir(k)
+PRINT k
+x.Iki(k, 10)
+PRINT k

@@ -1,0 +1,14 @@
+INTERFACE IOlcek
+    METHOD Hesapla(k AS F64) AS F64
+END INTERFACE
+CLASS Olcek IMPLEMENTS IOlcek
+    PUBLIC
+    METHOD Hesapla(k AS F64) AS F64
+        RETURN k * 2.0
+    END METHOD
+END CLASS
+SUB Yaz(o AS IOlcek)
+    PRINT o.Hesapla(3.5)
+END SUB
+DIM n AS Olcek = NEW Olcek()
+Yaz(n)

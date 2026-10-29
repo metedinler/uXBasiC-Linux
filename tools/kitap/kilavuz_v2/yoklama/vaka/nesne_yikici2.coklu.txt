@@ -1,0 +1,44 @@
+yerel nesne yordam sonu
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT "yikici"
+    END DESTRUCTOR
+END CLASS
+SUB Dene()
+    DIM a AS Sayac = NEW Sayac()
+    PRINT "yordam icinde"
+END SUB
+Dene()
+PRINT "yordam sonrasi"
+=====
+iki global nesne program sonu
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT "yikici " & n
+    END DESTRUCTOR
+END CLASS
+DIM a AS Sayac = NEW Sayac()
+a.n = 1
+DIM b AS Sayac = NEW Sayac()
+b.n = 2
+PRINT "bitti"
+=====
+nesne yeniden atama (eski nesne)
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT "yikici " & n
+    END DESTRUCTOR
+END CLASS
+DIM a AS Sayac = NEW Sayac()
+a.n = 1
+a = NEW Sayac()
+a.n = 2
+PRINT "yeniden atandi"
+DELETE a
+PRINT "bitti"

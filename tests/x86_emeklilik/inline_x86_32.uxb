@@ -1,0 +1,4 @@
+INLINE("x86_32","nasm","sub","abi=win32;preserve=ebx,esi,edi;stack=4;cleanup=cdecl")
+mov eax, 1
+END INLINE
+PRINT 42

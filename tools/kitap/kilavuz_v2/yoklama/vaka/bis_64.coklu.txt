@@ -1,0 +1,76 @@
+SUB cagri parantezsiz tek arguman
+SUB Artir(BYREF x AS I32)
+    x = x + 1
+END SUB
+DIM n AS I32 = 41
+Artir n
+PRINT n
+=====
+SUB cagri parantezli
+SUB Artir(BYREF x AS I32)
+    x = x + 1
+END SUB
+DIM n AS I32 = 41
+Artir(n)
+PRINT n
+=====
+SUB cagri CALL parantezli
+SUB Artir(BYREF x AS I32)
+    x = x + 1
+END SUB
+DIM n AS I32 = 41
+CALL Artir(n)
+PRINT n
+=====
+SUB cagri CALL parantezsiz
+SUB Artir(BYREF x AS I32)
+    x = x + 1
+END SUB
+DIM n AS I32 = 41
+CALL Artir n
+PRINT n
+=====
+SUB argumansiz cagri bos
+SUB Selam()
+    PRINT "selam"
+END SUB
+Selam
+PRINT "bitti"
+=====
+SUB argumansiz cagri parantezli
+SUB Selam()
+    PRINT "selam"
+END SUB
+Selam()
+PRINT "bitti"
+=====
+SUB argumansiz cagri CALL
+SUB Selam()
+    PRINT "selam"
+END SUB
+CALL Selam
+PRINT "bitti"
+=====
+SUB cok arguman parantezsiz
+SUB Topla(a AS I32, b AS I32)
+    PRINT a + b
+END SUB
+Topla 3, 4
+PRINT "bitti"
+=====
+SUB cok arguman parantezli
+SUB Topla(a AS I32, b AS I32)
+    PRINT a + b
+END SUB
+Topla(3, 4)
+PRINT "bitti"
+=====
+STATIC yerel parantezli
+SUB Say()
+    STATIC n AS I32 = 0
+    n = n + 1
+    PRINT n
+END SUB
+Say()
+Say()
+Say()

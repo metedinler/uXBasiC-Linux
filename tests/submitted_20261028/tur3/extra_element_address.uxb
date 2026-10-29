@@ -1,0 +1,2 @@
+DIM values(2 TO 4) AS I32
+PRINT VARPTR(values(5))

@@ -1,0 +1,15 @@
+THREAD Spin(signal AS I64) AS I64
+    UNSAFE
+        CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", signal)
+    END UNSAFE
+    DO
+    LOOP
+    RETURN 0
+END THREAD
+DIM started AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM t AS TASK OF I64 = SPAWN Spin(started)
+PRINT CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", started, 2000)
+t.CANCEL()
+t.WAIT()
+PRINT t.STATUS
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", started)

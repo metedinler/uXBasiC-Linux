@@ -8,8 +8,8 @@ Function MIRX64AsmCommentEscape(ByRef s As String) As String
     outText = ""
     For i = 1 To Len(s)
         ch = Mid(s, i, 1)
-        Select Case ch
-        Case Chr(13), Chr(10)
+        Select Case Asc(ch)
+        Case 0 To 31, 127
             outText &= " "
         Case Else
             outText &= ch

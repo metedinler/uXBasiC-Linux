@@ -1,0 +1,8 @@
+DIM i AS I32
+FOR i = 1 TO 3
+    DIM n AS I32 = i
+    DIM text AS STRING = "a"
+    PRINT n; text
+    n = 90
+    text = "b"
+NEXT i

@@ -1,0 +1,128 @@
+=== include_temel
+%%INCLUDE "yardim.uxb"
+PRINT Topla(2, 3)
+--- yardim.uxb
+FUNCTION Topla(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+=== include_makro_tasir
+%%INCLUDE "ayar.uxb"
+PRINT GENISLIK
+--- ayar.uxb
+%%DEFINE GENISLIK 640
+=== include_iki_kez
+%%INCLUDE "bir.uxb"
+%%INCLUDE "bir.uxb"
+--- bir.uxb
+PRINT "bir"
+=== include_dongu
+%%INCLUDE "a.uxb"
+PRINT 1
+--- a.uxb
+%%INCLUDE "b.uxb"
+--- b.uxb
+%%INCLUDE "a.uxb"
+=== include_alt_klasor
+%%INCLUDE "lib/ic.uxb"
+PRINT Ic()
+--- lib/ic.uxb
+FUNCTION Ic() AS I32
+    RETURN 7
+END FUNCTION
+=== include_duz
+INCLUDE "duz.uxb"
+PRINT Duz()
+--- duz.uxb
+FUNCTION Duz() AS I32
+    RETURN 9
+END FUNCTION
+=== include_path_alias
+%%PATH_ALIAS "@lib" AS "lib"
+%%INCLUDE "@lib/ic.uxb"
+PRINT Ic()
+--- lib/ic.uxb
+FUNCTION Ic() AS I32
+    RETURN 7
+END FUNCTION
+=== include_makro_adi
+%%DEFINE DOSYA "yardim.uxb"
+%%INCLUDE DOSYA
+PRINT Topla(1, 1)
+--- yardim.uxb
+FUNCTION Topla(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+=== include_kosullu
+%%DEFINE HIZLI 1
+%%IF HIZLI
+%%INCLUDE "hizli.uxb"
+%%ELSE
+%%INCLUDE "yavas.uxb"
+%%ENDIF
+PRINT Sec()
+--- hizli.uxb
+FUNCTION Sec() AS STRING
+    RETURN "hizli"
+END FUNCTION
+--- yavas.uxb
+FUNCTION Sec() AS STRING
+    RETURN "yavas"
+END FUNCTION
+=== pp_b_wat_func
+%%PP B
+%%ALLOW_RAW_WAT ON
+%%WAT_FUNC_BEGIN yardimci
+(func $yardimci (result i32) i32.const 7)
+%%WAT_FUNC_END
+PRINT 1
+=== pp_b_json_array
+%%PP B
+%%JSON_ARRAY_BEGIN liste
+1
+%%JSON_ARRAY_END
+PRINT 1
+=== pp_b_section
+%%PP B
+%%SECTION ust
+PRINT 1
+%%ENDSECTION
+=== pp_b_template
+%%PP B
+%%TEMPLATE_BEGIN sayac
+PRINT "sablon"
+%%TEMPLATE_END
+%%TEMPLATE_USE sayac
+PRINT 1
+=== makro_kayan
+%%MACRO KARE(X) (X) * (X)
+PRINT KARE(3 + 1)
+=== set_tire
+%%SET A = 5
+%%SET B = A
+PRINT B
+=== define_ifade
+%%DEFINE TOPLAM 2 + 3
+PRINT TOPLAM * 2
+=== define_bos
+%%DEFINE BAYRAK
+PRINT BAYRAK
+=== macro_ad_ayni
+%%MACRO F(X) X
+%%MACRO F(X) X + 1
+PRINT F(1)
+=== yorum_ici
+REM %%DEFINE GIZLI 5
+' %%DEFINE GIZLI2 6
+PRINT GIZLI
+=== metin_icinde_yonerge
+PRINT "%%DEFINE X 1"
+=== yonerge_girintili
+    %%DEFINE X 3
+PRINT X
+=== yonerge_sonda_yorum
+%%DEFINE X 3 ' aciklama
+PRINT X
+=== satir_devami
+%%DEFINE UZUN 1 + _
+2
+PRINT UZUN

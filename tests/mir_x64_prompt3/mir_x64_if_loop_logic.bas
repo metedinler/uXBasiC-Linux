@@ -1,0 +1,16 @@
+DIM A AS INTEGER
+DIM B AS INTEGER
+
+A = 0
+B = 0
+
+DO WHILE A < 5
+    B = B + A
+    A = A + 1
+LOOP
+
+IF B >= 10 THEN
+    PRINT B
+ELSE
+    PRINT 0
+END IF

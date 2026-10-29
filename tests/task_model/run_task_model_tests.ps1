@@ -110,4 +110,4 @@ try {
 } finally { if (Test-Path $tmpRoot) { try { [IO.Directory]::Delete($tmpRoot, $true) } catch {} } }
 "==================== OZET ===================="
 "Toplam: $($pass+$fail)   PASS: $pass   FAIL: $fail"
-if ($fail -eq 0) { "Tum kontroller gecti." } else { exit 1 }
+if ($fail -eq 0) { "Tum kontroller gecti."; exit 0 } else { exit 1 }

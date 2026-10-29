@@ -1,0 +1,6 @@
+DIM a AS F64 = 1.25
+DIM b AS F32 = 1.2
+PRINT STR(a) + "!"
+PRINT STR(b)
+PRINT STR(123)
+PRINT VAL("2.75") + 0.5

@@ -1,0 +1,23 @@
+THREAD Rendezvous(ownEvent AS I64, otherEvent AS I64, doneEvent AS I64) AS I32
+    DIM rc AS I32
+    UNSAFE
+        CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", ownEvent)
+        rc = CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", otherEvent, 1000)
+        CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", doneEvent)
+    END UNSAFE
+    RETURN rc
+END THREAD
+DIM a AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM b AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM da AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM db AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM t1 AS TASK OF I32 = SPAWN Rendezvous(a, b, da)
+DIM t2 AS TASK OF I32 = SPAWN Rendezvous(b, a, db)
+PRINT CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", da, 3000)
+PRINT CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", db, 3000)
+PRINT t1.JOIN()
+PRINT t2.JOIN()
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", a)
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", b)
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", da)
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", db)

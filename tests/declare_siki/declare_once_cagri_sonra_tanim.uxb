@@ -1,0 +1,7 @@
+' S-544: a use before AND a use after the definition: one DECLARE at the top is enough for both.
+DECLARE SUB Yaz(x AS I32)
+Yaz(1)
+SUB Yaz(x AS I32)
+    PRINT x * 10
+END SUB
+Yaz(2)

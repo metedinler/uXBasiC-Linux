@@ -1,0 +1,45 @@
+{
+  "ir_version": "uxb-mir-module-1",
+  "function_count": 1,
+  "global_count": 0,
+  "globals": [],
+  "functions": [
+    {
+      "name": "Add",
+      "entry_block": 0,
+      "block_count": 1,
+      "params": [
+        "a",
+        "b"
+      ],
+      "locals": [
+        "t0"
+      ],
+      "blocks": [
+        {
+          "id": 0,
+          "is_entry": true,
+          "is_exit": true,
+          "successors": [],
+          "instructions": [
+            {
+              "opcode": "ADD",
+              "operands": [
+                "a",
+                "b"
+              ],
+              "result": "t0"
+            },
+            {
+              "opcode": "RET",
+              "operands": [
+                "t0"
+              ],
+              "result": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

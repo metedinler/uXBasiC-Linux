@@ -1,0 +1,12 @@
+' S-599: an F64 function that assigns its result and then executes other statements returns the assigned value (legacy x64 returned 0).
+FUNCTION Yarim(x AS I32) AS F64
+    Yarim = 1.5
+    DIM y AS I32
+    y = x + 10
+END FUNCTION
+FUNCTION Hic(x AS I32) AS F64
+    DIM y AS I32
+    y = x
+END FUNCTION
+PRINT Yarim(1)
+PRINT Hic(3)

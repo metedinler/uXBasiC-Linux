@@ -1,3 +1,4 @@
 AST=LOCK_DEADLOCK: 'CONSOLE' kilidini tutan gorev
 MIR=LOCK_DEADLOCK: 'CONSOLE' kilidini tutan gorev
 x64=LOCK_DEADLOCK: 'CONSOLE' kilidini tutan gorev
+AST-x64=LOCK_DEADLOCK: 'CONSOLE' kilidini tutan gorev

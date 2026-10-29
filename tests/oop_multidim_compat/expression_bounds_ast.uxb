@@ -1,0 +1,8 @@
+CLASS Kutu
+ PUBLIC
+ n AS I32
+END CLASS
+DIM a(0 TO 1 + 1, 0 TO 1) AS Kutu
+a(2,1) = NEW Kutu()
+a(2,1).n = 17
+PRINT a(2,1).n

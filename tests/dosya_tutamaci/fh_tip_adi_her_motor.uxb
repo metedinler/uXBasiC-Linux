@@ -1,0 +1,7 @@
+' S-549 (F8): the type name and FREEFILE are recognised on every engine, JS and WASM included; only the file statements are refused there.
+DIM f AS FILE_HANDLE
+DIM g AS FILE_HANDLE
+g = 5
+PRINT f
+PRINT g + 1
+PRINT FREEFILE

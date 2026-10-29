@@ -1,4 +1,4 @@
-﻿' Extracted from code_generator.fbs for wave-14 modular split (phase 4)
+' Extracted from code_generator.fbs for wave-14 modular split (phase 4)
 
 #include once "../../../parser/ast_enum_lookup.fbs"
 
@@ -44,12 +44,8 @@ Private Function X64EnsureLocalSlot(ByRef cg As X64CodegenContext, ByRef varName
     Return gX64LocalOffsets(cg.localCount - 1)
 End Function
 
-' S-068 (legacy AST-x64): an `arr AS T[]` parameter's local slot does not hold array
-' elements. It holds the array's BIAS-ADJUSTED base pointer -- the element block's
-' address minus lowerBound*stride, computed by the caller (X64EmitArrayArgBaseToRax) --
-' so arr(i) is just [slot] + i*stride: no lower bound to subtract and no descriptor.
-' This legacy backend has no runtime array bounds checks at all (see S-097), so the
-' pointer form loses nothing here. Returns 1 and the ABI cell width for such a name.
+' S-097/TUR7: array parameters hold a descriptor pointer (data/lower/upper),
+' shared with MIR-x64, preserving bounds across forwarding and recursion.
 Private Function X64ParamArrayElemBytes(ByRef cg As X64CodegenContext, ByRef varName As String, ByRef elemBytesOut As Integer) As Integer
     elemBytesOut = 0
     Dim keyText As String
@@ -62,10 +58,9 @@ Private Function X64ParamArrayElemBytes(ByRef cg As X64CodegenContext, ByRef var
             Dim ptype As String
             ptype = X64Upper(Trim(gX64ParamTypes(i)))
             If Right(ptype, 2) <> "[]" Then Return 0
-            Dim abiPayload As Integer
-            Dim abiAlign As Integer
             Dim abiStride As Integer
-            If UXBTypeAbi(Left(ptype, Len(ptype) - 2), abiPayload, abiAlign, abiStride) = 0 Then Return 0
+            Dim storageType As String = UXBStep3StorageType(Left(ptype, Len(ptype) - 2))
+            If TypeLayoutStrideOfGlobal(storageType, abiStride) = 0 Then Return 0
             elemBytesOut = abiStride
             Return 1
         End If
@@ -74,7 +69,7 @@ Private Function X64ParamArrayElemBytes(ByRef cg As X64CodegenContext, ByRef var
 End Function
 
 ' Lower bound to subtract for an indexed access to a LOCAL array: none for an array
-' parameter (its pointer is already bias-adjusted), the DIM's for a real local array.
+' parameter (its base helper subtracts the descriptor lower bound), the DIM's for a real local array.
 Private Function X64LocalArrayLowerBoundOf(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByRef varName As String) As LongInt
     Dim paramStride As Integer
     If X64ParamArrayElemBytes(cg, varName, paramStride) <> 0 Then Return 0
@@ -83,10 +78,18 @@ End Function
 
 ' rcx = base address of a LOCAL array: the frame slot's own address for a real local
 ' array, the pointer stored in the slot for an array parameter.
-Private Sub X64EmitLocalArrayBaseToRcx(ByRef cg As X64CodegenContext, ByRef varName As String, ByVal baseOffset As Integer)
+Private Sub X64EmitLocalArrayBaseToRcx(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByRef varName As String, ByVal baseOffset As Integer)
+    If X64DcaDescriptor(ps, cg, varName, "rcx") <> 0 Then
+        X64EmitText cg, "    mov rcx, [rcx]"
+        Exit Sub
+    End If
     Dim paramStride As Integer
     If X64ParamArrayElemBytes(cg, varName, paramStride) <> 0 Then
         X64EmitText cg, "    mov rcx, " & X64FormatRbpRef(baseOffset)
+        X64EmitText cg, "    mov r11, [rcx + 8]"
+        X64EmitText cg, "    imul r11, " & X64ToStr(paramStride)
+        X64EmitText cg, "    mov rcx, [rcx]"
+        X64EmitText cg, "    sub rcx, r11"
     Else
         X64EmitText cg, "    lea rcx, " & X64FormatRbpRef(baseOffset)
     End If
@@ -224,10 +227,36 @@ Private Sub X64EmitLoadVar(ByRef cg As X64CodegenContext, ByRef varName As Strin
     X64EmitLoadIntegerMemory cg, "[rel " & labelText & "]", loadBytes, loadUnsigned
 End Sub
 
+' S-528 / S-157-L: a STRING variable keeps its own copy of the text. The value in rax is a pointer into one of the run
+' time's temporary text slots (STR(...) has ONE slot, concatenation / LEFT / MID a ring of 32) and those slots are reused by
+' the next text operation, so a variable that merely kept the pointer silently turned into whatever text was produced next
+' (`a = STR(111) : b = STR(222)` made a = 222). The run time already owns the answer (S-157): __uxb_rt_str_store(slot, text)
+' copies the text WITH ITS LENGTH (S-630: embedded zero bytes survive), registers the copy under the slot's address and frees
+' only the copy that same slot owned before - never another variable's text, never a literal or a temporary. Reading the
+' slot back leaves the stored pointer in rax, so the plain store that follows rewrites the same value.
+Private Sub X64EmitStringAssignCopy(ByRef cg As X64CodegenContext, ByRef varName As String)
+    Dim stringVarType As String = ""
+    If X64TryGetVarType(cg, varName, stringVarType) = 0 Then Exit Sub
+    If X64TypeNameIsStringLike(stringVarType) = 0 Then Exit Sub
+    Dim stringSlotErr As String = ""
+    X64EmitText cg, "    push rax"
+    If X64EmitAddrOfVar(cg, varName, stringSlotErr) = 0 Then
+        X64EmitText cg, "    pop rax"
+        Exit Sub
+    End If
+    X64EmitText cg, "    mov rcx, rax"
+    X64EmitText cg, "    pop rdx"
+    X64EmitText cg, "    push rcx"
+    X64EmitCall0 cg, "__uxb_rt_str_store"
+    X64EmitText cg, "    pop rcx"
+    X64EmitText cg, "    mov rax, [rcx]"
+End Sub
+
 Private Sub X64EmitStoreVar(ByRef cg As X64CodegenContext, ByRef varName As String)
     Dim localOffset As Integer
     Dim globalIdx As Integer
     Dim storeBytes As Integer
+    X64EmitStringAssignCopy cg, varName
     If cg.currentRoutineLabel <> "" Then
         If X64TryFindLocalOffset(cg, varName, localOffset) <> 0 Then
             storeBytes = 8
@@ -426,11 +455,19 @@ Private Function X64EmitAddrOfIndexedLocal(ByRef ps As ParseState, ByRef cg As X
     Dim baseOffset As Integer
     Dim slotCount As Integer
     If X64TryFindLocalInfo(cg, varName, baseOffset, slotCount) = 0 Then Return 0
+    ' S-529: a dynamic scalar array is addressed through its descriptor (the caller's stride argument is the table's 8)
+    If X64SdaKind(ps, varName) <> 0 Then
+        If X64EmitExprToRax(ps, indexExpr, cg, errText) = 0 Then Return 0
+        If X64EmitSdaElementAddr(ps, cg, varName) = 0 Then Return 0
+        X64EmitText cg, "    mov rax, rcx"
+        Return 1
+    End If
 
     If X64EmitExprToRax(ps, indexExpr, cg, errText) = 0 Then Return 0
     Dim addrLowerBound As LongInt
     addrLowerBound = X64LocalArrayLowerBoundOf(ps, cg, varName)
     If addrLowerBound <> 0 Then X64EmitText cg, "    sub rax, " & LTrim(Str(addrLowerBound))
+    X64EmitClassArrayIndexCheck ps, cg, varName, slotCount
 
     Dim strideBytes As Integer
     strideBytes = elemStrideBytes
@@ -438,7 +475,7 @@ Private Function X64EmitAddrOfIndexedLocal(ByRef ps As ParseState, ByRef cg As X
 
     X64EmitText cg, "    mov rbx, rax"
     X64EmitText cg, "    imul rbx, " & X64ToStr(strideBytes)
-    X64EmitLocalArrayBaseToRcx cg, varName, baseOffset
+    X64EmitLocalArrayBaseToRcx ps, cg, varName, baseOffset
     X64EmitText cg, "    add rcx, rbx"
     X64EmitText cg, "    mov rax, rcx"
     Return 1
@@ -449,6 +486,7 @@ Private Function X64EmitAddrOfIndexedGlobal(ByRef ps As ParseState, ByRef cg As 
     keyText = X64Upper(Trim(varName))
     If keyText = "" Then Return 0
 
+    Dim addrElementCount As Integer = 0
     Dim labelText As String
     labelText = ""
 
@@ -456,16 +494,24 @@ Private Function X64EmitAddrOfIndexedGlobal(ByRef ps As ParseState, ByRef cg As 
     For i = 0 To cg.globalCount - 1
         If gX64GlobalKeys(i) = keyText Then
             labelText = gX64GlobalLabels(i)
+            addrElementCount = gX64GlobalSlots(i)
             Exit For
         End If
     Next i
 
     If labelText = "" Then Return 0
+    If X64SdaKind(ps, varName) <> 0 Then
+        If X64EmitExprToRax(ps, indexExpr, cg, errText) = 0 Then Return 0
+        If X64EmitSdaElementAddr(ps, cg, varName) = 0 Then Return 0
+        X64EmitText cg, "    mov rax, rcx"
+        Return 1
+    End If
 
     If X64EmitExprToRax(ps, indexExpr, cg, errText) = 0 Then Return 0
     Dim addrLowerBoundG As LongInt
     addrLowerBoundG = X64ArrayLowerBoundOf(ps, varName)
     If addrLowerBoundG <> 0 Then X64EmitText cg, "    sub rax, " & LTrim(Str(addrLowerBoundG))
+    X64EmitClassArrayIndexCheck ps, cg, varName, addrElementCount
 
     Dim strideBytes As Integer
     strideBytes = elemStrideBytes
@@ -473,7 +519,11 @@ Private Function X64EmitAddrOfIndexedGlobal(ByRef ps As ParseState, ByRef cg As 
 
     X64EmitText cg, "    mov rbx, rax"
     X64EmitText cg, "    imul rbx, " & X64ToStr(strideBytes)
-    X64EmitText cg, "    lea rcx, [rel " & labelText & "]"
+    If X64DcaKind(ps, varName) <> 0 Then
+        X64EmitText cg, "    mov rcx, [rel " & labelText & "]"
+    Else
+        X64EmitText cg, "    lea rcx, [rel " & labelText & "]"
+    End If
     X64EmitText cg, "    add rcx, rbx"
     X64EmitText cg, "    mov rax, rcx"
     Return 1
@@ -731,6 +781,8 @@ Private Function X64ComputeDimSlotCount(ByRef ps As ParseState, ByVal declNode A
     Loop
 
 
+    If boundsNode >= 0 And X64DcaKind(ps, ps.ast.nodes(declNode).value) <> 0 Then Return 3
+
     Dim slotCount As Integer
     slotCount = 1
 
@@ -804,12 +856,31 @@ End Function
 ' field: BUMP"). It names a METHOD when the receiver is an expression chain (`.left` set), or when the
 ' leaf is a method of the root variable's declared class hierarchy; when the root's type cannot be
 ' determined here, when some class declares a method of that name and no class declares a field of it.
+' S-539 / S-541: `ns.arr(i)` (and `arr(i)` inside the namespace, which the front end qualifies the same way) names a DIM'd array
+' whose qualified store name is the dotted text itself - an index, never a field path or a method call.
+Private Function X64DottedNameIsDeclaredArray(ByRef ps As ParseState, ByRef nameText As String) As Integer
+    Dim qualifiedArrayName As String = X64Upper(Trim(nameText))
+    If InStr(qualifiedArrayName, ".") = 0 Then Return 0
+    Dim qa As Integer
+    For qa = 0 To ps.ast.count - 1
+        If X64Upper(ps.ast.nodes(qa).kind) <> "DIM_DECL" Then Continue For
+        If X64Upper(Trim(ps.ast.nodes(qa).value)) <> qualifiedArrayName Then Continue For
+        Dim qaChild As Integer = ps.ast.nodes(qa).firstChild
+        Do While qaChild >= 0
+            If X64Upper(ps.ast.nodes(qaChild).kind) = "DIM_BOUNDS" Then Return 1
+            qaChild = ps.ast.nodes(qaChild).nextSibling
+        Loop
+    Next qa
+    Return 0
+End Function
+
 Private Function X64DottedCallNamesMethod(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
     Dim callName As String
     callName = Trim(ps.ast.nodes(nodeIdx).value)
     Dim dotPos As Integer
     dotPos = InStr(callName, ".")
     If dotPos <= 1 Then Return 0
+    If X64DottedNameIsDeclaredArray(ps, callName) <> 0 Then Return 0
     If ps.ast.nodes(nodeIdx).left <> -1 Then Return 1
 
     Dim leafName As String
@@ -854,6 +925,10 @@ Private Function X64TryExtractIndexedTarget(ByRef ps As ParseState, ByVal nodeId
     If nodeKind = "CALL_EXPR" Then
         baseNameOut = Trim(ps.ast.nodes(nodeIdx).value)
         indexExprOut = X64ChildAt(ps, nodeIdx, 0)
+        ' S-618: inside FUNCTION F the name F also names its scalar result slot (S-599), but `F(x)` there is a recursive call, not an index
+        If gX64ResultSlotName <> "" Then
+            If X64Upper(baseNameOut) = gX64ResultSlotName Then Return 0
+        End If
         If baseNameOut <> "" And indexExprOut <> -1 And X64ChildCount(ps, nodeIdx) = 1 Then
             If InStr(baseNameOut, ".") > 0 Then
                 If X64DottedCallNamesMethod(ps, nodeIdx) <> 0 Then Return 0
@@ -894,6 +969,7 @@ Private Function X64InferElemBytesForName(ByRef ps As ParseState, ByRef cg As X6
     Dim declType As String
     declType = ""
     If X64FindDeclaredTypeName(ps, varName, declType) <> 0 Then
+        If X64FindClassDeclNode(ps, declType) <> -1 Then Return 8
         Dim sz As Integer
         Dim e As String
         If TypeLayoutSizeOf(ps, declType, sz, e) <> 0 Then
@@ -936,7 +1012,14 @@ Private Sub X64CollectRoutineLocals(ByRef ps As ParseState, ByVal nodeIdx As Int
         Do While decl <> -1
             Dim declName As String
             declName = Trim(ps.ast.nodes(decl).value)
-            If declName <> "" Then
+            ' The dynamic normalizer emits executable DIM nodes for REDIM.
+            ' A normalized global binding keeps its descriptor in global storage.
+            If declName <> "" AndAlso X64SdaKind(ps, declName) <> 0 Then
+                ' S-529: a dynamic scalar array is a three-qword descriptor (a global one is not a frame slot at all); sizing it from
+                ' the first DIM's element count left the frame slot at 8 bytes and the descriptor overwrote the saved registers and the
+                ' return address (crash on SUB exit).
+                If X64HasTopLevelGlobalDecl(ps, declName) = 0 Then X64EnsureLocalSlot(cg, declName, 3, 8)
+            ElseIf declName <> "" AndAlso Not (X64DcaKind(ps, declName) <> 0 AndAlso X64HasTopLevelGlobalDecl(ps, declName) <> 0) Then
                 Dim elemCountL As Integer
                 elemCountL = X64ComputeDimSlotCount(ps, decl)
                 Dim elemBytesL As Integer
@@ -985,6 +1068,12 @@ Private Sub X64CollectRoutineLocals(ByRef ps As ParseState, ByVal nodeIdx As Int
             End If
         End If
     ElseIf kindText = "FOR_STMT" Or kindText = "FOR" Then
+        ' Loop limits and steps belong to the invocation, including recursion
+        ' and simultaneous task workers. Never put compiler temporaries in globals.
+        Dim forStepName As String = "__uxb_for_step_" & X64ToStr(nodeIdx)
+        Dim forLimitName As String = "__uxb_for_limit_" & X64ToStr(nodeIdx)
+        X64EnsureLocalSlot cg, forStepName, 1, 8
+        X64EnsureLocalSlot cg, forLimitName, 1, 8
         Dim loopVar As String
         loopVar = Trim(ps.ast.nodes(nodeIdx).value)
         If loopVar <> "" And X64HasTopLevelGlobalDecl(ps, loopVar) = 0 Then
@@ -1031,6 +1120,9 @@ Private Sub X64CollectRoutineLocals(ByRef ps As ParseState, ByVal nodeIdx As Int
     Loop
 End Sub
 
+' S-485 / S-487 (P0.2, 2026-10-17): X64EmitImplicitBaseCtorChain used to live here and walk the base classes when NEW ran. The base constructors are now called
+' from inside the constructor bodies (SUPER.CONSTRUCTOR statements written by semantic_base_ctor.fbs), so NEW runs only its own class's constructor.
+
 Private Function X64EmitNewExpr(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
     Dim classTypeName As String
     classTypeName = UCase(Trim(ps.ast.nodes(nodeIdx).value))
@@ -1059,6 +1151,9 @@ Private Function X64EmitNewExpr(ByRef ps As ParseState, ByVal nodeIdx As Integer
 
     X64EmitText cg, "    lea rdx, [rel " & X64ClassVTableLabel(classTypeName) & "]"
     X64EmitText cg, "    mov [rax], rdx"
+
+    ' S-485 / S-487 (P0.2, 2026-10-17): NEW runs ONLY the constructor of the class it creates; the base constructors are called from inside its body
+    ' (the front end writes `SUPER.CONSTRUCTOR(args)` as the first statement, semantic_base_ctor.fbs). X64EmitImplicitBaseCtorChain used to walk the bases here.
 
     Dim ctorName As String
     ctorName = classTypeName & "_CTOR"
@@ -1111,26 +1206,46 @@ Private Function X64EmitNewExpr(ByRef ps As ParseState, ByVal nodeIdx As Integer
         selfSpillOffset = 32 + (stackArgCount * 8)
         X64EmitText cg, "    mov [rsp + " & X64ToStr(selfSpillOffset) & "], rax"
 
+        ' S-581 (2026-10-16): a typed F32/F64 constructor parameter is read by the constructor prologue from the xmm
+        ' register of its position (`movsd [rbp-8], xmm1`), exactly like every routine and method parameter. This
+        ' expression passed EVERY argument in an integer register, so `NEW T1(7.5)` handed the double's bit pattern to
+        ' rdx while the constructor read xmm1 (an unrelated register): the field held garbage (8.9e-308). The float
+        ' kinds now follow the same rule as X64EmitRoutineCall.
         Dim argPos As Integer
         For argPos = 0 To newArgCount - 1
             Dim argNode As Integer
             argNode = X64ChildAt(ps, nodeIdx, argPos)
-            If argNode = -1 Then
-                X64EmitText cg, "    xor rax, rax"
-            Else
-                If X64EmitExprToRax(ps, argNode, cg, errText) = 0 Then Return 0
-            End If
 
             Dim dstIndex As Integer
             dstIndex = argPos + 1
+            Dim argSlotOffset As Integer
             If dstIndex < 4 Then
-                Dim spillOffset As Integer
-                spillOffset = 32 + (stackArgCount * 8) + (dstIndex * 8)
-                X64EmitText cg, "    mov [rsp + " & X64ToStr(spillOffset) & "], rax"
+                argSlotOffset = 32 + (stackArgCount * 8) + (dstIndex * 8)
             Else
-                Dim stackOffset As Integer
-                stackOffset = 32 + ((dstIndex - 4) * 8)
-                X64EmitText cg, "    mov [rsp + " & X64ToStr(stackOffset) & "], rax"
+                argSlotOffset = 32 + ((dstIndex - 4) * 8)
+            End If
+
+            Dim ctorArgType As String
+            Dim ctorArgFloatKind As Integer
+            ctorArgType = ""
+            ctorArgFloatKind = 0
+            If X64TryGetRoutineParamType(cg, ctorName, dstIndex, ctorArgType) <> 0 Then ctorArgFloatKind = X64TypeToFloatKind(ctorArgType)
+
+            If argNode <> -1 And (ctorArgFloatKind = UXF_F32 Or ctorArgFloatKind = UXF_F64) Then
+                If X64EmitExprToXmm0As(ps, argNode, cg, ctorArgFloatKind, errText) = 0 Then Return 0
+                X64EmitText cg, "    mov qword [rsp + " & X64ToStr(argSlotOffset) & "], 0"
+                If ctorArgFloatKind = UXF_F32 Then
+                    X64EmitText cg, "    movss [rsp + " & X64ToStr(argSlotOffset) & "], xmm0"
+                Else
+                    X64EmitText cg, "    movsd [rsp + " & X64ToStr(argSlotOffset) & "], xmm0"
+                End If
+            Else
+                If argNode = -1 Then
+                    X64EmitText cg, "    xor rax, rax"
+                Else
+                    If X64EmitExprToRax(ps, argNode, cg, errText) = 0 Then Return 0
+                End If
+                X64EmitText cg, "    mov [rsp + " & X64ToStr(argSlotOffset) & "], rax"
             End If
         Next argPos
 
@@ -1140,11 +1255,30 @@ Private Function X64EmitNewExpr(ByRef ps As ParseState, ByVal nodeIdx As Integer
         regOrder(2) = "r8"
         regOrder(3) = "r9"
 
+        Dim ctorXmmOrder(0 To 3) As String
+        ctorXmmOrder(0) = "xmm0"
+        ctorXmmOrder(1) = "xmm1"
+        ctorXmmOrder(2) = "xmm2"
+        ctorXmmOrder(3) = "xmm3"
+
         Dim regIdx As Integer
         For regIdx = 0 To regSpillSlots - 1
             Dim loadOffset As Integer
             loadOffset = 32 + (stackArgCount * 8) + (regIdx * 8)
-            X64EmitText cg, "    mov " & regOrder(regIdx) & ", [rsp + " & X64ToStr(loadOffset) & "]"
+            Dim loadCtorType As String
+            Dim loadCtorFloatKind As Integer
+            loadCtorType = ""
+            loadCtorFloatKind = 0
+            If regIdx > 0 Then
+                If X64TryGetRoutineParamType(cg, ctorName, regIdx, loadCtorType) <> 0 Then loadCtorFloatKind = X64TypeToFloatKind(loadCtorType)
+            End If
+            If loadCtorFloatKind = UXF_F32 Then
+                X64EmitText cg, "    movss " & ctorXmmOrder(regIdx) & ", [rsp + " & X64ToStr(loadOffset) & "]"
+            ElseIf loadCtorFloatKind = UXF_F64 Then
+                X64EmitText cg, "    movsd " & ctorXmmOrder(regIdx) & ", [rsp + " & X64ToStr(loadOffset) & "]"
+            Else
+                X64EmitText cg, "    mov " & regOrder(regIdx) & ", [rsp + " & X64ToStr(loadOffset) & "]"
+            End If
         Next regIdx
 
         X64EmitText cg, "    call " & ctorName
@@ -1167,6 +1301,7 @@ End Function
 
 Private Function X64RuntimeExprIsStringLike(ByRef ps As ParseState, ByVal exprNode As Integer, ByRef cg As X64CodegenContext) As Integer
     If exprNode < 0 Or exprNode >= ps.ast.count Then Return 0
+    If UXBStep3TypeIsString(ps.ast.nodes(exprNode).typeName) <> 0 Then Return 1
 
     Dim k As String
     k = X64Upper(Trim(ps.ast.nodes(exprNode).kind))
@@ -1374,6 +1509,13 @@ Private Function X64EmitFloatComparisonToRax(ByRef ps As ParseState, ByVal lhs A
 End Function
 
 Private Function X64EmitExprToRax(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
+    If X64SyncCachedValue(nodeIdx, cg, 0) <> 0 Then Return 1
+    If nodeIdx >= 0 And nodeIdx < ps.ast.count Then
+        If X64Upper(ps.ast.nodes(nodeIdx).kind) = "SPAWN_EXPR" Then Return X64TaskEmitSpawn(ps, nodeIdx, cg, errText)
+        Dim taskHandled As Integer
+        If X64TaskEmitValue(ps, nodeIdx, cg, taskHandled, errText) = 0 Then Return 0
+        If taskHandled <> 0 Then Return 1
+    End If
     If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then
         errText = "x64-codegen: invalid expr node"
         Return 0
@@ -1439,7 +1581,7 @@ Private Function X64EmitExprToRax(ByRef ps As ParseState, ByVal nodeIdx As Integ
         Dim indexedBaseName As String
         Dim indexedExpr As Integer
         If X64TryExtractIndexedTarget(ps, nodeIdx, indexedBaseName, indexedExpr) <> 0 Then
-            If InStr(indexedBaseName, ".") > 0 Then
+            If InStr(indexedBaseName, ".") > 0 And X64DottedNameIsDeclaredArray(ps, indexedBaseName) = 0 Then
                 Return X64EmitLoadFieldExpr(ps, nodeIdx, cg, errText)
             End If
             If cg.currentRoutineLabel <> "" And X64EmitLoadIndexedLocal(ps, cg, indexedBaseName, indexedExpr, errText) <> 0 Then
@@ -1453,90 +1595,7 @@ Private Function X64EmitExprToRax(ByRef ps As ParseState, ByVal nodeIdx As Integ
     Case "NEW_EXPR"
         Return X64EmitNewExpr(ps, nodeIdx, cg, errText)
     Case "INCDEC_EXPR"
-        Dim incTarget As Integer
-        incTarget = ps.ast.nodes(nodeIdx).left
-        If incTarget = -1 Then
-            errText = "x64-codegen: INCDEC expression missing target"
-            Return 0
-        End If
-
-        ' S-130: `obj.n++` / `THIS.n--` on an integer field: load, +-1, store back, then re-load so rax holds the
-        ' new value and (POST) step it back to the old one. (The field store clobbers the working registers, so
-        ' no old-value copy is kept across it.) Floating-point fields are refused instead of computed wrongly.
-        If X64Upper(ps.ast.nodes(incTarget).kind) = "FIELD_EXPR" Then
-            If X64InferFloatKindOfExpr(ps, incTarget, cg) <> UXF_UNKNOWN Then
-                errText = "x64-codegen: INCDEC of a floating-point field is not supported by the legacy x64 backend"
-                Return 0
-            End If
-            If X64EmitLoadFieldExpr(ps, incTarget, cg, errText) = 0 Then Return 0
-            If Trim(ps.ast.nodes(nodeIdx).op) = "--" Then
-                X64EmitText cg, "    sub rax, 1"
-            Else
-                X64EmitText cg, "    add rax, 1"
-            End If
-            If X64EmitStoreFieldExpr(ps, incTarget, cg, errText) = 0 Then Return 0
-            If X64EmitLoadFieldExpr(ps, incTarget, cg, errText) = 0 Then Return 0
-            If X64Upper(Trim(ps.ast.nodes(nodeIdx).value)) = "POST" Then
-                If Trim(ps.ast.nodes(nodeIdx).op) = "--" Then
-                    X64EmitText cg, "    add rax, 1"
-                Else
-                    X64EmitText cg, "    sub rax, 1"
-                End If
-            End If
-            Return 1
-        End If
-
-        Dim incName As String
-        Dim incIndexExpr As Integer
-        Dim incIndexed As Integer
-        incIndexExpr = -1
-        incIndexed = 0
-
-        If X64Upper(ps.ast.nodes(incTarget).kind) = "IDENT" Or X64Upper(ps.ast.nodes(incTarget).kind) = "IDENTIFIER" Then
-            incName = Trim(ps.ast.nodes(incTarget).value)
-        ElseIf X64TryExtractIndexedTarget(ps, incTarget, incName, incIndexExpr) <> 0 Then
-            incIndexed = 1
-        End If
-
-        If incName = "" Then
-            errText = "x64-codegen: INCDEC expression invalid target"
-            Return 0
-        End If
-
-        If incIndexed <> 0 Then
-            If cg.currentRoutineLabel <> "" And X64EmitLoadIndexedLocal(ps, cg, incName, incIndexExpr, errText) <> 0 Then
-            ElseIf X64EmitLoadIndexedGlobal(ps, cg, incName, incIndexExpr, errText) = 0 Then
-                errText = "x64-codegen: INCDEC expression indexed target currently supports DIM arrays"
-                Return 0
-            End If
-        Else
-            X64EmitLoadVar cg, incName
-        End If
-
-        If X64Upper(Trim(ps.ast.nodes(nodeIdx).value)) = "POST" Then
-            X64EmitText cg, "    mov rdx, rax"
-        End If
-
-        If Trim(ps.ast.nodes(nodeIdx).op) = "--" Then
-            X64EmitText cg, "    sub rax, 1"
-        Else
-            X64EmitText cg, "    add rax, 1"
-        End If
-
-        If incIndexed <> 0 Then
-            If cg.currentRoutineLabel <> "" And X64EmitStoreIndexedLocal(ps, cg, incName, incIndexExpr, errText) <> 0 Then
-            ElseIf X64EmitStoreIndexedGlobal(ps, cg, incName, incIndexExpr, errText) = 0 Then
-                errText = "x64-codegen: INCDEC expression indexed target currently supports DIM arrays"
-                Return 0
-            End If
-        Else
-            X64EmitStoreVar cg, incName
-        End If
-
-        If X64Upper(Trim(ps.ast.nodes(nodeIdx).value)) = "POST" Then
-            X64EmitText cg, "    mov rax, rdx"
-        End If
-        Return 1
+        Return X64EmitLValueUpdate(ps, nodeIdx, cg, 0, errText)
     Case "FIELD_EXPR"
         Dim namespaceConstDecl As Integer
         Dim namespaceConstInit As Integer
@@ -1576,6 +1635,13 @@ Private Function X64EmitExprToRax(ByRef ps As ParseState, ByVal nodeIdx As Integ
         If unaryRhs = -1 Then
             errText = "x64-codegen: unary expression missing operand"
             Return 0
+        End If
+
+        Dim unaryFloatKind As Integer = X64InferFloatKindOfExpr(ps, nodeIdx, cg)
+        If unaryFloatKind = UXF_F32 Or unaryFloatKind = UXF_F64 Then
+            If X64EmitExprToXmm0As(ps, nodeIdx, cg, unaryFloatKind, errText) = 0 Then Return 0
+            If unaryFloatKind = UXF_F32 Then X64EmitText cg, "    movd eax, xmm0" Else X64EmitText cg, "    movq rax, xmm0"
+            Return 1
         End If
 
         If X64EmitExprToRax(ps, unaryRhs, cg, errText) = 0 Then Return 0
@@ -1842,6 +1908,20 @@ Private Function X64EmitExprToRax(ByRef ps As ParseState, ByVal nodeIdx As Integ
         Dim binUnsigned64 As Integer
         binUnsigned64 = IIf(UXBExprIsU64(ps, lhs) <> 0 Or UXBExprIsU64(ps, rhs) <> 0, 1, 0)
 
+        Dim rotateTypeForOp As String
+        If opKey = "ROL" Or opKey = "ROR" Then
+            rotateTypeForOp = Trim(ps.ast.nodes(lhs).typeName)
+            If rotateTypeForOp = "" Then
+                Dim rotateKindForOp As String
+                rotateKindForOp = X64Upper(Trim(ps.ast.nodes(lhs).kind))
+                If rotateKindForOp = "IDENT" Or rotateKindForOp = "IDENTIFIER" Or rotateKindForOp = "VAR" Or rotateKindForOp = "NAME" Or rotateKindForOp = "VAR_REF" Or rotateKindForOp = "KEYWORD_REF" Then
+                    X64FindDeclaredTypeName ps, ps.ast.nodes(lhs).value, rotateTypeForOp
+                End If
+            End If
+            rotateTypeForOp = X64Upper(Trim(UXBStep3StorageType(rotateTypeForOp)))
+            If Left(rotateTypeForOp, 5) = "TYPE_" Then rotateTypeForOp = Mid(rotateTypeForOp, 6)
+        End If
+
         Select Case opKey
         Case "+", "ADD"
             X64EmitText cg, "    add rax, rbx"
@@ -1912,10 +1992,20 @@ Private Function X64EmitExprToRax(ByRef ps As ParseState, ByVal nodeIdx As Integ
             If X64ExprIsUnsignedInteger(ps, lhs, cg) <> 0 Then X64EmitText cg, "    shr rax, cl" Else X64EmitText cg, "    sar rax, cl"
         Case "ROL"
             X64EmitText cg, "    mov ecx, ebx"
-            X64EmitText cg, "    rol rax, cl"
+            Select Case rotateTypeForOp
+            Case "U8", "UBYTE", "I8", "BYTE", "SBYTE": X64EmitText cg, "    rol al, cl"
+            Case "U16", "USHORT", "I16", "SHORT": X64EmitText cg, "    rol ax, cl"
+            Case "U32", "UINTEGER", "UINT", "ULONG", "I32", "INTEGER", "INT", "LONG": X64EmitText cg, "    rol eax, cl"
+            Case Else: X64EmitText cg, "    rol rax, cl"
+            End Select
         Case "ROR"
             X64EmitText cg, "    mov ecx, ebx"
-            X64EmitText cg, "    ror rax, cl"
+            Select Case rotateTypeForOp
+            Case "U8", "UBYTE", "I8", "BYTE", "SBYTE": X64EmitText cg, "    ror al, cl"
+            Case "U16", "USHORT", "I16", "SHORT": X64EmitText cg, "    ror ax, cl"
+            Case "U32", "UINTEGER", "UINT", "ULONG", "I32", "INTEGER", "INT", "LONG": X64EmitText cg, "    ror eax, cl"
+            Case Else: X64EmitText cg, "    ror rax, cl"
+            End Select
         Case "**", "POW"
             X64EmitIntegerPowRaxRbx cg
         Case "NAND"
@@ -1992,6 +2082,21 @@ Private Function X64EmitExprToRax(ByRef ps As ParseState, ByVal nodeIdx As Integ
             Return 0
         End Select
 
+        ' S-219: rotate width is the left operand's declared integer width,
+        ' even though the legacy emitter rotates in RAX as a 64-bit scratch.
+        If opKey = "ROL" Or opKey = "ROR" Then
+            Dim rotateType As String
+            rotateType = Trim(ps.ast.nodes(lhs).typeName)
+            If rotateType = "" Then
+                Dim rotateKind As String
+                rotateKind = X64Upper(Trim(ps.ast.nodes(lhs).kind))
+                If rotateKind = "IDENT" Or rotateKind = "IDENTIFIER" Or rotateKind = "VAR" Or rotateKind = "NAME" Or rotateKind = "VAR_REF" Or rotateKind = "KEYWORD_REF" Then
+                    X64FindDeclaredTypeName ps, ps.ast.nodes(lhs).value, rotateType
+                End If
+            End If
+            If rotateType <> "" Then X64TryEmitNarrowRegToType cg, "rax", rotateType
+        End If
+
         ' S-088: an expression whose static type is U32 wraps modulo 2^32 (mov eax,eax zero-extends)
         If UXBStep3TypeIsU32(ps.ast.nodes(nodeIdx).typeName) <> 0 Then X64EmitText cg, "    mov eax, eax"
         Return 1
@@ -2012,9 +2117,19 @@ Private Function X64EmitExprToRax(ByRef ps As ParseState, ByVal nodeIdx As Integ
         elseLabel = X64NextLabel(cg, "tern_else")
         endLabel = X64NextLabel(cg, "tern_end")
 
-        If X64EmitExprToRax(ps, condNode, cg, errText) = 0 Then Return 0
-        X64EmitText cg, "    cmp rax, 0"
-        X64EmitText cg, "    je " & elseLabel
+        If X64InferFloatKindOfExpr(ps, condNode, cg) <> UXF_UNKNOWN Then
+            Dim trueLabel As String = X64NextLabel(cg, "tern_true")
+            If X64EmitExprToXmm0As(ps, condNode, cg, UXF_F64, errText) = 0 Then Return 0
+            X64EmitText cg, "    pxor xmm1, xmm1"
+            X64EmitText cg, "    ucomisd xmm0, xmm1"
+            X64EmitText cg, "    jp " & trueLabel
+            X64EmitText cg, "    je " & elseLabel
+            X64EmitLabel cg, trueLabel
+        Else
+            If X64EmitExprToRax(ps, condNode, cg, errText) = 0 Then Return 0
+            X64EmitText cg, "    test rax, rax"
+            X64EmitText cg, "    jz " & elseLabel
+        End If
         If X64EmitExprToRax(ps, thenNode, cg, errText) = 0 Then Return 0
         X64EmitText cg, "    jmp " & endLabel
         X64EmitLabel cg, elseLabel

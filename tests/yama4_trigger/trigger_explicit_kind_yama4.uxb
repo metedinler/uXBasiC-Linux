@@ -1,0 +1,9 @@
+EVENT VeriGeldi
+    PRINT "EXPLICIT_EVENT"
+END EVENT
+
+SLOT
+    Kaydet 9 ON EVENT VeriGeldi
+END SLOT
+
+TRIGGER EVENT VeriGeldi

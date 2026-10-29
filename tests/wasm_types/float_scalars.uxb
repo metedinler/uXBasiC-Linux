@@ -1,0 +1,11 @@
+DIM a AS F64 = 1.5
+DIM b AS F64 = 2.25
+DIM c AS F32 = 1.25
+PRINT a + b
+PRINT b - a
+PRINT a * b
+PRINT b / a
+PRINT -a
+PRINT c + 0.5
+PRINT a < b
+PRINT a = b

@@ -1,0 +1,39 @@
+' S-611: a METHOD NAME and the parameter / local of ANOTHER method with the same name (`Deger` / `deger`). The method symbol and the
+' parameter shared one scope, so which one a name meant depended on the declaration order: method first -> "numeric operands required".
+' Both orders, in two classes.
+CLASS Bir
+    PUBLIC
+    METHOD Deger() AS I32
+        RETURN 5
+    END METHOD
+    METHOD Kat(deger AS I32) AS I32
+        RETURN deger * 10
+    END METHOD
+    METHOD Yerel() AS I32
+        DIM deger AS I32
+        deger = 3
+        RETURN deger * 100
+    END METHOD
+END CLASS
+CLASS Iki
+    PUBLIC
+    METHOD Kat(deger AS I32) AS I32
+        RETURN deger * 10
+    END METHOD
+    METHOD Yerel() AS I32
+        DIM deger AS I32
+        deger = 3
+        RETURN deger * 100
+    END METHOD
+    METHOD Deger() AS I32
+        RETURN 5
+    END METHOD
+END CLASS
+DIM a AS Bir = NEW Bir()
+DIM b AS Iki = NEW Iki()
+PRINT a.Deger()
+PRINT a.Kat(2)
+PRINT a.Yerel()
+PRINT b.Kat(2)
+PRINT b.Yerel()
+PRINT b.Deger()

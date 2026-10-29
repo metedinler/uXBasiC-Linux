@@ -1,0 +1,54 @@
+bilinmeyen tip YOKTIP
+DIM a AS YOKTIP
+PRINT 1
+=====
+LIBTYPE dosyasi yok
+LIBTYPE "yok_boyle.library_type.json"
+PRINT 1
+=====
+RATIONAL 3/2 yazdir
+DIM a AS RATIONAL
+DIM b AS RATIONAL
+DIM c AS RATIONAL
+a = 3
+b = 2
+c = a / b
+PRINT c
+=====
+RATIONAL ToString metodu
+DIM a AS RATIONAL
+DIM b AS RATIONAL
+DIM c AS RATIONAL
+a = 3
+b = 2
+c = a / b
+PRINT c.TOSTRING()
+=====
+RATIONAL sifira bolme
+DIM a AS RATIONAL
+DIM b AS RATIONAL
+DIM c AS RATIONAL
+a = 3
+c = a / b
+PRINT c
+=====
+RATIONAL dizi elemani bos
+DIM d(2) AS RATIONAL
+PRINT d(1)
+=====
+RATIONAL 1/3 atamasi
+DIM r AS RATIONAL
+r = 1 / 3
+PRINT r
+=====
+RATIONAL karsilastirma
+DIM a AS RATIONAL
+DIM b AS RATIONAL
+a = 1
+b = 3
+DIM x AS RATIONAL
+DIM y AS RATIONAL
+x = a / b
+y = b / a
+PRINT x < y
+PRINT x = y

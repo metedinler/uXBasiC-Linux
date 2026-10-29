@@ -1,0 +1,16 @@
+CLASS Ic
+    PUBLIC
+    n AS I32
+    METHOD Say() AS I32
+        RETURN THIS.n + 1
+    END METHOD
+END CLASS
+DIM arr(2) AS Ic
+arr(0) = NEW Ic()
+arr(0).n = 7
+PRINT arr(0).Say()
+DIM t AS Ic
+t = arr(0)
+t.n = 8
+PRINT arr(0).n
+PRINT t.Say()

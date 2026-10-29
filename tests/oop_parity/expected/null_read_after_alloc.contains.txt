@@ -1,0 +1,5 @@
+AST=field access on a null object reference
+MIR=field access on a null object reference
+x64=field access on a null object reference
+AST-x64=field access on a null object reference
+JS=field access on a null object reference

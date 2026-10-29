@@ -1,0 +1,6 @@
+{
+  "s103_udt_4byte_param": {"output": "29"},
+  "s103_udt_12byte_param": {"output": "55"},
+  "s103_udt_4byte_store": {"output": "73"},
+  "s103_udt_oob_negative": {"error": "array index out of bounds"}
+}

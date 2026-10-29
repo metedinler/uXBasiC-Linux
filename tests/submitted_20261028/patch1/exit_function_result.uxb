@@ -1,0 +1,10 @@
+FUNCTION Deger() AS I32
+    Deger = 17
+    TRY
+        EXIT FUNCTION
+    FINALLY
+        PRINT "FINALLY"
+    END TRY
+    RETURN 99
+END FUNCTION
+PRINT Deger()

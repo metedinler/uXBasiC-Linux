@@ -1,0 +1,18 @@
+' S-544: a bare call that means a METHOD of the class (written later in the class) is not a use of the SUB of the same name that comes after the class.
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    METHOD Artir()
+        n = n + 1
+        Yaz()
+    END METHOD
+    METHOD Yaz()
+        PRINT n
+    END METHOD
+END CLASS
+SUB Yaz()
+    PRINT 99
+END SUB
+DIM s AS Sayac = NEW Sayac()
+s.Artir()
+Yaz()

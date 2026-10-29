@@ -1,0 +1,6 @@
+[
+ {
+  "ad": "m10 6502 on iki mod tablosu",
+  "kod": "CONST ZP = 0\nDIM x AS I32 = 2\nDIM y AS I32 = 3\nPOKEB ZP + &h44, 11\nPOKEB ZP + &h46, 22\nPOKEB ZP + &h47, 33\nPOKEB &h4400, 44\nPOKEB &h4402, 55\nPOKEB &h4403, 66\nPOKEW ZP + &h30, &h4400\nPOKEW ZP + &h20, &h4400\nPOKEW ZP + &h22, &h4410\nPOKEB &h4410, 77\nPOKEW ZP + &h10, &h4420\nPOKEB &h4420, 88\nPRINT PEEKB(ZP + &h44)\nPRINT PEEKB(ZP + ((&h44 + x) AND 255))\nPRINT PEEKB(ZP + ((&h44 + y) AND 255))\nPRINT PEEKB(&h4400)\nPRINT PEEKB(&h4400 + x)\nPRINT PEEKB(&h4400 + y)\nPRINT PEEKW(ZP + &h30)\nPRINT PEEKB(PEEKW(ZP + ((&h20 + x) AND 255)))\nPRINT PEEKB(PEEKW(ZP + &h20) + y)\nDIM bx AS I32 = 240\nPRINT PEEKB(PEEKW(ZP + ((&h20 + bx) AND 255)))"
+ }
+]

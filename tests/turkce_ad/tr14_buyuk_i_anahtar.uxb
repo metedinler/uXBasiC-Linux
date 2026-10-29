@@ -1,0 +1,5 @@
+' S-579: Türkçe büyük İ ile yazılan anahtar sözcükler (DİM, İ32, İF, PRİNT, END İF) ASCII yazılışlarıyla aynıdır
+DİM x AS İ32 = 5
+İF x > 3 THEN
+    PRİNT x
+END İF

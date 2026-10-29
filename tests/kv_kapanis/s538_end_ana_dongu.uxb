@@ -1,0 +1,7 @@
+' S-538: END deyimi programi her yerde ana programda, dongu icinde bile, hemen bitirir (eski AST-x64 END'i hic desteklemiyordu).
+DIM i AS I32
+FOR i = 1 TO 5
+    PRINT i
+    IF i = 3 THEN END
+NEXT
+PRINT "olmamali"

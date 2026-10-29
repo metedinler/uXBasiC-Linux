@@ -1,0 +1,8 @@
+{
+  "s111_bounds_static_1d": {"output": "0\n5"},
+  "s111_bounds_static_2d": {"engines": ["AST", "MIR", "x64", "JS", "WASM"], "output": "0\n2"},
+  "s111_bounds_invalid_literal": {"error": "dimension must be a positive integer literal"},
+  "s111_bounds_negative_dimension": {"error": "dimension 2 is out of range"},
+  "s105_interface_single": {"output": "14"},
+  "s105_interface_multiple": {"output": "3\n10"}
+}

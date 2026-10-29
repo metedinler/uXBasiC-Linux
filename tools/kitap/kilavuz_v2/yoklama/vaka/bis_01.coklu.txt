@@ -1,0 +1,109 @@
+T1 fonksiyon param TYPE ic erisim
+TYPE Nokta
+    x AS I32
+    y AS I32
+END TYPE
+TYPE Cizgi
+    a AS Nokta
+    b AS Nokta
+END TYPE
+FUNCTION Uzunluk2(c AS Cizgi) AS I32
+    DIM dx AS I32 = c.b.x - c.a.x
+    DIM dy AS I32 = c.b.y - c.a.y
+    RETURN dx * dx + dy * dy
+END FUNCTION
+DIM k AS Cizgi
+k.a.x = 0: k.a.y = 0: k.b.x = 3: k.b.y = 4
+PRINT Uzunluk2(k)
+=====
+T2 TYPE icinde dizi alan
+TYPE Nokta
+    x AS I32
+    y AS I32
+END TYPE
+TYPE Sekil
+    ad AS STRING
+    kose(3) AS Nokta
+    adet AS I32
+END TYPE
+DIM s AS Sekil
+s.ad = "ucgen"
+s.adet = 3
+s.kose(0).x = 5
+PRINT s.ad; " "; s.kose(0).x
+=====
+T3 TYPE dizisi
+TYPE Cizgi
+    ad AS STRING
+    u AS I32
+END TYPE
+DIM c(2) AS Cizgi
+c(0).ad = "a": c(0).u = 5
+c(1).ad = "b": c(1).u = 9
+PRINT c(1).ad; " "; c(1).u
+=====
+T4 fonksiyon TYPE doner
+TYPE Cizgi
+    ad AS STRING
+    u AS I32
+END TYPE
+FUNCTION Yap(ad AS STRING, u AS I32) AS Cizgi
+    DIM c AS Cizgi
+    c.ad = ad
+    c.u = u
+    RETURN c
+END FUNCTION
+DIM k AS Cizgi
+k = Yap("x", 7)
+PRINT k.ad; " "; k.u
+=====
+T5 DIM ilk deger TYPE fonksiyon
+TYPE Cizgi
+    ad AS STRING
+    u AS I32
+END TYPE
+FUNCTION Yap(ad AS STRING, u AS I32) AS Cizgi
+    DIM c AS Cizgi
+    c.ad = ad
+    c.u = u
+    RETURN c
+END FUNCTION
+DIM k AS Cizgi = Yap("x", 7)
+PRINT k.ad; " "; k.u
+=====
+T6 BYREF TYPE
+TYPE Nokta
+    x AS I32
+    y AS I32
+END TYPE
+SUB Tasi(BYREF p AS Nokta, dx AS I32)
+    p.x += dx
+END SUB
+DIM n AS Nokta
+n.x = 1
+Tasi(n, 10)
+PRINT n.x
+=====
+T7 TYPE dizi elemani fonksiyona
+TYPE Nokta
+    x AS I32
+    y AS I32
+END TYPE
+FUNCTION Topla(p AS Nokta) AS I32
+    RETURN p.x + p.y
+END FUNCTION
+DIM d(1) AS Nokta
+d(0).x = 1: d(0).y = 2
+d(1).x = 10: d(1).y = 20
+PRINT Topla(d(1))
+=====
+T8 dizi atama TYPE
+TYPE Nokta
+    x AS I32
+    y AS I32
+END TYPE
+DIM d(1) AS Nokta
+DIM n AS Nokta
+n.x = 4: n.y = 5
+d(0) = n
+PRINT d(0).x; " "; d(0).y

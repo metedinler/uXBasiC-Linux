@@ -1,0 +1,8 @@
+NAMESPACE Hesap
+    FUNCTION Topla(a AS I32, b AS I32) AS I32
+        RETURN a + b
+    END FUNCTION
+END NAMESPACE
+USING Hesap
+PRINT Topla(3, 4)
+PRINT Hesap.Topla(10, 20)

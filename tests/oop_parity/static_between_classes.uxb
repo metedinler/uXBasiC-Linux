@@ -1,0 +1,19 @@
+' STATIC methods calling the STATIC methods of another class, and an instance method calling both.
+CLASS A
+    PUBLIC
+    STATIC METHOD Bir() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+CLASS B
+    PUBLIC
+    STATIC METHOD Iki() AS I32
+        RETURN A.Bir() + 1
+    END METHOD
+    METHOD Uc() AS I32
+        RETURN A.Bir() + B.Iki()
+    END METHOD
+END CLASS
+DIM x AS B = NEW B()
+PRINT B.Iki()
+PRINT x.Uc()

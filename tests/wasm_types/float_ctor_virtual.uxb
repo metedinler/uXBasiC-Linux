@@ -1,0 +1,13 @@
+CLASS BaseValue
+ PUBLIC
+ n AS F64
+ CONSTRUCTOR(value AS F64)
+  THIS.n = value
+ END CONSTRUCTOR
+ VIRTUAL METHOD Scale(x AS F64) AS F64
+  RETURN THIS.n * x
+ END METHOD
+END CLASS
+DIM k AS BaseValue = NEW BaseValue(1.25)
+PRINT k.n
+PRINT k.Scale(2.5)

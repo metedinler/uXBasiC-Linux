@@ -1,0 +1,6 @@
+AST=SUPER(...) passes 2 argument(s) but the CONSTRUCTOR of ATA takes 1
+MIR=SUPER(...) passes 2 argument(s) but the CONSTRUCTOR of ATA takes 1
+x64=SUPER(...) passes 2 argument(s) but the CONSTRUCTOR of ATA takes 1
+AST-x64=SUPER(...) passes 2 argument(s) but the CONSTRUCTOR of ATA takes 1
+JS=SUPER(...) passes 2 argument(s) but the CONSTRUCTOR of ATA takes 1
+WASM=SUPER(...) passes 2 argument(s) but the CONSTRUCTOR of ATA takes 1

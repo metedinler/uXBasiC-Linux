@@ -1,0 +1,273 @@
+#ifndef UXB_SEMANTIC_MID_ASSIGNMENT_FBS
+#define UXB_SEMANTIC_MID_ASSIGNMENT_FBS
+
+Private Function SemMidReceiverType(ByRef ps As ParseState, ByVal expression As Integer) As String
+    If expression < 0 Then Return ""
+    Dim annotated As String = UCase(ps.ast.nodes(expression).typeName)
+    If SemFindClassNode(ps, annotated) >= 0 Then Return annotated
+    Dim kindText As String = UCase(ps.ast.nodes(expression).kind)
+    Dim nameText As String = UCase(ps.ast.nodes(expression).value)
+    Dim owner As Integer = SemStaticRoutineOwner(ps, expression)
+    If kindText = "IDENT" Or kindText = "IDENTIFIER" Then
+        ' Match the current routine first, then globals. A same-named local in
+        ' another routine cannot determine the receiver's storage type.
+        For pass As Integer = 0 To 1
+            For i As Integer = ps.ast.count - 1 To 0 Step -1
+                Dim declarationKind As String = UCase(ps.ast.nodes(i).kind)
+                If declarationKind <> "DIM_DECL" And declarationKind <> "PARAM_DECL" Then Continue For
+                If UCase(ps.ast.nodes(i).value) <> nameText Then Continue For
+                Dim declarationOwner As Integer = SemStaticRoutineOwner(ps, i)
+                If (pass = 0 And declarationOwner <> owner) Or (pass = 1 And declarationOwner <> -1) Then Continue For
+                Dim ch As Integer = ps.ast.nodes(i).firstChild
+                Do While ch <> -1
+                    If UCase(ps.ast.nodes(ch).kind) = "TYPE_REF" Then Return UCase(ps.ast.nodes(ch).value)
+                    ch = ps.ast.nodes(ch).nextSibling
+                Loop
+            Next i
+        Next pass
+    ElseIf kindText = "CALL_EXPR" Then
+        Dim declaration As Integer = -1
+        For i As Integer = 0 To ps.ast.count - 1
+            If UCase(ps.ast.nodes(i).kind) <> "FUNCTION_STMT" Then Continue For
+            If UCase(ps.ast.nodes(i).value) = nameText Or UCase(ps.ast.nodes(i).symbolName) = nameText Then declaration = i: Exit For
+        Next i
+        If declaration < 0 Then
+            Dim receiverName As String, methodName As String
+            If SemSplitMethodCallName(nameText, receiverName, methodName) <> 0 Then
+                Dim receiver As Integer = SemStaticNode(ps, expression, "IDENT", receiverName)
+                ps.ast.nodes(receiver).parent = ps.ast.nodes(expression).parent
+                Dim receiverType As String = SemMidReceiverType(ps, receiver)
+                Dim classNode As Integer = SemFindClassNode(ps, receiverType)
+                If classNode >= 0 Then declaration = SemClassMethodNode(ps, classNode, methodName)
+            End If
+        End If
+        If declaration >= 0 Then
+            Dim ch As Integer = ps.ast.nodes(declaration).firstChild
+            Do While ch <> -1
+                If UCase(ps.ast.nodes(ch).kind) = "RETURN_TYPE" Then Return UCase(ps.ast.nodes(ch).value)
+                ch = ps.ast.nodes(ch).nextSibling
+            Loop
+        End If
+    ElseIf kindText = "FIELD_EXPR" Then
+        Dim receiverType As String = SemMidReceiverType(ps, ps.ast.nodes(expression).left)
+        Dim classNode As Integer = SemFindClassNode(ps, receiverType)
+        Do While classNode >= 0
+            Dim ch As Integer = ps.ast.nodes(classNode).firstChild
+            Do While ch <> -1
+                Dim memberKind As String = UCase(ps.ast.nodes(ch).kind)
+                If (memberKind = "CLASS_FIELD" Or memberKind = "CLASS_PROPERTY_DECL") And UCase(ps.ast.nodes(ch).value) = nameText Then
+                    Dim typeNode As Integer = ps.ast.nodes(ch).firstChild
+                    Do While typeNode <> -1
+                        If UCase(ps.ast.nodes(typeNode).kind) = "TYPE_REF" Then Return UCase(ps.ast.nodes(typeNode).value)
+                        typeNode = ps.ast.nodes(typeNode).nextSibling
+                    Loop
+                End If
+                ch = ps.ast.nodes(ch).nextSibling
+            Loop
+            Dim baseType As String
+            If SemClassBaseName(ps, classNode, baseType) = 0 Then Exit Do
+            classNode = SemFindClassNode(ps, baseType)
+        Loop
+    End If
+    Return ""
+End Function
+
+Private Function SemMidCloneExpr(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    If nodeIdx < 0 Then Return -1
+    Dim original As ASTNode = ps.ast.nodes(nodeIdx)
+    Dim result As Integer = SemStaticNode(ps, nodeIdx, original.kind, original.value, original.op)
+    ps.ast.nodes(result).typeName = original.typeName
+    ps.ast.nodes(result).symbolName = original.symbolName
+    ps.ast.nodes(result).flags = original.flags
+    Dim leftClone As Integer = SemMidCloneExpr(ps, original.left)
+    Dim rightClone As Integer = SemMidCloneExpr(ps, original.right)
+    ASTSetLeft ps.ast, result, leftClone
+    ASTSetRight ps.ast, result, rightClone
+    Dim ch As Integer = original.firstChild
+    Do While ch <> -1
+        Dim childClone As Integer = SemMidCloneExpr(ps, ch)
+        ASTAddChild ps.ast, result, childClone
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return result
+End Function
+
+Private Function SemMidCapture(ByRef ps As ParseState, ByVal owner As Integer, ByVal expression As Integer, ByVal typeName As String) As Integer
+    Dim nameText As String = "_UXB_MID_CAPTURE_" & LTrim(Str(owner)) & "_" & LTrim(Str(ps.ast.count))
+    Dim dimNode As Integer = SemStaticNode(ps, owner, "DIM_STMT")
+    Dim declNode As Integer = SemStaticNode(ps, owner, "DIM_DECL", nameText)
+    Dim typeNode As Integer = SemStaticNode(ps, owner, "TYPE_REF", typeName)
+    ASTAddChild ps.ast, declNode, typeNode
+    ASTAddChild ps.ast, dimNode, declNode
+    ASTAddChild ps.ast, owner, dimNode
+    Dim assignment As Integer = SemStaticNode(ps, owner, "ASSIGN_STMT", "", "=")
+    Dim assignmentIdent As Integer = SemStaticNode(ps, owner, "IDENT", nameText)
+    ASTSetLeft ps.ast, assignment, assignmentIdent
+    ASTSetRight ps.ast, assignment, expression
+    ASTAddChild ps.ast, owner, assignment
+    Return SemStaticNode(ps, owner, "IDENT", nameText)
+End Function
+
+Private Function SemMidCaptureTarget(ByRef ps As ParseState, ByVal owner As Integer, ByVal target As Integer, ByRef errText As String) As Integer
+    Dim kindText As String = UCase(ps.ast.nodes(target).kind)
+    If kindText = "IDENT" Or kindText = "IDENTIFIER" Then Return 1
+    If kindText = "CALL_EXPR" Then
+        Dim info As UXBArrayMemoryInfo
+        Dim arrayErr As String
+        If UXBFindArrayMemoryInfo(ps, ps.ast.nodes(target).value, info, arrayErr) = 0 Then
+            errText = "semantic: MID assignment target must be writable STRING storage"
+            Return 0
+        End If
+        Dim ch As Integer = ps.ast.nodes(target).firstChild
+        ps.ast.nodes(target).firstChild = -1
+        Do While ch <> -1
+            Dim nextChild As Integer = ps.ast.nodes(ch).nextSibling
+            ps.ast.nodes(ch).nextSibling = -1
+            Dim captured As Integer = SemMidCapture(ps, owner, ch, "I64")
+            ASTAddChild ps.ast, target, captured
+            ch = nextChild
+        Loop
+        Return 1
+    End If
+    If kindText = "FIELD_EXPR" Then
+        Dim receiver As Integer = ps.ast.nodes(target).left
+        If receiver < 0 Then errText = "semantic: MID assignment field receiver missing": Return 0
+        Dim receiverType As String = SemMidReceiverType(ps, receiver)
+        If SemFindClassNode(ps, receiverType) <> -1 Then
+            Dim capturedReceiver As Integer = SemMidCapture(ps, owner, receiver, receiverType)
+            ASTSetLeft ps.ast, target, capturedReceiver
+            Return 1
+        End If
+        If UCase(ps.ast.nodes(receiver).kind) = "CALL_EXPR" Then Return SemMidCaptureTarget(ps, owner, receiver, errText)
+        If UCase(ps.ast.nodes(receiver).kind) = "FIELD_EXPR" Then Return SemMidCaptureTarget(ps, owner, receiver, errText)
+        If UCase(ps.ast.nodes(receiver).kind) <> "IDENT" Then errText = "semantic: MID assignment receiver must be writable storage": Return 0
+        Return 1
+    End If
+    errText = "semantic: MID assignment target must be writable STRING storage"
+    Return 0
+End Function
+
+Private Function SemMidAppendHelper(ByRef ps As ParseState, ByVal helperName As String, ByRef errText As String) As Integer
+    ' Compile one shared implementation through the ordinary language pipeline.
+    ' Its generated locations are unknown, rather than invented user coordinates.
+    Dim code As String
+    code = "FUNCTION " & helperName & "(sourceText AS STRING, startIndex AS I32, replaceLength AS I32, replacement AS STRING) AS STRING" & Chr(10)
+    code &= "IF startIndex < 1 THEN THROW " & Chr(34) & "MID assignment start must be >= 1" & Chr(34) & Chr(10)
+    code &= "IF replaceLength < 0 THEN THROW " & Chr(34) & "MID assignment length must be >= 0" & Chr(34) & Chr(10)
+    code &= "DIM amount AS I32 = LEN(replacement)" & Chr(10)
+    code &= "IF amount > replaceLength THEN amount = replaceLength" & Chr(10)
+    code &= "DIM available AS I32 = LEN(sourceText) - startIndex + 1" & Chr(10)
+    code &= "IF available <= 0 THEN RETURN sourceText" & Chr(10)
+    code &= "IF amount > available THEN amount = available" & Chr(10)
+    code &= "RETURN LEFT(sourceText,startIndex-1) + LEFT(replacement,amount) + MID(sourceText,startIndex+amount)" & Chr(10)
+    code &= "END FUNCTION" & Chr(10)
+    Dim lx As LexerState
+    Dim helper As ParseState
+    Dim declaredCount As Integer = gDeclaredTypeCount
+    Dim referencedCount As Integer = gReferencedTypeCount
+    Dim declaredNames(Any) As String, referencedNames(Any) As String
+    If declaredCount > 0 Then ReDim declaredNames(declaredCount - 1)
+    If referencedCount > 0 Then ReDim referencedNames(referencedCount - 1)
+    For i As Integer = 0 To declaredCount - 1: declaredNames(i) = gDeclaredTypeNames(i): Next i
+    For i As Integer = 0 To referencedCount - 1: referencedNames(i) = gReferencedTypeNames(i): Next i
+    LexerInit lx, code
+    ParserInit helper, lx
+    Dim parsed As Integer = ParseProgram(helper)
+    gDeclaredTypeCount = declaredCount: gReferencedTypeCount = referencedCount
+    If declaredCount > 0 Then ReDim gDeclaredTypeNames(declaredCount - 1)
+    If referencedCount > 0 Then ReDim gReferencedTypeNames(referencedCount - 1)
+    For i As Integer = 0 To declaredCount - 1: gDeclaredTypeNames(i) = declaredNames(i): Next i
+    For i As Integer = 0 To referencedCount - 1: gReferencedTypeNames(i) = referencedNames(i): Next i
+    If parsed = 0 Then errText = "semantic: MID helper failed: " & helper.lastError: Return 0
+    Dim offset As Integer = ps.ast.count - 1
+    For i As Integer = 1 To helper.ast.count - 1
+        Dim result As Integer = ASTNewNode(ps.ast, helper.ast.nodes(i).kind, "", "", 0, 0)
+        ps.ast.nodes(result) = helper.ast.nodes(i)
+        With ps.ast.nodes(result)
+            If .left >= 0 Then .left += offset
+            If .right >= 0 Then .right += offset
+            If .firstChild >= 0 Then .firstChild += offset
+            If .nextSibling >= 0 Then .nextSibling += offset
+            If .parent >= 0 Then .parent += offset
+            .lineNo = 0: .colNo = 0: .sourceFile = ""
+        End With
+    Next i
+    Dim routine As Integer = helper.ast.nodes(helper.rootNode).firstChild + offset
+    ASTAddChild ps.ast, ps.rootNode, routine
+    Return 1
+End Function
+
+Private Function SemNormalizeMidAssignments(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim sourceNodeCount As Integer = ps.ast.count
+    Dim helperName As String = "_UXB_MID_REPLACE_" & LTrim(Str(sourceNodeCount))
+    Dim used As Integer = 0
+    For i As Integer = 0 To sourceNodeCount - 1
+        If UCase(ps.ast.nodes(i).kind) <> "ASSIGN_STMT" Then Continue For
+        Dim candidate As Integer = ps.ast.nodes(i).left
+        Dim candidateName As String = ""
+        If candidate >= 0 AndAlso UCase(ps.ast.nodes(candidate).kind) = "CALL_EXPR" Then
+            candidateName = UCase(Trim(ps.ast.nodes(candidate).value))
+            If candidateName = "" Then candidateName = UCase(Trim(ps.ast.nodes(candidate).symbolName))
+        End If
+        If UCase(ps.ast.nodes(i).op) <> "MID" And UCase(ps.ast.nodes(i).value) <> "MID_ASSIGN" And candidateName <> "MID" Then Continue For
+        Dim midCall As Integer = ps.ast.nodes(i).left
+        Dim replacement As Integer = ps.ast.nodes(i).right
+        Dim count As Integer = SemChildCount(ps, midCall)
+        If count <> 2 And count <> 3 Then errText = "semantic: MID assignment expects target,start[,length]": Return 0
+        Dim target As Integer = SemChildAt(ps, midCall, 0)
+        Dim startExpr As Integer = SemChildAt(ps, midCall, 1)
+        Dim lengthExpr As Integer = IIf(count = 3, SemChildAt(ps, midCall, 2), -1)
+        ps.ast.nodes(target).nextSibling = -1
+        ps.ast.nodes(startExpr).nextSibling = -1
+        If lengthExpr >= 0 Then ps.ast.nodes(lengthExpr).nextSibling = -1
+        ps.ast.nodes(midCall).firstChild = -1
+        ps.ast.nodes(midCall).kind = "TYPE_REF": ps.ast.nodes(midCall).value = "STRING"
+        ps.ast.nodes(midCall).parent = -1
+        ps.ast.nodes(i).kind = "IF_STMT": ps.ast.nodes(i).op = "MID_ASSIGN"
+        ps.ast.nodes(i).left = -1: ps.ast.nodes(i).right = -1
+        ps.ast.nodes(target).parent = i
+        Dim alwaysNode As Integer = SemStaticNode(ps, i, "NUMBER", "1")
+        ASTAddChild ps.ast, i, alwaysNode
+        If SemMidCaptureTarget(ps, i, target, errText) = 0 Then Return 0
+        Dim callNode As Integer = SemStaticNode(ps, i, "CALL_EXPR", helperName)
+        Dim originalText As Integer = SemMidCloneExpr(ps, target)
+        ASTAddChild ps.ast, callNode, originalText
+        ASTAddChild ps.ast, callNode, startExpr
+        If lengthExpr < 0 Then lengthExpr = SemStaticNode(ps, i, "NUMBER", "2147483647")
+        ASTAddChild ps.ast, callNode, lengthExpr
+        ASTAddChild ps.ast, callNode, replacement
+        Dim assignment As Integer = SemStaticNode(ps, i, "ASSIGN_STMT", "", "=")
+        ASTSetLeft ps.ast, assignment, target
+        ASTSetRight ps.ast, assignment, callNode
+        ASTAddChild ps.ast, i, assignment
+        used = 1
+    Next i
+    If used <> 0 Then Return SemMidAppendHelper(ps, helperName, errText)
+    Return 1
+End Function
+
+' S-520: `a ROL= n` / `a ROR= n` donme degil KAYDIRMA yapiyordu (U8 129 ROL= 1 -> 2, beklenen 3; JS 258) ve acik yazim
+' (`a = a ROL n`) ile ayni sonucu vermiyordu. Acik yazim her motorda genislik/isaret farkindadir (S-219); bu yuzden bilesik
+' deyim on uctta acik yazima acilir: hedef (kopyalanarak) ROL/ROR isleminin sol islenenidir.
+Private Function SemRewriteRotateAssignments(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim originalCount As Integer = ps.ast.count
+    Dim i As Integer
+    For i = 0 To originalCount - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "ASSIGN_STMT" Then Continue For
+        Dim assignOp As String = UCase(Trim(ps.ast.nodes(i).op))
+        If assignOp <> "ROL=" And assignOp <> "ROR=" Then Continue For
+        Dim targetNode As Integer = ps.ast.nodes(i).left
+        Dim amountNode As Integer = ps.ast.nodes(i).right
+        If targetNode < 0 Or amountNode < 0 Then
+            errText = "semantic: " & assignOp & " requires a target and a rotate count"
+            Return 0
+        End If
+        Dim rotateNode As Integer = SemStaticNode(ps, i, "BINARY", "", Left(assignOp, 3))
+        ASTSetLeft ps.ast, rotateNode, SemMidCloneExpr(ps, targetNode)
+        ASTSetRight ps.ast, rotateNode, amountNode
+        ASTSetRight ps.ast, i, rotateNode
+        ps.ast.nodes(i).op = "="
+    Next i
+    Return 1
+End Function
+#endif

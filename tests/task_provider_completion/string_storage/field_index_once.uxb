@@ -1,0 +1,24 @@
+TYPE Record
+    text AS STRING
+    mark AS I32
+END TYPE
+DIM records(0 TO 2) AS Record
+DIM calls AS I32 = 0
+DIM trace AS I32 = 0
+FUNCTION NextIndex() AS I32
+    calls += 1
+    trace = trace * 10 + 1
+    RETURN 0
+END FUNCTION
+FUNCTION RightValue() AS STRING
+    trace = trace * 10 + 2
+    RETURN "x"
+END FUNCTION
+records(0).text = "AB" + CHR(0) + "CD"
+records(0).mark = 42
+records(NextIndex()).text += RightValue()
+PRINT LEN(records(0).text)
+PRINT ASC(MID(records(0).text, 3, 1))
+PRINT calls
+PRINT trace
+PRINT records(0).mark

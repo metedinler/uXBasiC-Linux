@@ -1,0 +1,25 @@
+INCLUDE "include/modules/uxstats.uxmh"
+
+DIM v AS U64
+v = UXSTATS_VecCreate(8)
+UXSTATS_VecPush(v, 1.0)
+UXSTATS_VecPush(v, 2.0)
+UXSTATS_VecPush(v, 3.0)
+UXSTATS_VecPush(v, 4.0)
+
+PRINT UXSTATS_Version()
+PRINT UXSTATS_VecCount(v)
+PRINT UXSTATS_Mean(v)
+PRINT UXSTATS_StdDevSamp(v)
+PRINT UXSTATS_Median(v)
+PRINT UXSTATS_Percentile(v, 75.0)
+
+ASSERT UXSTATS_Version() = 1
+ASSERT UXSTATS_VecCount(v) = 4
+ASSERT ABS(UXSTATS_Mean(v) - 2.5) < 0.000001
+ASSERT ABS(UXSTATS_StdDevSamp(v) - 1.29099444873581) < 0.000001
+ASSERT ABS(UXSTATS_Median(v) - 2.5) < 0.000001
+ASSERT ABS(UXSTATS_Percentile(v, 75.0) - 3.25) < 0.000001
+
+UXSTATS_VecFree(v)
+PRINT "PASS_UXSTATS"

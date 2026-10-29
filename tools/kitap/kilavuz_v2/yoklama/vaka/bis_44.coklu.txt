@@ -1,0 +1,36 @@
+V1 IMMUTABLE alan
+CLASS Kutu
+PUBLIC
+    IMMUTABLE DIM x AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+PRINT "tamam"
+=====
+V2 RESTRICTED bolumu
+CLASS Kutu
+RESTRICTED
+    DIM x AS I32
+PUBLIC
+    METHOD Al() AS I32
+        RETURN x
+    END METHOD
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+PRINT k.Al()
+=====
+V3 FRIEND bolumu
+CLASS Kutu
+FRIEND
+    DIM x AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+PRINT "tamam"
+=====
+V4 IMMUTABLE yazma denemesi
+CLASS Kutu
+PUBLIC
+    IMMUTABLE DIM x AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.x = 5
+PRINT k.x

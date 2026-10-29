@@ -5,6 +5,7 @@
 #include once "common/diagnostic.fbs"
 #include once "common/artifact_standard.fbs"
 #include once "build/main_cli_runtime_helpers.fbs"
+#include once "preprocessor/preprocess_package.fbs"
 
 ' ADIM23: Adim20/22 katman cikti sozlesmesi baglayicisi.
 ' Test runner artifact uydurmaz; compiler gercek veriden rapor uretir.
@@ -58,6 +59,7 @@ Type UXBOutputContractPaths
     exeRoot As String
     dllRoot As String
     webRoot As String
+    outRootBase As String
     activeBindPlanJsonOutPath As String
     activeBindPlanTxtOutPath As String
     semanticTypesJsonOutPath As String
@@ -131,6 +133,7 @@ Sub UXBOutputContractInit(ByRef p As UXBOutputContractPaths)
     p.exeRoot = ""
     p.dllRoot = ""
     p.webRoot = ""
+    p.outRootBase = ""
     p.activeBindPlanJsonOutPath = ""
     p.activeBindPlanTxtOutPath = ""
     p.semanticTypesJsonOutPath = ""
@@ -205,6 +208,7 @@ Sub UXBOutputContractReadCli(ByRef p As UXBOutputContractPaths)
     p.exeRoot = UXBArtifactSubRootForBaseAndRun(artifactRootBase, "exe", p.runId)
     p.dllRoot = UXBArtifactSubRootForBaseAndRun(artifactRootBase, "dll", p.runId)
     p.webRoot = UXBArtifactSubRootForBaseAndRun(artifactRootBase, "web", p.runId)
+    p.outRootBase = artifactRootBase
 
     If GetArgValue("--run-manifest-json-out", p.runManifestJsonOutPath) = 0 Then p.runManifestJsonOutPath = p.artifactRoot & "/run_manifest.json"
     If GetArgValue("--all-diagnostics-json-out", p.allDiagnosticsJsonOutPath) = 0 Then p.allDiagnosticsJsonOutPath = p.artifactRoot & "/diagnostics/all_diagnostics.json"
@@ -352,12 +356,80 @@ Private Function UXBOutputEmitGeneratedBlocks(ByRef paths As UXBOutputContractPa
         If writeOk = 0 Then Return 0
         PreprocessResultAddManifest preprocessResult, "files.generated." & outFile & ".path", physicalPath
     Next i
+
+    ' %%GEN_FILE path KIND declares a file the program generates. Without a %%GEN_BLOCK for it the file is created empty
+    ' (with a warning); a JSON file must hold valid JSON.
+    Dim mi As Integer
+    For mi = 0 To preprocessResult.manifestCount - 1
+        Dim mk As String = preprocessResult.manifest(mi).keyText
+        If Left(mk, 16) <> "files.generated." Or Right(mk, 5) <> ".kind" Then Continue For
+        Dim genName As String = Mid(mk, 17, Len(mk) - 16 - 5)
+        Dim declaredBefore As Integer = 0
+        Dim dj As Integer
+        For dj = 0 To mi - 1
+            If preprocessResult.manifest(dj).keyText = mk Then declaredBefore = 1: Exit For
+        Next dj
+        If declaredBefore <> 0 Then Continue For
+        Dim genKind As String = UCase(preprocessResult.manifest(mi).valueText)
+        Dim genPhysical As String = paths.buildRoot & "/generated/" & genName
+        Dim hasBlock As Integer = 0
+        For dj = 0 To preprocessResult.blockCount - 1
+            If UCase(Trim(preprocessResult.blocks(dj).target)) = "GEN" And UCase(Trim(preprocessResult.blocks(dj).outFile)) = UCase(genName) Then hasBlock = 1: Exit For
+        Next dj
+        If hasBlock = 0 Then
+            If UXBReportWriteText(genPhysical, "", errText) = 0 Then Return 0
+            PreprocessResultAddManifest preprocessResult, "files.generated." & genName & ".path", genPhysical
+            UxbWarn "GEN_FILE_NO_BLOCK: %%GEN_FILE " & genName & " " & genKind & " has no %%GEN_BLOCK; an empty file was written"
+        ElseIf genKind = "JSON" Then
+            Dim genText As String
+            If UXBPkgReadAll(genPhysical, genText) <> 0 Then
+                If UXBPkgJsonIsValid(genText) = 0 Then
+                    errText = "GEN_FILE_KIND_MISMATCH: " & genName & " is declared JSON but its text is not valid JSON"
+                    Return 0
+                End If
+            End If
+        End If
+    Next mi
     Return 1
 End Function
+
+' S-672: %%OUTDIR moves the web package to <out-root>/<folder>, %%BROWSER_ENTRY names the page.
+' Paths given on the command line (--js-out, --html-out, ...) do not start with the default web root and stay as they are.
+Private Function UXBOutputRebasePath(ByRef pathText As String, ByRef oldRoot As String, ByRef newRoot As String) As String
+    If Trim(pathText) = "" Or oldRoot = "" Then Return pathText
+    If Left(pathText, Len(oldRoot)) = oldRoot Then Return newRoot & Mid(pathText, Len(oldRoot) + 1)
+    Return pathText
+End Function
+
+Sub UXBOutputContractApplyPreprocess(ByRef paths As UXBOutputContractPaths, ByRef preprocessResult As PreprocessResult)
+    Dim outDirText As String = Trim(preprocessResult.outDir)
+    If outDirText <> "" And Trim(paths.outRootBase) <> "" Then
+        Dim oldRoot As String = paths.webRoot
+        Dim newRoot As String = paths.outRootBase & "/" & UXBPkgSlash(outDirText)
+        paths.jsOutPath = UXBOutputRebasePath(paths.jsOutPath, oldRoot, newRoot)
+        paths.jsRuntimeOutPath = UXBOutputRebasePath(paths.jsRuntimeOutPath, oldRoot, newRoot)
+        paths.watOutPath = UXBOutputRebasePath(paths.watOutPath, oldRoot, newRoot)
+        paths.wasmOutPath = UXBOutputRebasePath(paths.wasmOutPath, oldRoot, newRoot)
+        paths.htmlOutPath = UXBOutputRebasePath(paths.htmlOutPath, oldRoot, newRoot)
+        paths.manifestOutPath = UXBOutputRebasePath(paths.manifestOutPath, oldRoot, newRoot)
+        paths.browserIndexOutPath = UXBOutputRebasePath(paths.browserIndexOutPath, oldRoot, newRoot)
+        paths.webRoot = newRoot
+    End If
+    Dim entryHtml As String = ""
+    If UXBPkgManifestGet(preprocessResult, "entries.html", entryHtml) <> 0 Then
+        If paths.htmlOutPath = paths.browserIndexOutPath And Trim(entryHtml) <> "" Then
+            Dim htmlDir As String = UXBPkgDirOf(paths.htmlOutPath)
+            paths.htmlOutPath = UXBPkgJoin(htmlDir, UXBPkgSlash(entryHtml))
+            paths.browserIndexOutPath = paths.htmlOutPath
+        End If
+    End If
+End Sub
 
 
 Function UXBOutputContractWriteFrontendArtifacts(ByRef paths As UXBOutputContractPaths, ByRef originalSourceText As String, ByRef expandedSourceText As String, ByRef preprocessResult As PreprocessResult, ByRef errText As String) As Integer
     errText = ""
+
+    UXBOutputContractApplyPreprocess paths, preprocessResult
 
     If UXBOutputPathRequested(paths.originalSourceOutPath) <> 0 Then
         If UXBOutputWriteText(paths.originalSourceOutPath, originalSourceText, errText) = 0 Then Return 0
@@ -608,8 +680,10 @@ Function UXBOutputContractWriteDiagnosticList(ByRef paths As UXBOutputContractPa
 End Function
 
 Private Sub UXBOutputContractLocationFromMessage(ByRef messageText As String, ByRef lineNo As Integer, ByRef colNo As Integer)
-    lineNo = 1
-    colNo = 1
+    lineNo = 0
+    colNo = 0
+    UXBErr45ExtractSrcPos messageText, lineNo, colNo
+    If lineNo > 0 Then Exit Sub
     Dim scanPos As Integer
     scanPos = 1
     Do
@@ -639,13 +713,56 @@ Private Sub UXBOutputContractLocationFromMessage(ByRef messageText As String, By
     Loop
 End Sub
 
+Private Function UXBOutputContractLibraryTypeDetail(ByRef messageText As String) As String
+    Dim lowerText As String = LCase(messageText)
+    Dim marker As String = "library type lifecycle provider unavailable for "
+    Dim markerPos As Integer = InStr(lowerText, marker)
+    If markerPos > 0 Then Return Trim(Mid(messageText, markerPos + Len(marker)))
+    marker = "library type provider unavailable for "
+    markerPos = InStr(lowerText, marker)
+    If markerPos > 0 Then Return Trim(Mid(messageText, markerPos + Len(marker)))
+    Return Trim(messageText)
+End Function
+
+Private Function UXBOutputContractProviderDetail(ByRef messageText As String) As String
+    Dim lowerText As String = LCase(messageText)
+    Dim marker As String
+    Dim markerPos As Integer
+    marker = "library type provider missing:"
+    markerPos = InStr(lowerText, marker)
+    If markerPos > 0 Then Return Trim(Mid(messageText, markerPos + Len(marker)))
+    marker = "library type provider type mismatch:"
+    markerPos = InStr(lowerText, marker)
+    If markerPos > 0 Then Return Trim(Mid(messageText, markerPos + Len(marker)))
+    marker = "library type provider operation unavailable:"
+    markerPos = InStr(lowerText, marker)
+    If markerPos > 0 Then Return Trim(Mid(messageText, markerPos + Len(marker)))
+    Return Trim(messageText)
+End Function
+
+Private Function UXBOutputContractFailureCode(ByRef stageText As String, ByRef messageText As String) As String
+    Dim upperMessage As String = UCase(messageText)
+    If InStr(upperMessage, "UXB_LIBTYPE_PROVIDER_UNAVAILABLE:") > 0 Or _
+       InStr(upperMessage, "LIBRARY TYPE LIFECYCLE PROVIDER UNAVAILABLE") > 0 Then
+        Return "UXB_LIBTYPE_PROVIDER_UNAVAILABLE"
+    End If
+    If InStr(upperMessage, "UXB_LIBTYPE_PROVIDER_TYPE_MISMATCH:") > 0 Then Return "UXB_LIBTYPE_PROVIDER_TYPE_MISMATCH"
+    If InStr(upperMessage, "UXB_LIBTYPE_PROVIDER_MISSING:") > 0 Then Return "UXB_LIBTYPE_PROVIDER_MISSING"
+    If InStr(upperMessage, "UXB_LIBTYPE_PROVIDER_OPERATION_UNAVAILABLE:") > 0 Then Return "UXB_LIBTYPE_PROVIDER_OPERATION_UNAVAILABLE"
+    If InStr(upperMessage, "UXB_CALL_PAREN_REQUIRED:") > 0 Then Return "UXB_CALL_PAREN_REQUIRED"
+    If InStr(upperMessage, "UXB_CONST_ASSIGNMENT:") > 0 Then Return "UXB_CONST_ASSIGNMENT"
+    If InStr(upperMessage, "UXB_MIXED_STRING_NUMERIC:") > 0 Then Return "UXB_MIXED_STRING_NUMERIC"
+    If InStr(upperMessage, "UXB_INTERPRETER_COMPARE_MISMATCH:") > 0 Then Return "UXB_INTERPRETER_COMPARE_MISMATCH"
+    Return "UXB_" & UCase(Trim(stageText)) & "_FAILED"
+End Function
+
 Function UXBOutputContractPushFailureDiagnostic(ByRef list As UXBDiagnosticList, ByVal stageText As String, ByRef messageText As String, ByRef sourcePathText As String) As Integer
     Dim codeText As String
     Dim layerText As String
     Dim phaseText As String
     Dim surfaceText As String
     Dim hintText As String
-    codeText = "UXB_" & UCase(Trim(stageText)) & "_FAILED"
+    codeText = UXBOutputContractFailureCode(stageText, messageText)
     layerText = LCase(Trim(stageText))
     phaseText = layerText
     surfaceText = ""
@@ -655,7 +772,93 @@ Function UXBOutputContractPushFailureDiagnostic(ByRef list As UXBDiagnosticList,
     UXBOutputContractLocationFromMessage messageText, lineNo, colNo
     Dim srcLocation As SourceLocation
     srcLocation = UXBSourceLocationMake(sourcePathText, lineNo, colNo, 1, surfaceText)
+    If codeText = "UXB_LIBTYPE_PROVIDER_UNAVAILABLE" Then
+        Dim targetDetail As String = UXBOutputContractLibraryTypeDetail(messageText)
+        Dim enMessage As String = "Library type provider is unavailable for the execution target: " & targetDetail
+        Dim trMessage As String = "Calistirma hedefi icin kutuphane tipi saglayicisi kullanilamiyor: " & targetDetail
+        Return UXBDiagnosticPushBilingual(list, "UXB_LIBTYPE_PROVIDER_UNAVAILABLE", UXB_DIAG_ERROR, "library_type", "target_validation", enMessage, trMessage, srcLocation, targetDetail, "Register a provider for this target or use a supported library type", "Bu hedef icin provider kaydedin veya desteklenen bir kutuphane tipi kullanin")
+    End If
+    If codeText = "UXB_LIBTYPE_PROVIDER_TYPE_MISMATCH" Then
+        Dim mismatchDetail As String = UXBOutputContractProviderDetail(messageText)
+        Return UXBDiagnosticPushBilingual(list, "UXB_LIBTYPE_PROVIDER_TYPE_MISMATCH", UXB_DIAG_ERROR, "library_type", "provider_call", _
+            "Library type provider does not support this type: " & mismatchDetail, _
+            "Kutuphane tipi saglayicisi bu tipi desteklemiyor: " & mismatchDetail, srcLocation, mismatchDetail, _
+            "Register a provider that supports this library type", "Bu kutuphane tipini destekleyen bir provider kaydedin")
+    End If
+    If codeText = "UXB_LIBTYPE_PROVIDER_MISSING" Then
+        Dim missingDetail As String = UXBOutputContractProviderDetail(messageText)
+        Return UXBDiagnosticPushBilingual(list, "UXB_LIBTYPE_PROVIDER_MISSING", UXB_DIAG_ERROR, "library_type", "provider_call", _
+            "Library type provider is missing: " & missingDetail, _
+            "Kutuphane tipi saglayicisi eksik: " & missingDetail, srcLocation, missingDetail, _
+            "Install or register the provider for this library type operation", "Bu kutuphane tipi islemi icin provider kurun veya kaydedin")
+    End If
+    If codeText = "UXB_LIBTYPE_PROVIDER_OPERATION_UNAVAILABLE" Then
+        Dim operationDetail As String = UXBOutputContractProviderDetail(messageText)
+        Return UXBDiagnosticPushBilingual(list, "UXB_LIBTYPE_PROVIDER_OPERATION_UNAVAILABLE", UXB_DIAG_ERROR, "library_type", "provider_call", _
+            "Library type provider does not support this operation: " & operationDetail, _
+            "Kutuphane tipi saglayicisi bu islemi desteklemiyor: " & operationDetail, srcLocation, operationDetail, _
+            "Use a provider that implements this operation or choose a supported member", "Bu islemi uygulayan bir provider kullanin veya desteklenen bir uye secin")
+    End If
     Return UXBDiagnosticPush(list, codeText, UXB_DIAG_ERROR, layerText, phaseText, messageText, srcLocation, surfaceText, hintText)
+End Function
+
+Private Function UXBOutputContractFailureJson(ByRef schemaText As String, ByRef stageText As String, ByRef messageText As String) As String
+    Dim codeText As String = UXBOutputContractFailureCode(stageText, messageText)
+    Dim layerText As String = LCase(Trim(stageText))
+    Dim phaseText As String = layerText
+    Dim messageEn As String = UXBOutputSafeMessageText(messageText)
+    Dim messageTr As String = messageEn
+    Dim detailsText As String = messageEn
+    If codeText = "UXB_LIBTYPE_PROVIDER_UNAVAILABLE" Then
+        Dim targetDetail As String = UXBOutputContractLibraryTypeDetail(messageText)
+        messageEn = "Library type provider is unavailable for the execution target: " & targetDetail
+        messageTr = "Calistirma hedefi icin kutuphane tipi saglayicisi kullanilamiyor: " & targetDetail
+        detailsText = targetDetail
+        layerText = "library_type"
+        phaseText = "target_validation"
+    ElseIf codeText = "UXB_LIBTYPE_PROVIDER_MISSING" Then
+        layerText = "library_type"
+        phaseText = "provider_call"
+        Dim missingDetailJson As String = UXBOutputContractProviderDetail(messageText)
+        messageEn = "Library type provider is missing: " & missingDetailJson
+        messageTr = "Kutuphane tipi saglayicisi eksik: " & missingDetailJson
+        detailsText = missingDetailJson
+    ElseIf codeText = "UXB_LIBTYPE_PROVIDER_TYPE_MISMATCH" Then
+        layerText = "library_type"
+        phaseText = "provider_call"
+        Dim mismatchDetailJson As String = UXBOutputContractProviderDetail(messageText)
+        messageEn = "Library type provider does not support this type: " & mismatchDetailJson
+        messageTr = "Kutuphane tipi saglayicisi bu tipi desteklemiyor: " & mismatchDetailJson
+        detailsText = mismatchDetailJson
+    ElseIf codeText = "UXB_LIBTYPE_PROVIDER_OPERATION_UNAVAILABLE" Then
+        layerText = "library_type"
+        phaseText = "provider_call"
+        Dim operationDetailJson As String = UXBOutputContractProviderDetail(messageText)
+        messageEn = "Library type provider does not support this operation: " & operationDetailJson
+        messageTr = "Kutuphane tipi saglayicisi bu islemi desteklemiyor: " & operationDetailJson
+        detailsText = operationDetailJson
+    End If
+    Dim q As String = Chr(34)
+    Dim j As String = "{" & Chr(10)
+    j &= "  " & q & "schema" & q & ": " & q & JsonEscape(schemaText) & q & "," & Chr(10)
+    j &= "  " & q & "ok" & q & ": false," & Chr(10)
+    j &= "  " & q & "code" & q & ": " & q & JsonEscape(codeText) & q & "," & Chr(10)
+    j &= "  " & q & "severity" & q & ": " & q & "error" & q & "," & Chr(10)
+    j &= "  " & q & "layer" & q & ": " & q & JsonEscape(layerText) & q & "," & Chr(10)
+    j &= "  " & q & "phase" & q & ": " & q & JsonEscape(phaseText) & q & "," & Chr(10)
+    j &= "  " & q & "message" & q & ": " & q & JsonEscape(messageEn) & q & "," & Chr(10)
+    j &= "  " & q & "message_en" & q & ": " & q & JsonEscape(messageEn) & q & "," & Chr(10)
+    j &= "  " & q & "message_tr" & q & ": " & q & JsonEscape(messageTr) & q & "," & Chr(10)
+    j &= "  " & q & "details" & q & ": " & q & JsonEscape(detailsText) & q & Chr(10)
+    j &= "}" & Chr(10)
+    Return j
+End Function
+
+Private Function UXBOutputContractWriteFailureJsonIfRequested(ByRef outPath As String, ByRef schemaText As String, ByRef stageText As String, ByRef messageText As String, ByRef errText As String) As Integer
+    errText = ""
+    If UXBOutputPathRequested(outPath) = 0 Then Return 1
+    Dim jsonText As String = UXBOutputContractFailureJson(schemaText, stageText, messageText)
+    Return UXBOutputWriteText(outPath, jsonText, errText)
 End Function
 
 Function UXBOutputContractWriteFailureDiagnostics(ByRef paths As UXBOutputContractPaths, ByRef stageText As String, ByRef messageText As String, ByRef errText As String) As Integer
@@ -664,13 +867,11 @@ Function UXBOutputContractWriteFailureDiagnostics(ByRef paths As UXBOutputContra
     schemaBase = "uxb.failure_diagnostic.v1." & LCase(Trim(stageText))
 
     Dim werr As String
-    Dim msgSafe As String
-    msgSafe = UXBOutputSafeMessageText(messageText)
-    If UXBOutputContractWriteJsonIfRequested(paths.lexerDiagnosticsJsonOutPath, schemaBase & ".lexer", "false", msgSafe, werr) = 0 Then errText = werr
-    If UXBOutputContractWriteJsonIfRequested(paths.parserDiagnosticsJsonOutPath, schemaBase & ".parser", "false", msgSafe, werr) = 0 Then errText = werr
-    If UXBOutputContractWriteJsonIfRequested(paths.semanticJsonOutPath, schemaBase & ".semantic_report", "false", msgSafe, werr) = 0 Then errText = werr
-    If UXBOutputContractWriteJsonIfRequested(paths.semanticDiagnosticsJsonOutPath, schemaBase & ".semantic", "false", msgSafe, werr) = 0 Then errText = werr
-    If UXBOutputContractWriteJsonIfRequested(paths.backendReportJsonOutPath, schemaBase & ".backend", "false", msgSafe, werr) = 0 Then errText = werr
+    If UXBOutputContractWriteFailureJsonIfRequested(paths.lexerDiagnosticsJsonOutPath, schemaBase & ".lexer", stageText, messageText, werr) = 0 Then errText = werr
+    If UXBOutputContractWriteFailureJsonIfRequested(paths.parserDiagnosticsJsonOutPath, schemaBase & ".parser", stageText, messageText, werr) = 0 Then errText = werr
+    If UXBOutputContractWriteFailureJsonIfRequested(paths.semanticJsonOutPath, schemaBase & ".semantic_report", stageText, messageText, werr) = 0 Then errText = werr
+    If UXBOutputContractWriteFailureJsonIfRequested(paths.semanticDiagnosticsJsonOutPath, schemaBase & ".semantic", stageText, messageText, werr) = 0 Then errText = werr
+    If UXBOutputContractWriteFailureJsonIfRequested(paths.backendReportJsonOutPath, schemaBase & ".backend", stageText, messageText, werr) = 0 Then errText = werr
 
     If errText <> "" Then Return 0
     Return 1

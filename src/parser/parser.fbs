@@ -17,6 +17,7 @@ Type ParseState
     lx As LexerState
     cursorIndex As Integer
     parseDebug As Integer
+    trustedGeneratedInput As Integer
     lastError As String
     parseErrorCount As Integer
     parseErrors(Any) As String

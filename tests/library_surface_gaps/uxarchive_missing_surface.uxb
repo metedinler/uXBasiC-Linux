@@ -1,0 +1,10 @@
+INCLUDE "include/modules/uxarchive.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxarchive.EntryCount("")
+        PRINT uxarchive.ErrorText()
+        PRINT uxarchive.ExtractAll("", "")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXARCHIVE"
+END MAIN

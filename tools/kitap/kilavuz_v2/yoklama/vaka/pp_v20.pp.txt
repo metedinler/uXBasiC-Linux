@@ -1,0 +1,66 @@
+=== v1_degisken_ilk
+DIM m AS STRING = "[INFO] a [WARN] b [INFO] c"
+DIM p AS STRING = "[INFO]"
+DIM k AS I32 = 1
+k = INSTR(k, m, p)
+PRINT k
+k += 6
+PRINT k
+k = INSTR(k, m, p)
+PRINT k
+k += 6
+PRINT k
+k = INSTR(k, m, p)
+PRINT k
+=== v2_ayri_degisken
+DIM m AS STRING = "[INFO] a [WARN] b [INFO] c"
+DIM p AS STRING = "[INFO]"
+DIM k AS I32 = 1
+DIM r AS I32
+r = INSTR(k, m, p)
+PRINT r
+k = r + 6
+r = INSTR(k, m, p)
+PRINT r
+k = r + 6
+r = INSTR(k, m, p)
+PRINT r
+=== v3_fonksiyon_icinde
+FUNCTION Ilk(metin AS STRING, parca AS STRING, bas AS I32) AS I32
+    RETURN INSTR(bas, metin, parca)
+END FUNCTION
+PRINT Ilk("[INFO] a [WARN] b [INFO] c", "[INFO]", 1)
+PRINT Ilk("[INFO] a [WARN] b [INFO] c", "[INFO]", 7)
+PRINT Ilk("[INFO] a [WARN] b [INFO] c", "[INFO]", 22)
+=== v4_dongu_ayri_degisken
+FUNCTION Say(metin AS STRING, parca AS STRING) AS I32
+    DIM adet AS I32 = 0
+    DIM bas AS I32 = 1
+    DIM r AS I32
+    DIM g AS I32 = 0
+    DO
+        r = INSTR(bas, metin, parca)
+        g += 1
+        IF g > 10 THEN
+            PRINT "SONSUZ"
+            EXIT DO
+        END IF
+        IF r = 0 THEN EXIT DO
+        adet += 1
+        bas = r + LEN(parca)
+    LOOP
+    RETURN adet
+END FUNCTION
+PRINT Say("[INFO] a [WARN] b [INFO] c", "[INFO]")
+=== v5_do_while
+FUNCTION Say(metin AS STRING, parca AS STRING) AS I32
+    DIM adet AS I32 = 0
+    DIM konum AS I32 = 1
+    konum = INSTR(konum, metin, parca)
+    DO WHILE konum > 0
+        adet += 1
+        konum = INSTR(konum + LEN(parca), metin, parca)
+    LOOP
+    RETURN adet
+END FUNCTION
+PRINT Say("[INFO] a [WARN] b [INFO] c", "[INFO]")

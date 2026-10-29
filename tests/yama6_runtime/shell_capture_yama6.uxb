@@ -1,0 +1,6 @@
+DIM cevap AS STRING
+DIM hata AS STRING
+DIM kod AS I32
+SHELL "cmd /c echo SHELL_OK" TIMEOUT 10000 OUTVAR cevap ERRVAR hata CODEVAR kod
+PRINT cevap
+PRINT kod

@@ -1,0 +1,17 @@
+' S-271 / S-141: NAMESPACE A icinde yalin Topla kendi namespace'ine gider; ust duzey USING B belirsizlik uretmez.
+' AST yorumlayici bunu USING B'ye bagliyor (S-715), bu yuzden AST bu testin motor listesinde yok.
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING B
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+    FUNCTION Cagir(x AS I32, y AS I32) AS I32
+        RETURN Topla(x, y)
+    END FUNCTION
+END NAMESPACE
+PRINT A.Cagir(3, 4)

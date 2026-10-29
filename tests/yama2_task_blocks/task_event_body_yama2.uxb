@@ -1,0 +1,3 @@
+EVENT VeriGeldi
+    PRINT "EVENT_BODY"
+END EVENT

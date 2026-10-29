@@ -1,0 +1,2 @@
+INCLUDE "tests/adim36_full_surface/includes/math_aliases.uxbh"
+CONST NESTED_VALUE AS I32 = 42

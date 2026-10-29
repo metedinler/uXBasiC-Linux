@@ -1,0 +1,7 @@
+' S-544: FUNCTION with a DECLARE, used in an expression and as an argument before the definition.
+DECLARE FUNCTION Toplam(a AS I32, b AS I32) AS I32
+PRINT Toplam(2, 3)
+PRINT Toplam(Toplam(1, 2), 4) * 2
+FUNCTION Toplam(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION

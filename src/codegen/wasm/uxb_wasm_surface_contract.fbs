@@ -94,7 +94,7 @@ Function UXBWasmSurfaceContractStatus(ByRef surfaceText As String) As String
     Case "ELSE": Return UXBSurfaceLayerStatus(surfaceText, layerText)
     Case "ELSEIF": Return UXBSurfaceLayerStatus(surfaceText, layerText)
     Case "END": Return UXBSurfaceLayerStatus(surfaceText, layerText)
-    Case "EXIT": Return UXBSurfaceLayerStatus(surfaceText, layerText)
+    Case "EXIT", "CONTINUE": Return UXBSurfaceLayerStatus(surfaceText, layerText)
     Case "FOR": Return UXBSurfaceLayerStatus(surfaceText, layerText)
     Case "GOSUB": Return UXBSurfaceLayerStatus(surfaceText, layerText)
     Case "GOTO": Return UXBSurfaceLayerStatus(surfaceText, layerText)

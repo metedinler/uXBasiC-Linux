@@ -222,7 +222,7 @@ Function UXBSurfaceKnown(ByRef surfaceText As String) As Integer
         Return 1
     Case "EVENT"
         Return 1
-    Case "EXIT"
+    Case "EXIT", "CONTINUE"
         Return 1
     Case "EXP"
         Return 1
@@ -306,6 +306,8 @@ Function UXBSurfaceKnown(ByRef surfaceText As String) As Integer
         Return 1
     Case "LOCATE"
         Return 1
+    Case "LOCK"
+        Return 1
     Case "LOF"
         Return 1
     Case "LOG"
@@ -324,6 +326,8 @@ Function UXBSurfaceKnown(ByRef surfaceText As String) As Integer
         Return 1
     Case "MATH"
         Return 1
+    Case "MEMCOPY"
+        Return 1
     Case "MEMCOPYB"
         Return 1
     Case "MEMCOPYD"
@@ -331,6 +335,8 @@ Function UXBSurfaceKnown(ByRef surfaceText As String) As Integer
     Case "MEMCOPYQ"
         Return 1
     Case "MEMCOPYW"
+        Return 1
+    Case "MEMFILL"
         Return 1
     Case "MEMFILLB"
         Return 1
@@ -385,6 +391,8 @@ Function UXBSurfaceKnown(ByRef surfaceText As String) As Integer
     Case "PARALEL"
         Return 1
     Case "PARALEL"
+        Return 1
+    Case "PEEK"
         Return 1
     Case "PEEKB"
         Return 1
@@ -506,6 +514,10 @@ Function UXBSurfaceKnown(ByRef surfaceText As String) As Integer
         Return 1
     Case "TAN"
         Return 1
+    Case "TASK"
+        Return 1
+    Case "TASKGROUP"
+        Return 1
     Case "THEN"
         Return 1
     Case "THREAD"
@@ -537,6 +549,8 @@ Function UXBSurfaceKnown(ByRef surfaceText As String) As Integer
     Case "U8"
         Return 1
     Case "UCASE"
+        Return 1
+    Case "UNSAFE"
         Return 1
     Case "UNTIL"
         Return 1
@@ -748,7 +762,7 @@ Function UXBSurfaceGroup(ByRef surfaceText As String) As String
     Case "END": Return "CONTROL_FLOW"
     Case "EOF": Return "BUILTIN"
     Case "EVENT": Return "BUILTIN"
-    Case "EXIT": Return "CONTROL_FLOW"
+    Case "EXIT", "CONTINUE": Return "CONTROL_FLOW"
     Case "EXP": Return "BUILTIN"
     Case "F128": Return "TYPE"
     Case "F32": Return "TYPE"
@@ -790,6 +804,7 @@ Function UXBSurfaceGroup(ByRef surfaceText As String) As String
     Case "LIST": Return "COLLECTION"
     Case "LLAMA": Return "LIBRARY"
     Case "LOCATE": Return "IO"
+    Case "LOCK": Return "CONTROL_FLOW"
     Case "LOF": Return "BUILTIN"
     Case "LOG": Return "BUILTIN"
     Case "LOOP": Return "CONTROL_FLOW"
@@ -799,10 +814,12 @@ Function UXBSurfaceGroup(ByRef surfaceText As String) As String
     Case "MAGIC": Return "BUILTIN"
     Case "MAIN": Return "MODULE"
     Case "MATH": Return "LIBRARY"
+    Case "MEMCOPY": Return "MEMORY"
     Case "MEMCOPYB": Return "MEMORY"
     Case "MEMCOPYD": Return "MEMORY"
     Case "MEMCOPYQ": Return "MEMORY"
     Case "MEMCOPYW": Return "MEMORY"
+    Case "MEMFILL": Return "MEMORY"
     Case "MEMFILLB": Return "MEMORY"
     Case "MEMFILLD": Return "MEMORY"
     Case "MEMFILLQ": Return "MEMORY"
@@ -814,6 +831,7 @@ Function UXBSurfaceGroup(ByRef surfaceText As String) As String
     Case "MODULE": Return "COMPILE_TIME"
     Case "MUTABLE": Return "COMPILE_TIME"
     Case "NAMESPACE": Return "COMPILE_TIME"
+    Case "NATIVE": Return "BUILTIN"
     Case "NEW": Return "PROCEDURE_OOP"
     Case "NEXT": Return "CONTROL_FLOW"
     Case "NOT": Return "OPERATOR"
@@ -829,6 +847,7 @@ Function UXBSurfaceGroup(ByRef surfaceText As String) As String
     Case "OVERRIDE": Return "BUILTIN"
     Case "PACK": Return "COMPILE_TIME"
     Case "PARALEL": Return "BUILTIN"
+    Case "PEEK": Return "MEMORY"
     Case "PEEKS": Return "MEMORY"
     Case "PEEKB": Return "MEMORY"
     Case "PEEKD": Return "MEMORY"
@@ -890,6 +909,8 @@ Function UXBSurfaceGroup(ByRef surfaceText As String) As String
     Case "STRPTR": Return "BUILTIN"
     Case "SUB": Return "PROCEDURE_OOP"
     Case "TAN": Return "BUILTIN"
+    Case "TASK": Return "BUILTIN"
+    Case "TASKGROUP": Return "BUILTIN"
     Case "THEN": Return "CONTROL_FLOW"
     Case "THREAD": Return "BUILTIN"
     Case "THREAD": Return "BUILTIN"
@@ -906,6 +927,7 @@ Function UXBSurfaceGroup(ByRef surfaceText As String) As String
     Case "U64": Return "TYPE"
     Case "U8": Return "TYPE"
     Case "UCASE": Return "BUILTIN"
+    Case "UNSAFE": Return "CONTROL_FLOW"
     Case "UNTIL": Return "CONTROL_FLOW"
     Case "USING": Return "COMPILE_TIME"
     Case "VAL": Return "BUILTIN"
@@ -1063,9 +1085,10 @@ Function UXBSurfaceKind(ByRef surfaceText As String) As String
     Case "ELSE": Return "BASIC_STATEMENT"
     Case "ELSEIF": Return "BASIC_STATEMENT"
     Case "END": Return "BASIC_STATEMENT"
+    Case "ENUM": Return "BASIC_STATEMENT"
     Case "EOF": Return "BUILTIN_FUNCTION"
     Case "EVENT": Return "BUILTIN_FUNCTION"
-    Case "EXIT": Return "BASIC_STATEMENT"
+    Case "EXIT", "CONTINUE": Return "BASIC_STATEMENT"
     Case "EXP": Return "BUILTIN_FUNCTION"
     Case "F128": Return "DATA_TYPE"
     Case "F32": Return "DATA_TYPE"
@@ -1107,6 +1130,7 @@ Function UXBSurfaceKind(ByRef surfaceText As String) As String
     Case "LIST": Return "BASIC_STATEMENT"
     Case "LLAMA": Return "RUNTIME_LIBRARY"
     Case "LOCATE": Return "BASIC_STATEMENT"
+    Case "LOCK": Return "BASIC_STATEMENT"
     Case "LOF": Return "BUILTIN_FUNCTION"
     Case "LOG": Return "BUILTIN_FUNCTION"
     Case "LOOP": Return "BASIC_STATEMENT"
@@ -1116,10 +1140,12 @@ Function UXBSurfaceKind(ByRef surfaceText As String) As String
     Case "MAGIC": Return "BUILTIN_FUNCTION"
     Case "MAIN": Return "DIRECTIVE"
     Case "MATH": Return "RUNTIME_LIBRARY"
+    Case "MEMCOPY": Return "BUILTIN_FUNCTION"
     Case "MEMCOPYB": Return "BUILTIN_FUNCTION"
     Case "MEMCOPYD": Return "BUILTIN_FUNCTION"
     Case "MEMCOPYQ": Return "BUILTIN_FUNCTION"
     Case "MEMCOPYW": Return "BUILTIN_FUNCTION"
+    Case "MEMFILL": Return "BUILTIN_FUNCTION"
     Case "MEMFILLB": Return "BUILTIN_FUNCTION"
     Case "MEMFILLD": Return "BUILTIN_FUNCTION"
     Case "MEMFILLQ": Return "BUILTIN_FUNCTION"
@@ -1131,6 +1157,7 @@ Function UXBSurfaceKind(ByRef surfaceText As String) As String
     Case "MODULE": Return "DIRECTIVE"
     Case "MUTABLE": Return "DIRECTIVE"
     Case "NAMESPACE": Return "DIRECTIVE"
+    Case "NATIVE": Return "BUILTIN_FUNCTION"
     Case "NEW": Return "BASIC_STATEMENT"
     Case "NEXT": Return "BASIC_STATEMENT"
     Case "NOT": Return "EXPRESSION_OPERATOR"
@@ -1146,6 +1173,7 @@ Function UXBSurfaceKind(ByRef surfaceText As String) As String
     Case "OVERRIDE": Return "BUILTIN_FUNCTION"
     Case "PACK": Return "DIRECTIVE"
     Case "PARALEL": Return "BUILTIN_FUNCTION"
+    Case "PEEK": Return "BUILTIN_FUNCTION"
     Case "PEEKS": Return "BUILTIN_FUNCTION"
     Case "PEEKB": Return "BUILTIN_FUNCTION"
     Case "PEEKD": Return "BUILTIN_FUNCTION"
@@ -1207,6 +1235,8 @@ Function UXBSurfaceKind(ByRef surfaceText As String) As String
     Case "STRPTR": Return "BUILTIN_FUNCTION"
     Case "SUB": Return "BASIC_STATEMENT"
     Case "TAN": Return "BUILTIN_FUNCTION"
+    Case "TASK": Return "BUILTIN_FUNCTION"
+    Case "TASKGROUP": Return "BUILTIN_FUNCTION"
     Case "THEN": Return "BASIC_STATEMENT"
     Case "THREAD": Return "BUILTIN_FUNCTION"
     Case "THREAD": Return "BUILTIN_FUNCTION"
@@ -1223,12 +1253,14 @@ Function UXBSurfaceKind(ByRef surfaceText As String) As String
     Case "U64": Return "DATA_TYPE"
     Case "U8": Return "DATA_TYPE"
     Case "UCASE": Return "BUILTIN_FUNCTION"
+    Case "UNSAFE": Return "BASIC_STATEMENT"
     Case "UNTIL": Return "BASIC_STATEMENT"
     Case "USING": Return "DIRECTIVE"
     Case "VAL": Return "BUILTIN_FUNCTION"
     Case "VARPTR": Return "BUILTIN_FUNCTION"
     Case "VIRTUAL": Return "BUILTIN_FUNCTION"
     Case "WEBGPU": Return "RUNTIME_LIBRARY"
+    Case "WEND": Return "BASIC_STATEMENT"
     Case "WHILE": Return "BASIC_STATEMENT"
     Case "XOR": Return "EXPRESSION_OPERATOR"
     Case "[": Return "EXPRESSION_OPERATOR"

@@ -1,0 +1,162 @@
+#ifndef UXB_SEMANTIC_USING_AMBIGUITY_FBS
+#define UXB_SEMANTIC_USING_AMBIGUITY_FBS
+
+' S-271, Mete K3 2026-10-28: an unqualified call whose name is declared in two DIFFERENT namespaces that are both opened
+' with USING is a compile error. Until now every engine silently took the routine of the first USING (AST, MIR, native x64,
+' JS and WASM printed 7 for A.Topla / B.Topla; legacy AST-x64 refused the program), so the result depended on the order of
+' two USING lines.
+'
+' Rules (tests/declare_shadow_olcum/s271_using_cakisma.coklu.txt, cases U1..U10):
+'   * the error is at the CALL, never at the USING line: a name that is declared twice but never called unqualified is fine;
+'   * an unqualified call resolved BEFORE the USING imports is not ambiguous: a local variable / parameter of that name
+'     (then it is an index expression), a real top-level routine, or a routine of the namespace the call itself stands in
+'     (S-141); qualified calls (A.Topla) are never ambiguous;
+'   * the rule is by NAME, not by parameter count: arity selection through USING does not work on any engine yet (S-714),
+'     so a count-based exception would keep a silently wrong result;
+'   * a routine of the compiler (_UXB_*, __UXB*) is not source text and is ignored; a name that is also a built-in is NOT
+'     handled here (S-705 / K2).
+' Every engine resolves USING program-wide today (mir_lower_expr.fbs MIRResolveUsingRoutineCall walks every USING_ITEM), so this
+' pass does the same instead of inventing block scopes the engines do not have.
+
+Private Function SemUsingAmbiguityNameIndex(names() As String, ByVal total As Integer, ByRef wanted As String) As Integer
+    Dim p As Integer
+    For p = 0 To total - 1
+        If names(p) = wanted Then Return p
+    Next p
+    Return -1
+End Function
+
+' 1 when the unqualified call node resolves without the USING imports
+Private Function SemUsingAmbiguityResolvedElsewhere(ByRef ps As ParseState, ByVal callNode As Integer, ByRef callName As String) As Integer
+    If StiFindDeclAny(ps, callName, callNode) >= 0 Then Return 1
+
+    ' the namespace (or module) the call stands in
+    Dim enclosing As String = ""
+    Dim up As Integer = ps.ast.nodes(callNode).parent
+    Dim hop As Integer = 0
+    Do While up >= 0 And up < ps.ast.count And hop < 4096
+        Dim upKind As String = UCase(Trim(ps.ast.nodes(up).kind))
+        If upKind = "NAMESPACE_STMT" Or upKind = "MODULE_STMT" Then
+            enclosing = UCase(Trim(ps.ast.nodes(up).value))
+            Exit Do
+        End If
+        up = ps.ast.nodes(up).parent
+        hop += 1
+    Loop
+
+    Dim r As Integer
+    For r = 0 To ps.ast.count - 1
+        Dim rKind As String = UCase(Trim(ps.ast.nodes(r).kind))
+        If rKind <> "FUNCTION_STMT" And rKind <> "SUB_STMT" Then Continue For
+        If UCase(Trim(ps.ast.nodes(r).value)) <> callName Then Continue For
+        Dim rParent As Integer = ps.ast.nodes(r).parent
+        If rParent = ps.rootNode Then Return 1
+        If enclosing <> "" And rParent >= 0 And rParent < ps.ast.count Then
+            Dim rParentKind As String = UCase(Trim(ps.ast.nodes(rParent).kind))
+            If rParentKind = "NAMESPACE_STMT" Or rParentKind = "MODULE_STMT" Then
+                If UCase(Trim(ps.ast.nodes(rParent).value)) = enclosing Then Return 1
+            End If
+        End If
+    Next r
+    Return 0
+End Function
+
+Private Function SemValidateUsingAmbiguity(ByRef ps As ParseState, ByRef errText As String) As Integer
+    ' step 1: the distinct namespaces opened with USING
+    Dim usingNs() As String
+    Dim usingTotal As Integer = 0
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(i).kind)) <> "USING_ITEM" Then Continue For
+        Dim usingName As String = UCase(Trim(ps.ast.nodes(i).value))
+        If usingName = "" Then Continue For
+        If usingTotal > 0 Then
+            If SemUsingAmbiguityNameIndex(usingNs(), usingTotal, usingName) >= 0 Then Continue For
+        End If
+        If usingTotal = 0 Then ReDim usingNs(0) Else ReDim Preserve usingNs(usingTotal)
+        usingNs(usingTotal) = usingName
+        usingTotal += 1
+    Next i
+    If usingTotal < 2 Then Return 1
+
+    ' step 2: routine names declared by at least two different USING namespaces
+    Dim seenName() As String
+    Dim seenOwner() As String
+    Dim seenOwnerShown() As String
+    Dim seenTotal As Integer = 0
+    Dim ambName() As String
+    Dim ambFirst() As String
+    Dim ambSecond() As String
+    Dim ambTotal As Integer = 0
+    For i = 0 To ps.ast.count - 1
+        Dim defKind As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If defKind <> "FUNCTION_STMT" And defKind <> "SUB_STMT" Then Continue For
+        Dim defParent As Integer = ps.ast.nodes(i).parent
+        If defParent < 0 Or defParent >= ps.ast.count Then Continue For
+        Dim defParentKind As String = UCase(Trim(ps.ast.nodes(defParent).kind))
+        If defParentKind <> "NAMESPACE_STMT" And defParentKind <> "MODULE_STMT" Then Continue For
+        Dim defOwner As String = UCase(Trim(ps.ast.nodes(defParent).value))
+        If SemUsingAmbiguityNameIndex(usingNs(), usingTotal, defOwner) < 0 Then Continue For
+        Dim defName As String = UCase(Trim(ps.ast.nodes(i).value))
+        If defName = "" Or InStr(defName, ".") > 0 Then Continue For
+        If Left(defName, 5) = "_UXB_" Or Left(defName, 5) = "__UXB" Then Continue For
+
+        Dim seenAt As Integer = -1
+        If seenTotal > 0 Then seenAt = SemUsingAmbiguityNameIndex(seenName(), seenTotal, defName)
+        If seenAt < 0 Then
+            If seenTotal = 0 Then
+                ReDim seenName(0)
+                ReDim seenOwner(0)
+                ReDim seenOwnerShown(0)
+            Else
+                ReDim Preserve seenName(seenTotal)
+                ReDim Preserve seenOwner(seenTotal)
+                ReDim Preserve seenOwnerShown(seenTotal)
+            End If
+            seenName(seenTotal) = defName
+            seenOwner(seenTotal) = defOwner
+            seenOwnerShown(seenTotal) = defOwner
+            seenTotal += 1
+        ElseIf seenOwner(seenAt) <> defOwner Then
+            Dim ambAt As Integer = -1
+            If ambTotal > 0 Then ambAt = SemUsingAmbiguityNameIndex(ambName(), ambTotal, defName)
+            If ambAt < 0 Then
+                If ambTotal = 0 Then
+                    ReDim ambName(0)
+                    ReDim ambFirst(0)
+                    ReDim ambSecond(0)
+                Else
+                    ReDim Preserve ambName(ambTotal)
+                    ReDim Preserve ambFirst(ambTotal)
+                    ReDim Preserve ambSecond(ambTotal)
+                End If
+                ambName(ambTotal) = defName
+                ambFirst(ambTotal) = seenOwnerShown(seenAt)
+                ambSecond(ambTotal) = defOwner
+                ambTotal += 1
+            End If
+        End If
+    Next i
+    If ambTotal = 0 Then Return 1
+
+    ' step 3: unqualified calls of such a name that nothing earlier in the resolution order claims
+    For i = 0 To ps.ast.count - 1
+        Dim callKind As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If callKind <> "CALL_STMT" And callKind <> "CALL_EXPR" Then Continue For
+        Dim callName As String = UCase(Trim(ps.ast.nodes(i).value))
+        If callName = "" Or InStr(callName, ".") > 0 Then Continue For
+        Dim ambIdx As Integer = SemUsingAmbiguityNameIndex(ambName(), ambTotal, callName)
+        If ambIdx < 0 Then Continue For
+        If SemUsingAmbiguityResolvedElsewhere(ps, i, callName) <> 0 Then Continue For
+
+        ' the AST keeps identifiers normalised; upper case matches the other semantic messages (declaration signature mismatch IKI ...)
+        Dim shown As String = callName
+        errText = "semantic: UXB_USING_AMBIGUOUS_NAME: '" & shown & "' is declared in namespaces " & ambFirst(ambIdx) & " and " & ambSecond(ambIdx) & _
+                  " (both opened with USING); write " & ambFirst(ambIdx) & "." & shown & " or " & ambSecond(ambIdx) & "." & shown & _
+                  " [line " & LTrim(Str(ps.ast.nodes(i).lineNo)) & "]"
+        Return 0
+    Next i
+    Return 1
+End Function
+
+#endif

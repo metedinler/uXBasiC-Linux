@@ -1,0 +1,19 @@
+INCLUDE "include/modules/uxcrypto.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxcrypto.BlobData(0)
+        uxcrypto.BlobFree(0)
+        PRINT uxcrypto.BlobSize(0)
+        PRINT uxcrypto.ErrorText()
+        PRINT uxcrypto.Initialize()
+        PRINT uxcrypto.PasswordHash("")
+        PRINT uxcrypto.PasswordVerify("", "")
+        PRINT uxcrypto.RandomBlob(0)
+        PRINT uxcrypto.SecretboxDecrypt(0, 0, 0, 0)
+        PRINT uxcrypto.SecretboxEncrypt(0, 0, 0, 0)
+        PRINT uxcrypto.Sha256Hex(0, 0)
+        PRINT uxcrypto.Sha256Text("")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXCRYPTO"
+END MAIN

@@ -1,0 +1,6 @@
+AST=instance method cannot be called through class name SAY.DORT
+MIR=instance method cannot be called through class name SAY.DORT
+x64=instance method cannot be called through class name SAY.DORT
+AST-x64=instance method cannot be called through class name SAY.DORT
+JS=instance method cannot be called through class name SAY.DORT
+WASM=instance method cannot be called through class name SAY.DORT

@@ -1,0 +1,11 @@
+DIM a AS U8 = U8(255)
+DIM old AS U8 = a++
+DIM current AS U8 = ++a
+PRINT old
+PRINT current
+DIM b AS F32 = 0.25
+FUNCTION NextValue() AS F32
+    RETURN b++
+END FUNCTION
+PRINT NextValue()
+PRINT b

@@ -3,6 +3,7 @@
 
 #include once "cli_args.fbs"
 #include once "cli_output_contract_adim41.fbs"
+#include once "../backend/common/backend_target.fbs"
 
 Private Function UXBCliValidateOutputOptionAdim41(ByRef optName As String, ByRef outPath As String, ByRef errText As String) As Integer
     If Trim(outPath) = "" Then Return 1
@@ -75,7 +76,21 @@ Private Sub UXBCliAddCommonCompatibility(ByRef s As UXBCliState)
     If s.route.x64Mode <> "" Then UXBCliAddAliasValue s, "--x64-mode", s.route.x64Mode
 End Sub
 
+' S-666 (x86 emeklilik, Asama 3): x86 adi hangi yoldan verilirse verilsin (`x86` fiili, --emit-x86, --target-x86,
+' --target x86|win32|windows32|i386|i686) ayni CLI_TARGET_RETIRED hatasi doner. Eskiden yalniz `x86` fiili reddediliyor,
+' `run --target-x86` sessizce calisiyor, `bld --target x86` ise sessizce x64 EXE uretiyordu.
+Private Function UXBCliRetiredX86Message() As String
+    Return "x86 hedefi emekli edildi: uXBasic artik x86 (32-bit) kod uretmiyor. uXBasic'in resmi native hedefi x64'tur; 'x64' verb'ini veya --target x64 kullanin."
+End Function
+
+Private Function UXBCliX86Requested(ByRef s As UXBCliState) As Integer
+    If UXBCliArgListHasKey(s.expandedArgs, "--emit-x86") <> 0 Then Return 1
+    If UXBCliArgListHasKey(s.expandedArgs, "--target-x86") <> 0 Then Return 1
+    Return UXBBackendTargetIsRetired(s.route.target)
+End Function
+
 Function UXBCliBuildCompatibilityAliases(ByRef s As UXBCliState) As Integer
+    If UXBCliX86Requested(s) <> 0 Then Return UXBCliSetError(s, "CLI_TARGET_RETIRED", UXBCliRetiredX86Message())
     UXBCliAddCommonCompatibility s
     Dim v As String = UXBCliLower(s.route.verb)
     Select Case v
@@ -108,7 +123,7 @@ Function UXBCliBuildCompatibilityAliases(ByRef s As UXBCliState) As Integer
         ' UXB_TARGET_X86_RETIRED). Eskiden buradan --emit-x86 enjekte edilip derin
         ' bir katmanda kafa karistirici "unknown target" hatasi alinirdi; artik CLI
         ' seviyesinde dogrudan, durust bir emeklilik mesaji verilir.
-        Return UXBCliSetError(s, "CLI_TARGET_RETIRED", "x86 hedefi emekli edildi: uXBasic artik x86 (32-bit) kod uretmiyor. uXBasic'in resmi native hedefi x64'tur; 'x64' verb'ini veya --target x64 kullanin.")
+        Return UXBCliSetError(s, "CLI_TARGET_RETIRED", UXBCliRetiredX86Message())
     Case "jsw": s.route.target = "js": UXBCliAddAliasFlag s, "--emit-js": If s.route.emitJsOut <> "" Then UXBCliAddAliasValue s, "--js-out", s.route.emitJsOut: If s.route.jsonOut <> "" Then UXBCliAddAliasValue s, "--backend-report-json-out", s.route.jsonOut
     Case "wat": s.route.target = "wat": UXBCliAddAliasFlag s, "--emit-wat": If s.route.emitWatOut <> "" Then UXBCliAddAliasValue s, "--wasm-wat-out", s.route.emitWatOut: If s.route.jsonOut <> "" Then UXBCliAddAliasValue s, "--backend-report-json-out", s.route.jsonOut
     Case "bld": UXBCliAddAliasFlag s, "--build-x64": UXBCliAddAliasValue s, "--x64-mode", IIf(s.route.x64Mode <> "", s.route.x64Mode, "MIR"): If s.route.emitNasmOut <> "" Then UXBCliAddAliasValue s, "--build-x64-out", s.route.emitNasmOut

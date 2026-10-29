@@ -1,0 +1,73 @@
+=== a_tur_kontrol
+DIM k AS I32
+k = INSTR(1, "[INFO] a [WARN] b [INFO] c", "[INFO]")
+PRINT k + 6
+k += 6
+PRINT k
+=== b_sayi_ata_sonra_artir
+DIM k AS I32
+k = 1
+k += 6
+PRINT k
+=== c_len_sonrasi
+DIM k AS I32
+k = LEN("abc")
+k += 6
+PRINT k
+=== d_instr_sonrasi_normal_toplama
+DIM k AS I32
+k = INSTR(1, "abc", "b")
+k = k + 6
+PRINT k
+=== e_bileşik_str
+DIM k AS I32
+k = INSTR(1, "abc", "b")
+PRINT k
+k -= 1
+PRINT k
+k *= 5
+PRINT k
+=== f_i64_instr
+DIM k AS I64
+k = INSTR(1, "abc", "b")
+k += 6
+PRINT k
+=== g_instr_bilesik_atama_oncesi
+DIM k AS I32
+DIM r AS I32
+r = INSTR(1, "abc", "b")
+k = r
+k += 6
+PRINT k
+=== h_dongu_v4_sadelestirilmis
+DIM bas AS I32 = 1
+DIM r AS I32
+DIM adet AS I32 = 0
+DIM g AS I32 = 0
+DO
+    r = INSTR(bas, "xaxax", "a")
+    g += 1
+    IF g > 6 THEN
+        PRINT "SONSUZ"
+        EXIT DO
+    END IF
+    IF r = 0 THEN EXIT DO
+    adet += 1
+    bas = r + 1
+LOOP
+PRINT adet
+=== i_dongu_v4_adet_artirmasiz
+DIM bas AS I32 = 1
+DIM r AS I32
+DIM g AS I32 = 0
+DO
+    r = INSTR(bas, "xaxax", "a")
+    g = g + 1
+    IF g > 6 THEN
+        PRINT "SONSUZ"
+        EXIT DO
+    END IF
+    IF r = 0 THEN EXIT DO
+    bas = r + 1
+LOOP
+PRINT g

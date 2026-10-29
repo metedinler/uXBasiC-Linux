@@ -1,0 +1,11 @@
+' S-624: TIMER gercek saniye verir (yalniz karsilastirma degil DEGER duzeyinde): 0.25 sn bekleyen dongunun sonunda
+' fark 0.25 ile 3 arasindadir. F64 degiskene tamsayi bitleri yazan bir TIMER (2.3e-319) bu dongude hic ilerlemez.
+DIM a AS F64 = TIMER
+DIM b AS F64 = a
+DIM n AS I32 = 0
+DO WHILE ((b - a) < 0.25) AND (n < 50000000)
+    b = TIMER
+    n += 1
+LOOP
+PRINT (b - a) >= 0.25
+PRINT (b - a) < 3

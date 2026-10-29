@@ -1,0 +1,9 @@
+DIM a AS STRING = "hello"
+DIM b AS STRING = " world"
+DIM empty AS STRING
+PRINT a + b
+PRINT LEN(a)
+PRINT a = "hello"
+PRINT a <> b
+PRINT LEN(empty)
+PRINT "literal"

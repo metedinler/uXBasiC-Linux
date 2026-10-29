@@ -1,0 +1,18 @@
+' S-611: the scope of a member routine nests INSIDE the class scope: the class's fields and method names stay visible in the member body.
+CLASS Say
+    PUBLIC
+    DIM n AS I32
+    METHOD Artir(adim AS I32)
+        n = n + adim
+    END METHOD
+    METHOD Iki()
+        Artir(1)
+        Artir(2)
+    END METHOD
+    METHOD Oku() AS I32
+        RETURN n
+    END METHOD
+END CLASS
+DIM s AS Say = NEW Say()
+s.Iki()
+PRINT s.Oku()

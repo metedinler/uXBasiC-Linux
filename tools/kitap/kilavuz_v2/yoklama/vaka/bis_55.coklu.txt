@@ -1,0 +1,49 @@
+F80 yalniz atama ve yazdirma
+DIM a AS F80
+a = 1.5
+PRINT a
+=====
+F80 yalniz tam atama ve yazdirma
+DIM a AS F80
+a = 7
+PRINT a
+=====
+BIGF yalniz atama ve yazdirma
+DIM a AS BIGF
+a = 1.5
+PRINT a
+=====
+BIGF yalniz tam atama ve yazdirma
+DIM a AS BIGF
+a = 7
+PRINT a
+=====
+BIGD yalniz atama ve yazdirma
+DIM a AS BIGD
+a = 1.5
+PRINT a
+=====
+BIGD yalniz tam atama ve yazdirma
+DIM a AS BIGD
+a = 7
+PRINT a
+=====
+BALL yalniz atama ve yazdirma
+DIM a AS BALL
+a = 1.5
+PRINT a
+=====
+BALL yalniz tam atama ve yazdirma
+DIM a AS BALL
+a = 7
+PRINT a
+=====
+F128 yalniz atama ve yazdirma
+DIM a AS F128
+a = 1.5
+PRINT a
+=====
+F128 yalniz tam atama ve yazdirma
+DIM a AS F128
+a = 7
+PRINT a

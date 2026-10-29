@@ -1,0 +1,5 @@
+PIPE IkiKat deger AS I32
+    DIM sonuc AS I32
+    sonuc = deger + deger
+    RETURN sonuc
+END PIPE

@@ -1,0 +1,17 @@
+TYPE Cell
+    f AS F32
+    d AS F64
+END TYPE
+DIM cells(0 TO 1) AS Cell
+DIM calls AS I32 = 0
+FUNCTION NextIndex() AS I32
+    calls += 1
+    RETURN 0
+END FUNCTION
+cells(0).f = 0.25
+cells(0).d = 0.5
+cells(NextIndex()).f += 0.5
+cells(NextIndex()).d *= 2.0
+PRINT cells(0).f
+PRINT cells(0).d
+PRINT calls

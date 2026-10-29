@@ -1,0 +1,5 @@
+' S-544: Selam() is used before its definition and no DECLARE announces it.
+Selam()
+SUB Selam()
+    PRINT 7
+END SUB

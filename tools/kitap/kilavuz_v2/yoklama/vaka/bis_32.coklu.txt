@@ -1,0 +1,71 @@
+J1 iki metotta ayni adli (value) farkli tipli parametre (beklenen 2.5)
+CLASS Ak
+PUBLIC
+    DIM s AS STRING
+    DIM f AS F64
+    METHOD SetS(value AS STRING)
+        s = value
+    END METHOD
+    METHOD SetF(value AS F64)
+        f = value
+    END METHOD
+END CLASS
+DIM a AS Ak = NEW Ak()
+a.SetS("x")
+a.SetF(2.5)
+PRINT a.f
+=====
+J2 ayni ama parametre adi v
+CLASS Ak
+PUBLIC
+    DIM s AS STRING
+    DIM f AS F64
+    METHOD SetS(v AS STRING)
+        s = v
+    END METHOD
+    METHOD SetF(v AS F64)
+        f = v
+    END METHOD
+END CLASS
+DIM a AS Ak = NEW Ak()
+a.SetS("x")
+a.SetF(2.5)
+PRINT a.f
+=====
+J3 ayni adli parametre, farkli sinif metotlarinda
+CLASS Ak
+PUBLIC
+    DIM s AS STRING
+    METHOD SetS(value AS STRING)
+        s = value
+    END METHOD
+END CLASS
+CLASS Bk
+PUBLIC
+    DIM f AS F64
+    METHOD SetF(value AS F64)
+        f = value
+    END METHOD
+END CLASS
+DIM a AS Ak = NEW Ak()
+DIM b AS Bk = NEW Bk()
+a.SetS("x")
+b.SetF(2.5)
+PRINT b.f
+=====
+J4 THIS.alan = parametre, alan adi __ ile baslar
+CLASS Ak
+PRIVATE
+    __SV AS STRING
+    __FV AS F64
+PUBLIC
+    METHOD SetF(v AS F64)
+        THIS.__FV = v
+    END METHOD
+    METHOD GetF() AS F64
+        RETURN THIS.__FV
+    END METHOD
+END CLASS
+DIM a AS Ak = NEW Ak()
+a.SetF(2.5)
+PRINT a.GetF()

@@ -1,0 +1,22 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    METHOD Al() AS I32
+        RETURN v
+    END METHOD
+END CLASS
+
+' S-564: an object field holds NOTHING until it is assigned and can be emptied again.
+CLASS Kap
+    PUBLIC
+    DIM ic AS Kutu
+END CLASS
+DIM c AS Kap = NEW Kap()
+IF c.ic = NOTHING THEN PRINT 1
+c.ic = NEW Kutu(4)
+IF c.ic <> NOTHING THEN PRINT c.ic.Al()
+c.ic = NOTHING
+IF c.ic = NOTHING THEN PRINT 2

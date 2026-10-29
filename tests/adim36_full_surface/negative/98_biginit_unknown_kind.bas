@@ -1,0 +1,2 @@
+DIM A AS BIGI
+A = BIGINIT("NOPE", "1", 0)

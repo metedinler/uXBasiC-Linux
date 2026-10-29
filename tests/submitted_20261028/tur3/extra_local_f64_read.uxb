@@ -1,0 +1,5 @@
+SUB Probe()
+    DIM values(5 TO 7) AS F64
+    PRINT values(4)
+END SUB
+Probe()

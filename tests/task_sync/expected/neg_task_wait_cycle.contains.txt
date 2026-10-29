@@ -1,3 +1,4 @@
 AST=TASK_WAIT_CYCLE: gorevler birbirini bekliyor
 MIR=TASK_WAIT_CYCLE: gorevler birbirini bekliyor
 x64=TASK_WAIT_CYCLE: gorevler birbirini bekliyor
+AST-x64=TASK_WAIT_CYCLE: gorevler birbirini bekliyor

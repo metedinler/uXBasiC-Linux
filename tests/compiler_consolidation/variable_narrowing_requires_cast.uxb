@@ -1,0 +1,3 @@
+DIM source AS I32 = 1
+DIM value AS I8 = source
+PRINT value

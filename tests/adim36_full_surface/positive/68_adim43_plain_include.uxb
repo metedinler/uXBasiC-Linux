@@ -1,0 +1,2 @@
+INCLUDE "tests/adim36_full_surface/includes/adim42_inc_math.uxbh"
+PRINT ADIM42_ADD(2, 3)

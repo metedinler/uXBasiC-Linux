@@ -1,0 +1,69 @@
+paren-siz metin sabit arguman
+SUB Selam(ad AS STRING)
+    PRINT "merhaba " + ad
+END SUB
+Selam "Ayse"
+PRINT "bitti"
+=====
+paren-siz sayi sabit arguman
+SUB Yaz(n AS I32)
+    PRINT n
+END SUB
+Yaz 5
+PRINT "bitti"
+=====
+paren-siz degisken arguman BYVAL
+SUB Yaz(n AS I32)
+    PRINT n
+END SUB
+DIM k AS I32 = 7
+Yaz k
+PRINT "bitti"
+=====
+paren-siz ifade arguman
+SUB Yaz(n AS I32)
+    PRINT n
+END SUB
+DIM k AS I32 = 7
+Yaz k + 1
+PRINT "bitti"
+=====
+paren-siz argumansiz yordam icinde
+SUB Selam()
+    PRINT "selam"
+END SUB
+SUB Ana()
+    Selam
+    PRINT "ana bitti"
+END SUB
+Ana()
+=====
+paren-siz FUNCTION deyim olarak
+FUNCTION F() AS I32
+    PRINT "F calisti"
+    RETURN 1
+END FUNCTION
+F
+PRINT "bitti"
+=====
+paren-siz bos satir metot
+CLASS K
+    PUBLIC
+    METHOD Selam()
+        PRINT "metot selam"
+    END METHOD
+END CLASS
+DIM o AS K = NEW K()
+o.Selam
+PRINT "bitti"
+=====
+paren-siz metot arguman
+CLASS K
+    PUBLIC
+    METHOD Yaz(n AS I32)
+        PRINT n
+    END METHOD
+END CLASS
+DIM o AS K = NEW K()
+o.Yaz 5
+PRINT "bitti"

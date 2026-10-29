@@ -1,0 +1,11 @@
+{
+  "s101_dimension_valid": {
+    "engines": ["AST", "MIR", "x64", "JS", "WASM"],
+    "output": "0\n4\n1"
+  },
+  "s101_dimension_exponent_reject": {"error": "dimension must be a positive integer literal"},
+  "s101_dimension_float_reject": {"error": "dimension must be a positive integer literal"},
+  "s101_dimension_overflow_reject": {"error": "dimension must be a positive integer literal"},
+  "s101_dimension_zero_reject": {"error": "dimension must be a positive integer literal"},
+  "extra_dimension_radix": {"output": "2\n4\n2\n4"}
+}

@@ -1,0 +1,4 @@
+' Out-of-range access must be rejected by every execution backend.
+VIRTUAL 64K, 64K
+POKED VIRTUAL, 131072, 1
+PRINT PEEKD(VIRTUAL, 131072)

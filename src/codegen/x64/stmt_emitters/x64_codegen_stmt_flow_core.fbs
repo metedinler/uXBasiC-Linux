@@ -29,7 +29,7 @@ Private Function GenerateIf(ByRef ps As ParseState, ByVal nodeIdx As Integer, By
     gX64IfEndLabels(gX64IfDepth) = lblEnd
     gX64IfDepth += 1
 
-    If X64EmitExprToRax(ps, condNode, cg, errText) = 0 Then Return 0
+    If X64EmitConditionToRax(ps, condNode, cg, errText) = 0 Then Return 0
     X64EmitText cg, "    cmp rax, 0"
     X64EmitText cg, "    je " & lblElse
     X64EmitText cg, "    jmp " & lblThen
@@ -68,7 +68,7 @@ Private Function GenerateIf(ByRef ps As ParseState, ByVal nodeIdx As Integer, By
             lblElseIfThen = X64NextLabel(cg, "elseif_then")
             lblElseIfNext = X64NextLabel(cg, "elseif_next")
 
-            If X64EmitExprToRax(ps, elseifCond, cg, errText) = 0 Then Return 0
+            If X64EmitConditionToRax(ps, elseifCond, cg, errText) = 0 Then Return 0
             X64EmitText cg, "    cmp rax, 0"
             X64EmitText cg, "    je " & lblElseIfNext
             X64EmitText cg, "    jmp " & lblElseIfThen
@@ -103,6 +103,82 @@ Private Function GenerateIf(ByRef ps As ParseState, ByVal nodeIdx As Integer, By
     Return 1
 End Function
 
+' S-530: a FOR whose counter is F32/F64. The integer machinery below kept the counter in an integer register, stepped it
+' with `add`, and compared with `cmp`, so a double counter was read as its bit pattern (`FOR x = -2 TO 2` printed -nan,
+' denormals, and `STEP 0.5` never ended). Here the counter keeps its own float width; limit and step are held as doubles.
+Private Function GenerateForFloat(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String, ByVal loopKind As Integer, ByRef loopVar As String, ByVal startExpr As Integer, ByVal endExpr As Integer, ByVal stepExpr As Integer, ByVal bodyNode As Integer) As Integer
+    Dim lblStart As String = X64NextLabel(cg, "for_start")
+    Dim lblEnd As String = X64NextLabel(cg, "for_end")
+    Dim stepVar As String = "__uxb_for_step_" & X64ToStr(nodeIdx)
+    Dim limitVar As String = "__uxb_for_limit_" & X64ToStr(nodeIdx)
+
+    If X64EmitExprToXmm0As(ps, startExpr, cg, loopKind, errText) = 0 Then Return 0
+    If X64EmitStoreXmm0ToFloatVarAs(cg, loopVar, loopKind, errText) = 0 Then Return 0
+    If X64EmitExprToXmm0As(ps, endExpr, cg, UXF_F64, errText) = 0 Then Return 0
+    If X64EmitStoreXmm0ToFloatVarAs(cg, limitVar, UXF_F64, errText) = 0 Then Return 0
+    If stepExpr <> -1 Then
+        If X64EmitExprToXmm0As(ps, stepExpr, cg, UXF_F64, errText) = 0 Then Return 0
+    Else
+        X64EmitText cg, "    mov eax, 1"
+        X64EmitText cg, "    cvtsi2sd xmm0, rax"
+    End If
+    If X64EmitStoreXmm0ToFloatVarAs(cg, stepVar, UXF_F64, errText) = 0 Then Return 0
+
+    cg.loopDepth += 1
+    If cg.loopDepth > 255 Then
+        errText = "x64-codegen: loop nesting too deep"
+        Return 0
+    End If
+    gX64LoopVars(cg.loopDepth - 1) = loopVar
+    gX64LoopStartLabels(cg.loopDepth - 1) = lblStart
+    gX64LoopEndLabels(cg.loopDepth - 1) = lblEnd
+    gX64LoopStepLabels(cg.loopDepth - 1) = lblStart & "_step"
+    gX64LoopKinds(cg.loopDepth - 1) = "FOR"
+
+    X64EmitLabel cg, lblStart
+    X64TaskEmitCancelPoint ps, cg
+
+    ' xmm2 = step, xmm1 = limit, xmm0 = counter (as a double)
+    If X64EmitLoadFloatVarToXmm0As(ps, cg, stepVar, UXF_F64, errText) = 0 Then Return 0
+    X64EmitText cg, "    movapd xmm2, xmm0"
+    If X64EmitLoadFloatVarToXmm0As(ps, cg, limitVar, UXF_F64, errText) = 0 Then Return 0
+    X64EmitText cg, "    movapd xmm1, xmm0"
+    If X64EmitLoadFloatVarToXmm0As(ps, cg, loopVar, loopKind, errText) = 0 Then Return 0
+    If loopKind = UXF_F32 Then X64EmitText cg, "    cvtss2sd xmm0, xmm0"
+    X64EmitText cg, "    xorpd xmm3, xmm3"
+    X64EmitText cg, "    ucomisd xmm2, xmm3"
+    X64EmitText cg, "    jb " & lblStart & "_neg"
+    X64EmitText cg, "    ucomisd xmm0, xmm1"
+    X64EmitText cg, "    ja " & lblEnd
+    X64EmitText cg, "    jmp " & lblStart & "_body"
+    X64EmitLabel cg, lblStart & "_neg"
+    X64EmitText cg, "    ucomisd xmm0, xmm1"
+    X64EmitText cg, "    jb " & lblEnd
+    X64EmitLabel cg, lblStart & "_body"
+
+    Do While bodyNode <> -1
+        If X64EmitNode(ps, bodyNode, cg, errText) = 0 Then Return 0
+        bodyNode = ps.ast.nodes(bodyNode).nextSibling
+    Loop
+
+    X64EmitLabel cg, lblStart & "_step"
+    If X64EmitLoadFloatVarToXmm0As(ps, cg, stepVar, UXF_F64, errText) = 0 Then Return 0
+    X64EmitText cg, "    movapd xmm2, xmm0"
+    If X64EmitLoadFloatVarToXmm0As(ps, cg, loopVar, loopKind, errText) = 0 Then Return 0
+    If loopKind = UXF_F32 Then X64EmitText cg, "    cvtss2sd xmm0, xmm0"
+    X64EmitText cg, "    addsd xmm0, xmm2"
+    If loopKind = UXF_F32 Then X64EmitText cg, "    cvtsd2ss xmm0, xmm0"
+    If X64EmitStoreXmm0ToFloatVarAs(cg, loopVar, loopKind, errText) = 0 Then Return 0
+    X64EmitText cg, "    jmp " & lblStart
+    X64EmitLabel cg, lblEnd
+    gX64LoopVars(cg.loopDepth - 1) = ""
+    gX64LoopStartLabels(cg.loopDepth - 1) = ""
+    gX64LoopEndLabels(cg.loopDepth - 1) = ""
+    gX64LoopStepLabels(cg.loopDepth - 1) = ""
+    cg.loopDepth -= 1
+    Return 1
+End Function
+
 Private Function GenerateFor(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
     X64EmitComment cg, "stmt: FOR"
 
@@ -129,6 +205,18 @@ Private Function GenerateFor(ByRef ps As ParseState, ByVal nodeIdx As Integer, B
         stepExpr = -1
     End If
 
+    ' S-530: a floating point counter takes the float path (declared type of the counter variable).
+    Dim forCounterType As String = ""
+    Dim forCounterKind As Integer = UXF_UNKNOWN
+    If X64TryGetVarType(cg, loopVar, forCounterType) <> 0 Then
+        forCounterKind = X64TypeToFloatKind(forCounterType)
+    ElseIf X64FindDeclaredTypeName(ps, loopVar, forCounterType) <> 0 Then
+        forCounterKind = X64TypeToFloatKind(forCounterType)
+    End If
+    If forCounterKind = UXF_F32 Or forCounterKind = UXF_F64 Then
+        Return GenerateForFloat(ps, nodeIdx, cg, errText, forCounterKind, loopVar, startExpr, endExpr, stepExpr, bodyNode)
+    End If
+
     Dim lblStart As String
     Dim lblEnd As String
     lblStart = X64NextLabel(cg, "for_start")
@@ -136,8 +224,8 @@ Private Function GenerateFor(ByRef ps As ParseState, ByVal nodeIdx As Integer, B
 
     Dim stepVar As String
     Dim limitVar As String
-    stepVar = X64NextLabel(cg, "for_step_tmp")
-    limitVar = X64NextLabel(cg, "for_limit_tmp")
+    stepVar = "__uxb_for_step_" & X64ToStr(nodeIdx)
+    limitVar = "__uxb_for_limit_" & X64ToStr(nodeIdx)
 
     If X64EmitExprToRax(ps, startExpr, cg, errText) = 0 Then Return 0
     X64EmitStoreVar cg, loopVar
@@ -160,9 +248,11 @@ Private Function GenerateFor(ByRef ps As ParseState, ByVal nodeIdx As Integer, B
     gX64LoopVars(cg.loopDepth - 1) = loopVar
     gX64LoopStartLabels(cg.loopDepth - 1) = lblStart
     gX64LoopEndLabels(cg.loopDepth - 1) = lblEnd
-    gX64LoopStepLabels(cg.loopDepth - 1) = lblStart
+    gX64LoopStepLabels(cg.loopDepth - 1) = lblStart & "_step"
+    gX64LoopKinds(cg.loopDepth - 1) = "FOR"
 
     X64EmitLabel cg, lblStart
+    X64TaskEmitCancelPoint ps, cg
 
     X64EmitLoadVar cg, loopVar
     X64EmitText cg, "    mov rbx, rax"
@@ -184,6 +274,7 @@ Private Function GenerateFor(ByRef ps As ParseState, ByVal nodeIdx As Integer, B
         bodyNode = ps.ast.nodes(bodyNode).nextSibling
     Loop
 
+    X64EmitLabel cg, lblStart & "_step"
     X64EmitLoadVar cg, loopVar
     X64EmitText cg, "    mov rbx, rax"
     X64EmitLoadVar cg, stepVar

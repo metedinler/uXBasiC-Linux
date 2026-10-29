@@ -1,0 +1,29 @@
+' S-597 (2026-10-17): routines whose body holds no statement are real routines. An empty SUB / FUNCTION was dropped from MIR (every call
+' failed in MIR, native x64 and JS), the AST interpreter crashed on any empty body (`And` does not short-circuit: array index -1) and the
+' legacy x64 backend called an empty METHOD / CONSTRUCTOR / DESTRUCTOR it never emitted ("symbol ALT_CTOR not defined").
+SUB Bos()
+END SUB
+FUNCTION BosF() AS I32
+END FUNCTION
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    METHOD BosM()
+    END METHOD
+    CONSTRUCTOR()
+    END CONSTRUCTOR
+    DESTRUCTOR()
+    END DESTRUCTOR
+END CLASS
+CLASS Alt EXTENDS Kutu
+    PUBLIC
+    CONSTRUCTOR()
+    END CONSTRUCTOR
+END CLASS
+Bos()
+PRINT BosF()
+DIM x AS Alt = NEW Alt()
+x.BosM()
+PRINT x.v
+DELETE x
+PRINT 4

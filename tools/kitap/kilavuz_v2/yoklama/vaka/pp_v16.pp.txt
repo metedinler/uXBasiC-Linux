@@ -1,0 +1,99 @@
+=== g_decl_nonew_ret
+CLASS Gz
+    PUBLIC
+    DIM a AS I32
+END CLASS
+FUNCTION Yap(v AS I32) AS Gz
+    DIM nesne AS Gz = NEW Gz()
+    nesne.a = v
+    RETURN nesne
+END FUNCTION
+DIM x AS Gz
+x = Yap(7)
+PRINT x.a
+=== g_decl_new_ret
+CLASS Gz
+    PUBLIC
+    DIM a AS I32
+END CLASS
+FUNCTION Yap(v AS I32) AS Gz
+    DIM nesne AS Gz = NEW Gz()
+    nesne.a = v
+    RETURN nesne
+END FUNCTION
+DIM x AS Gz = NEW Gz()
+x = Yap(7)
+PRINT x.a
+=== g_direkt_init
+CLASS Gz
+    PUBLIC
+    DIM a AS I32
+END CLASS
+FUNCTION Yap(v AS I32) AS Gz
+    DIM nesne AS Gz = NEW Gz()
+    nesne.a = v
+    RETURN nesne
+END FUNCTION
+DIM x AS Gz = Yap(7)
+PRINT x.a
+=== g_main_icinde
+CLASS Gz
+    PUBLIC
+    DIM a AS I32
+END CLASS
+FUNCTION Yap(v AS I32) AS Gz
+    DIM nesne AS Gz = NEW Gz()
+    nesne.a = v
+    RETURN nesne
+END FUNCTION
+MAIN
+    DIM x AS Gz
+    x = Yap(7)
+    PRINT x.a
+END MAIN
+=== g_magic_main
+CLASS Gz
+    PUBLIC
+    DIM a AS I32
+    MAGIC ADD(o AS Gz) AS Gz
+        DIM r AS Gz = NEW Gz()
+        r.a = a + o.a
+        RETURN r
+    END MAGIC
+END CLASS
+FUNCTION Yap(v AS I32) AS Gz
+    DIM nesne AS Gz = NEW Gz()
+    nesne.a = v
+    RETURN nesne
+END FUNCTION
+MAIN
+    DIM x AS Gz
+    DIM y AS Gz
+    DIM z AS Gz
+    x = Yap(2)
+    y = Yap(3)
+    z = x + y
+    PRINT z.a
+END MAIN
+=== g_magic_main_new
+CLASS Gz
+    PUBLIC
+    DIM a AS I32
+    MAGIC ADD(o AS Gz) AS Gz
+        DIM r AS Gz = NEW Gz()
+        r.a = a + o.a
+        RETURN r
+    END MAGIC
+END CLASS
+FUNCTION Yap(v AS I32) AS Gz
+    DIM nesne AS Gz = NEW Gz()
+    nesne.a = v
+    RETURN nesne
+END FUNCTION
+MAIN
+    DIM x AS Gz = Yap(2)
+    DIM y AS Gz = Yap(3)
+    DIM z AS Gz = x + y
+    PRINT z.a
+END MAIN
+

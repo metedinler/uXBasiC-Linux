@@ -1,0 +1,12 @@
+[
+ {"ad": "THREAD govdesinden EVENT tetikle", "kod": "EVENT Haber(x AS I32)\n    PRINT \"haber \"; x\nEND EVENT\nTHREAD Is(n AS I32) AS I32\n    TRIGGER EVENT Haber, n\n    RETURN n * 2\nEND THREAD\nDIM t AS TASK OF I32 = SPAWN Is(4)\nPRINT t.JOIN()", "beklenen": ["haber 4", "8"], "yoksay": ["JS"]},
+ {"ad": "gorevde END", "kod": "THREAD Is(n AS I32) AS I32\n    END\n    RETURN 1\nEND THREAD\nDIM t AS TASK OF I32 = SPAWN Is(1)\nPRINT t.JOIN()", "beklenen": "HATA", "yoksay": ["JS"]},
+ {"ad": "SPAWN tanimdan once", "kod": "DIM t AS TASK OF I32 = SPAWN Kare(6)\nPRINT t.JOIN()\nTHREAD Kare(n AS I32) AS I32\n    RETURN n * n\nEND THREAD", "beklenen": "36", "yoksay": ["JS"]},
+ {"ad": "PIPE TRIGGER TASKOUT", "kod": "PIPE Iki(x AS I32) AS I32\n    RETURN x * 2\nEND PIPE\nTRIGGER PIPE Iki, 5\nPRINT CINT(TASKOUT)", "beklenen": "10", "yoksay": ["JS"]},
+ {"ad": "iki THREAD JOIN", "kod": "THREAD A1(n AS I32) AS I32\n    RETURN n + 1\nEND THREAD\nDIM a AS TASK OF I32 = SPAWN A1(1)\nDIM b AS TASK OF I32 = SPAWN A1(10)\nPRINT a.JOIN() + b.JOIN()", "beklenen": "13", "yoksay": ["JS"]},
+ {"ad": "gorev BYREF parametre", "kod": "THREAD Is(BYREF n AS I32) AS I32\n    RETURN n\nEND THREAD\nDIM k AS I32 = 3\nDIM t AS TASK OF I32 = SPAWN Is(k)\nPRINT t.JOIN()", "beklenen": "HATA", "yoksay": ["JS"]},
+ {"ad": "THREAD degersiz RETURN", "kod": "THREAD Is(n AS I32) AS I32\n    RETURN\nEND THREAD\nDIM t AS TASK OF I32 = SPAWN Is(1)\nPRINT t.JOIN()", "beklenen": "HATA", "yoksay": ["JS"]},
+ {"ad": "EVENT donus tipi", "kod": "EVENT Haber(x AS I32) AS I32\n    RETURN 1\nEND EVENT\nTRIGGER EVENT Haber, 1\nPRINT 1", "beklenen": "HATA", "yoksay": ["JS"]},
+ {"ad": "PARALEL SPAWN", "kod": "PARALEL Top(a AS I32, b AS I32) AS I32\n    RETURN a + b\nEND PARALEL\nDIM t AS TASK OF I32 = SPAWN Top(3, 4)\nPRINT t.JOIN()", "beklenen": "7", "yoksay": ["JS"]},
+ {"ad": "gorev ozyineleme", "kod": "THREAD Fib(n AS I32) AS I32\n    IF n < 2 THEN RETURN n\n    DIM a AS TASK OF I32 = SPAWN Fib(n - 1)\n    DIM b AS TASK OF I32 = SPAWN Fib(n - 2)\n    RETURN a.JOIN() + b.JOIN()\nEND THREAD\nDIM t AS TASK OF I32 = SPAWN Fib(10)\nPRINT t.JOIN()", "beklenen": "55", "yoksay": ["JS"]}
+]

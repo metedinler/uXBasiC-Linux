@@ -45,8 +45,6 @@ Function UXBPreParseIsCanonicalCommand(ByRef headText As String) As Integer
     Dim h As String
     h = UCase(Trim(headText))
     Select Case h
-    Case "PP"
-        Return 1
     Case "DEFINE", "MACRO", "UNDEF", "IF", "IFN", "IFC", "ELIF", "ELSE", "ENDIF"
         Return 1
     Case "INCLUDE", "ALIAS", "SET", "EVAL", "PROFILE", "CONFIG_FILE", "PATH_ALIAS"
@@ -88,11 +86,7 @@ Function UXBPreParseIsCanonicalCommand(ByRef headText As String) As Integer
     Return 0
 End Function
 
-' PreproesssorB'nin web/manifest komutlari: preprocess_web_manifest_commands.fbs
-' icinde gercek bir Case dali olan, ama yalniz %%PP B aktifken calistirilan komutlar.
-' UXBPreParseIsCanonicalCommand bunlari kosulsuz "kanonik" sayar; asil kume kontrolu
-' preprocess_engine.fbs'de yapilir. Bu liste, kullaniciya "bilinmeyen komut" yerine
-' "bu komut %%PP B gerektirir" diye dogru bir tani vermek icin kullanilir.
+' Shared web/manifest family; all commands use the same engine.
 Function UXBPreParseIsWebManifestDirective(ByRef headText As String) As Integer
     Dim h As String
     h = UCase(Trim(headText))
@@ -107,29 +101,9 @@ Function UXBPreParseIsWebManifestDirective(ByRef headText As String) As Integer
     Return 0
 End Function
 
-' Kanonik listede kayitli ama ne A ne B kumesinde gercek bir isleyicisi olan komutlar
-' (bkz. rapor I / bulgu C5). Bunlar icin "%%PP B ekleyin" demek yanlis olur; kullanici
-' bunu B'ye gecirse de yine calismaz. Ayri, durust bir mesaj gerekir.
-Function UXBPreParseIsUnimplementedCanonicalDirective(ByRef headText As String) As Integer
-    Dim h As String
-    h = UCase(Trim(headText))
-    Select Case h
-    Case "EMBEDBASE64", "GEN_BLOCK", "GEN_END"
-        Return 1
-    End Select
-    Return 0
-End Function
-
 Function UXBPreParseValidateCommand(ByRef cmd As PreprocessCommand, ByRef errText As String) As Integer
     errText = ""
     Select Case UCase(Trim(cmd.commandName))
-    Case "PP"
-        Dim v As String
-        v = UCase(Trim(cmd.argsText))
-        If v <> "A" And v <> "B" Then
-            errText = "PREPROCESSOR_PP_INVALID: %%PP expects A or B"
-            Return 0
-        End If
     Case "INCLUDE"
         If Trim(cmd.argsText) = "" Then
             errText = "PREPROCESSOR_INCLUDE_MISSING_PATH"

@@ -1,0 +1,13 @@
+DIM total AS I64 = 7
+THREAD Work(total AS I64) AS I64
+ DIM i AS I64
+ FOR i = 1 TO 1000
+  total = total + 1
+ NEXT
+ RETURN total
+END THREAD
+DIM a AS TASK OF I64 = SPAWN Work(10)
+DIM b AS TASK OF I64 = SPAWN Work(20)
+PRINT a.JOIN()
+PRINT b.JOIN()
+PRINT total

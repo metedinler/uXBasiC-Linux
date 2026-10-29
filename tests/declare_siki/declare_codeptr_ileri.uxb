@@ -1,0 +1,7 @@
+' S-544: CODEPTR(Selam) is a use; the DECLARE above it announces the SUB that is defined further down (CODEPTR itself needs a native engine).
+DECLARE SUB Selam()
+DIM p AS PTR = CODEPTR(Selam)
+Selam()
+SUB Selam()
+    PRINT 7
+END SUB

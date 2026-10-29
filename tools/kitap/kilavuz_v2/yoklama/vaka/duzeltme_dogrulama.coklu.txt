@@ -1,0 +1,39 @@
+yakalanmayan THROW (JS cikis kodu ve iletisi)
+PRINT "once"
+THROW "kotu"
+PRINT "sonra"
+=====
+basarisiz ASSERT
+PRINT "once"
+ASSERT 1 = 2
+PRINT "sonra"
+=====
+F32 16777217 ilkleme (S-446)
+DIM f AS F32 = 16777217
+PRINT f
+=====
+F32 toplama yuvarlama (S-446)
+DIM f AS F32 = 16777216
+DIM g AS F32
+g = f + 1
+PRINT g
+=====
+F32 sabit ondalik (S-446)
+DIM f AS F32 = 0.1
+DIM d AS F64
+d = f
+PRINT d
+=====
+CONST golgeleme pozitif (S-441)
+CONST A = 3
+SUB P()
+    DIM A AS I32
+    A = 5
+    PRINT A
+END SUB
+P()
+PRINT A
+=====
+CONST okuma dogru (S-441)
+CONST A = 3
+PRINT A + 1

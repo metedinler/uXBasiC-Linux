@@ -1,0 +1,21 @@
+[
+ {"ad": "LIST ekle oku say", "kod": "DIM l AS LIST\nl = LIST_NEW()\nLISTADD(l, 10)\nLISTADD(l, 20)\nLISTADD(l, 30)\nPRINT LISTLEN(l)\nPRINT CINT(LISTGET(l, 1))", "beklenen": ["3", "20"], "yoksay": ["JS"]},
+ {"ad": "LISTSET", "kod": "DIM l AS LIST\nl = LIST_NEW()\nLISTADD(l, 10)\nLISTADD(l, 20)\nLISTSET(l, 0, 99)\nPRINT CINT(LISTGET(l, 0))", "beklenen": "99", "yoksay": ["JS"]},
+ {"ad": "LISTREMOVE kaydirir", "kod": "DIM l AS LIST\nl = LIST_NEW()\nLISTADD(l, 10)\nLISTADD(l, 20)\nLISTADD(l, 30)\nLISTREMOVE(l, 0)\nPRINT LISTLEN(l)\nPRINT CINT(LISTGET(l, 0))", "beklenen": ["2", "20"], "yoksay": ["JS"]},
+ {"ad": "LISTCLEAR", "kod": "DIM l AS LIST\nl = LIST_NEW()\nLISTADD(l, 10)\nLISTCLEAR(l)\nPRINT LISTLEN(l)", "beklenen": "0"},
+ {"ad": "DICT ust yaz say var", "kod": "DIM d AS DICT\nd = DICT_NEW()\nDICTSET(d, \"a\", 1)\nDICTSET(d, \"b\", 2)\nDICTSET(d, \"a\", 5)\nPRINT DICTLEN(d)\nPRINT CINT(DICTGET(d, \"a\"))\nPRINT DICTHAS(d, \"b\")\nPRINT DICTHAS(d, \"z\")", "beklenen": ["2", "5", "-1", "0"], "yoksay": ["JS"]},
+ {"ad": "DICT sayisal anahtar", "kod": "DIM d AS DICT\nd = DICT_NEW()\nDICTSET(d, 5, 10)\nPRINT CINT(DICTGET(d, 5))", "beklenen": "10", "yoksay": ["JS"]},
+ {"ad": "DICTCLEAR", "kod": "DIM d AS DICT\nd = DICT_NEW()\nDICTSET(d, \"a\", 1)\nDICTCLEAR(d)\nPRINT DICTLEN(d)", "beklenen": "0"},
+ {"ad": "SET tekrar eklemez", "kod": "DIM s AS SET\ns = SET_NEW()\nSETADD(s, 3)\nSETADD(s, 3)\nSETADD(s, 4)\nPRINT SETLEN(s)\nPRINT SETHAS(s, 3)\nPRINT SETHAS(s, 9)", "beklenen": ["2", "-1", "0"], "yoksay": ["JS"]},
+ {"ad": "SETREMOVE SETCLEAR", "kod": "DIM s AS SET\ns = SET_NEW()\nSETADD(s, 3)\nSETADD(s, 4)\nSETREMOVE(s, 3)\nPRINT SETLEN(s)\nSETCLEAR(s)\nPRINT SETLEN(s)", "beklenen": ["1", "0"]},
+ {"ad": "FOR EACH DICT ekleme sirasi", "kod": "DIM d AS DICT\nd = DICT_NEW()\nDICTSET(d, \"z\", 1)\nDICTSET(d, \"a\", 2)\nDICTSET(d, \"m\", 3)\nDIM k AS STRING\nFOR EACH k IN d\n    PRINT k\nNEXT", "beklenen": ["z", "a", "m"], "yoksay": ["JS"]},
+ {"ad": "WITH yok", "kod": "TYPE P\n    x AS I32\nEND TYPE\nDIM a AS P\nWITH a\n    .x = 1\nEND WITH\nPRINT a.x", "beklenen": "HATA"},
+ {"ad": "TYPE kopya deger semantigi", "kod": "TYPE P\n    x AS I32\nEND TYPE\nDIM a AS P\nDIM b AS P\na.x = 1\nb = a\nb.x = 9\nPRINT a.x\nPRINT b.x", "beklenen": ["1", "9"]},
+ {"ad": "ic ice TYPE kopya derin", "kod": "TYPE A1\n    x AS I32\nEND TYPE\nTYPE B1\n    a AS A1\nEND TYPE\nDIM p AS B1\nDIM q AS B1\np.a.x = 4\nq = p\nq.a.x = 9\nPRINT p.a.x\nPRINT q.a.x", "beklenen": ["4", "9"]},
+ {"ad": "ENUM varsayilan ve acik", "kod": "ENUM Renk\n    Kirmizi\n    Yesil = 5\n    Mavi\nEND ENUM\nPRINT Renk.Kirmizi\nPRINT Renk.Yesil\nPRINT Renk.Mavi", "beklenen": ["0", "5", "6"]},
+ {"ad": "ENUM tipli degisken", "kod": "ENUM Renk\n    Kirmizi\n    Yesil\nEND ENUM\nDIM r AS Renk = Renk.Yesil\nIF r = Renk.Yesil THEN PRINT \"yesil\"", "beklenen": "yesil"},
+ {"ad": "UNION ust uste", "kod": "UNION U\n    i AS I32\n    f AS F32\nEND UNION\nDIM u AS U\nu.i = 1065353216\nPRINT u.f", "beklenen": "1", "yoksay": ["JS"]},
+ {"ad": "STRUCT SIZEOF OFFSETOF", "kod": "STRUCT S ABI C PACK 1\n    a AS U8\n    b AS I32\nEND STRUCT\nPRINT SIZEOF(S)\nPRINT OFFSETOF(S, \"b\")", "beklenen": ["5", "1"], "yoksay": ["JS"]},
+ {"ad": "LISTFREE yok", "kod": "DIM l AS LIST\nl = LIST_NEW()\nLISTFREE(l)", "beklenen": "HATA"},
+ {"ad": "LIST karisik tip", "kod": "DIM l AS LIST\nl = LIST_NEW()\nLISTADD(l, 1)\nLISTADD(l, \"a\")\nLISTADD(l, 2.5)\nPRINT LISTLEN(l)", "beklenen": "3"}
+]

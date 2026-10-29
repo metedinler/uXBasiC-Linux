@@ -1,0 +1,5 @@
+' Step 2 AST contract smoke
+FUNCTION add(a AS INTEGER, b AS INTEGER) AS INTEGER
+ RETURN a + b
+END FUNCTION
+PRINT add(1,2)

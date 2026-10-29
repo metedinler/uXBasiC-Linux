@@ -1,0 +1,37 @@
+CONTINUE WHILE
+DIM i AS I32 = 0
+DIM t AS I32 = 0
+WHILE i < 5
+    i = i + 1
+    IF i = 2 THEN CONTINUE
+    t = t + i
+WEND
+PRINT t
+=====
+CONTINUE DO
+DIM i AS I32 = 0
+DIM t AS I32 = 0
+DO WHILE i < 5
+    i = i + 1
+    IF i = 2 THEN CONTINUE
+    t = t + i
+LOOP
+PRINT t
+=====
+CONTINUE FOR
+DIM t AS I32 = 0
+DIM i AS I32
+FOR i = 1 TO 5
+    IF i = 2 THEN CONTINUE
+    t = t + i
+NEXT i
+PRINT t
+=====
+uxcollections LIST sayisi
+INCLUDE "include/modules/uxcollections.uxmh"
+DIM l AS PTR
+l = uxcollections.ListNew()
+uxcollections.ListPushI64(l, 5)
+uxcollections.ListPushI64(l, 7)
+PRINT uxcollections.ListCount(l)
+uxcollections.ListFree(l)

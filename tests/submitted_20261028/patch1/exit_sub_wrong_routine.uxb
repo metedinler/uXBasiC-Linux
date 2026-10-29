@@ -1,0 +1,4 @@
+FUNCTION Deger() AS I32
+    EXIT SUB
+END FUNCTION
+PRINT Deger()

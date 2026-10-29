@@ -1,0 +1,12 @@
+CLASS Box
+    PUBLIC
+    PROPERTY Amount AS I32
+        GET
+            RETURN VALUE
+        END GET
+        SET
+            PRINT VALUE
+        END SET
+END CLASS
+DIM b AS Box = NEW Box()
+PRINT b.Amount

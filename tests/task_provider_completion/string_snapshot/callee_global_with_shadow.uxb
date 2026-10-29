@@ -1,0 +1,19 @@
+DIM sharedText AS STRING = "old"
+DIM globalNumber AS I32 = 1
+FUNCTION ChangeGlobals() AS I32
+    sharedText = "AB" + CHR(0) + "CD"
+    globalNumber = 9
+    RETURN 7
+END FUNCTION
+FUNCTION Wrapper() AS I32
+    DIM sharedText AS STRING = "local"
+    DIM globalNumber AS I32 = 2
+    DIM marker AS I32 = ChangeGlobals()
+    PRINT sharedText
+    PRINT globalNumber
+    RETURN marker
+END FUNCTION
+PRINT Wrapper()
+PRINT LEN(sharedText)
+PRINT ASC(MID(sharedText, 3, 1))
+PRINT globalNumber

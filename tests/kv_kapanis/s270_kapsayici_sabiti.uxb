@@ -1,0 +1,29 @@
+' S-270: NAMESPACE/MODULE icindeki CONST, ayni kapsayicinin rutininde niteliksiz kullanilabilir; parametre/yerel onu golgeler.
+NAMESPACE ns
+    CONST SINIR AS I32 = 5
+    CONST YARIM AS F64 = 0.5
+    CONST AD = "xy"
+    FUNCTION Oku() AS I32
+        RETURN SINIR
+    END FUNCTION
+    FUNCTION Kesir() AS F64
+        RETURN YARIM + 3
+    END FUNCTION
+    FUNCTION Metin() AS STRING
+        RETURN AD + "-z"
+    END FUNCTION
+END NAMESPACE
+MODULE M
+    CONST K = 5
+    FUNCTION Golge(K AS I32) AS I32
+        RETURN K + 1
+    END FUNCTION
+    FUNCTION Sabit() AS I32
+        RETURN K * 2
+    END FUNCTION
+END MODULE
+PRINT ns.Oku()
+PRINT ns.Kesir()
+PRINT ns.Metin()
+PRINT M.Golge(10)
+PRINT M.Sabit()

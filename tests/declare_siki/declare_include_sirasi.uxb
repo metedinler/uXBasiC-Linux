@@ -1,0 +1,3 @@
+' S-544: "text order" is the order after INCLUDE expansion: the included SUB comes before the call, so no DECLARE is needed.
+INCLUDE "declare_inc_yardimci.uxbh"
+IncSelam()

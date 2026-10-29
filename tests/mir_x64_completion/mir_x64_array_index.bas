@@ -1,0 +1,4 @@
+DIM A(0 TO 3) AS INTEGER
+A(0) = 10
+A(1) = 20
+PRINT A(0) + A(1)

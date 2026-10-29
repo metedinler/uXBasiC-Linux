@@ -1,0 +1,113 @@
+sol karsilastirma +
+DIM z AS I32 = 0
+PRINT (z = 0) + 3
+=====
+sag karsilastirma +
+DIM z AS I32 = 0
+PRINT 3 + (z = 0)
+=====
+sol karsilastirma -
+DIM z AS I32 = 0
+PRINT (z = 0) - 3
+=====
+sag karsilastirma -
+DIM z AS I32 = 0
+PRINT 3 - (z = 0)
+=====
+sol karsilastirma *
+DIM z AS I32 = 0
+PRINT (z = 0) * 3
+=====
+sag karsilastirma *
+DIM z AS I32 = 0
+PRINT 3 * (z = 0)
+=====
+sol karsilastirma /
+DIM z AS I32 = 0
+PRINT (z = 0) / 3
+=====
+sag karsilastirma /
+DIM z AS I32 = 0
+PRINT 3 / (z = 0)
+=====
+sol karsilastirma \
+DIM z AS I32 = 0
+PRINT (z = 0) \ 3
+=====
+sag karsilastirma \
+DIM z AS I32 = 0
+PRINT 3 \ (z = 0)
+=====
+sol karsilastirma MOD
+DIM z AS I32 = 0
+PRINT (z = 0) MOD 3
+=====
+sag karsilastirma MOD
+DIM z AS I32 = 0
+PRINT 3 MOD (z = 0)
+=====
+sol karsilastirma **
+DIM z AS I32 = 0
+PRINT (z = 0) ** 3
+=====
+sag karsilastirma **
+DIM z AS I32 = 0
+PRINT 3 ** (z = 0)
+=====
+sol karsilastirma AND
+DIM z AS I32 = 0
+PRINT (z = 0) AND 3
+=====
+sag karsilastirma AND
+DIM z AS I32 = 0
+PRINT 3 AND (z = 0)
+=====
+sol karsilastirma OR
+DIM z AS I32 = 0
+PRINT (z = 0) OR 3
+=====
+sag karsilastirma OR
+DIM z AS I32 = 0
+PRINT 3 OR (z = 0)
+=====
+sol karsilastirma XOR
+DIM z AS I32 = 0
+PRINT (z = 0) XOR 3
+=====
+sag karsilastirma XOR
+DIM z AS I32 = 0
+PRINT 3 XOR (z = 0)
+=====
+sol karsilastirma SHL
+DIM z AS I32 = 0
+PRINT (z = 0) SHL 3
+=====
+sag karsilastirma SHL
+DIM z AS I32 = 0
+PRINT 3 SHL (z = 0)
+=====
+tekli eksi
+DIM z AS I32 = 0
+PRINT -(z = 0)
+=====
+tekli NOT
+DIM z AS I32 = 0
+PRINT NOT (z = 0)
+=====
+atama I32
+DIM z AS I32 = 0
+DIM t AS I32
+t = (z = 0)
+PRINT t
+=====
+atama sonra carpim
+DIM z AS I32 = 0
+DIM t AS I32
+t = (z = 0)
+PRINT t * 3
+=====
+atama sonra eksi
+DIM z AS I32 = 0
+DIM t AS I32
+t = (z = 0)
+PRINT -t

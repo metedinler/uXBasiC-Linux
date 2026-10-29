@@ -1,0 +1,14 @@
+' S-549: a FILE_HANDLE passed BYREF; closing twice is harmless (the second CLOSE sees 0). The legacy engine refuses BYREF parameters (S-167-L).
+SUB Ac(BYREF h AS FILE_HANDLE)
+    OPEN "fh_p.txt" FOR OUTPUT AS h
+END SUB
+SUB Kapat(BYREF h AS FILE_HANDLE)
+    CLOSE h
+END SUB
+DIM f AS FILE_HANDLE
+Ac(f)
+PRINT f
+Kapat(f)
+PRINT f
+Kapat(f)
+PRINT f

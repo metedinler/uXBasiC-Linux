@@ -1,0 +1,23 @@
+INCLUDE "include/modules/uxwasmrt.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT WasmCallI32_0(0, "")
+        PRINT WasmCallI32_1(0, "", 0)
+        PRINT WasmCallI32_2(0, "", 0, 0)
+        PRINT WasmCallI32_3(0, "", 0, 0, 0)
+        PRINT WasmCallI32_4(0, "", 0, 0, 0, 0)
+        PRINT WasmClose(0)
+        PRINT WasmHasExport(0, "")
+        PRINT WasmLastError(0)
+        PRINT WasmLastErrorCode(0)
+        PRINT WasmLastOk(0)
+        PRINT WasmOpenFile("")
+        PRINT WasmProvider()
+        PRINT WasmRuntimeApiVersion()
+        PRINT WasmRuntimeAvailable()
+        PRINT WasmRuntimePath()
+        PRINT WasmValidateFile("")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXWASMRT"
+END MAIN

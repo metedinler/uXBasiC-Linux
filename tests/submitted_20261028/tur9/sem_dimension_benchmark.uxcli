@@ -1,0 +1,5 @@
+# Existing preprocessor expands the benchmark; no external source generator.
+sem
+tests/submitted_20261028/tur9/s111_dimension_index_benchmark.uxb
+--out-root
+build/test_outputs/s111_round9_perf

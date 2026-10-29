@@ -1,0 +1,22 @@
+DIM i AS I32
+DIM j AS I32
+DIM finalized AS I32 = 0
+IF 1 THEN
+    FOR i = 1 TO 2
+        TRY
+            DO
+                IF i > 0 THEN CONTINUE FOR
+                CONTINUE DO
+            LOOP
+        FINALLY
+            FOR j = 1 TO 2
+                CONTINUE
+            NEXT j
+            finalized += 1
+            IF finalized > 4 THEN THROW "wrong FINALLY scope"
+            EXIT IF
+        END TRY
+        PRINT 999
+    NEXT i
+END IF
+PRINT finalized

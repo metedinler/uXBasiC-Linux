@@ -1,0 +1,18 @@
+' S-484 follow-up: a bare method call (= ME.Deger()) inside a MAGIC operator body.
+CLASS Vek
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(ax AS I32)
+        x = ax
+    END CONSTRUCTOR
+    METHOD Deger() AS I32
+        RETURN x
+    END METHOD
+    MAGIC ADD(o AS Vek) AS Vek
+        RETURN NEW Vek(Deger() + o.Deger())
+    END MAGIC
+END CLASS
+DIM a AS Vek = NEW Vek(3)
+DIM b AS Vek = NEW Vek(4)
+DIM c AS Vek = a + b
+PRINT c.Deger()

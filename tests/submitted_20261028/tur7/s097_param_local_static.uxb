@@ -1,0 +1,12 @@
+DECLARE FUNCTION ReadFirst(a AS I32[]) AS I32
+DECLARE FUNCTION LocalTest() AS I32
+FUNCTION ReadFirst(a AS I32[]) AS I32
+    RETURN a(1)
+END FUNCTION
+FUNCTION LocalTest() AS I32
+    DIM q(1 TO 2) AS I32
+    q(1) = 25
+    RETURN ReadFirst(q)
+END FUNCTION
+PRINT LocalTest()
+' EXPECT stdout: 25

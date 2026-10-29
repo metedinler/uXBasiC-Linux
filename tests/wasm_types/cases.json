@@ -1,0 +1,71 @@
+{
+  "s001_param_narrow": {
+    "output": "-1"
+  },
+  "s001_param_boundaries": {
+    "output": "-1\n1\n1\n-1\n1"
+  },
+  "float_scalars": {
+    "output": "3.75\n0.75\n3.375\n1.5\n-1.5\n1.75\n-1\n0"
+  },
+  "float_functions": {
+    "output": "4.25\n1.75\n1.5"
+  },
+  "float_arrays": {
+    "output": "1.5\n3.75\n0"
+  },
+  "text_values": {
+    "output": "hello world\n5\n-1\n-1\n0\nliteral"
+  },
+  "text_functions": {
+    "output": "[uxb]\nabc\nef\nABC\nabc\n65\nB"
+  },
+  "text_arrays": {
+    "output": "first second\nfirst"
+  },
+  "float_precision": {
+    "output": "1.2\n0.125\n1e-07"
+  },
+  "float_cast": {
+    "output": "3.5\n2\n3.5"
+  },
+  "float_ctor_virtual": {
+    "output": "1.25\n3.125"
+  },
+  "text_trim": {
+    "output": "a"
+  },
+  "text_utf8_print": {
+    "output": "T\u00fcrk\u00e7e \u00e7\u0131\u011f\n\u0130zmir \u0130stanbul"
+  },
+  "text_growth_alias": {
+    "output": "600\nxxx\nkept\nkept"
+  },
+  "text_nul": {
+    "output": "3\n66"
+  },
+  "s005_long_width": {
+    "output": "-2147483648"
+  },
+  "s006_print_param": {
+    "output": "4\n5"
+  },
+  "s007_round_fix": {
+    "output": "3\n5\n-3\n-5"
+  },
+  "float_str_val": {
+    "output": "1.25!\n1.2\n123\n3.25"
+  },
+  "s007_ties": {
+    "output": "2\n4\n-2\n-4\n-2\n-3"
+  },
+  "s524_float_negation": {
+    "output": "-2.5\n-1.25\n-3.5\n-3.5\n2.5\n-5\n-4.25\n-2.5\n1.25"
+  },
+  "runtime_name_isolation": {
+    "output": "5\nab"
+  },
+  "text_class": {
+    "output": "kept\nkept!\nkept!"
+  }
+}

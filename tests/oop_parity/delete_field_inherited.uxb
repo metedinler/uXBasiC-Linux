@@ -1,0 +1,26 @@
+CLASS Ic
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT 5
+    END DESTRUCTOR
+END CLASS
+CLASS Taban
+    PUBLIC
+    DIM ic AS Ic
+END CLASS
+CLASS Tur EXTENDS Taban
+    PUBLIC
+    SUB Temizle()
+        DELETE ic
+    END SUB
+END CLASS
+' S-615: a field declared in the BASE class can be DELETEd from a member of the derived class (bare name) and from outside (through a variable).
+DIM t AS Tur = NEW Tur()
+t.ic = NEW Ic()
+t.Temizle()
+IF t.ic = NOTHING THEN PRINT 1
+DIM u AS Tur = NEW Tur()
+u.ic = NEW Ic()
+DELETE u.ic
+IF u.ic = NOTHING THEN PRINT 2

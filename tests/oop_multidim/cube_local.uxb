@@ -1,0 +1,14 @@
+CLASS Kutu
+    PUBLIC
+    n AS I32
+    METHOD Oku() AS I32
+        RETURN THIS.n + 1
+    END METHOD
+END CLASS
+SUB Work()
+    DIM a(1 TO 2, -1 TO 0, 3 TO 4) AS Kutu
+    a(2, -1, 4) = NEW Kutu()
+    a(2, -1, 4).n = 31
+    PRINT a(2, -1, 4).Oku()
+END SUB
+Work()

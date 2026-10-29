@@ -1,3 +1,4 @@
 AST=okunmamis gorev hatasi (boom): exec: THROW
 MIR=okunmamis gorev hatasi (BOOM): MIR: uncaught THROW/ASSERT sessiz degil
 x64=okunmamis gorev hatasi (BOOM): native: uncaught THROW sessiz degil
+AST-x64=okunmamis gorev hatasi (BOOM): native: uncaught THROW sessiz degil

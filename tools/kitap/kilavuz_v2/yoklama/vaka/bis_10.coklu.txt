@@ -1,0 +1,128 @@
+K1 metin birlestirme dizi elemanlariyla
+MAIN
+    DIM kul(3) AS I32
+    DIM adlar(3) AS STRING
+    DIM top(3) AS I64
+    DIM sira AS STRING = ""
+    DIM j AS I64
+    DIM k AS I64
+    DIM en AS I64
+    FOR j = 0 TO 3
+        adlar(j) = "u" + STR(j)
+        top(j) = j * 5
+        kul(j) = 0
+    NEXT
+    FOR k = 0 TO 3
+        en = -1
+        FOR j = 0 TO 3
+            IF kul(j) = 0 THEN
+                IF en = -1 THEN
+                    en = j
+                ELSEIF top(j) > top(en) THEN
+                    en = j
+                END IF
+            END IF
+        NEXT
+        kul(en) = 1
+        IF k > 0 THEN sira = sira + ", "
+        sira = sira + adlar(en) + " " + STR(top(en)) + " sn"
+    NEXT
+    PRINT sira
+END MAIN
+=====
+K2 ayni, ilk deger atamasi DIM ile n
+MAIN
+    DIM n AS I64 = 4
+    DIM kul(3) AS I32
+    DIM adlar(3) AS STRING
+    DIM top(3) AS I64
+    DIM sira AS STRING = ""
+    DIM j AS I64
+    DIM k AS I64
+    DIM en AS I64
+    FOR j = 0 TO n - 1
+        adlar(j) = "u" + STR(j)
+        top(j) = j * 5
+        kul(j) = 0
+    NEXT
+    FOR k = 0 TO n - 1
+        en = -1
+        FOR j = 0 TO n - 1
+            IF kul(j) = 0 THEN
+                IF en = -1 THEN
+                    en = j
+                ELSEIF top(j) > top(en) THEN
+                    en = j
+                END IF
+            END IF
+        NEXT
+        kul(en) = 1
+        sira = sira + adlar(en) + " " + STR(top(en)) + " sn "
+    NEXT
+    PRINT sira
+END MAIN
+=====
+K3 dizi adi kullanilmis 7 elemanli, n ile
+MAIN
+    DIM n AS I64 = 4
+    DIM kullanilmis(7) AS I32
+    DIM adlar(7) AS STRING
+    DIM toplam(7) AS I64
+    DIM sira AS STRING = ""
+    DIM j AS I64
+    DIM k AS I64
+    DIM en AS I64
+    FOR j = 0 TO n - 1
+        adlar(j) = "u" + STR(j)
+        toplam(j) = j * 5
+        kullanilmis(j) = 0
+    NEXT
+    FOR k = 0 TO n - 1
+        en = -1
+        FOR j = 0 TO n - 1
+            IF kullanilmis(j) = 0 THEN
+                IF en = -1 THEN
+                    en = j
+                ELSEIF toplam(j) > toplam(en) THEN
+                    en = j
+                END IF
+            END IF
+        NEXT
+        kullanilmis(en) = 1
+        sira = sira + adlar(en) + " " + STR(toplam(en)) + " sn "
+    NEXT
+    PRINT sira
+END MAIN
+=====
+K4 K3 ama IF k > 0 THEN sira = sira + ", "
+MAIN
+    DIM n AS I64 = 4
+    DIM kullanilmis(7) AS I32
+    DIM adlar(7) AS STRING
+    DIM toplam(7) AS I64
+    DIM sira AS STRING = ""
+    DIM j AS I64
+    DIM k AS I64
+    DIM en AS I64
+    FOR j = 0 TO n - 1
+        adlar(j) = "u" + STR(j)
+        toplam(j) = j * 5
+        kullanilmis(j) = 0
+    NEXT
+    FOR k = 0 TO n - 1
+        en = -1
+        FOR j = 0 TO n - 1
+            IF kullanilmis(j) = 0 THEN
+                IF en = -1 THEN
+                    en = j
+                ELSEIF toplam(j) > toplam(en) THEN
+                    en = j
+                END IF
+            END IF
+        NEXT
+        kullanilmis(en) = 1
+        IF k > 0 THEN sira = sira + ", "
+        sira = sira + adlar(en)
+    NEXT
+    PRINT sira
+END MAIN

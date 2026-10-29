@@ -6,7 +6,7 @@ if errorlevel 1 exit /b 1
 if exist build_compiler_64.bat (
   call build_compiler_64.bat
 )
-if exist uxb\compiler\wrappers\uxb_main_wrapper_64.exe (
-  uxb\compiler\wrappers\uxb_main_wrapper_64.exe uxb\tests\uxllama\uxllama_include_smoke.bas --debug
+if exist uxb\bin\uxb.exe (
+  uxb\bin\uxb.exe uxb\tests\uxllama\uxllama_include_smoke.bas --debug
 )
 endlocal

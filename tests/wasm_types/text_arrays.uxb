@@ -1,0 +1,5 @@
+DIM words(1 TO 2) AS STRING
+words(1) = "first"
+words(2) = words(1) + " second"
+PRINT words(2)
+PRINT words(1)

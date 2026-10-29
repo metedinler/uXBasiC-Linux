@@ -1,0 +1,15 @@
+DIM ham AS STRING
+DIM temiz AS STRING
+
+ham = "admin#1234"
+temiz = "TXT"
+
+PRINT LEN(ham)
+PRINT MID(ham,2,4)
+PRINT temiz
+PRINT STR(123)
+PRINT UCASE("ab")
+PRINT LCASE("AB")
+PRINT LEN(temiz)
+PRINT SPACE(2)
+PRINT STRING(2,66)

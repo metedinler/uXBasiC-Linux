@@ -1,0 +1,5 @@
+CLASS A
+PUBLIC:
+    X AS I32
+    X AS I32
+END CLASS

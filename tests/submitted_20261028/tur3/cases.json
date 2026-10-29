@@ -1,0 +1,12 @@
+{
+  "bounded_ok":{"output":"7"},
+  "oob_f64_write":{"error":"array index out of bounds"},
+  "oob_i32_read":{"error":"array index out of bounds"},
+  "oob_i32_write":{"error":"array index out of bounds"},
+  "oob_negative_index":{"error":"array index out of bounds"},
+  "oob_nonzero_lower":{"error":"array index out of bounds"},
+  "extra_local_f32_write":{"engines":["AST-x64"],"error":"array index out of bounds"},
+  "extra_local_f64_read":{"engines":["AST-x64"],"error":"array index out of bounds"},
+  "extra_f80_read":{"engines":["AST-x64"],"error":"array index out of bounds"},
+  "extra_f80_valid":{"engines":["AST-x64"],"output":"0"}
+}

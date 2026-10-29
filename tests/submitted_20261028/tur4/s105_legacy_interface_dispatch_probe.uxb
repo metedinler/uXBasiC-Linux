@@ -1,0 +1,12 @@
+INTERFACE IAnimal
+    METHOD Speak() AS I32
+END INTERFACE
+CLASS Dog IMPLEMENTS IAnimal
+    METHOD Speak() AS I32
+        RETURN 7
+    END METHOD
+END CLASS
+DIM i AS IAnimal
+i = NEW Dog()
+PRINT i.Speak()
+' EXPECTED 7; repeat with the actual oop_parity/interface_dispatch source if syntax differs.

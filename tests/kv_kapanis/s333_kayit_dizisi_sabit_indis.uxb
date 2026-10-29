@@ -1,0 +1,12 @@
+' S-333: kayit dizisi elemanina sabit indisle alan yazip sabit indisle okumak (eskiden x64/JS "ASSIGN_STMT: FAIL_EXPECTED_OPCODE_NOT_FOUND" ile reddedilirdi).
+TYPE N
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(1) AS N
+d(0).a = 1
+d(0).b = 4
+d(1).a = 7
+PRINT d(0).a + d(0).a
+PRINT d(0).a + d(0).b
+PRINT d(1).a

@@ -1,0 +1,11 @@
+FUNCTION SumLocal(n AS I32) AS I64
+    DIM sum AS I64
+    DIM i AS I32
+    FOR i = 1 TO n
+        sum = sum + i
+    NEXT
+    RETURN sum
+END FUNCTION
+PRINT SumLocal(100)
+PRINT SumLocal(2)
+PRINT SumLocal(100)

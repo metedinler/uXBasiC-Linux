@@ -1,0 +1,407 @@
+#ifndef UXB_SEMANTIC_CLASS_ARRAY_DYNAMIC_FBS
+#define UXB_SEMANTIC_CLASS_ARRAY_DYNAMIC_FBS
+
+' S-629/M7: portable lowering to real flat reference storage and a separate
+' per-binding shape array. Its descriptor survives REDIM; parameter forwarding
+' passes that same shape array. Generated loops copy logical intersections.
+Type SemDcaBinding
+    active As Integer
+    owner As Integer
+    rank As Integer
+    bounds As Integer
+    isParam As Integer
+    paramPosition As Integer
+    oldName As String
+    storeName As String
+    shapeName As String
+    elementType As String
+End Type
+
+Private Function SemDcaOwner(ByRef ps As ParseState, ByVal node As Integer) As Integer
+    Dim owner As Integer = ps.ast.nodes(node).parent
+    Do While owner >= 0
+        If SemStaticRoutineKind(ps.ast.nodes(owner).kind) <> 0 Or Left(ps.ast.nodes(owner).kind, 7) = "DECLARE" Then Return owner
+        owner = ps.ast.nodes(owner).parent
+    Loop
+    Return -1
+End Function
+
+Private Function SemDcaChildKind(ByRef ps As ParseState, ByVal node As Integer, ByVal wanted As String) As Integer
+    Dim ch As Integer = ps.ast.nodes(node).firstChild
+    Do While ch >= 0
+        If ps.ast.nodes(ch).kind = wanted Then Return ch
+        ch = ps.ast.nodes(ch).nextSibling
+    Loop
+    Return -1
+End Function
+
+Private Function SemDcaResolve(ByRef ps As ParseState, bindings() As SemDcaBinding, ByVal sourceCount As Integer, ByVal expression As Integer, ByVal nameText As String) As Integer
+    Dim owner As Integer = SemDcaOwner(ps, expression)
+    For pass As Integer = 0 To 1
+        For d As Integer = 0 To sourceCount - 1
+            Dim k As String = ps.ast.nodes(d).kind
+            If k <> "DIM_DECL" And k <> "PARAM_DECL" Then Continue For
+            If UCase(ps.ast.nodes(d).value) <> UCase(nameText) Then Continue For
+            Dim declOwner As Integer = SemDcaOwner(ps, d)
+            If (pass = 0 And declOwner <> owner) Or (pass = 1 And declOwner <> -1) Then Continue For
+            Return IIf(bindings(d).active <> 0, d, -1)
+        Next d
+    Next pass
+    Return -1
+End Function
+
+Private Function SemDcaImport(ByRef ps As ParseState, ByVal code As String, ByVal parent As Integer, ByVal origin As Integer, ByRef errText As String) As Integer
+    Dim lx As LexerState, parsedPs As ParseState
+    Dim declaredCount As Integer = gDeclaredTypeCount, referencedCount As Integer = gReferencedTypeCount
+    Dim declaredNames(Any) As String, referencedNames(Any) As String
+    If declaredCount > 0 Then ReDim declaredNames(declaredCount - 1)
+    If referencedCount > 0 Then ReDim referencedNames(referencedCount - 1)
+    For i As Integer = 0 To declaredCount - 1: declaredNames(i) = gDeclaredTypeNames(i): Next i
+    For i As Integer = 0 To referencedCount - 1: referencedNames(i) = gReferencedTypeNames(i): Next i
+    LexerInit lx, code
+    ParserInit parsedPs, lx
+    parsedPs.trustedGeneratedInput = 1
+    Dim parsed As Integer = ParseProgram(parsedPs)
+    gDeclaredTypeCount = declaredCount: gReferencedTypeCount = referencedCount
+    If declaredCount > 0 Then ReDim gDeclaredTypeNames(declaredCount - 1)
+    If referencedCount > 0 Then ReDim gReferencedTypeNames(referencedCount - 1)
+    For i As Integer = 0 To declaredCount - 1: gDeclaredTypeNames(i) = declaredNames(i): Next i
+    For i As Integer = 0 To referencedCount - 1: gReferencedTypeNames(i) = referencedNames(i): Next i
+    If parsed = 0 Then errText = "semantic: dynamic class array lowering: " & parsedPs.lastError: Return 0
+    Dim offset As Integer = ps.ast.count - 1
+    For i As Integer = 1 To parsedPs.ast.count - 1
+        Dim added As Integer = ASTNewNode(ps.ast, parsedPs.ast.nodes(i).kind, "", "", 0, 0)
+        ps.ast.nodes(added) = parsedPs.ast.nodes(i)
+        With ps.ast.nodes(added)
+            If .left >= 0 Then .left += offset
+            If .right >= 0 Then .right += offset
+            If .firstChild >= 0 Then .firstChild += offset
+            If .nextSibling >= 0 Then .nextSibling += offset
+            If .parent >= 0 Then .parent += offset
+            .lineNo = 0: .colNo = 0: .sourceFile = ""
+        End With
+    Next i
+    ' Add markers only after all imported indices are fixed. Inserting nodes
+    ' during the copy would shift every subsequent offset and corrupt edges.
+    Dim importedEnd As Integer = ps.ast.count - 1
+    For added As Integer = offset + 1 To importedEnd
+        If ps.ast.nodes(added).kind = "DIM_DECL" Then
+            Dim marker As Integer = SemStaticNode(ps, origin, "CLASS_ARRAY_RUNTIME")
+            ASTAddChild ps.ast, added, marker
+        End If
+    Next added
+    Dim statement As Integer = parsedPs.ast.nodes(parsedPs.rootNode).firstChild
+    Do While statement >= 0
+        Dim following As Integer = parsedPs.ast.nodes(statement).nextSibling
+        ps.ast.nodes(statement + offset).nextSibling = -1
+        ASTAddChild ps.ast, parent, statement + offset
+        statement = following
+    Loop
+    Return 1
+End Function
+
+Private Function SemDcaCall(ByRef ps As ParseState, ByVal origin As Integer, ByVal nameText As String, ByVal shapeName As String) As Integer
+    Dim result As Integer = SemStaticNode(ps, origin, "CALL_EXPR", nameText)
+    ASTAddChild ps.ast, result, SemStaticNode(ps, origin, "IDENT", shapeName)
+    Return result
+End Function
+
+Private Function SemDcaHelpers(ByVal prefix As String) As String
+    Dim nl As String = Chr(10), code As String
+    code = "FUNCTION " & prefix & "TOTAL(m AS I32[]) AS I32" & nl
+    code &= "DIM total AS I32 = 1" & nl & "DIM axis AS I32" & nl
+    code &= "FOR axis = 0 TO m(0)-1" & nl
+    code &= "DIM extent AS F64 = CDBL(m(3+axis*2))-CDBL(m(2+axis*2))+1" & nl
+    code &= "ASSERT extent >= 1 AND extent <= 268435455, ""class array byte size overflow or invalid bounds""" & nl
+    code &= "DIM width AS I32 = CINT(extent)" & nl
+    code &= "ASSERT total <= 268435455 \ width, ""class array byte size overflow""" & nl
+    code &= "total *= width" & nl & "NEXT axis" & nl
+    code &= "RETURN total" & nl & "END FUNCTION" & nl
+    code &= "FUNCTION " & prefix & "BOUND(m AS I32[], axis AS I32, upper AS I32) AS I32" & nl
+    code &= "ASSERT axis >= 1 AND axis <= m(0), ""array dimension out of range""" & nl
+    code &= "RETURN m(2+(axis-1)*2+upper)" & nl & "END FUNCTION" & nl
+    code &= "FUNCTION " & prefix & "INDEX(m AS I32[], acc AS I32, ix AS I32, axis AS I32, rank AS I32) AS I32" & nl
+    code &= "ASSERT rank = m(0), ""array index rank mismatch""" & nl
+    code &= "DIM lowIndex AS I32 = m(2+axis*2)" & nl & "DIM highIndex AS I32 = m(3+axis*2)" & nl
+    code &= "ASSERT ix >= lowIndex AND ix <= highIndex, ""array index out of bounds""" & nl
+    code &= "RETURN acc*(highIndex-lowIndex+1)+ix-lowIndex" & nl & "END FUNCTION" & nl
+    code &= "FUNCTION " & prefix & "REMAP(oldShape AS I32[], newShape AS I32[], oldIndex AS I32) AS I32" & nl
+    code &= "DIM resultIndex AS I32 = 0" & nl & "DIM stride AS I32 = 1" & nl & "DIM axis AS I32" & nl
+    code &= "FOR axis = oldShape(0)-1 TO 0 STEP -1" & nl
+    code &= "DIM width AS I32 = oldShape(3+axis*2)-oldShape(2+axis*2)+1" & nl
+    code &= "DIM coordinate AS I32 = oldShape(2+axis*2)+(oldIndex MOD width)" & nl
+    code &= "oldIndex = oldIndex \ width" & nl
+    code &= "IF coordinate < newShape(2+axis*2) OR coordinate > newShape(3+axis*2) THEN RETURN -1" & nl
+    code &= "resultIndex += (coordinate-newShape(2+axis*2))*stride" & nl
+    code &= "stride *= newShape(3+axis*2)-newShape(2+axis*2)+1" & nl
+    code &= "NEXT axis" & nl & "RETURN resultIndex" & nl & "END FUNCTION" & nl
+    Return code
+End Function
+
+Private Function SemNormalizeDynamicClassArrays(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim sourceCount As Integer = ps.ast.count
+    Dim bindings(Any) As SemDcaBinding
+    ReDim bindings(sourceCount - 1)
+    Dim needed As Integer = 0
+    For parameter As Integer = 0 To sourceCount - 1
+        If ps.ast.nodes(parameter).kind <> "PARAM_DECL" Then Continue For
+        Dim typeNode As Integer = SemDcaChildKind(ps, parameter, "TYPE_REF")
+        If typeNode < 0 Then Continue For
+        Dim parameterType As String = ps.ast.nodes(typeNode).value
+        If Right(parameterType, 2) <> "[]" Then Continue For
+        If SemHasClassName(ps, Left(parameterType, Len(parameterType)-2)) <> 0 Then needed = 1
+    Next parameter
+    For d As Integer = 0 To sourceCount - 1
+        If ps.ast.nodes(d).kind <> "DIM_DECL" Then Continue For
+        Dim bounds As Integer = SemDcaChildKind(ps, d, "DIM_BOUNDS")
+        Dim typeNode As Integer = SemDcaChildKind(ps, d, "TYPE_REF")
+        If bounds < 0 Or typeNode < 0 Then Continue For
+        If SemHasClassName(ps, ps.ast.nodes(typeNode).value) = 0 Or SemChildCount(ps, bounds) < 2 Then Continue For
+        Dim b As Integer = ps.ast.nodes(bounds).firstChild
+        Do While b >= 0
+            Dim lo As LongInt, hi As LongInt
+            If SemClassArrayReadBound(ps, b, lo, hi) = 0 Then needed = 1
+            b = ps.ast.nodes(b).nextSibling
+        Loop
+        For r As Integer = 0 To sourceCount - 1
+            If ps.ast.nodes(r).kind = "REDIM_DECL" And UCase(ps.ast.nodes(r).value) = UCase(ps.ast.nodes(d).value) Then needed = 1
+        Next r
+    Next d
+    If needed = 0 Then Return 1
+    Dim prefix As String = "_UXB_DCA_" & LTrim(Str(sourceCount)) & "_"
+    Do While SemHasRoutineByName(ps, prefix & "TOTAL") <> 0
+        prefix &= "G_"
+    Loop
+    ' Activate all CLASS array bindings in this program, so static actuals can
+    ' be forwarded to the same shape-aware parameter as a dynamic actual.
+    For d As Integer = 0 To sourceCount - 1
+        Dim k As String = ps.ast.nodes(d).kind
+        If k <> "DIM_DECL" And k <> "PARAM_DECL" Then Continue For
+        Dim typeNode As Integer = SemDcaChildKind(ps, d, "TYPE_REF")
+        If typeNode < 0 Then Continue For
+        Dim elementType As String = UCase(ps.ast.nodes(typeNode).value)
+        Dim isParam As Integer = IIf(k = "PARAM_DECL" And Right(elementType, 2) = "[]", 1, 0)
+        If isParam <> 0 Then elementType = Left(elementType, Len(elementType)-2)
+        If SemHasClassName(ps, elementType) = 0 Then Continue For
+        Dim bounds As Integer = SemDcaChildKind(ps, d, "DIM_BOUNDS")
+        If bounds < 0 And isParam = 0 Then Continue For
+        With bindings(d)
+            .active = 1: .owner = SemDcaOwner(ps, d): .bounds = bounds: .isParam = isParam
+            .oldName = UCase(ps.ast.nodes(d).value): .storeName = .oldName
+            .storeName = "_UXB_DCA_BIND_" & LTrim(Str(d)) & "_"
+            For namePos As Integer = 1 To Len(.oldName)
+                Dim letter As String = Mid(.oldName, namePos, 1)
+                If letter = "." Then letter = "_"
+                .storeName &= letter
+            Next namePos
+            .shapeName = prefix & "SHAPE_" & LTrim(Str(d))
+            .elementType = elementType
+            If bounds >= 0 Then .rank = SemChildCount(ps, bounds)
+            If isParam <> 0 Then
+                .paramPosition = 0
+                Dim sibling As Integer = ps.ast.nodes(ps.ast.nodes(d).parent).firstChild
+                Do While sibling >= 0 And sibling <> d
+                    .paramPosition += 1: sibling = ps.ast.nodes(sibling).nextSibling
+                Loop
+            End If
+        End With
+    Next d
+    ' Rewrite original uses before adding generated nodes. The source bindings
+    ' remain intact until resolution has finished, including local shadowing.
+    For expr As Integer = 0 To sourceCount - 1
+        Dim k As String = ps.ast.nodes(expr).kind
+        Dim n As String = UCase(ps.ast.nodes(expr).value)
+        If k = "IDENT" Or k = "IDENTIFIER" Or k = "CALL_EXPR" Or k = "REDIM_DECL" Then
+            Dim binding As Integer = SemDcaResolve(ps, bindings(), sourceCount, expr, n)
+            If binding >= 0 Then
+                ps.ast.nodes(expr).value = bindings(binding).storeName
+                If k = "CALL_EXPR" Then
+                    Dim count As Integer = SemChildCount(ps, expr)
+                    If bindings(binding).rank > 0 And count <> bindings(binding).rank Then errText = "semantic: array index rank mismatch": Return 0
+                    Dim indexNode As Integer = ps.ast.nodes(expr).firstChild, acc As Integer = SemStaticNode(ps, expr, "NUMBER", "0"), axis As Integer = 0
+                    ps.ast.nodes(expr).firstChild = -1
+                    Do While indexNode >= 0
+                        Dim following As Integer = ps.ast.nodes(indexNode).nextSibling
+                        ps.ast.nodes(indexNode).nextSibling = -1
+                        Dim callNode As Integer = SemDcaCall(ps, expr, prefix & "INDEX", bindings(binding).shapeName)
+                        ' Evaluate earlier indices before this one.
+                        ASTAddChild ps.ast, callNode, acc
+                        ASTAddChild ps.ast, callNode, indexNode
+                        ASTAddChild ps.ast, callNode, SemStaticNode(ps, expr, "NUMBER", LTrim(Str(axis)))
+                        ASTAddChild ps.ast, callNode, SemStaticNode(ps, expr, "NUMBER", LTrim(Str(count)))
+                        acc = callNode: axis += 1: indexNode = following
+                    Loop
+                    ASTAddChild ps.ast, expr, acc
+                End If
+                Continue For
+            End If
+        End If
+        If k <> "CALL_EXPR" And k <> "CALL_STMT" Then Continue For
+        If n = "LBOUND" Or n = "UBOUND" Or n = "SIZEOF" Then
+            Dim arrayArg As Integer = SemChildAt(ps, expr, 0)
+            If arrayArg < 0 Then Continue For
+            Dim binding As Integer = SemDcaResolve(ps, bindings(), sourceCount, expr, ps.ast.nodes(arrayArg).value)
+            If binding < 0 Then
+                For d As Integer = 0 To sourceCount - 1
+                    If bindings(d).active <> 0 And UCase(ps.ast.nodes(arrayArg).value) = bindings(d).storeName Then binding = d: Exit For
+                Next d
+            End If
+            If binding < 0 Then Continue For
+            If n = "SIZEOF" Then
+                ps.ast.nodes(expr).kind = "BINARY": ps.ast.nodes(expr).op = "*": ps.ast.nodes(expr).value = "": ps.ast.nodes(expr).firstChild = -1
+                Dim totalCell As Integer = SemDcaCall(ps, expr, bindings(binding).shapeName, "")
+                ps.ast.nodes(totalCell).firstChild = -1
+                ASTAddChild ps.ast, totalCell, SemStaticNode(ps, expr, "NUMBER", "1")
+                ASTSetLeft ps.ast, expr, totalCell
+                ASTSetRight ps.ast, expr, SemStaticNode(ps, expr, "NUMBER", "8")
+            Else
+                Dim dimArg As Integer = SemChildAt(ps, expr, 1)
+                If dimArg < 0 Then dimArg = SemStaticNode(ps, expr, "NUMBER", "1")
+                ps.ast.nodes(dimArg).nextSibling = -1
+                ps.ast.nodes(expr).value = prefix & "BOUND": ps.ast.nodes(expr).firstChild = -1
+                ASTAddChild ps.ast, expr, SemStaticNode(ps, expr, "IDENT", bindings(binding).shapeName)
+                ASTAddChild ps.ast, expr, dimArg
+                ASTAddChild ps.ast, expr, SemStaticNode(ps, expr, "NUMBER", IIf(n = "UBOUND", "1", "0"))
+            End If
+        Else
+            ' Append matching sidecar arguments in parameter declaration order.
+            For d As Integer = 0 To sourceCount - 1
+                If bindings(d).active = 0 Or bindings(d).isParam = 0 Then Continue For
+                Dim owner As Integer = bindings(d).owner
+                If owner < 0 Then Continue For
+                If Left(ps.ast.nodes(owner).kind, 7) = "DECLARE" Then Continue For
+                If UCase(ps.ast.nodes(owner).value) <> n And UCase(ps.ast.nodes(owner).symbolName) <> n And UCase(SemScopedRoutineName(ps, owner, ps.ast.nodes(owner).value)) <> n Then Continue For
+                Dim actual As Integer = SemChildAt(ps, expr, bindings(d).paramPosition)
+                If actual < 0 Then Continue For
+                Dim actualBinding As Integer = SemDcaResolve(ps, bindings(), sourceCount, expr, ps.ast.nodes(actual).value)
+                If actualBinding < 0 Then
+                    For b As Integer = 0 To sourceCount - 1
+                        If bindings(b).active <> 0 And bindings(b).storeName = UCase(ps.ast.nodes(actual).value) Then actualBinding = b: Exit For
+                    Next b
+                End If
+                If actualBinding < 0 Then errText = "semantic: class array argument has no live shape": Return 0
+                ASTAddChild ps.ast, expr, SemStaticNode(ps, expr, "IDENT", bindings(actualBinding).shapeName)
+            Next d
+        End If
+    Next expr
+    For d As Integer = 0 To sourceCount - 1
+        If bindings(d).active = 0 Then Continue For
+        ps.ast.nodes(d).value = bindings(d).storeName
+        If bindings(d).isParam <> 0 Then
+            Dim parameter As Integer = SemStaticNode(ps, d, "PARAM_DECL", bindings(d).shapeName)
+            ASTAddChild ps.ast, parameter, SemStaticNode(ps, d, "TYPE_REF", "I32[]")
+            Dim parent As Integer = ps.ast.nodes(d).parent
+            Dim previous As Integer = -1, following As Integer = ps.ast.nodes(parent).firstChild
+            Do While following >= 0
+                If ps.ast.nodes(following).kind <> "PARAM_DECL" Then Exit Do
+                previous = following: following = ps.ast.nodes(following).nextSibling
+            Loop
+            ps.ast.nodes(parameter).parent = parent: ps.ast.nodes(parameter).nextSibling = following
+            If previous < 0 Then ps.ast.nodes(parent).firstChild = parameter Else ps.ast.nodes(previous).nextSibling = parameter
+            ASTAddChild ps.ast, d, SemStaticNode(ps, d, "CLASS_ARRAY_RUNTIME")
+        End If
+    Next d
+    ' Replace declarations by executable blocks, preserving every statement and
+    ' source bound expression. Only actual execution publishes new metadata.
+    For stmt As Integer = 0 To sourceCount - 1
+        Dim kindText As String = ps.ast.nodes(stmt).kind
+        If kindText <> "DIM_STMT" And kindText <> "REDIM_STMT" Then Continue For
+        Dim declarations As Integer = ps.ast.nodes(stmt).firstChild, anyActive As Integer = 0
+        Dim d As Integer = declarations
+        Do While d >= 0
+            If bindings(d).active <> 0 Then anyActive = 1
+            If kindText = "REDIM_STMT" Then
+                For b As Integer = 0 To sourceCount - 1
+                    If bindings(b).active <> 0 And bindings(b).storeName = UCase(ps.ast.nodes(d).value) Then anyActive = 1
+                Next b
+            End If
+            d = ps.ast.nodes(d).nextSibling
+        Loop
+        If anyActive = 0 Then Continue For
+        Dim keepCells As Integer = IIf(UCase(ps.ast.nodes(stmt).op) = "PRESERVE", 1, 0)
+        ps.ast.nodes(stmt).kind = "IF_STMT": ps.ast.nodes(stmt).op = "DYNAMIC_CLASS_ARRAY": ps.ast.nodes(stmt).firstChild = -1
+        ASTAddChild ps.ast, stmt, SemStaticNode(ps, stmt, "NUMBER", "1")
+        d = declarations
+        Do While d >= 0
+            Dim following As Integer = ps.ast.nodes(d).nextSibling
+            Dim binding As Integer = IIf(bindings(d).active <> 0, d, -1)
+            If binding < 0 Then
+                For b As Integer = 0 To sourceCount - 1
+                    If bindings(b).active <> 0 And bindings(b).storeName = UCase(ps.ast.nodes(d).value) Then binding = b: Exit For
+                Next b
+            End If
+            If binding < 0 Then
+                Dim original As Integer = SemStaticNode(ps, stmt, kindText)
+                ps.ast.nodes(d).nextSibling = -1: ASTAddChild ps.ast, original, d: ASTAddChild ps.ast, stmt, original
+                d = following: Continue Do
+            End If
+            Dim bounds As Integer = SemDcaChildKind(ps, d, "DIM_BOUNDS"), rank As Integer = SemChildCount(ps, bounds)
+            If bindings(binding).rank > 0 And rank <> bindings(binding).rank Then errText = "semantic: REDIM rank must match DIM": Return 0
+            Dim redimTypeNode As Integer = SemDcaChildKind(ps, d, "TYPE_REF")
+            If redimTypeNode >= 0 AndAlso UCase(ps.ast.nodes(redimTypeNode).value) <> bindings(binding).elementType Then errText = "semantic: REDIM element type must match DIM": Return 0
+            Dim shapeName As String = bindings(binding).shapeName
+            Dim nextShape As String = prefix & "NEXT_" & LTrim(Str(d))
+            Dim code As String, nl As String = Chr(10)
+            If kindText = "DIM_STMT" Then code &= "DIM " & shapeName & "(0 TO " & LTrim(Str(rank*2+1)) & ") AS I32" & nl
+            code &= "DIM " & nextShape & "(0 TO " & LTrim(Str(rank*2+1)) & ") AS I32" & nl
+            code &= nextShape & "(0) = " & LTrim(Str(rank)) & nl
+            Dim b As Integer = ps.ast.nodes(bounds).firstChild, axis As Integer = 0
+            Dim placeholders(Any) As Integer: ReDim placeholders(rank*2-1)
+            Do While b >= 0
+                Dim lo As Integer = -1, hi As Integer = b
+                If ps.ast.nodes(b).kind = "RANGE_EXPR" Then lo = ps.ast.nodes(b).left: hi = ps.ast.nodes(b).right
+                placeholders(axis*2) = lo: placeholders(axis*2+1) = hi
+                For side As Integer = 0 To 1
+                    Dim token As String = prefix & "VALUE_" & LTrim(Str(d)) & "_" & LTrim(Str(axis*2+side))
+                    Dim captured As String = token & "_CAPTURED"
+                    code &= "DIM " & captured & " AS F64 = " & token & nl
+                    code &= "ASSERT " & captured & " >= -2147483648 AND " & captured & " <= 2147483647 AND " & captured & " = FIX(" & captured & "), ""array bound must be an I32 integer""" & nl
+                    code &= nextShape & "(" & LTrim(Str(2+axis*2+side)) & ") = CINT(" & captured & ")" & nl
+                Next side
+                axis += 1: b = ps.ast.nodes(b).nextSibling
+            Loop
+            code &= nextShape & "(1) = " & prefix & "TOTAL(" & nextShape & ")" & nl
+            If kindText = "REDIM_STMT" Then code &= "ASSERT " & shapeName & "(0) = " & nextShape & "(0), ""REDIM rank must match DIM""" & nl
+            Dim tempArray As String = prefix & "COPY_" & LTrim(Str(d)), loopVar As String = prefix & "I_" & LTrim(Str(d)), mapped As String = prefix & "J_" & LTrim(Str(d))
+            If kindText = "REDIM_STMT" And keepCells <> 0 Then
+                code &= "DIM " & tempArray & "(0 TO " & nextShape & "(1)-1) AS " & bindings(binding).elementType & nl
+                code &= "DIM " & loopVar & " AS I32" & nl & "DIM " & mapped & " AS I32" & nl
+                code &= "FOR " & loopVar & " = 0 TO " & shapeName & "(1)-1" & nl
+                code &= mapped & " = " & prefix & "REMAP(" & shapeName & "," & nextShape & "," & loopVar & ")" & nl
+                code &= "IF " & mapped & " >= 0 THEN " & tempArray & "(" & mapped & ") = " & bindings(binding).storeName & "(" & loopVar & ")" & nl & "NEXT " & loopVar & nl
+            End If
+            code &= IIf(kindText = "DIM_STMT", "DIM ", "REDIM ") & bindings(binding).storeName & "(0 TO " & nextShape & "(1)-1) AS " & bindings(binding).elementType & nl
+            If kindText = "REDIM_STMT" And keepCells <> 0 Then
+                code &= "FOR " & loopVar & " = 0 TO " & nextShape & "(1)-1" & nl
+                code &= bindings(binding).storeName & "(" & loopVar & ") = " & tempArray & "(" & loopVar & ")" & nl & "NEXT " & loopVar & nl
+                code &= "REDIM " & tempArray & "(0 TO 0) AS " & bindings(binding).elementType & nl
+            End If
+            For cell As Integer = 0 To rank*2+1
+                code &= shapeName & "(" & LTrim(Str(cell)) & ") = " & nextShape & "(" & LTrim(Str(cell)) & ")" & nl
+            Next cell
+            Dim importedStart As Integer = ps.ast.count
+            If SemDcaImport(ps, code, stmt, stmt, errText) = 0 Then Return 0
+            For node As Integer = importedStart To ps.ast.count - 1
+                If ps.ast.nodes(node).kind <> "IDENT" Then Continue For
+                For part As Integer = 0 To rank*2-1
+                    If UCase(ps.ast.nodes(node).value) <> prefix & "VALUE_" & LTrim(Str(d)) & "_" & LTrim(Str(part)) Then Continue For
+                    Dim replacement As Integer
+                    If placeholders(part) < 0 Then replacement = SemStaticNode(ps, stmt, "NUMBER", "0") Else replacement = SemMidCloneExpr(ps, placeholders(part))
+                    Dim parent As Integer = ps.ast.nodes(node).parent, sibling As Integer = ps.ast.nodes(node).nextSibling
+                    ps.ast.nodes(node) = ps.ast.nodes(replacement): ps.ast.nodes(node).parent = parent: ps.ast.nodes(node).nextSibling = sibling
+                    If ps.ast.nodes(node).left >= 0 Then ps.ast.nodes(ps.ast.nodes(node).left).parent = node
+                    If ps.ast.nodes(node).right >= 0 Then ps.ast.nodes(ps.ast.nodes(node).right).parent = node
+                    Dim child As Integer = ps.ast.nodes(node).firstChild
+                    Do While child >= 0
+                        ps.ast.nodes(child).parent = node: child = ps.ast.nodes(child).nextSibling
+                    Loop
+                    Exit For
+                Next part
+            Next node
+            ps.ast.nodes(d).kind = "CLASS_ARRAY_RUNTIME"
+            d = following
+        Loop
+    Next stmt
+    Return SemDcaImport(ps, SemDcaHelpers(prefix), ps.rootNode, ps.rootNode, errText)
+End Function
+#endif

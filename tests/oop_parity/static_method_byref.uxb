@@ -1,0 +1,12 @@
+' S-610 (2026-10-17): a BYREF parameter of a STATIC method. Native x64 passed the VALUE where the callee expected an address and crashed with an
+' access violation (exit 0xC0000005, no output). WASM and legacy AST-x64 reject BYREF parameters with an explicit message (G-WASM-12, S-167-L).
+CLASS Say
+    PUBLIC
+    STATIC METHOD Artir(BYREF n AS I32)
+        n = n + 1
+    END METHOD
+END CLASS
+DIM k AS I32
+k = 5
+Say.Artir(k)
+PRINT k

@@ -1,0 +1,13 @@
+TYPE Triple
+    x AS I32
+    y AS I32
+    z AS I32
+END TYPE
+DECLARE FUNCTION ReadLast(a AS Triple[]) AS I32
+FUNCTION ReadLast(a AS Triple[]) AS I32
+    RETURN a(2).z
+END FUNCTION
+DIM cells(0 TO 3) AS Triple
+cells(2).z = 19
+PRINT ReadLast(cells)
+' EXPECT: 19 (TYPE stride = 12; last field offset 8)

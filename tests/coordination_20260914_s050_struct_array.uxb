@@ -1,0 +1,17 @@
+TYPE POINT
+    X AS I32
+    Y AS I32
+END TYPE
+DIM pts(0 TO 2) AS POINT
+DIM i AS I32
+FOR i = 0 TO 2
+    pts(i).X = (i + 1) * 10
+    pts(i).Y = (i + 1) * 3
+NEXT i
+PRINT pts(0).X
+PRINT pts(1).X
+PRINT pts(2).X
+PRINT pts(i - 1).X
+PRINT pts(0).Y
+PRINT pts(1).Y
+PRINT pts(2).Y

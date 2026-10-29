@@ -1,0 +1,4 @@
+' S-669: Her kapanis kendi donguyu kapatir: %%FOR'u %%UNTILMETA ile kapatmak hatadir.
+%%FOR K = 1 TO 2
+PRINT {{K}}
+%%UNTILMETA 1

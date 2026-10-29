@@ -1,0 +1,10 @@
+' S-544: mutual recursion without a DECLARE: the call to Cift inside Tek comes before Cift is defined.
+FUNCTION Tek(n AS I32) AS I32
+    IF n = 0 THEN RETURN 0
+    RETURN Cift(n - 1)
+END FUNCTION
+FUNCTION Cift(n AS I32) AS I32
+    IF n = 0 THEN RETURN 1
+    RETURN Tek(n - 1)
+END FUNCTION
+PRINT Cift(4)

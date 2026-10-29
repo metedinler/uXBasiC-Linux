@@ -109,6 +109,8 @@ Private Function UXBMIRStep4TypeIsExtensionName(ByRef typeText As String) As Int
     For i = 1 To Len(t)
         Dim ch As String
         ch = Mid(t, i, 1)
+        ' S-579: a UTF-8 Turkish letter of a type name (bytes >= 128) is part of the name
+        If Asc(ch) >= 128 Then Continue For
         If (ch < "A" Or ch > "Z") And (ch < "0" Or ch > "9") And ch <> "_" And ch <> "." Then Return 0
         If i = 1 And ch >= "0" And ch <= "9" Then Return 0
     Next i

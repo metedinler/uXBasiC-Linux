@@ -25,7 +25,7 @@ New-Item -ItemType Directory -Force $current | Out-Null
 
 $exe = "build\uxb_main_64.exe"
 if (!(Test-Path $exe)) {
-    $exe = "compiler\wrappers\uxb_main_wrapper_64.exe"
+    $exe = "bin\uxb.exe"
 }
 if (!(Test-Path $exe)) {
     Write-Error "uXBasic executable bulunamadi. Once compiler\scripts\build_uxb_main_64.bat calistir."

@@ -133,7 +133,9 @@ Private Function UXBStep3InferScopeForNode(ByRef ps As ParseState, ByVal nodeIdx
     Do While p >= 0 And p < ps.ast.count
         Dim k As String = UCase(Trim(ps.ast.nodes(p).kind))
         Select Case k
-        Case "FUNCTION_STMT", "SUB_STMT", "CLASS_STMT", "TYPE_STMT", "ENUM_STMT", "INTERFACE_STMT", "MODULE_STMT", "NAMESPACE_STMT"
+        Case "FUNCTION_STMT", "SUB_STMT", "CLASS_STMT", "TYPE_STMT", "ENUM_STMT", "INTERFACE_STMT", "MODULE_STMT", "NAMESPACE_STMT", _
+             "CLASS_METHOD_DECL", "CLASS_CONSTRUCTOR_DECL", "CLASS_DESTRUCTOR_DECL", "CLASS_OPERATOR_DECL", "CLASS_PROPERTY_GET_STMT", "CLASS_PROPERTY_SET_STMT", "INTERFACE_METHOD_DECL"
+            ' S-611: a class member routine owns a scope of its own (same list as Step3ScopeForNode in semantic_step3_gate.fbs)
             Return p + 1
         End Select
         ' S-030 Faz 1B: zincirin ORTASINDA .parent kopuk olabilir (ham .left/.right
@@ -269,6 +271,40 @@ Private Function UXBStep3DeclaredVarTypeFromAst(ByRef ps As ParseState, ByRef na
             Loop
         End If
     Next i
+    Return 0
+End Function
+
+' S-541: ayristirici ad alani (NAMESPACE/MODULE) icindeki degiskenleri NITELENDIRIR (`SAYAC.KUTU`); dizi elemani
+' `SAYAC.KUTU(1)` bir CALL_EXPR olarak gelir ve noktali ad yuzunden "ad alani yordami / metot cagrisi" yoluna girip taninmayan
+' alicidan TYPE_OBJECT uretiyordu (`RETURN kutu(1)` ve `DIM v AS I32 = kutu(1)` derlenmiyordu). Bildirim DIM_BOUNDS
+' tasiyorsa (dizi), elemanin turu bildirimin TYPE_REF'idir. 1 = bulundu (typeOut dolu), 0 = o adli bir dizi bildirimi yok.
+Private Function UXBStep3NamespaceArrayElementType(ByRef ps As ParseState, ByRef qualifiedName As String, ByRef typeOut As String) As Integer
+    typeOut = ""
+    Dim wantedName As String = UCase(Trim(qualifiedName))
+    If wantedName = "" Then Return 0
+    Dim declScan As Integer
+    Dim declChild As Integer
+    Dim declHasBounds As Integer
+    Dim declTypeText As String
+    For declScan = 0 To ps.ast.count - 1
+        If UCase(Trim(ps.ast.nodes(declScan).kind)) <> "DIM_DECL" Then Continue For
+        If UCase(Trim(ps.ast.nodes(declScan).value)) <> wantedName Then Continue For
+        declHasBounds = 0
+        declTypeText = ""
+        declChild = ps.ast.nodes(declScan).firstChild
+        Do While declChild <> -1
+            Select Case UCase(Trim(ps.ast.nodes(declChild).kind))
+            Case "DIM_BOUNDS": declHasBounds = 1
+            Case "TYPE_REF": declTypeText = ps.ast.nodes(declChild).value
+            End Select
+            declChild = ps.ast.nodes(declChild).nextSibling
+        Loop
+        If declTypeText = "" Then declTypeText = ps.ast.nodes(declScan).typeName
+        If declHasBounds <> 0 And Trim(declTypeText) <> "" Then
+            typeOut = UXBStep3TypeCanonical(declTypeText)
+            Return IIf(typeOut <> "", 1, 0)
+        End If
+    Next declScan
     Return 0
 End Function
 
@@ -424,6 +460,17 @@ Private Function UXBStep3ClassMethodReturnTypeInHierarchy(ByRef ps As ParseState
 
         Dim classNode As Integer
         classNode = UXBStep3FindClassNodeByName(ps, curClass)
+        ' Interface calls carry the declared result type too; treating the
+        ' result as OBJECT rejects RETURN i.Value() in an I32 function.
+        If classNode = -1 Then
+            Dim interfaceIdx As Integer
+            For interfaceIdx = 0 To ps.ast.count - 1
+                If UCase(ps.ast.nodes(interfaceIdx).kind) = "INTERFACE_STMT" AndAlso UCase(Trim(ps.ast.nodes(interfaceIdx).value)) = curClass Then
+                    classNode = interfaceIdx
+                    Exit For
+                End If
+            Next interfaceIdx
+        End If
         If classNode = -1 Then Exit Do
 
         Dim pass As Integer
@@ -441,7 +488,7 @@ Private Function UXBStep3ClassMethodReturnTypeInHierarchy(ByRef ps As ParseState
             Do While ch <> -1
                 Dim ck As String
                 ck = UCase(Trim(ps.ast.nodes(ch).kind))
-                If ck = "CLASS_METHOD_DECL" Or ck = "CLASS_OPERATOR_DECL" Then
+                If ck = "CLASS_METHOD_DECL" Or ck = "CLASS_OPERATOR_DECL" Or ck = "INTERFACE_METHOD_DECL" Then
                     If UCase(Trim(ps.ast.nodes(ch).value)) = wanted Then
                         Return UXBStep3RoutineNodeReturnType(ps, ch, typeOut)
                     End If
@@ -991,6 +1038,7 @@ End Function
 
 Private Function UXBStep3CoreScalarConstructorType(ByVal callNameRaw As String, ByRef typeOut As String) As Integer
     typeOut = UXBStep3TypeCanonical(callNameRaw)
+    If UXBStep3EnumBaseType(typeOut) <> "" Then Return 1
     Select Case typeOut
     Case TYPE_BOOL, TYPE_I8, TYPE_U8, TYPE_I16, TYPE_U16, TYPE_I32, TYPE_U32, TYPE_I64, TYPE_U64, TYPE_F32, TYPE_F64, TYPE_PTR
         Return 1
@@ -1121,6 +1169,16 @@ Private Function UXBStep3InferIdentType(ByRef ps As ParseState, ByVal nodeIdx As
     End If
     If n = "" Then typeOut = TYPE_OBJECT: errText = "": Return 1
     Dim scopeId As Integer = UXBStep3InferScopeForNode(ps, nodeIdx)
+    ' VALUE is the setter's implicit formal parameter, even if the class
+    ' also declares a field named value. Do not reclassify it as that field.
+    If nu = "VALUE" And scopeId > 0 And scopeId <= ps.ast.count Then
+        If UCase(ps.ast.nodes(scopeId - 1).kind) = "CLASS_PROPERTY_SET_STMT" Then
+            If UXBStep3SymbolFindExact(n, SYM_PARAM, scopeId) >= 0 Then
+                If UXBStep3ResolveSymbol(n, "", scopeId, typeOut, errText) = 0 Then Return 0
+                typeOut = UXBStep3TypeCanonical(typeOut): errText = "": Return 1
+            End If
+        End If
+    End If
     If UXBStep3ResolveImplicitClassFieldType(ps, nodeIdx, n, typeOut) <> 0 Then
         If typeOut = "" Then typeOut = TYPE_OBJECT
         typeOut = UXBStep3TypeCanonical(typeOut)
@@ -1265,6 +1323,30 @@ Private Function UXBStep3InferBinaryType(ByRef ps As ParseState, ByVal nodeIdx A
         Return 1
     End If
 
+    ' A numeric/string binary expression has no implicit conversion contract.
+    ' Leaving it to the individual runtime or backend produced concatenation,
+    ' numeric coercion, and even pointer arithmetic for the same source.  Keep
+    ' explicit STR/VAL as the portable boundary (S-459/S-460).
+    If (UXBStep3TypeIsString(lt) <> 0 And UXBStep3TypeIsNumeric(rt) <> 0) Or _
+       (UXBStep3TypeIsNumeric(lt) <> 0 And UXBStep3TypeIsString(rt) <> 0) Then
+        errText = "UXB_MIXED_STRING_NUMERIC: string and numeric operands cannot be mixed; use STR or VAL"
+        Return 0
+    End If
+
+    ' User class operators return their declared nominal type, not the
+    ' numeric fallback. The same hierarchy route is used by MIR execution.
+    Dim classOpSuffix As String
+    Dim classOpOwner As String
+    Dim classOpRoutine As String
+    If UXBStep3TypeIsNumeric(lt) = 0 AndAlso UXBStep3TypeIsString(lt) = 0 AndAlso UXBStep3TypeIsBytePointer(lt) = 0 AndAlso UXBStep3TypeCanonical(lt) <> TYPE_BOOL AndAlso MIROperatorTokenToRoutineSuffix(opText, classOpSuffix) <> 0 Then
+        If MIRResolveOperatorOwnerType(ps, lt, classOpSuffix, classOpOwner, classOpRoutine) <> 0 Then
+            If UXBStep3ClassMethodReturnTypeInHierarchy(ps, classOpOwner, classOpRoutine, typeOut) <> 0 Then
+                errText = ""
+                Return 1
+            End If
+        End If
+    End If
+
     Select Case opText
     Case "=", "==", "<>", "!=", "<", "<=", ">", ">=", "ANDALSO", "ORELSE", "&&", "||", "IS"
         typeOut = TYPE_BOOL: errText = "": Return 1
@@ -1341,7 +1423,7 @@ Private Function UXBStep3DeclFieldType(ByRef ps As ParseState, ByVal declNode As
         enumChild = ps.ast.nodes(declNode).firstChild
         Do While enumChild <> -1
             If UCase(Trim(ps.ast.nodes(enumChild).kind)) = "ENUM_ITEM" And UCase(Trim(ps.ast.nodes(enumChild).value)) = UCase(Trim(fieldName)) Then
-                typeOut = enumBaseType
+                typeOut = UCase(Trim(ps.ast.nodes(declNode).value))
                 Return 1
             End If
             enumChild = ps.ast.nodes(enumChild).nextSibling
@@ -1360,7 +1442,8 @@ Private Function UXBStep3DeclFieldType(ByRef ps As ParseState, ByVal declNode As
     Dim ch As Integer
     ch = ps.ast.nodes(declNode).firstChild
     Do While ch <> -1
-        If UCase(Trim(ps.ast.nodes(ch).kind)) = fkType And UCase(Trim(ps.ast.nodes(ch).value)) = target Then
+        Dim memberKind As String = UCase(Trim(ps.ast.nodes(ch).kind))
+        If (memberKind = fkType Or (fkType = "CLASS_FIELD" And memberKind = "CLASS_PROPERTY_DECL")) And UCase(Trim(ps.ast.nodes(ch).value)) = target Then
             Dim t As String
             t = ""
             If fkType = "TYPE_FIELD" Then
@@ -1569,7 +1652,16 @@ Function UXBStep3InferExprType(ByRef ps As ParseState, ByVal nodeIdx As Integer,
         If UXBStep3InferExprType(ps, ps.ast.nodes(nodeIdx).left, conditionT, errText) = 0 Then Return 0
         If UXBStep3InferExprType(ps, ps.ast.nodes(nodeIdx).firstChild, thenT, errText) = 0 Then Return 0
         If UXBStep3InferExprType(ps, ps.ast.nodes(nodeIdx).right, elseT, errText) = 0 Then Return 0
-        If UXBStep3TypeCanonical(thenT) = UXBStep3TypeCanonical(elseT) Then typeOut = UXBStep3TypeCanonical(thenT) Else typeOut = TYPE_OBJECT
+        If UXBStep3TypeCanonical(thenT) = UXBStep3TypeCanonical(elseT) Then
+            typeOut = UXBStep3TypeCanonical(thenT)
+        ElseIf UXBStep3TypeIsNumeric(thenT) <> 0 And UXBStep3TypeIsNumeric(elseT) <> 0 Then
+            typeOut = UXBStep3TypePromoteNumeric(thenT, elseT)
+        Else
+            If UCase(Trim(ps.ast.nodes(nodeIdx).op)) = "IFF" Then errText = "type: IFF branches have no common type: " & thenT & " and " & elseT: Return 0
+            typeOut = TYPE_OBJECT
+        End If
+        If UCase(Trim(ps.ast.nodes(nodeIdx).op)) = "IFF" And UXBStep3TypeIsNumeric(conditionT) = 0 And UXBStep3TypeCanonical(conditionT) <> TYPE_BOOL Then errText = "type: IFF condition must be numeric or Boolean": Return 0
+        ps.ast.nodes(nodeIdx).typeName = typeOut
         errText = "": Return 1
     Case "CAST_EXPR"
         If v <> "" Then typeOut = UXBStep3TypeCanonical(v) Else typeOut = TYPE_OBJECT
@@ -1580,7 +1672,9 @@ Function UXBStep3InferExprType(ByRef ps As ParseState, ByVal nodeIdx As Integer,
     Case "INDEX_EXPR"
         typeOut = TYPE_OBJECT: errText = "": Return 1
     Case "FIELD_EXPR", "MEMBER_EXPR"
-        Return UXBStep3ResolveFieldExprType(ps, nodeIdx, typeOut, errText)
+        Dim fieldOk As Integer = UXBStep3ResolveFieldExprType(ps, nodeIdx, typeOut, errText)
+        If fieldOk <> 0 Then ps.ast.nodes(nodeIdx).typeName = UXBStep3TypeCanonical(typeOut)
+        Return fieldOk
     Case "CALL_EXPR", "CALL_STMT"
         Dim callName As String
         callName = Trim(v)
@@ -1647,10 +1741,11 @@ Function UXBStep3InferExprType(ByRef ps As ParseState, ByVal nodeIdx As Integer,
 
             Dim scalarSourceType As String
             If UXBStep3InferChild(ps, nodeIdx, 0, scalarSourceType, errText) = 0 Then Return 0
-            If UXBStep3TypeIsNumeric(scalarSourceType) = 0 And UXBStep3TypeIsPointerLike(scalarSourceType) = 0 Then
+            If UXBStep3TypeIsNumeric(scalarSourceType) = 0 And UXBStep3TypeIsPointerLike(scalarSourceType) = 0 And UXBStep3TypeCanonical(scalarSourceType) <> TYPE_BOOL Then
                 errText = "type: " & UCase(Trim(callName)) & " conversion requires a numeric, Boolean or pointer operand"
                 Return 0
             End If
+            If UXBStep3EnumBaseType(scalarCastType) <> "" And UXBStep3TypeIsPointerLike(scalarSourceType) <> 0 Then errText = "type: ENUM conversion requires a numeric or Boolean operand": Return 0
             typeOut = scalarCastType
             ps.ast.nodes(nodeIdx).typeName = scalarCastType
             errText = ""
@@ -1667,6 +1762,12 @@ Function UXBStep3InferExprType(ByRef ps As ParseState, ByVal nodeIdx As Integer,
         End If
 
         If InStr(UCase(Trim(callName)), ".") > 0 Then
+            If ps.ast.nodes(nodeIdx).firstChild <> -1 Then   ' S-541: ad alani dizisinin elemani
+                If UXBStep3NamespaceArrayElementType(ps, callName, typeOut) <> 0 Then
+                    errText = ""
+                    Return 1
+                End If
+            End If
             If UXBStep3NamespaceRoutineReturnType(ps, callName, typeOut) <> 0 Then
                 errText = ""
                 Return 1
@@ -1681,6 +1782,27 @@ Function UXBStep3InferExprType(ByRef ps As ParseState, ByVal nodeIdx As Integer,
             Return UXBStep3BigInitReturnType43(ps, nodeIdx, typeOut, errText)
         End If
 
+        ' Normalize STR(class) through the ordinary method-call path shared
+        ' by all engines. Keep STR around the one method result so numeric
+        ' MAGIC TOSTRING returns retain their normal text conversion too.
+        If UCase(Trim(callName)) = "STR" And ps.ast.nodes(nodeIdx).op <> "MAGIC_TOSTRING_NORMALIZED" Then
+            Dim strReceiver As Integer = ps.ast.nodes(nodeIdx).firstChild
+            If strReceiver <> -1 AndAlso ps.ast.nodes(strReceiver).nextSibling = -1 Then
+                Dim strReceiverType As String, strMagicType As String, strInferError As String
+                If UXBStep3InferExprType(ps, strReceiver, strReceiverType, strInferError) <> 0 Then
+                    If UXBStep3ClassMethodReturnTypeInHierarchy(ps, strReceiverType, "MAGIC_TOSTRING", strMagicType) <> 0 Then
+                        Dim strMagicCall As Integer = ASTNewNode(ps.ast, "CALL_EXPR", strReceiverType & ".MAGIC_TOSTRING", "", ps.ast.nodes(nodeIdx).lineNo, ps.ast.nodes(nodeIdx).colNo, ps.ast.nodes(nodeIdx).sourceFile)
+                        If strMagicCall < 0 Then errText = "type: MAGIC TOSTRING normalization allocation failed": Return 0
+                        ps.ast.nodes(strMagicCall).left = strReceiver
+                        ps.ast.nodes(strMagicCall).parent = nodeIdx
+                        ps.ast.nodes(strMagicCall).typeName = strMagicType
+                        ps.ast.nodes(strReceiver).parent = strMagicCall
+                        ps.ast.nodes(nodeIdx).firstChild = strMagicCall
+                        ps.ast.nodes(nodeIdx).op = "MAGIC_TOSTRING_NORMALIZED"
+                    End If
+                End If
+            End If
+        End If
         If UXBStep3BuiltinReturnType(callName, typeOut) <> 0 Then
             errText = ""
             Return 1
@@ -1722,7 +1844,12 @@ Function UXBStep3InferExprType(ByRef ps As ParseState, ByVal nodeIdx As Integer,
         ' S-030: SPAWN <gorevCagrisi> her zaman bir TASK tutamaci uretir.
         typeOut = TYPE_TASK
         errText = "": Return 1
-    Case "RANGE_EXPR", "INCDEC_EXPR"
+    Case "INCDEC_EXPR"
+        If ps.ast.nodes(nodeIdx).left < 0 Then errText = "type: INCDEC target missing": Return 0
+        If UXBStep3InferExprType(ps, ps.ast.nodes(nodeIdx).left, typeOut, errText) = 0 Then Return 0
+        If UXBStep3TypeIsNumeric(typeOut) = 0 And UXBStep3TypeCanonical(typeOut) <> TYPE_BOOL Then errText = "type: INCDEC requires a numeric target": Return 0
+        errText = "": Return 1
+    Case "RANGE_EXPR"
         typeOut = TYPE_I32: errText = "": Return 1
     Case "INIT_EXPR"
         If ps.ast.nodes(nodeIdx).firstChild <> -1 Then Return UXBStep3InferChild(ps, nodeIdx, 0, typeOut, errText)

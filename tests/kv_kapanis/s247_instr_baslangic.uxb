@@ -1,0 +1,6 @@
+' S-247: INSTR(baslangic, metin, aranan): JS baslangic bagimsiz degiskenini yok sayip 0 donduruyordu.
+PRINT INSTR(2, "abcabc", "b")
+PRINT INSTR(3, "abcabc", "b")
+PRINT INSTR(1, "abcabc", "c")
+PRINT INSTR("abcabc", "ca")
+PRINT INSTR(7, "abcabc", "a")

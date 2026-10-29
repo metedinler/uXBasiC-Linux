@@ -1,0 +1,21 @@
+STR(n) = "5"
+DIM n AS I32 = 5
+PRINT STR(n) = "5"
+=====
+VAL ile sayiya cevir
+DIM n AS I32 = 5
+PRINT n = VAL("5")
+=====
+STR ondalik
+DIM f AS F64 = 2.5
+PRINT STR(f) + "a"
+=====
+metin birlestirme STR(+)
+DIM s AS STRING = "x"
+s = s + STR(7)
+PRINT s
+=====
+s += STR(7)
+DIM s AS STRING = "x"
+s += STR(7)
+PRINT s

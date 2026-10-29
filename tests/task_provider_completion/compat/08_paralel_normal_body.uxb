@@ -1,0 +1,8 @@
+PARALEL GroupWorker(baseValue AS I32, countValue AS I32)
+    DIM i AS I32
+    FOR i = 1 TO countValue
+        PRINT baseValue + i
+    NEXT
+END PARALEL
+
+TRIGGER PARALEL GroupWorker, 10, 3

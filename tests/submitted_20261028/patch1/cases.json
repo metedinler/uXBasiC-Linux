@@ -1,0 +1,13 @@
+{
+  "exit_sub_finally": {"output": "1\nFINALLY\nDONE"},
+  "exit_sub_outside": {"error": "EXIT SUB requires a matching routine body"},
+  "exit_sub_wrong_routine": {"error": "EXIT SUB requires a matching routine body"},
+  "continue_sub_reject": {"error": "CONTINUE: expected"},
+  "exit_function_result": {"output": "FINALLY\n17"},
+  "exit_function_default": {"output": "0\n0"},
+  "exit_function_text": {"output": "3\n0\n66"},
+  "exit_function_wrong_routine": {"error": "EXIT FUNCTION requires a matching routine body"},
+  "exit_function_outside_gosub": {"error": "EXIT FUNCTION requires a matching routine body"},
+  "bare_return_typed": {"output": "17\n3\n0"},
+  "exit_function_finally_overwrite": {"output": "3\n0"}
+}

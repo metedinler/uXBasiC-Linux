@@ -1,0 +1,32 @@
+INCLUDE "include/modules/uxjsruntime.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT JsBootstrapUxb(0, "", "")
+        PRINT JsCall(0, "", "")
+        PRINT JsCallAwait(0, "", "", 0)
+        PRINT JsClearError(0)
+        PRINT JsContextCreate(0)
+        PRINT JsContextFree(0)
+        PRINT JsContractVersion()
+        PRINT JsEval(0, "", "", 0)
+        PRINT JsEvalDrainJobsFlag()
+        PRINT JsEvalFile(0, "", 0)
+        PRINT JsEvalModuleFlag()
+        PRINT JsEvalScriptFlag()
+        PRINT JsInstallNativeHost(0)
+        PRINT JsLastError(0)
+        PRINT JsPumpJobs(0, 0)
+        PRINT JsQuickJsVersion()
+        PRINT JsResultFree(0, 0)
+        PRINT JsResultJson(0, 0)
+        PRINT JsRuntimeApiVersion()
+        PRINT JsRuntimeCollectGarbage(0)
+        PRINT JsRuntimeCreate()
+        PRINT JsRuntimeFree(0)
+        PRINT JsRuntimeMemoryLimitMb(0, 0)
+        PRINT JsRuntimeStackLimitKb(0, 0)
+        PRINT JsRuntimeTimeLimitMs(0, 0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXJSRUNTIME"
+END MAIN

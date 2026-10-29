@@ -1,0 +1,431 @@
+[
+ {
+  "ad": "yasak ad PRINT",
+  "kod": "DIM PRINT AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad INPUT",
+  "kod": "DIM INPUT AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad LOOP",
+  "kod": "DIM LOOP AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad END",
+  "kod": "DIM END AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad LEN",
+  "kod": "DIM LEN AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad STR",
+  "kod": "DIM STR AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad ASC",
+  "kod": "DIM ASC AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad ABS",
+  "kod": "DIM ABS AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad MOD",
+  "kod": "DIM MOD AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad STRING",
+  "kod": "DIM STRING AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad I32",
+  "kod": "DIM I32 AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad TASK",
+  "kod": "DIM TASK AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad LIST",
+  "kod": "DIM LIST AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad TYPE",
+  "kod": "DIM TYPE AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad CLASS",
+  "kod": "DIM CLASS AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad TRUE",
+  "kod": "DIM TRUE AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad TIMER",
+  "kod": "DIM TIMER AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad ON",
+  "kod": "DIM ON AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad SLOT",
+  "kod": "DIM SLOT AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad EACH",
+  "kod": "DIM EACH AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad TO",
+  "kod": "DIM TO AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad STEP",
+  "kod": "DIM STEP AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad GET",
+  "kod": "DIM GET AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad SET",
+  "kod": "DIM SET AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad U8",
+  "kod": "DIM U8 AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "yasak ad F64",
+  "kod": "DIM F64 AS I32\nPRINT 1",
+  "beklenen": "HATA",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "serbest ad LEFT",
+  "kod": "DIM LEFT AS I32\nLEFT = 3\nPRINT LEFT",
+  "beklenen": "3",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "serbest ad NAME",
+  "kod": "DIM NAME AS I32\nNAME = 3\nPRINT NAME",
+  "beklenen": "3",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "serbest ad RESULT",
+  "kod": "DIM RESULT AS I32\nRESULT = 3\nPRINT RESULT",
+  "beklenen": "3",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "serbest ad VALUE",
+  "kod": "DIM VALUE AS I32\nVALUE = 3\nPRINT VALUE",
+  "beklenen": "3",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "serbest ad COUNT",
+  "kod": "DIM COUNT AS I32\nCOUNT = 3\nPRINT COUNT",
+  "beklenen": "3",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "serbest ad BASE",
+  "kod": "DIM BASE AS I32\nBASE = 3\nPRINT BASE",
+  "beklenen": "3",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "serbest ad DATA",
+  "kod": "DIM DATA AS I32\nDATA = 3\nPRINT DATA",
+  "beklenen": "3",
+  "yoksay": [
+   "MIR",
+   "x64",
+   "JS"
+  ]
+ },
+ {
+  "ad": "kacis dizisi yok",
+  "kod": "PRINT \"a\\tb\"",
+  "beklenen": "a\\tb"
+ },
+ {
+  "ad": "cift tirnak",
+  "kod": "PRINT \"a\"\"b\"",
+  "beklenen": "a\"b"
+ },
+ {
+  "ad": "buyuk tamsayi sabit",
+  "kod": "PRINT 12345678901",
+  "beklenen": "12345678901",
+  "yoksay": [
+   "JS"
+  ]
+ },
+ {
+  "ad": "ussel sabit",
+  "kod": "PRINT 1E3\nPRINT 2.5E-1",
+  "beklenen": [
+   "1000",
+   "0.25"
+  ]
+ },
+ {
+  "ad": "TRUE FALSE",
+  "kod": "PRINT TRUE\nPRINT FALSE",
+  "beklenen": [
+   "-1",
+   "0"
+  ],
+  "yoksay": [
+   "JS"
+  ]
+ },
+ {
+  "ad": "Turkce harfli ad",
+  "kod": "DIM sayı AS I32\nPRINT 1",
+  "beklenen": "HATA"
+ },
+ {
+  "ad": "sayiyla baslayan ad",
+  "kod": "DIM 1x AS I32\nPRINT 1",
+  "beklenen": "HATA"
+ },
+ {
+  "ad": "END IF eksik",
+  "kod": "DIM a AS I32 = 1\nIF a = 1 THEN\n    PRINT 1",
+  "beklenen": "HATA"
+ },
+ {
+  "ad": "NEXT eksik",
+  "kod": "DIM i AS I32\nFOR i = 1 TO 3\n    PRINT i",
+  "beklenen": "HATA"
+ },
+ {
+  "ad": "soru isareti kisayolu",
+  "kod": "? 5",
+  "beklenen": "HATA"
+ },
+ {
+  "ad": "REM yorumu",
+  "kod": "REM bu bir yorum\nPRINT 1 ' sonda yorum\nPRINT 2",
+  "beklenen": [
+   "1",
+   "2"
+  ]
+ },
+ {
+  "ad": "iki nokta cok deyim",
+  "kod": "DIM a AS I32: a = 3: PRINT a",
+  "beklenen": "3"
+ },
+ {
+  "ad": "satir devami",
+  "kod": "PRINT 1 + _\n2",
+  "beklenen": "3"
+ },
+ {
+  "ad": "buyuk kucuk harf",
+  "kod": "dim Toplam as i32\ntoplam = 4\nprint TOPLAM",
+  "beklenen": "4"
+ },
+ {
+  "ad": "nokta iceren ad",
+  "kod": "DIM a.b AS I32\nPRINT 1",
+  "beklenen": "HATA"
+ },
+ {
+  "ad": "PRINT bos",
+  "kod": "PRINT \"a\"\nPRINT\nPRINT \"b\"",
+  "beklenen": [
+   "a",
+   "b"
+  ],
+  "yoksay": []
+ }
+]

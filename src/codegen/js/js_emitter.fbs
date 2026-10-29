@@ -109,7 +109,12 @@ Private Function UXBJsFunctionHasOwnBinding(ByRef fn As MIRFunction, ByRef nameT
     Return 0
 End Function
 
-Private Function UXBJsEmitFunction(ByRef module As MIRModule, ByRef fn As MIRFunction, ByRef outText As String, ByRef errText As String) As Integer
+#include once "../web_control_flow.fbs"
+
+Private Function UXBJsEmitFunction(ByRef module As MIRModule, ByRef originalFn As MIRFunction, ByRef outText As String, ByRef errText As String) As Integer
+    Dim fn As MIRFunction
+    If UXBWebPrepareControlFlow(originalFn, fn, errText) = 0 Then Return 0
+    UXBJsSetCurrentFunction fn
     Dim b As Integer
     Dim j As Integer
     Dim blk As MIRBasicBlock
@@ -129,6 +134,7 @@ Private Function UXBJsEmitFunction(ByRef module As MIRModule, ByRef fn As MIRFun
 
     outText &= "async function " & fnName & "(" & paramList & ") {" & Chr(10)
     outText &= "  const vars = Object.create(null);" & Chr(10)
+    outText &= "  const __gosubReturns = [];" & Chr(10)
     For p = 0 To module.globalVarCount - 1
         If UXBJsFunctionHasOwnBinding(fn, module.globalVars(p)) = 0 Then
             Dim globalKey As String
@@ -154,7 +160,13 @@ Private Function UXBJsEmitFunction(ByRef module As MIRModule, ByRef fn As MIRFun
             ' caller's actual variable in real time, not a local copy.
             outText &= "  Object.defineProperty(vars, " & paramKey & ", { enumerable: true, get: () => " & paramJsName & ".value, set: value => { " & paramJsName & ".value = value; } });" & Chr(10)
         Else
-            outText &= "  vars[" & paramKey & "] = " & paramJsName & ";" & Chr(10)
+            Dim paramType As String = UCase(Trim(fn.paramVarTypes(p)))
+            Dim paramValue As String = paramJsName
+            Select Case paramType
+            Case "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "F32", "F64", "BOOLEAN", "BOOL"
+                paramValue = UXBJsScalarCastExpression(paramJsName, paramType)
+            End Select
+            outText &= "  vars[" & paramKey & "] = " & paramValue & ";" & Chr(10)
         End If
     Next p
 
@@ -217,6 +229,10 @@ Public Function UXBJsEmitFromMIR( _
     For i = 0 To module.globalVarCount - 1
         outText &= "__uxbGlobals[" & UXBJsVarKey(module.globalVars(i)) & "] = 0;" & Chr(10)
     Next i
+    ' S-243: the exception state is program-wide (UXBJsIsSharedExceptionVar, js_expr_emit.fbs): a routine returning with the flag set hands the
+    ' exception to its caller's post-call check instead of a per-frame vars[] slot losing it.
+    outText &= "__uxbGlobals[" & UXBJsVarKey("__mir_exc_active") & "] = 0;" & Chr(10)
+    outText &= "__uxbGlobals[" & UXBJsVarKey("__mir_exc_value") & "] = 0;" & Chr(10)
     outText &= Chr(10)
 
     If Trim(wasmPath) <> "" Then
@@ -250,7 +266,24 @@ Public Function UXBJsEmitFromMIR( _
         outText &= "__uxbUser[" & UXBJsQuote(UCase(Trim(module.functions(i).name))) & "] = " & fnName & ";" & Chr(10)
     Next i
     outText &= Chr(10)
-    outText &= "if (globalThis.uxb) globalThis.uxb.exports = __uxbUser;" & Chr(10)
+    ' S-243: a routine called from outside the program (uxb.exports) has no caller whose post-call check could see a still active exception;
+    ' the exported entry turns it into a JS error, as the RET of the main routine does.
+    outText &= "function __uxbExported(src) {" & Chr(10)
+    outText &= "  const out = Object.create(null);" & Chr(10)
+    outText &= "  for (const k of Object.keys(src)) {" & Chr(10)
+    outText &= "    out[k] = async (...a) => {" & Chr(10)
+    outText &= "      const r = await src[k](...a);" & Chr(10)
+    outText &= "      if ((Number(__uxbGlobals[" & UXBJsVarKey("__mir_exc_active") & "]) || 0) !== 0) {" & Chr(10)
+    outText &= "        const v = __uxbGlobals[" & UXBJsVarKey("__mir_exc_value") & "];" & Chr(10)
+    outText &= "        __uxbGlobals[" & UXBJsVarKey("__mir_exc_active") & "] = 0;" & Chr(10)
+    outText &= "        throw new Error(String(v));" & Chr(10)
+    outText &= "      }" & Chr(10)
+    outText &= "      return r;" & Chr(10)
+    outText &= "    };" & Chr(10)
+    outText &= "  }" & Chr(10)
+    outText &= "  return out;" & Chr(10)
+    outText &= "}" & Chr(10)
+    outText &= "if (globalThis.uxb) globalThis.uxb.exports = __uxbExported(__uxbUser);" & Chr(10)
 
     ' Canonical MIR OOP vtable registration. The runtime stores the
     ' resolved function names per class; virtual METHOD_CALL selects by slot.
@@ -311,7 +344,7 @@ Public Function UXBJsEmitFromMIR( _
     If entryName = "" Then entryName = "main"
 
     outText &= "globalThis.uxbMain = " & entryName & ";" & Chr(10)
-    outText &= "if (!globalThis.uxb || globalThis.uxb.autoRun !== false) { " & entryName & "().catch(err => { const message = 'uXBasic runtime error: ' + (err && err.message ? err.message : String(err)); if (globalThis.uxb && globalThis.uxb.console) globalThis.uxb.console.println(message); else if (typeof console !== 'undefined' && console.error) console.error(err); if (typeof process !== 'undefined' && process) process.exitCode = 1; else throw err; }); }" & Chr(10)
+    outText &= "if (!globalThis.uxb || globalThis.uxb.autoRun !== false) { " & entryName & "().catch(err => { if (err && err.uxbProgramEnd) return; const message = 'uXBasic runtime error: ' + (err && err.message ? err.message : String(err)); if (globalThis.uxb && globalThis.uxb.console) globalThis.uxb.console.println(message); else if (typeof console !== 'undefined' && console.error) console.error(err); if (typeof process !== 'undefined' && process) process.exitCode = 1; else throw err; }); }" & Chr(10)
 
     Return UXBJsWriteText(jsOutPath, outText, errText)
 End Function

@@ -1,0 +1,12 @@
+' S-068: array-typed parameters must be indexable inside a routine body.
+SUB Touch(arr AS I32[])
+    PRINT arr(0)
+    arr(1) = arr(0) + 7
+END SUB
+
+DIM values(2) AS I32
+values(0) = 35
+values(1) = 0
+
+Touch(values)
+PRINT values(1)

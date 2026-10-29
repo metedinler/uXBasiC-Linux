@@ -1,0 +1,39 @@
+INCLUDE "include/modules/uxonnx2.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxonnx2.InputCount(0)
+        PRINT uxonnx2.InputDType(0, 0)
+        PRINT uxonnx2.InputName(0, 0)
+        PRINT uxonnx2.InputRank(0, 0)
+        PRINT uxonnx2.LastError()
+        PRINT uxonnx2.OutputCount(0)
+        PRINT uxonnx2.OutputDType(0, 0)
+        PRINT uxonnx2.OutputName(0, 0)
+        PRINT uxonnx2.OutputRank(0, 0)
+        PRINT uxonnx2.ProviderAvailable(0)
+        PRINT uxonnx2.ResultCount(0)
+        uxonnx2.ResultFree(0)
+        PRINT uxonnx2.ResultTensor(0, 0)
+        PRINT uxonnx2.Run1(0, "", 0, "")
+        PRINT uxonnx2.RunAddInput(0, "", 0)
+        PRINT uxonnx2.RunAddOutput(0, "")
+        PRINT uxonnx2.RunCreate(0)
+        PRINT uxonnx2.RunExecute(0)
+        uxonnx2.RunFree(0)
+        PRINT uxonnx2.SessionCreate("")
+        PRINT uxonnx2.SessionCreateAdvanced("", 0, 0, 0, 0)
+        uxonnx2.SessionFree(0)
+        PRINT uxonnx2.TensorCreate1D(0, 0)
+        PRINT uxonnx2.TensorCreate3D(0, 0, 0, 0)
+        PRINT uxonnx2.TensorCreate4D(0, 0, 0, 0, 0)
+        PRINT uxonnx2.TensorDType(0)
+        PRINT uxonnx2.TensorDataPtr(0)
+        PRINT uxonnx2.TensorDim(0, 0)
+        PRINT uxonnx2.TensorGetI64(0, 0)
+        PRINT uxonnx2.TensorGetString(0, 0)
+        uxonnx2.TensorSetI64(0, 0, 0)
+        uxonnx2.TensorSetString(0, 0, "")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXONNX2"
+END MAIN

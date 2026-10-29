@@ -1,0 +1,12 @@
+' S-179: VAL() returns a Double (VAL("2.75") = 2.75, S-137's own AST fix); native/legacy called an
+' INTEGER-returning runtime helper (__uxb_rt_val_i64 / atoi) for it while every caller reads the result
+' as F64 -- the raw integer bits then got misread through XMM0 as if they were already a double's bit
+' pattern (VAL("40") printed as the denormal 40's bits decode to, ~1.976e-322; VAL("40")+7 printed 7).
+DIM n AS F64
+n = VAL("40")
+PRINT n
+PRINT VAL("40") + 7
+PRINT VAL("2.75")
+PRINT VAL("-3.5") * 2
+PRINT VAL("")
+PRINT VAL("abc")

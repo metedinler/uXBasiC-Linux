@@ -1,0 +1,2 @@
+%%SAFE_PATHS ON
+%%ASSET_COPY "../secret.txt", "secret.txt"

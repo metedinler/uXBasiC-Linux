@@ -1,0 +1,6 @@
+' S-544: the DECLARE must come BEFORE the first use; a DECLARE written after the use does not help.
+Selam()
+DECLARE SUB Selam()
+SUB Selam()
+    PRINT 7
+END SUB

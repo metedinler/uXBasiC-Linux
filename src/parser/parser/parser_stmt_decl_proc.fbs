@@ -21,8 +21,17 @@ End Function
 Private Function ParserRoutineNameIsReserved(ByRef ps As ParseState, ByRef nameTok As Token) As Integer
     If ps.namespaceDepth > 0 Or ps.moduleDepth > 0 Then Return 0
     If UCase(Trim(nameTok.lexeme)) = "MAIN" Then Return 0
-    Return ParserTokenIsReservedName(nameTok)
+    If ParserTokenIsReservedName(nameTok) <> 0 Then Return 1
+    Return ParserNonKeywordBuiltinRoutineName(nameTok.lexeme)
 End Function
+
+Private Sub ParserSetReservedRoutineNameError(ByRef ps As ParseState, ByRef nameTok As Token, ByRef declarationKind As String)
+    If ParserTokenIsReservedName(nameTok) <> 0 Then
+        ParserSetReservedNameError ps, nameTok, declarationKind, "routine"
+    Else
+        ps.lastError = declarationKind & ": '" & LCase(Trim(nameTok.lexeme)) & "' is a reserved uXBasic builtin function name and cannot be used as a routine name; choose another name"
+    End If
+End Sub
 
 ' S-149 (Mete, 2026-09-25): tipli gorev tutamaci `TASK OF <tip>`. Tip adi yine
 ' `TASK` kalir (her motorun TASK yolu degismez); sonuc tipi, TASK tip dugumunun
@@ -242,7 +251,7 @@ Function ParseDeclareStmt(ByRef ps As ParseState, ByRef firstTok As Token) As In
     Dim nameTok As Token
     nameTok = CurToken(ps)
     If ParserRoutineNameIsReserved(ps, nameTok) <> 0 Then
-        ParserSetReservedNameError ps, nameTok, "DECLARE", "routine"
+        ParserSetReservedRoutineNameError ps, nameTok, "DECLARE"
         Return -1
     End If
     If nameTok.kind <> "IDENT" Then
@@ -296,7 +305,7 @@ Function ParseSubStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Intege
     Dim nameTok As Token
     nameTok = CurToken(ps)
     If ParserRoutineNameIsReserved(ps, nameTok) <> 0 Then
-        ParserSetReservedNameError ps, nameTok, "SUB", "routine"
+        ParserSetReservedRoutineNameError ps, nameTok, "SUB"
         Return -1
     End If
     If nameTok.kind <> "IDENT" Then
@@ -335,7 +344,7 @@ Function ParseFunctionStmt(ByRef ps As ParseState, ByRef firstTok As Token) As I
     Dim nameTok As Token
     nameTok = CurToken(ps)
     If ParserRoutineNameIsReserved(ps, nameTok) <> 0 Then
-        ParserSetReservedNameError ps, nameTok, "FUNCTION", "routine"
+        ParserSetReservedRoutineNameError ps, nameTok, "FUNCTION"
         Return -1
     End If
     If nameTok.kind <> "IDENT" Then

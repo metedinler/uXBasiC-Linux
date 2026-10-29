@@ -1,0 +1,6 @@
+AST=class SAY has no STATIC method YOK
+MIR=class SAY has no STATIC method YOK
+x64=class SAY has no STATIC method YOK
+AST-x64=class SAY has no STATIC method YOK
+JS=class SAY has no STATIC method YOK
+WASM=class SAY has no STATIC method YOK

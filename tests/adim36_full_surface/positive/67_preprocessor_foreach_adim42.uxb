@@ -1,0 +1,4 @@
+%%SET N = 2
+%%FOREACH X IN ("A","B")
+PRINT "{{X}}"
+%%ENDFOREACH

@@ -35,9 +35,9 @@ Function UXBAstChildModelForKind(ByVal kindName As String) As Integer
     k = UCase(Trim(kindName))
 
     Select Case k
-    Case ASTK_BINARY
+    Case ASTK_BINARY, ASTK_CASE_RANGE_VALUE
         Return UXB_AST_CHILD_MODEL_BINARY_SHORTCUT
-    Case ASTK_UNARY
+    Case ASTK_UNARY, ASTK_CASE_IS_VALUE
         Return UXB_AST_CHILD_MODEL_UNARY_SHORTCUT
     Case "INIT_EXPR", "SPAWN_EXPR", "INCDEC_EXPR", "INCDEC_STMT"
         ' Parser tek islenenlerini .left'e yazar (DIM ilk degeri; SPAWN'in gorev cagrisi) ve

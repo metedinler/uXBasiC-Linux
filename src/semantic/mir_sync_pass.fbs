@@ -30,6 +30,7 @@ Declare Function UXBTaskSyncActive() As Integer
 Declare Function UXBTaskIsSyncGlobal(ByVal nameRaw As String) As Integer
 Declare Function UXBTaskSyncLockOrder(ByVal nameRaw As String) As Integer
 Declare Function UXBTaskNodeInsideUnsafe(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+Declare Function UXBTaskBuiltinCanStayInSync(ByVal nameText As String) As Integer
 
 Dim Shared gMirSyncLocals As String       ' "|AD|" gecerli fonksiyonun yerel+parametre adlari
 Dim Shared gMirSyncUserFns As String      ' "|AD|" modul fonksiyon adlari (kullanici kodu)
@@ -79,7 +80,7 @@ Private Function MIRSyncIsConsoleCall(ByRef ins As MIRIRInstruction) As Integer
     Dim n As String = UCase(Trim(ins.operands(0)))
     If Left(n, 5) = "PRINT" Then Return 1
     Select Case n
-    Case "CLS", "COLOR", "LOCATE", "INPUT", "INPUTF", "LINE_INPUT", "LINEINPUT", "INKEY", "GETKEY", "BEEP", "WRITE", "WIDTH", "VIEW_PRINT"
+    Case "CLS", "COLOR", "LOCATE", "CSRLIN", "POS", "INPUT", "INPUTF", "LINE_INPUT", "LINEINPUT", "INKEY", "GETKEY", "BEEP", "WRITE", "WIDTH", "VIEW_PRINT"
         Return 1
     End Select
     Return 0
@@ -187,7 +188,7 @@ Private Sub MIRSyncPlanAtomicFastPath(ByRef m As MIRModule)
                         End If
                     End If
                     ' Adayin adini isleneninde yazim amaciyla tasiyan diger buyruklar (dizi/alan yazimi, adres).
-                    If opU = "MIR_VARPTR" Or opU = "STORE_INDEXED" Or opU = "MIR_FIELD_STORE" Then
+                    If opU = "MIR_VARPTR" Or opU = "STORE_INDEXED" Or opU = "MIR_FIELD_STORE" Or opU = "MIR_UNION_FIELD_STORE" Then
                         Dim k As Integer
                         For k = 0 To .operandCount - 1
                             Dim oU As String = UCase(Trim(.operands(k)))
@@ -329,10 +330,16 @@ End Function
 
 ' Yan etkisiz (one alinan cagri diliminin atlayabilecegi) buyruk.
 Private Function MIRSyncIsPure(ByRef ins As MIRIRInstruction) As Integer
-    If MIRSyncIsCallOp(ins) <> 0 Then Return 0
+    If MIRSyncIsCallOp(ins) <> 0 Then
+        If MIRSyncIsBarrierCall(ins) <> 0 Or ins.operandCount < 1 Then Return 0
+        ' LEN/MID/etc are calculations, not user-code sequencing barriers.
+        ' Use the same builtin effect policy as AST and legacy; never move a
+        ' user routine, WAIT, console or FFI call through this path.
+        Return UXBTaskBuiltinCanStayInSync(MIRSyncUnquote(ins.operands(0)))
+    End If
     If MIRSyncIsControlOp(ins) <> 0 Then Return 0
     Select Case UCase(Trim(ins.opcode))
-    Case "STORE_VAR", "STORE_INDEXED", "MIR_FIELD_STORE", "MIR_ARRAY_FIELD_STORE", "DIM", "REDIM", "CONST", "DEF_TYPE", _
+    Case "STORE_VAR", "STORE_INDEXED", "MIR_FIELD_STORE", "MIR_UNION_FIELD_STORE", "MIR_ARRAY_FIELD_STORE", "DIM", "REDIM", "CONST", "DEF_TYPE", _
          "SETSTRINGSIZE", "MIR_MEMORY_COPY", "MIR_MEMORY_FILL", "MIR_MEMORY_STORE", "MIR_MEMORY_WRITE_SEQUENCE", "MIR_VIRTUAL_INIT"
         Return 0
     End Select
@@ -446,6 +453,7 @@ Private Sub MIRSyncMake(ByRef ins As MIRIRInstruction, ByRef tmpl As MIRIRInstru
     ins.blockId = tmpl.blockId
     ins.srcLoc = tmpl.srcLoc
     ins.flags = tmpl.flags
+    ins.bareReturn = tmpl.bareReturn
     ins.stmtSeq = tmpl.stmtSeq
     ins.operandCount = nOps
     If nOps > 0 Then ins.operands(0) = op0
@@ -494,7 +502,7 @@ End Function
 
 Private Function MIRSyncIsLoadOp(ByRef ins As MIRIRInstruction) As Integer
     Select Case UCase(Trim(ins.opcode))
-    Case "LOAD_VAR", "LOAD_INDEXED", "MIR_FIELD_LOAD", "FIELD_GET", "MIR_ARRAY_FIELD_LOAD"
+    Case "LOAD_VAR", "LOAD_INDEXED", "MIR_FIELD_LOAD", "MIR_UNION_FIELD_LOAD", "FIELD_GET", "MIR_ARRAY_FIELD_LOAD"
         Return 1
     End Select
     Return 0

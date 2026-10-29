@@ -1,0 +1,28 @@
+INTERFACE ISayi
+    METHOD Oku() AS I32
+END INTERFACE
+INTERFACE IOndalik
+    METHOD Oku() AS F64
+END INTERFACE
+CLASS Tam IMPLEMENTS ISayi
+    PUBLIC
+    METHOD Oku() AS I32
+        RETURN 5
+    END METHOD
+END CLASS
+CLASS Kesir IMPLEMENTS IOndalik
+    PUBLIC
+    METHOD Oku() AS F64
+        RETURN 3.5
+    END METHOD
+END CLASS
+SUB YazTam(n AS ISayi)
+    PRINT n.Oku()
+END SUB
+SUB YazKesir(n AS IOndalik)
+    PRINT n.Oku()
+END SUB
+DIM t AS Tam = NEW Tam()
+DIM k AS Kesir = NEW Kesir()
+YazTam(t)
+YazKesir(k)

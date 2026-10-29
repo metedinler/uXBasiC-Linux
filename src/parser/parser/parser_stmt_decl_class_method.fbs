@@ -23,7 +23,7 @@ Private Function ParseMagicCustomNameIsValid(ByRef rawName As String) As Integer
     For i = 1 To Len(n)
         Dim ch As String
         ch = Mid(n, i, 1)
-        If (ch >= "A" And ch <= "Z") Or (ch >= "0" And ch <= "9") Or ch = "_" Then
+        If (ch >= "A" And ch <= "Z") Or (ch >= "0" And ch <= "9") Or ch = "_" Or Asc(ch) >= 128 Then ' S-579: UTF-8 Turkish letters
             Continue For
         End If
         Return 0
@@ -503,10 +503,28 @@ Private Function ParseClassMethodDecl(ByRef ps As ParseState, ByVal classNode As
     If methodHeaderUpper = "SUB" Then endMethodKeyword = "SUB"
     If isMagicDecl <> 0 Then endMethodKeyword = "MAGIC"
 
+    ' STATIC can start a method body as a local declaration. Preserve the
+    ' declaration-only form followed by another class member: an explicit
+    ' matching END must appear before the next routine/class boundary.
+    Dim startsWithStaticLocal As Integer = 0
+    If UCase(CurToken(ps).lexeme) = "STATIC" And LookToken(ps, 1).kind = "IDENT" Then
+        For ahead As Integer = 1 To ps.lx.tokens.count
+            Dim probe As Token = LookToken(ps, ahead)
+            Dim word As String = UCase(probe.lexeme)
+            If probe.kind = "EOF" Then Exit For
+            If probe.kind = "KEYWORD" And word = "END" Then
+                Dim endWord As String = UCase(LookToken(ps, ahead + 1).lexeme)
+                If endWord = endMethodKeyword Then startsWithStaticLocal = 1: Exit For
+                If endWord = "CLASS" Then Exit For
+            End If
+            If probe.kind = "KEYWORD" And (word = "METHOD" Or word = "FUNCTION" Or word = "SUB" Or word = "CONSTRUCTOR" Or word = "DESTRUCTOR") Then Exit For
+        Next ahead
+    End If
+
     If IsKw(ps, "END") And UCase(LookToken(ps, 1).lexeme) = endMethodKeyword Then
         AdvanceTok ps
         AdvanceTok ps
-    ElseIf IsClassMemberHeaderStart(ps) = 0 Then
+    ElseIf IsClassMemberHeaderStart(ps) = 0 Or startsWithStaticLocal <> 0 Then
         Do While CurToken(ps).kind <> "EOF"
             If IsKw(ps, "END") And UCase(LookToken(ps, 1).lexeme) = endMethodKeyword Then Exit Do
             If IsEndClassStart(ps) Then

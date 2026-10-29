@@ -1,0 +1,15 @@
+' Tarayıcıda çalışan küçük program: karelerin toplamı ve özyinelemeli faktöriyel
+FUNCTION Fakt(n AS I32) AS I32
+    IF n <= 1 THEN RETURN 1
+    RETURN n * Fakt(n - 1)
+END FUNCTION
+
+DIM i AS I32
+DIM toplam AS I32 = 0
+PRINT "merhaba tarayici"
+FOR i = 1 TO 5
+    toplam += i * i
+    PRINT i; " karesi = "; i * i
+NEXT
+PRINT "kareler toplami = "; toplam
+PRINT "6! = "; Fakt(6)

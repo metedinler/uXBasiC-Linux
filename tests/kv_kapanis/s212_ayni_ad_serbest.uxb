@@ -1,0 +1,26 @@
+' S-212 (olumlu yon): farkli rutinlerde, global/yerel ve kardes IF dallarinda ayni ad serbesttir; yalniz ayni kapsayicinin ikinci DIM'i reddedilir.
+SUB A1()
+    DIM x AS I32 = 1
+    PRINT x
+END SUB
+SUB A2()
+    DIM x AS I32 = 2
+    PRINT x
+END SUB
+DIM g AS I32 = 5
+SUB T()
+    DIM g AS I32 = 7
+    PRINT g
+END SUB
+A1()
+A2()
+PRINT g
+T()
+DIM n AS I32 = 2
+IF n = 1 THEN
+    DIM s AS STRING = "a"
+    PRINT s
+ELSE
+    DIM s AS STRING = "b"
+    PRINT s
+END IF

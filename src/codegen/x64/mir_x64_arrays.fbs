@@ -15,6 +15,20 @@ Function MIRX64ArrayLabel(ByRef nameText As String) As String
     Return "__uxb_arr_" & MIRX64NormalizeVarName(nameText)
 End Function
 
+Private Function MIRX64FrameArraySlotName(ByRef nameText As String, ByVal part As String) As String
+    Return "_UXB_ARRAY_DESC_" & MIRX64NormalizeVarName(nameText) & "_" & part
+End Function
+
+Private Function MIRX64IsFrameArray(ByRef cg As MIRX64Context, ByRef nameText As String) As Integer
+    If cg.modulePtr = 0 Then Return 0
+    If cg.currentFunctionIndex < 0 Or cg.currentFunctionIndex >= cg.modulePtr->functionCount Then Return 0
+    Dim fn As MIRFunction Ptr = @cg.modulePtr->functions(cg.currentFunctionIndex)
+    For i As Integer = 0 To fn->localVarCount - 1
+        If UCase(fn->localVars(i)) = UCase(nameText) And UCase(fn->localVarTypes(i)) = "ARRAY" Then Return 1
+    Next i
+    Return 0
+End Function
+
 Function MIRX64FindArrayIndex(ByRef cg As MIRX64Context, ByRef nameText As String, ByRef indexOut As Integer) As Integer
     Dim target As String
     target = MIRX64NormalizeVarName(nameText)
@@ -42,11 +56,10 @@ Function MIRX64FindArrayIndex(ByRef cg As MIRX64Context, ByRef nameText As Strin
 End Function
 
 Private Function MIRX64ArrayElementBytes(ByRef typeNameRaw As String) As Integer
-    ' S-079: element cell from the shared ABI table (0 = not a builtin scalar).
-    Dim abiPayload As Integer
-    Dim abiAlign As Integer
+    ' S-079/S-103: scalar ABI and inline TYPE stride share the layout owner.
     Dim abiStride As Integer
-    If UXBTypeAbi(typeNameRaw, abiPayload, abiAlign, abiStride) = 0 Then Return 0
+    Dim storageType As String = UXBStep3StorageType(typeNameRaw)
+    If TypeLayoutStrideOfGlobal(storageType, abiStride) = 0 Then Return 0
     Return abiStride
 End Function
 
@@ -171,11 +184,20 @@ Function MIRX64RegisterParamArrays(ByRef cg As MIRX64Context, ByRef fn As MIRFun
         cg.arrays(idx).lowerBound = 0
         cg.arrays(idx).upperBound = 0
         cg.arrays(idx).elementCount = 0
-        cg.arrays(idx).elementType = elemType
+        cg.arrays(idx).elementType = UXBStep3StorageType(elemType)
         cg.arrays(idx).elementBytes = MIRX64ArrayElementBytes(elemType)
         cg.arrays(idx).byteLength = 0
         cg.arrays(idx).isParam = 1
         cg.arrays(idx).descLocalName = MIRX64NormalizeVarName(fn.paramVars(pi))
+        If cg.arrays(idx).elementBytes <= 0 And cg.modulePtr <> 0 Then
+            For classIndex As Integer = 0 To cg.modulePtr->vtableClassCount - 1
+                If UCase(cg.modulePtr->vtableClassNames(classIndex)) = UCase(elemType) Then
+                    cg.arrays(idx).elementBytes = 8
+                    cg.arrays(idx).elementType = UCase(elemType)
+                    Exit For
+                End If
+            Next classIndex
+        End If
         If cg.arrays(idx).elementBytes <= 0 Then
             errText = "MIR x64 arrays: array parameter " & fn.paramVars(pi) & " has unsupported element type " & elemType
             Return 0
@@ -222,7 +244,7 @@ Function MIRX64EmitArrayBasePtrToReg(ByRef cg As MIRX64Context, ByVal arrIdx As 
     Return 1
 End Function
 
-Function MIRX64EnsureArraySlot(ByRef cg As MIRX64Context, ByRef nameText As String, ByVal lowerBound As Integer, ByVal upperBound As Integer, ByRef indexOut As Integer, ByRef errText As String, ByVal elementBytesOverride As Integer = 0, ByRef elementTypeOverride As String = "") As Integer
+Function MIRX64EnsureArraySlot(ByRef cg As MIRX64Context, ByRef nameText As String, ByVal lowerBound As Integer, ByVal upperBound As Integer, ByRef indexOut As Integer, ByRef errText As String, ByVal elementBytesOverride As Integer = 0, ByRef elementTypeOverride As String = "", ByVal deferAllocation As Integer = 0) As Integer
     errText = ""
     If Trim(nameText) = "" Then
         errText = "MIR x64 arrays: array name is empty"
@@ -251,7 +273,7 @@ Function MIRX64EnsureArraySlot(ByRef cg As MIRX64Context, ByRef nameText As Stri
     cg.arrays(idx).upperBound = upperBound
     cg.arrays(idx).elementCount = upperBound - lowerBound + 1
     cg.arrays(idx).elementType = MIRX64ArrayTypeForName(cg, nameText)
-    If Trim(elementTypeOverride) <> "" Then cg.arrays(idx).elementType = UCase(Trim(elementTypeOverride))
+    If Trim(elementTypeOverride) <> "" Then cg.arrays(idx).elementType = UCase(Trim(UXBStep3StorageType(elementTypeOverride)))
     cg.arrays(idx).elementBytes = MIRX64ArrayElementBytes(cg.arrays(idx).elementType)
     If elementBytesOverride > 0 Then cg.arrays(idx).elementBytes = elementBytesOverride
     If cg.arrays(idx).elementBytes <= 0 Then
@@ -262,9 +284,55 @@ Function MIRX64EnsureArraySlot(ByRef cg As MIRX64Context, ByRef nameText As Stri
     cg.arrays(idx).isParam = 0
     cg.arrays(idx).descLocalName = ""
 
+    If MIRX64IsFrameArray(cg, nameText) <> 0 Then
+        ' Descriptor belongs to this invocation's frame, with the same
+        ' pointer/lower/upper ABI used by array parameters. Recursive calls
+        ' cannot replace their caller's descriptor or element block.
+        Dim descOff As Integer, dataOff As Integer
+        Dim dataSlot As String = MIRX64FrameArraySlotName(nameText, "DATA")
+        If MIRX64FindLocalOffset(cg, nameText, descOff) = 0 Or MIRX64FindLocalOffset(cg, dataSlot, dataOff) = 0 Then
+            errText = "MIR x64 arrays: frame descriptor slot missing: " & nameText: Return 0
+        End If
+        If cg.arrays(idx).byteLength <= 0 Or cg.arrays(idx).byteLength > &H7FFFFFFF Then
+            errText = "MIR x64 arrays: local array byte length out of range: " & nameText: Return 0
+        End If
+        cg.arrays(idx).isParam = 1
+        cg.arrays(idx).descLocalName = MIRX64NormalizeVarName(nameText)
+        If deferAllocation <> 0 Then
+            MIRX64Emit cg, "    lea rax, " & MIRX64RbpRef(dataOff)
+            MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(descOff) & ", rax"
+            indexOut = idx
+            Return 1
+        End If
+        MIRX64EmitRuntimeExtern cg, "calloc"
+        MIRX64Emit cg, "    mov rcx, 1"
+        MIRX64Emit cg, "    mov rdx, " & MIRX64ToStr(CInt(cg.arrays(idx).byteLength))
+        MIRX64Emit cg, "    sub rsp, 32"
+        MIRX64Emit cg, "    call calloc"
+        MIRX64Emit cg, "    add rsp, 32"
+        Dim localAllocOk As String = MIRX64NextLabel(cg, "local_arr_alloc_ok")
+        MIRX64Emit cg, "    test rax, rax"
+        MIRX64Emit cg, "    jnz " & localAllocOk
+        If MIRX64EmitArrayAllocErrorExit(cg, "array memory allocation failed: " & nameText, errText) = 0 Then Return 0
+        MIRX64Emit cg, localAllocOk & ":"
+        MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(dataOff) & ", rax"
+        MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(dataOff + 8) & ", " & MIRX64ToStr(lowerBound)
+        MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(dataOff + 16) & ", " & MIRX64ToStr(upperBound)
+        MIRX64Emit cg, "    lea rax, " & MIRX64RbpRef(dataOff)
+        MIRX64Emit cg, "    mov qword " & MIRX64RbpRef(descOff) & ", rax"
+        MIRX64EnsureMemoryModeHelpers cg
+        MIRX64Emit cg, "    mov rcx, qword " & MIRX64RbpRef(dataOff)
+        MIRX64Emit cg, "    mov rdx, " & MIRX64ToStr(CInt(cg.arrays(idx).byteLength))
+        MIRX64Emit cg, "    call __uxb_memref_register"
+        indexOut = idx
+        Return 1
+    End If
+
     MIRX64EmitBss cg, cg.arrays(idx).labelText & ": resq 3"
-    If MIRX64EmitArrayAlloc(cg, cg.arrays(idx).labelText, cg.arrays(idx).byteLength, errText) = 0 Then Return 0
-    MIRX64EmitArrayDescriptorBounds cg, cg.arrays(idx).labelText, lowerBound, upperBound
+    If deferAllocation = 0 Then
+        If MIRX64EmitArrayAlloc(cg, cg.arrays(idx).labelText, cg.arrays(idx).byteLength, errText) = 0 Then Return 0
+        MIRX64EmitArrayDescriptorBounds cg, cg.arrays(idx).labelText, lowerBound, upperBound
+    End If
 
     indexOut = idx
     Return 1
@@ -293,9 +361,9 @@ Private Function MIRX64EmitArrayBoundsCheck(ByRef cg As MIRX64Context, ByVal arr
         MIRX64Emit cg, "    cmp " & idxReg & ", qword [rdx + 16]"
         MIRX64Emit cg, "    jle " & okLabel
     Else
-        MIRX64Emit cg, "    cmp " & idxReg & ", " & MIRX64ToStr(cg.arrays(arrIdx).lowerBound)
+        MIRX64Emit cg, "    cmp " & idxReg & ", qword [rel " & cg.arrays(arrIdx).labelText & " + 8]"
         MIRX64Emit cg, "    jl " & badLabel
-        MIRX64Emit cg, "    cmp " & idxReg & ", " & MIRX64ToStr(cg.arrays(arrIdx).upperBound)
+        MIRX64Emit cg, "    cmp " & idxReg & ", qword [rel " & cg.arrays(arrIdx).labelText & " + 16]"
         MIRX64Emit cg, "    jle " & okLabel
     End If
     MIRX64Emit cg, badLabel & ":"
@@ -322,9 +390,7 @@ Function MIRX64EmitArrayAddressToReg(ByRef cg As MIRX64Context, ByRef arrayName 
         Return 1
     End If
 
-    If cg.arrays(arrIdx).lowerBound <> 0 Then
-        MIRX64Emit cg, "    sub " & regName & ", " & MIRX64ToStr(cg.arrays(arrIdx).lowerBound)
-    End If
+    MIRX64Emit cg, "    sub " & regName & ", qword [rel " & cg.arrays(arrIdx).labelText & " + 8]"
     MIRX64Emit cg, "    imul " & regName & ", " & MIRX64ToStr(cg.arrays(arrIdx).elementBytes)
     MIRX64Emit cg, "    mov rdx, qword [rel " & cg.arrays(arrIdx).labelText & "]"
     MIRX64Emit cg, "    add " & regName & ", rdx"
@@ -401,14 +467,35 @@ Function MIRX64EmitArrayBound(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64C
     Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
 End Function
 
+Private Function MIRX64EmitLiveResize(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByVal arrIdx As Integer, ByVal preserveFlag As Integer, ByRef errText As String) As Integer
+    ' All source expressions have already been evaluated into MIR operands.
+    ' Release the old MemoryRef registration and register the actual new block.
+    MIRX64EnsureMemoryModeHelpers cg
+    If MIRX64EmitArrayBasePtrToReg(cg, arrIdx, "rcx", errText) = 0 Then Return 0
+    MIRX64Emit cg, "    call __uxb_memref_release"
+    If MIRX64EmitArrayDescriptorAddrToReg(cg, ins.operands(0), "rcx", errText) = 0 Then Return 0
+    If MIRX64LoadOperandToReg(cg, ins.operands(1), "rdx", errText) = 0 Then Return 0
+    If MIRX64LoadOperandToReg(cg, ins.operands(2), "r8", errText) = 0 Then Return 0
+    Dim flags As ULongInt = CULngInt(cg.arrays(arrIdx).elementBytes)
+    If preserveFlag <> 0 Then flags Or= 4294967296ULL
+    MIRX64Emit cg, "    mov r9, " & LTrim(Str(flags))
+    MIRX64EmitRuntimeExtern cg, "__uxb_rt_array_resize"
+    MIRX64Emit cg, "    sub rsp, 32"
+    MIRX64Emit cg, "    call __uxb_rt_array_resize"
+    MIRX64Emit cg, "    add rsp, 32"
+    If MIRX64EmitArrayDescriptorAddrToReg(cg, ins.operands(0), "r10", errText) = 0 Then Return 0
+    MIRX64Emit cg, "    mov rcx, [r10]"
+    MIRX64Emit cg, "    mov rdx, [r10 + 16]"
+    MIRX64Emit cg, "    sub rdx, [r10 + 8]"
+    MIRX64Emit cg, "    inc rdx"
+    MIRX64Emit cg, "    imul rdx, " & LTrim(Str(cg.arrays(arrIdx).elementBytes))
+    MIRX64Emit cg, "    call __uxb_memref_register"
+    Return 1
+End Function
+
 Function MIRX64EmitDimArray(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
     If ins.operandCount < 3 Then
         errText = "MIR x64 arrays: DIM array requires var, lower, upper operands"
-        Return 0
-    End If
-
-    If MIRX64IsIntegerLiteral(ins.operands(1)) = 0 Or MIRX64IsIntegerLiteral(ins.operands(2)) = 0 Then
-        errText = "MIR x64 arrays: DIM array bounds must be compile-time integer literals in current backend; got lower='" & ins.operands(1) & "' upper='" & ins.operands(2) & "'"
         Return 0
     End If
 
@@ -417,6 +504,10 @@ Function MIRX64EmitDimArray(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Con
     Dim overrideBytes As Integer = 0
     If ins.operandCount > 3 Then overrideBytes = ValInt(ins.operands(3))
     If ins.operandCount > 4 Then overrideType = ins.operands(4)
+    If (ins.operandCount > 5 AndAlso ins.operands(5) = "LIVE_DESCRIPTOR") Or MIRX64IsIntegerLiteral(ins.operands(1)) = 0 Or MIRX64IsIntegerLiteral(ins.operands(2)) = 0 Then
+        If MIRX64EnsureArraySlot(cg, ins.operands(0), 0, 0, arrIdx, errText, overrideBytes, overrideType, 1) = 0 Then Return 0
+        Return MIRX64EmitLiveResize(ins, cg, arrIdx, 0, errText)
+    End If
     Return MIRX64EnsureArraySlot(cg, ins.operands(0), ValInt(ins.operands(1)), ValInt(ins.operands(2)), arrIdx, errText, overrideBytes, overrideType)
 End Function
 
@@ -443,103 +534,7 @@ Function MIRX64EmitRedimArray(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64C
         Return 0
     End If
 
-    If cg.arrays(arrIdx).isParam <> 0 Then
-        errText = "MIR x64 arrays: REDIM of an array parameter is not supported: " & ins.operands(0)
-        Return 0
-    End If
-
-    If MIRX64IsIntegerLiteral(ins.operands(1)) = 0 Or MIRX64IsIntegerLiteral(ins.operands(2)) = 0 Then
-        errText = "MIR x64 arrays: REDIM bounds must be compile-time integer literals in current backend; got lower='" & ins.operands(1) & "' upper='" & ins.operands(2) & "'"
-        Return 0
-    End If
-
-    Dim newLower As Integer
-    Dim newUpper As Integer
-    newLower = ValInt(ins.operands(1))
-    newUpper = ValInt(ins.operands(2))
-    If newUpper < newLower Then
-        errText = "MIR x64 arrays: REDIM upper bound is smaller than lower bound for " & ins.operands(0)
-        Return 0
-    End If
-
-    Dim preserveFlag As Integer
-    preserveFlag = ValInt(ins.operands(3))
-
-    Dim elementBytes As Integer
-    elementBytes = cg.arrays(arrIdx).elementBytes
-    Dim newCount As Integer
-    newCount = newUpper - newLower + 1
-    Dim newByteLength As LongInt
-    newByteLength = CLngInt(newCount) * CLngInt(elementBytes)
-    If newByteLength <= 0 Or newByteLength > &H7FFFFFFF Then
-        errText = "MIR x64 arrays: REDIM array byte overflow for " & ins.operands(0)
-        Return 0
-    End If
-
-    Dim oldLower As Integer
-    Dim oldUpper As Integer
-    oldLower = cg.arrays(arrIdx).lowerBound
-    oldUpper = cg.arrays(arrIdx).upperBound
-
-    Dim ptrLabel As String
-    ptrLabel = cg.arrays(arrIdx).labelText
-
-    MIRX64EnsureRedimScratch cg
-
-    ' Save the OLD heap pointer before MIRX64EmitArrayAlloc overwrites
-    ' [rel ptrLabel] with the new one -- needed for the preserve-copy and
-    ' the final free().
-    MIRX64Emit cg, "    mov rax, qword [rel " & ptrLabel & "]"
-    MIRX64Emit cg, "    mov qword [rel __uxb_redim_scratch_old], rax"
-
-    If MIRX64EmitArrayAlloc(cg, ptrLabel, newByteLength, errText) = 0 Then Return 0
-    MIRX64EmitArrayDescriptorBounds cg, ptrLabel, newLower, newUpper
-    MIRX64Emit cg, "    mov rax, qword [rel " & ptrLabel & "]"
-    MIRX64Emit cg, "    mov qword [rel __uxb_redim_scratch_new], rax"
-
-    If preserveFlag <> 0 Then
-        Dim overlapLower As Integer
-        Dim overlapUpper As Integer
-        overlapLower = IIf(newLower > oldLower, newLower, oldLower)
-        overlapUpper = IIf(newUpper < oldUpper, newUpper, oldUpper)
-        If overlapUpper >= overlapLower Then
-            Dim srcOff As LongInt
-            Dim dstOff As LongInt
-            Dim copyLen As LongInt
-            srcOff = CLngInt(overlapLower - oldLower) * CLngInt(elementBytes)
-            dstOff = CLngInt(overlapLower - newLower) * CLngInt(elementBytes)
-            copyLen = CLngInt(overlapUpper - overlapLower + 1) * CLngInt(elementBytes)
-
-            MIRX64EmitRuntimeExtern cg, "memcpy"
-            MIRX64Emit cg, "    mov rcx, qword [rel __uxb_redim_scratch_new]"
-            If dstOff <> 0 Then MIRX64Emit cg, "    add rcx, " & MIRX64ToStr(CInt(dstOff))
-            MIRX64Emit cg, "    mov rdx, qword [rel __uxb_redim_scratch_old]"
-            If srcOff <> 0 Then MIRX64Emit cg, "    add rdx, " & MIRX64ToStr(CInt(srcOff))
-            MIRX64Emit cg, "    mov r8, " & MIRX64ToStr(CInt(copyLen))
-            MIRX64Emit cg, "    sub rsp, 32"
-            MIRX64Emit cg, "    call memcpy"
-            MIRX64Emit cg, "    add rsp, 32"
-        End If
-    End If
-
-    ' free() on a NULL pointer is a defined no-op per the C standard -- no
-    ' guard needed even though in practice a slot always has a real prior
-    ' allocation here (MIRX64EnsureArraySlot always calloc's at DIM time).
-    ' S-056 MemoryRef: the old block is about to be freed -- pointers into it go stale.
-    MIRX64Emit cg, "    mov rcx, qword [rel __uxb_redim_scratch_old]"
-    MIRX64Emit cg, "    call __uxb_memref_release"
-    MIRX64EmitRuntimeExtern cg, "free"
-    MIRX64Emit cg, "    mov rcx, qword [rel __uxb_redim_scratch_old]"
-    MIRX64Emit cg, "    sub rsp, 32"
-    MIRX64Emit cg, "    call free"
-    MIRX64Emit cg, "    add rsp, 32"
-
-    cg.arrays(arrIdx).lowerBound = newLower
-    cg.arrays(arrIdx).upperBound = newUpper
-    cg.arrays(arrIdx).elementCount = newCount
-    cg.arrays(arrIdx).byteLength = newByteLength
-
-    Return 1
+    Return MIRX64EmitLiveResize(ins, cg, arrIdx, ValInt(ins.operands(3)), errText)
 End Function
 
 ' S-064: this used to always load into an integer register regardless of the
@@ -589,19 +584,49 @@ Function MIRX64EmitLoadIndexed(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64
     Dim elemType As String
     elemType = UCase(Trim(cg.arrays(arrIdx).elementType))
     If elemType = "F64" Or elemType = "DOUBLE" Then
+        ' S-503: MIRX64StoreXmmToVar allocates unseen temporaries as I64.
+        ' Register the widened float slot before emitting the store so the
+        ' helper writes the same 8-byte representation that later consumers
+        ' load and classify as F64.
+        Dim floatTempOffset As Integer
+        If MIRX64EnsureLocalSlot(cg, ins.result, floatTempOffset) = 0 Then
+            errText = "MIR x64 arrays: cannot allocate F64 indexed-load result"
+            Return 0
+        End If
+        MIRX64SetLocalType cg, ins.result, "F64"
         MIRX64Emit cg, "    movsd xmm0, qword [rcx]"
         If MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText) = 0 Then Return 0
         MIRX64MarkOperandTypeName cg, ins.result, "F64"
         Return 1
     ElseIf elemType = "F32" Or elemType = "SINGLE" Then
+        ' F32 array cells are widened to the canonical 8-byte XMM slot, but
+        ' retain F32 type/format semantics for PRINT, STR and later operators.
+        Dim f32TempOffset As Integer
+        If MIRX64EnsureLocalSlot(cg, ins.result, f32TempOffset) = 0 Then
+            errText = "MIR x64 arrays: cannot allocate F32 indexed-load result"
+            Return 0
+        End If
+        Dim f32TempIndex As Integer
+        If MIRX64FindLocalIndex(cg, ins.result, f32TempIndex) = 0 Then
+            errText = "MIR x64 arrays: cannot find F32 indexed-load result"
+            Return 0
+        End If
+        cg.locals(f32TempIndex).isFloatWide = 1
+        MIRX64SetLocalType cg, ins.result, "F32"
         MIRX64Emit cg, "    movss xmm0, dword [rcx]"
         MIRX64Emit cg, "    cvtss2sd xmm0, xmm0"
         If MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText) = 0 Then Return 0
-        MIRX64MarkOperandTypeName cg, ins.result, "F64"
+        MIRX64MarkOperandTypeName cg, ins.result, "F32"
         Return 1
     ElseIf elemType = "F80" Or elemType = "EXTENDED" Or elemType = "EXT" Then
         ' S-079: the element cell is 16 bytes whose first 10 are the x87 extended
         ' payload. Read it with a real `fld tword`, narrow to the 8-byte float slot.
+        Dim f80TempOffset As Integer
+        If MIRX64EnsureLocalSlot(cg, ins.result, f80TempOffset) = 0 Then
+            errText = "MIR x64 arrays: cannot allocate F80 indexed-load result"
+            Return 0
+        End If
+        MIRX64SetLocalType cg, ins.result, "F64"
         MIRX64Emit cg, "    fld tword [rcx]"
         MIRX64Emit cg, "    sub rsp, 16"
         MIRX64Emit cg, "    fstp qword [rsp]"
@@ -627,6 +652,19 @@ Function MIRX64EmitLoadIndexed(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64
     Case 8: MIRX64Emit cg, "    mov rax, qword [rcx]"
     Case Else: errText = "MIR x64 arrays: LOAD_INDEXED element width unsupported: " & MIRX64ToStr(cg.arrays(arrIdx).elementBytes): Return 0
     End Select
+    ' A loaded integer element keeps its underlying width and unsignedness.
+    ' Temporary slots otherwise default to I64, losing U64 display/order metadata.
+    Dim loadedType As String
+    If UXBStep3TypeIsInteger(elemType) <> 0 Then
+        loadedType = UXBStep3TypeLegacyName(UXBStep3StorageType(elemType))
+        Dim integerTempOffset As Integer
+        If MIRX64EnsureLocalSlot(cg, ins.result, integerTempOffset) = 0 Then
+            errText = "MIR x64 arrays: cannot allocate integer indexed-load result"
+            Return 0
+        End If
+        MIRX64SetLocalType cg, ins.result, loadedType
+        MIRX64MarkOperandTypeName cg, ins.result, loadedType
+    End If
     If MIRX64StoreRegToVar(cg, "rax", ins.result, errText) = 0 Then Return 0
     ' Same registry gap as the float case above, and it turned out to be the
     ' WHOLE bug for STRING arrays too: PRINT/etc. check MIRX64OperandIsString
@@ -701,6 +739,18 @@ Function MIRX64EmitArrayFieldLoad(ByRef ins As MIRIRInstruction, ByRef cg As MIR
     If MIRX64EmitArrayAddressToReg(cg, ins.operands(0), ins.operands(1), "rcx", errText) = 0 Then Return 0
     Dim off As Integer = ValInt(ins.operands(4))
     Dim fieldWidthLoad As Integer = ValInt(ins.operands(5))
+    Dim loadType As String = MIRCanonicalTypeName(ins.resultType)
+    If loadType = "STRING" Then MIRX64MarkOperandTypeName cg, ins.result, "STRING"
+    If loadType = "F32" Or loadType = "F64" Then
+        Dim suffix As String = IIf(off = 0, "", " + " & MIRX64ToStr(off))
+        If loadType = "F32" Then
+            MIRX64Emit cg, "    cvtss2sd xmm0, dword [rcx" & suffix & "]"
+        Else
+            MIRX64Emit cg, "    movsd xmm0, qword [rcx" & suffix & "]"
+        End If
+        MIRX64SetLocalType cg, ins.result, loadType
+        Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
+    End If
     If off = 0 Then
         Select Case fieldWidthLoad
         Case 1: MIRX64Emit cg, "    movzx rax, byte [rcx]"
@@ -726,11 +776,22 @@ Function MIRX64EmitArrayFieldStore(ByRef ins As MIRIRInstruction, ByRef cg As MI
     Dim arrIdx As Integer
     If MIRX64FindArrayIndex(cg, ins.operands(0), arrIdx) = 0 Then errText = "MIR x64 arrays: struct array not declared: " & ins.operands(0): Return 0
     If MIRX64EmitArrayAddressToReg(cg, ins.operands(0), ins.operands(1), "rcx", errText) = 0 Then Return 0
-    If MIRX64LoadOperandToReg(cg, ins.operands(3), "rax", errText) = 0 Then Return 0
     Dim off As Integer = ValInt(ins.operands(5))
     Dim fieldWidthStore As Integer = ValInt(ins.operands(6))
     Dim suffix As String = IIf(off = 0, "", " + " & MIRX64ToStr(off))
-    If UCase(Trim(ins.operands(4))) = "STRING" Then
+    Dim storeType As String = MIRCanonicalTypeName(ins.resultType)
+    If storeType = "F32" Or storeType = "F64" Then
+        If MIRX64LoadFloatOperandToXmm(cg, ins.operands(3), "xmm0", errText) = 0 Then Return 0
+        If storeType = "F32" Then
+            MIRX64Emit cg, "    cvtsd2ss xmm4, xmm0"
+            MIRX64Emit cg, "    movss dword [rcx" & suffix & "], xmm4"
+        Else
+            MIRX64Emit cg, "    movsd qword [rcx" & suffix & "], xmm0"
+        End If
+        Return 1
+    End If
+    If MIRX64LoadOperandToReg(cg, ins.operands(3), "rax", errText) = 0 Then Return 0
+    If storeType = "STRING" Then
         MIRX64EmitOwnedStringStore cg, "    lea rcx, [rcx" & suffix & "]", "rax"   ' S-157
         Return 1
     End If

@@ -1,0 +1,64 @@
+R1 duz alan, ad deger (beklenen 42 / 42)
+CLASS Sayac3
+PUBLIC
+    DIM deger AS I32
+    CONSTRUCTOR(baslangic AS I32)
+        deger = baslangic
+    END CONSTRUCTOR
+    METHOD Ekle(d AS I32) AS I32
+        deger = deger + d
+        RETURN deger
+    END METHOD
+    METHOD Al() AS I32
+        RETURN deger
+    END METHOD
+END CLASS
+DIM c AS Sayac3 = NEW Sayac3(10)
+DIM r AS I32
+r = c.Ekle(32)
+PRINT r
+PRINT c.Al()
+=====
+R2 PRIVATE PROPERTY, ad deger (beklenen 42 / 42)
+CLASS Sayac4
+PRIVATE
+    PROPERTY deger AS I32
+PUBLIC
+    CONSTRUCTOR(baslangic AS I32)
+        deger = baslangic
+    END CONSTRUCTOR
+    METHOD Ekle(d AS I32) AS I32
+        deger = deger + d
+        RETURN deger
+    END METHOD
+    METHOD Al() AS I32
+        RETURN deger
+    END METHOD
+END CLASS
+DIM c AS Sayac4 = NEW Sayac4(10)
+DIM r AS I32
+r = c.Ekle(32)
+PRINT r
+PRINT c.Al()
+=====
+R3 PRIVATE DIM alan + PUBLIC metot (beklenen 42 / 42)
+CLASS Sayac5
+PRIVATE
+    DIM deger AS I32
+PUBLIC
+    CONSTRUCTOR(baslangic AS I32)
+        deger = baslangic
+    END CONSTRUCTOR
+    METHOD Ekle(d AS I32) AS I32
+        deger = deger + d
+        RETURN deger
+    END METHOD
+    METHOD Al() AS I32
+        RETURN deger
+    END METHOD
+END CLASS
+DIM c AS Sayac5 = NEW Sayac5(10)
+DIM r AS I32
+r = c.Ekle(32)
+PRINT r
+PRINT c.Al()

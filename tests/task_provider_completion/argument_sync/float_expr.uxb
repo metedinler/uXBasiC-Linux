@@ -1,0 +1,10 @@
+DIM a AS F64 = 0.5
+DIM old AS F64 = a++
+DIM newer AS F64 = --a
+PRINT old
+PRINT newer
+PRINT a
+DIM b AS F32 = 0.25
+DIM c AS F32 = ++b
+PRINT c
+PRINT b

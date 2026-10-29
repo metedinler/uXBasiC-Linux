@@ -1,0 +1,6 @@
+{
+  "auto_sync_call_snapshot": {
+    "output": "1\n1\n2",
+    "engines": ["x64", "AST-x64"]
+  }
+}

@@ -1,0 +1,40 @@
+' S-484: THIS.m() / ME.m() / bare m() in a base-class method, on objects of three different real classes (three-level chain).
+CLASS Taban
+    PUBLIC
+    VIRTUAL METHOD Goster() AS I32
+        RETURN 100
+    END METHOD
+    METHOD Rapor() AS I32
+        RETURN THIS.Goster()
+    END METHOD
+    METHOD RaporMe() AS I32
+        RETURN ME.Goster()
+    END METHOD
+    METHOD RaporPlain() AS I32
+        RETURN Goster()
+    END METHOD
+END CLASS
+CLASS Orta EXTENDS Taban
+    PUBLIC
+    OVERRIDE METHOD Goster() AS I32
+        RETURN 200
+    END METHOD
+END CLASS
+CLASS Alt EXTENDS Orta
+    PUBLIC
+    OVERRIDE METHOD Goster() AS I32
+        RETURN 300
+    END METHOD
+END CLASS
+DIM x AS Alt = NEW Alt()
+PRINT x.Rapor()
+PRINT x.RaporMe()
+PRINT x.RaporPlain()
+DIM y AS Orta = NEW Orta()
+PRINT y.Rapor()
+PRINT y.RaporMe()
+PRINT y.RaporPlain()
+DIM z AS Taban = NEW Taban()
+PRINT z.Rapor()
+PRINT z.RaporMe()
+PRINT z.RaporPlain()

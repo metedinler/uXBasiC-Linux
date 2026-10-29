@@ -1,0 +1,15 @@
+' S-484: a bare call of an inherited PROTECTED method from a derived class stays legal on every engine.
+CLASS Taban
+    PROTECTED
+    METHOD Cekirdek() AS I32
+        RETURN 9
+    END METHOD
+END CLASS
+CLASS Alt EXTENDS Taban
+    PUBLIC
+    METHOD Kullan() AS I32
+        RETURN Cekirdek() + 1
+    END METHOD
+END CLASS
+DIM x AS Alt = NEW Alt()
+PRINT x.Kullan()

@@ -1,0 +1,19 @@
+CLASS Kutu
+    PUBLIC
+    n AS I32
+END CLASS
+DIM a(-1 TO 0, 2 TO 3) AS Kutu
+SUB Yerel()
+    DIM a(1 TO 2, 3 TO 4, 5 TO 6) AS Kutu
+    a(2, 4, 6) = NEW Kutu()
+    a(2, 4, 6).n = 13
+    PRINT a(2, 4, 6).n
+    PRINT LBOUND(a)
+    PRINT UBOUND(a, 3)
+END SUB
+a(-1, 3) = NEW Kutu()
+a(-1, 3).n = 7
+Yerel()
+PRINT a(-1, 3).n
+PRINT LBOUND(a)
+PRINT UBOUND(a, 2)

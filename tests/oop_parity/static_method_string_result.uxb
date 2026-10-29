@@ -1,0 +1,9 @@
+' S-609 (2026-10-17): legacy AST-x64 did not know the result type of `Say.Selam("x")` (a STATIC method named through its class) and PRINT
+' wrote the returned STRING pointer as a number. WASM cannot print strings (explicit rejection), so five engines run this.
+CLASS Say
+    PUBLIC
+    STATIC METHOD Selam(ad AS STRING) AS STRING
+        RETURN "Merhaba " + ad
+    END METHOD
+END CLASS
+PRINT Say.Selam("Ayse")

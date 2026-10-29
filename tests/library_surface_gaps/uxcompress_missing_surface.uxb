@@ -1,0 +1,16 @@
+INCLUDE "include/modules/uxcompress.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxcompress.BlobData(0)
+        uxcompress.BlobFree(0)
+        PRINT uxcompress.BlobSize(0)
+        PRINT uxcompress.Compress(0, 0, 0)
+        PRINT uxcompress.CompressFile("", "", 0)
+        PRINT uxcompress.CompressText("", 0)
+        PRINT uxcompress.Decompress(0, 0, 0)
+        PRINT uxcompress.DecompressFile("", "")
+        PRINT uxcompress.ErrorText()
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXCOMPRESS"
+END MAIN

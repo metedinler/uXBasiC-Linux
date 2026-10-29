@@ -1,0 +1,16 @@
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    DESTRUCTOR()
+        PRINT 7
+    END DESTRUCTOR
+END CLASS
+
+' S-574 (Mete's design): DELETE leaves the variable empty - it equals NOTHING afterwards.
+DIM k AS Kutu = NEW Kutu(3)
+IF k <> NOTHING THEN PRINT 1
+DELETE k
+IF k = NOTHING THEN PRINT 2

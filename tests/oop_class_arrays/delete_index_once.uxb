@@ -1,0 +1,30 @@
+DIM destructions AS I32 = 0
+DIM picks AS I32 = 0
+FUNCTION Pick() AS I32
+    picks = picks + 1
+    RETURN 1
+END FUNCTION
+CLASS Temel
+    PUBLIC
+    n AS I32
+    DESTRUCTOR()
+        PRINT 10
+        destructions = destructions + 1
+    END DESTRUCTOR
+END CLASS
+CLASS Alt EXTENDS Temel
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 20
+        destructions = destructions + 1
+    END DESTRUCTOR
+END CLASS
+DIM arr(2) AS Temel
+arr(1) = NEW Alt()
+DIM aliasRef AS Temel = arr(1)
+DELETE arr(Pick())
+PRINT arr(1) = NOTHING
+PRINT picks
+DELETE aliasRef
+DELETE arr(1)
+PRINT destructions

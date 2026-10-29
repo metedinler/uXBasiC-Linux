@@ -1,0 +1,4 @@
+AST=semantic: ME virtual method call is not allowed in CONSTRUCTOR
+MIR=semantic: ME virtual method call is not allowed in CONSTRUCTOR
+x64=semantic: ME virtual method call is not allowed in CONSTRUCTOR
+AST-x64=semantic: ME virtual method call is not allowed in CONSTRUCTOR

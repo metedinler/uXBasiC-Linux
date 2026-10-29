@@ -1,0 +1,44 @@
+{
+  "index_once": {
+    "output": "13\n1\n21",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  },
+  "float_fields": {
+    "output": "0.75\n1\n2",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  },
+  "array_typed": {
+    "output": "0.75\n1\n-128\n3",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  },
+  "property_compound": {
+    "output": "0.75\n1\n1",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  },
+  "local_parameter": {
+    "output": "0.75\n0.75",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  },
+  "record_layout": {
+    "output": "0\n0\n-128\n5\n0\n16777216\n0.75",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  }
+}

@@ -1,0 +1,3 @@
+' S-669: Acik bir %%REPEAT'e ait olmayan %%UNTILMETA acik hatadir.
+%%UNTILMETA 1
+PRINT 1

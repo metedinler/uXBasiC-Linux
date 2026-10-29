@@ -1,0 +1,70 @@
+[
+ {
+  "ad": "r alan + alan (beklenen 10)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k + k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r alan * 2.0 (beklenen 10)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k * 2.0\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r 2.0 * alan (beklenen 10)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN 2.0 * k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r alan * alan (beklenen 25)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k * k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r THIS.alan * THIS.alan (beklenen 25)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN THIS.k * THIS.k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r alan - 1.0 (beklenen 4)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k - 1.0\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r yerel a * b (beklenen 25)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        DIM a AS F64 = k\n        DIM b AS F64 = k\n        RETURN a * b\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r yerel t * t (beklenen 25)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        DIM t2 AS F64 = k\n        RETURN t2 * t2\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r alan / 2.0 (beklenen 2.5)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k / 2.0\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r yalniz alan (beklenen 5)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r alan * alan atama sonra donus (beklenen 25)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        DIM r AS F64\n        r = k * k\n        RETURN r\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "r2 genel F64 carpim (kontrol)",
+  "kod": "DIM g AS F64 = 5.0\nPRINT g * g\n"
+ },
+ {
+  "ad": "r3 F64 kurucu parametresi alan okuma",
+  "kod": "CLASS T1\n    PUBLIC\n    DIM k AS F64\n    CONSTRUCTOR(a AS F64)\n        k = a\n    END CONSTRUCTOR\nEND CLASS\nDIM t AS T1 = NEW T1(7.5)\nPRINT t.k\n"
+ },
+ {
+  "ad": "r4 F64 kurucu parametresi PRIVATE alan + yontem",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR(a AS F64)\n        k = a\n    END CONSTRUCTOR\n    METHOD Oku() AS F64\n        RETURN k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1(7.5)\nPRINT t.Oku()\n"
+ },
+ {
+  "ad": "r5 F64 yontem parametresi",
+  "kod": "CLASS T1\n    PUBLIC\n    DIM k AS F64\n    METHOD Yaz(a AS F64)\n        k = a\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nt.Yaz(7.5)\nPRINT t.k\n"
+ },
+ {
+  "ad": "r6 F64 kurucu parametresi iki alan",
+  "kod": "CLASS T1\n    PUBLIC\n    DIM x AS F64\n    DIM y AS F64\n    CONSTRUCTOR(a AS F64, b AS F64)\n        x = a\n        y = b\n    END CONSTRUCTOR\nEND CLASS\nDIM t AS T1 = NEW T1(1.5, 2.5)\nPRINT t.x\nPRINT t.y\n"
+ },
+ {
+  "ad": "r7 I32 kurucu parametresi (kontrol)",
+  "kod": "CLASS T1\n    PUBLIC\n    DIM k AS I32\n    CONSTRUCTOR(a AS I32)\n        k = a\n    END CONSTRUCTOR\nEND CLASS\nDIM t AS T1 = NEW T1(7)\nPRINT t.k\n"
+ }
+]

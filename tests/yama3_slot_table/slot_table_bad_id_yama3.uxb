@@ -1,0 +1,7 @@
+EVENT VeriGeldi
+    PRINT "EVENT_BODY"
+END EVENT
+
+SLOT
+    Kaydet 300 ON EVENT VeriGeldi
+END SLOT

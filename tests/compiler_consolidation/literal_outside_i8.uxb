@@ -1,0 +1,2 @@
+DIM value AS I8 = 128
+PRINT value

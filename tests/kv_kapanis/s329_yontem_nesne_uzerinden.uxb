@@ -1,0 +1,11 @@
+' S-329 koruma (gorunurluk): yontem yalnizca nesne uzerinden nitelikli cagrilir.
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    SUB Bump()
+        n = n + 1
+    END SUB
+END CLASS
+DIM s AS Sayac = NEW Sayac()
+s.Bump()
+PRINT s.n

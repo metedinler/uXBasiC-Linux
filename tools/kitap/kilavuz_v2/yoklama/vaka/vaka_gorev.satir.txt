@@ -1,0 +1,22 @@
+olay_thread_tetik | THREAD Kaydet(v AS I32)\n    PRINT "kaydedildi "; v\nEND THREAD\nEVENT Gelen(v AS I32)\n    TRIGGER THREAD Kaydet, v\nEND EVENT | TRIGGER EVENT Gelen, 21
+thread_olay_tetik | EVENT Haber(v AS I32)\n    PRINT "haber "; v\nEND EVENT\nTHREAD Is(v AS I32)\n    TRIGGER EVENT Haber, v\nEND THREAD | TRIGGER THREAD Is, 5
+pipe_zincir_taskout | PIPE Ikile(v AS I32) AS I32\n    RETURN v * 2\nEND PIPE\nPIPE Dortle(v AS I32) AS I32\n    RETURN v * 4\nEND PIPE | TRIGGER PIPE Ikile, 3\nDIM ara AS I32\nara = CINT(TASKOUT)\nTRIGGER PIPE Dortle, ara\nPRINT CINT(TASKOUT)
+olay_pipe_thread | PIPE Olc(v AS I32) AS I32\n    RETURN v * 2\nEND PIPE\nTHREAD Kaydet(v AS I32)\n    PRINT "kaydedildi "; v\nEND THREAD\nEVENT Gelen(v AS I32)\n    TRIGGER PIPE Olc, v\n    TRIGGER THREAD Kaydet, CINT(TASKOUT)\nEND EVENT | TRIGGER EVENT Gelen, 21
+uc_katman | THREAD Yaprak(x AS I32) AS I32\n    RETURN x * x\nEND THREAD\nPARALEL Dal(a AS I32) AS I32\n    DIM t1 AS TASK OF I32 = SPAWN Yaprak(a)\n    DIM t2 AS TASK OF I32 = SPAWN Yaprak(a + 1)\n    RETURN t1.JOIN() + t2.JOIN()\nEND PARALEL\nTHREAD Govde(n AS I32) AS I32\n    DIM d1 AS TASK OF I32 = SPAWN Dal(n)\n    DIM d2 AS TASK OF I32 = SPAWN Dal(n + 2)\n    RETURN d1.JOIN() + d2.JOIN()\nEND THREAD | DIM g AS TASK OF I32 = SPAWN Govde(1)\nPRINT g.JOIN()
+gorev_hata_metni | THREAD Boom(x AS I32) AS I32\n    THROW "patladi"\n    RETURN x\nEND THREAD | DIM t AS TASK OF I32 = SPAWN Boom(1)\nt.WAIT()\nPRINT t.STATUS\nPRINT "["; t.ERRORTEXT; "]"
+gorev_hata_try | THREAD Boom(x AS I32) AS I32\n    THROW "patladi"\n    RETURN x\nEND THREAD | DIM t AS TASK OF I32 = SPAWN Boom(1)\nTRY\n    PRINT t.JOIN()\nCATCH\n    PRINT "yakalandi"\nEND TRY
+lock_iki_degisken | DIM a AS I64 = 1000\nDIM b AS I64 = 1000\nTHREAD Ileri(n AS I32)\n    DIM i AS I32\n    FOR i = 1 TO n\n        LOCK a, b\n            a = a - 1\n            b = b + 1\n        END LOCK\n    NEXT\nEND THREAD\nTHREAD Geri(n AS I32)\n    DIM i AS I32\n    FOR i = 1 TO n\n        LOCK a, b\n            a = a + 1\n            b = b - 1\n        END LOCK\n    NEXT\nEND THREAD | DIM t1 AS TASK = SPAWN Ileri(5000)\nDIM t2 AS TASK = SPAWN Geri(3000)\nt1.JOIN()\nt2.JOIN()\nPRINT a; " "; b; " "; a + b
+atomik_sayac_dort | DIM ATOMIC n AS I64 = 0\nTHREAD Art(k AS I32)\n    DIM i AS I32\n    FOR i = 1 TO k\n        n.ADD(1)\n    NEXT\nEND THREAD | DIM g AS TASKGROUP\nDIM i AS I32\nFOR i = 1 TO 4\n    g.ADD(SPAWN Art(2500))\nNEXT\ng.JOIN()\nPRINT n.LOAD()
+atomik_cas | DIM ATOMIC n AS I64 = 5 | PRINT n.CAS(5, 9); " "; n.LOAD(); " "; n.CAS(5, 1); " "; n.LOAD()
+atomik_store | DIM ATOMIC n AS I64 = 0 | n.STORE(42)\nPRINT n.LOAD(); " "; n.SUB(2); " "; n.EXCHANGE(7); " "; n.LOAD()
+mutex_dogrudan | DIM m AS MUTEX\nDIM x AS I32 | LOCK m\n    x = 5\nEND LOCK\nPRINT x
+kilit_kendi_icinde | DIM x AS I64 | LOCK x\n    LOCK x\n        x = 1\n    END LOCK\nEND LOCK\nPRINT x
+paralel_toplam_global | DIM toplam AS I64\nTHREAD Ekle(x AS I32)\n    toplam += x\nEND THREAD | DIM g AS TASKGROUP\nDIM i AS I32\nFOR i = 1 TO 100\n    g.ADD(SPAWN Ekle(i))\nNEXT\ng.JOIN()\nPRINT toplam
+taskgroup_bos_join | | DIM g AS TASKGROUP\ng.JOIN()\nPRINT "ok"
+task_status_once | THREAD W(x AS I32) AS I32\n    RETURN x\nEND THREAD | DIM t AS TASK OF I32 = SPAWN W(3)\nPRINT t.JOIN()\nPRINT t.STATUS
+task_dizi_foreach | THREAD W(x AS I32) AS I32\n    RETURN x * x\nEND THREAD | DIM ts(2) AS TASK OF I32\nDIM i AS I32\nFOR i = 0 TO 2\n    ts(i) = SPAWN W(i + 1)\nNEXT\nDIM top AS I32\nFOR i = 0 TO 2\n    top += ts(i).JOIN()\nNEXT\nPRINT top
+task_atama | THREAD W(x AS I32) AS I32\n    RETURN x\nEND THREAD | DIM a AS TASK OF I32 = SPAWN W(8)\nDIM b AS TASK OF I32\nb = a\nPRINT b.JOIN(); " "; a.JOIN()
+task_sayi_gibi | THREAD W(x AS I32) AS I32\n    RETURN x\nEND THREAD | DIM a AS TASK OF I32 = SPAWN W(8)\nDIM n AS I32 = a + 1\nPRINT n
+spawn_baska_gorev_icinde_global | DIM g AS I32\nTHREAD W(x AS I32)\n    g = x\nEND THREAD | DIM t AS TASK = SPAWN W(11)\nt.JOIN()\nPRINT g
+gorev_string_sonuc | THREAD Selam(ad AS STRING) AS STRING\n    RETURN "Merhaba " + ad\nEND THREAD | DIM t AS TASK OF STRING = SPAWN Selam("Ece")\nPRINT t.JOIN()
+gorev_f64_sonuc | THREAD Yarim(x AS F64) AS F64\n    RETURN x / 2\nEND THREAD | DIM t AS TASK OF F64 = SPAWN Yarim(5.0)\nPRINT t.JOIN()

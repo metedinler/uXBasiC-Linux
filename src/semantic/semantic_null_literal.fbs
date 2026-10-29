@@ -1,0 +1,65 @@
+#ifndef UXB_SEMANTIC_NULL_LITERAL_FBS
+#define UXB_SEMANTIC_NULL_LITERAL_FBS
+
+' S-564 (2026-10-17, Mete's decision 2026-10-15): NULL and NOTHING are two spellings of the same empty value (design:
+' docs/tasarim/UXB_S544_S549_S564_DECLARE_DOSYA_TUTAMACI_NULL_20261015_TR.md, section 3). Until now the parser produced a plain identifier for both and the
+' type gate rejected it ("unknown symbol: nothing") on every engine, although the MIR lowering already had a (never reached) KEYWORD_REF branch for them.
+'
+' One front-end rewrite serves all six engines: an identifier NULL / NOTHING that no program declaration shadows becomes the integer literal 0
+' (kind NUMBER, value "0") tagged with the type TYPE_NULL. The engines see an ordinary 0 (an empty pointer / object reference is 0 on every one of
+' them), the type rules see the null type: it converts to pointers, objects, classes, interfaces and function pointers, and `i = NULL` for a number,
+' text or Boolean variable is the compile error UXB_NULL_TYPE.
+
+Private Function SemNullLiteralIsDeclaredName(ByRef ps As ParseState, ByRef nameUpper As String) As Integer
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Select Case UCase(Trim(ps.ast.nodes(i).kind))
+        Case "DIM_DECL", "PARAM_DECL", "CONST_DECL", "REDIM_DECL", "CLASS_FIELD", "TYPE_FIELD", "SUB_STMT", "FUNCTION_STMT", "CLASS_STMT", "TYPE_STMT", "ENUM_ITEM", "CLASS_METHOD_DECL"
+            If UCase(Trim(ps.ast.nodes(i).value)) = nameUpper Then Return 1
+        End Select
+    Next i
+    Return 0
+End Function
+
+Private Function SemNormalizeNullLiterals(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim shadowNull As Integer
+    Dim shadowNothing As Integer
+    shadowNull = -1
+    shadowNothing = -1
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        Dim k As String
+        k = UCase(Trim(ps.ast.nodes(i).kind))
+        If k <> "IDENT" And k <> "IDENTIFIER" And k <> "KEYWORD_REF" Then Continue For
+        Dim nm As String
+        nm = UCase(Trim(ps.ast.nodes(i).value))
+        If nm <> "NULL" And nm <> "NOTHING" Then Continue For
+
+        ' a member name after a dot (`obj.Null`) is not the literal
+        Dim p As Integer
+        p = ps.ast.nodes(i).parent
+        If p >= 0 And p < ps.ast.count Then
+            Dim pk As String
+            pk = UCase(Trim(ps.ast.nodes(p).kind))
+            If pk = "FIELD_EXPR" Or pk = "MEMBER_EXPR" Then
+                If ps.ast.nodes(p).right = i Then Continue For
+            End If
+        End If
+
+        ' a program that declares its own NULL / NOTHING keeps meaning it
+        If nm = "NULL" Then
+            If shadowNull = -1 Then shadowNull = SemNullLiteralIsDeclaredName(ps, nm)
+            If shadowNull <> 0 Then Continue For
+        Else
+            If shadowNothing = -1 Then shadowNothing = SemNullLiteralIsDeclaredName(ps, nm)
+            If shadowNothing <> 0 Then Continue For
+        End If
+
+        ps.ast.nodes(i).kind = "NUMBER"
+        ps.ast.nodes(i).value = "0"
+        ps.ast.nodes(i).typeName = TYPE_NULL
+    Next i
+    Return 1
+End Function
+
+#endif

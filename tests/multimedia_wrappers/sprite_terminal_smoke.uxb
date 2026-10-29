@@ -1,0 +1,8 @@
+INCLUDE "include/modules/uxraylib.uxmh"
+INCLUDE "include/modules/uxterminal.uxmh"
+
+PRINT "FRAME="; uxraylib.SpriteFrame(9, 4)
+PRINT "COLLIDE_YES="; uxraylib.RectCollision(0, 0, 10, 10, 5, 5, 4, 4)
+PRINT "COLLIDE_NO="; uxraylib.RectCollision(0, 0, 2, 2, 5, 5, 2, 2)
+PRINT "TERM_VERSION="; uxterminal.Version()
+PRINT "TERM_COLLIDE="; uxterminal.RectCollision(0, 0, 8, 4, 7, 3, 2, 2)

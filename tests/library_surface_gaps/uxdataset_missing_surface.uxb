@@ -1,0 +1,32 @@
+INCLUDE "include/modules/uxdataset.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxdataset.Backend()
+        PRINT uxdataset.BatchCreate(0, 0, 0, 0)
+        uxdataset.BatchFree(0)
+        PRINT uxdataset.BatchGetX(0, 0, 0)
+        PRINT uxdataset.BatchGetY(0, 0, 0)
+        PRINT uxdataset.BatchNext(0)
+        uxdataset.BatchReset(0)
+        PRINT uxdataset.BatchRows(0)
+        PRINT uxdataset.BatchXPtr(0)
+        PRINT uxdataset.BatchYPtr(0)
+        PRINT uxdataset.Clone(0)
+        uxdataset.FillMissingMean(0)
+        PRINT uxdataset.GetY(0, 0, 0)
+        PRINT uxdataset.SaveCSV(0, "")
+        PRINT uxdataset.ScalerFitMinMax(0)
+        PRINT uxdataset.ScalerFitStandard(0)
+        uxdataset.ScalerFree(0)
+        uxdataset.ScalerInverseTransform(0, 0)
+        uxdataset.ScalerTransform(0, 0)
+        uxdataset.Shuffle(0, 0)
+        PRINT uxdataset.SplitTest(0, 0.0, 0)
+        PRINT uxdataset.SplitTrain(0, 0.0, 0)
+        PRINT uxdataset.TargetDim(0)
+        PRINT uxdataset.XPtr(0)
+        PRINT uxdataset.YPtr(0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXDATASET"
+END MAIN

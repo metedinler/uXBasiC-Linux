@@ -1,0 +1,28 @@
+DIM n AS I32 = 5
+SELECT CASE n
+    CASE 1 TO 3, 4 TO 6
+        PRINT "range"
+    CASE ELSE
+        PRINT "bad"
+END SELECT
+SELECT CASE n
+    CASE 6 TO 4
+        PRINT "bad"
+    CASE ELSE
+        PRINT "reversed"
+END SELECT
+DIM s AS STRING = "pirasa"
+SELECT CASE s
+    CASE "elma"
+        PRINT "bad"
+    CASE "pirasa"
+        PRINT "string"
+    CASE ELSE
+        PRINT "bad"
+END SELECT
+SELECT CASE s
+    CASE IS < "elma"
+        PRINT "bad"
+    CASE IS >= "p"
+        PRINT "ordered"
+END SELECT

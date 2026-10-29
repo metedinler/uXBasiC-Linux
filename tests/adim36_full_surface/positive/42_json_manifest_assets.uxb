@@ -1,0 +1,9 @@
+%%TARGET WEB
+%%ASSET_ROOT "tests/adim36_full_surface/assets"
+%%ASSET_IMAGE "player.png" AS PLAYER
+%%ASSET_AUDIO "music.ogg" AS MUSIC
+%%MANIFEST_SET "app.name", "ADIM36"
+%%JSON_BEGIN "config.json"
+%%JSON_SET "version", "1.0"
+%%JSON_END
+PRINT "ASSET_MANIFEST"

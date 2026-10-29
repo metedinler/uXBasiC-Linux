@@ -1,0 +1,82 @@
+[
+ {
+  "ad": "MAGIC DIV",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC DIV(o AS Sayi) AS Sayi\n        DIM r AS Sayi = NEW Sayi()\n        r.v = v \\ o.v\n        RETURN r\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\nDIM c AS Sayi = NEW Sayi()\na.v = 12\nb.v = 4\nc = a / b\nPRINT c.v",
+  "beklenen": "3"
+ },
+ {
+  "ad": "MAGIC IDIV",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC IDIV(o AS Sayi) AS Sayi\n        DIM r AS Sayi = NEW Sayi()\n        r.v = v \\ o.v\n        RETURN r\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\nDIM c AS Sayi = NEW Sayi()\na.v = 12\nb.v = 4\nc = a \\ b\nPRINT c.v",
+  "beklenen": "3"
+ },
+ {
+  "ad": "MAGIC MOD",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC MOD(o AS Sayi) AS Sayi\n        DIM r AS Sayi = NEW Sayi()\n        r.v = v MOD o.v\n        RETURN r\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\nDIM c AS Sayi = NEW Sayi()\na.v = 12\nb.v = 4\nc = a MOD b\nPRINT c.v",
+  "beklenen": "0"
+ },
+ {
+  "ad": "MAGIC AND",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC AND(o AS Sayi) AS Sayi\n        DIM r AS Sayi = NEW Sayi()\n        r.v = v AND o.v\n        RETURN r\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\nDIM c AS Sayi = NEW Sayi()\na.v = 12\nb.v = 4\nc = a AND b\nPRINT c.v",
+  "beklenen": "4"
+ },
+ {
+  "ad": "MAGIC OR",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC OR(o AS Sayi) AS Sayi\n        DIM r AS Sayi = NEW Sayi()\n        r.v = v OR o.v\n        RETURN r\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\nDIM c AS Sayi = NEW Sayi()\na.v = 12\nb.v = 4\nc = a OR b\nPRINT c.v",
+  "beklenen": "12"
+ },
+ {
+  "ad": "MAGIC XOR",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC XOR(o AS Sayi) AS Sayi\n        DIM r AS Sayi = NEW Sayi()\n        r.v = v XOR o.v\n        RETURN r\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\nDIM c AS Sayi = NEW Sayi()\na.v = 12\nb.v = 4\nc = a XOR b\nPRINT c.v",
+  "beklenen": "8"
+ },
+ {
+  "ad": "MAGIC SHL",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC SHL(o AS Sayi) AS Sayi\n        DIM r AS Sayi = NEW Sayi()\n        r.v = v SHL o.v\n        RETURN r\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\nDIM c AS Sayi = NEW Sayi()\na.v = 12\nb.v = 4\nc = a SHL b\nPRINT c.v",
+  "beklenen": "192"
+ },
+ {
+  "ad": "MAGIC SHR",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC SHR(o AS Sayi) AS Sayi\n        DIM r AS Sayi = NEW Sayi()\n        r.v = v SHR o.v\n        RETURN r\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\nDIM c AS Sayi = NEW Sayi()\na.v = 12\nb.v = 4\nc = a SHR b\nPRINT c.v",
+  "beklenen": "0"
+ },
+ {
+  "ad": "MAGIC EQ",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC EQ(o AS Sayi) AS I32\n        IF v = o.v THEN RETURN -1\n        RETURN 0\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\na.v = 4\nb.v = 4\nIF a = b THEN\n    PRINT \"dogru\"\nELSE\n    PRINT \"yanlis\"\nEND IF",
+  "beklenen": "dogru"
+ },
+ {
+  "ad": "MAGIC NE",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC NE(o AS Sayi) AS I32\n        IF v <> o.v THEN RETURN -1\n        RETURN 0\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\na.v = 4\nb.v = 5\nIF a <> b THEN\n    PRINT \"dogru\"\nELSE\n    PRINT \"yanlis\"\nEND IF",
+  "beklenen": "dogru"
+ },
+ {
+  "ad": "MAGIC LT",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC LT(o AS Sayi) AS I32\n        IF v < o.v THEN RETURN -1\n        RETURN 0\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\na.v = 3\nb.v = 5\nIF a < b THEN\n    PRINT \"dogru\"\nELSE\n    PRINT \"yanlis\"\nEND IF",
+  "beklenen": "dogru"
+ },
+ {
+  "ad": "MAGIC LE",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC LE(o AS Sayi) AS I32\n        IF v <= o.v THEN RETURN -1\n        RETURN 0\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\na.v = 5\nb.v = 5\nIF a <= b THEN\n    PRINT \"dogru\"\nELSE\n    PRINT \"yanlis\"\nEND IF",
+  "beklenen": "dogru"
+ },
+ {
+  "ad": "MAGIC GT",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC GT(o AS Sayi) AS I32\n        IF v > o.v THEN RETURN -1\n        RETURN 0\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\na.v = 7\nb.v = 5\nIF a > b THEN\n    PRINT \"dogru\"\nELSE\n    PRINT \"yanlis\"\nEND IF",
+  "beklenen": "dogru"
+ },
+ {
+  "ad": "MAGIC GE",
+  "kod": "CLASS Sayi\n    PUBLIC\n    DIM v AS I32\n    MAGIC GE(o AS Sayi) AS I32\n        IF v >= o.v THEN RETURN -1\n        RETURN 0\n    END MAGIC\nEND CLASS\nDIM a AS Sayi = NEW Sayi()\nDIM b AS Sayi = NEW Sayi()\na.v = 5\nb.v = 5\nIF a >= b THEN\n    PRINT \"dogru\"\nELSE\n    PRINT \"yanlis\"\nEND IF",
+  "beklenen": "dogru"
+ },
+ {
+  "ad": "MAGIC CALL",
+  "kod": "CLASS K\n    PUBLIC\n    DIM v AS I32\n    MAGIC CALL(x AS I32) AS I32\n        RETURN v + x\n    END MAGIC\nEND CLASS\nDIM a AS K = NEW K()\na.v = 5\nPRINT a(3)",
+  "beklenen": "8"
+ },
+ {
+  "ad": "MAGIC GET SET",
+  "kod": "CLASS K\n    PUBLIC\n    DIM v AS I32\n    MAGIC GET(n AS STRING) AS I32\n        RETURN v\n    END MAGIC\n    MAGIC SET(n AS STRING, x AS I32)\n        v = x\n    END MAGIC\nEND CLASS\nDIM a AS K = NEW K()\na.v = 5\nPRINT a.v",
+  "beklenen": "5"
+ }
+]

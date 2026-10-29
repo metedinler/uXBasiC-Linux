@@ -1,0 +1,9 @@
+CLASS MagicBox
+    MAGIC HASH(seed AS I32) AS I32
+        RETURN seed + 7
+    END MAGIC
+
+    MAGIC METHOD CUSTOMHOOK(x AS I32) AS I32
+        RETURN x
+    END METHOD
+END CLASS

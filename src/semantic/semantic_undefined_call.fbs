@@ -1,0 +1,405 @@
+#ifndef UXB_SEMANTIC_UNDEFINED_CALL_FBS
+#define UXB_SEMANTIC_UNDEFINED_CALL_FBS
+
+#include once "../surface/uxb_surface_registry.fbs"
+
+' S-329, Mete K1 2026-10-28: a call of a name that nothing visible at the call defines is a compile error on every engine.
+' DECLARE stays optional (S-544): a routine may be defined after its call and needs no DECLARE. What is checked is that a
+' definition (or variable, or built-in) with that name is VISIBLE at the call, never in which order the lines stand.
+'
+' Until now the engines disagreed after the program had started: the AST interpreter, the MIR interpreter and JS printed
+' what came before the call and failed at run time with "unsupported call YOK"; a call in a branch that never runs, or in a
+' routine nobody calls, passed on those engines silently while native x64 / WASM refused or crashed
+' (tests/declare_shadow_olcum/s329_yanlis_pozitif.coklu.txt, cases H1..H7). A name that exists only somewhere it is not
+' visible (a NAMESPACE nobody opened, a CLASS method called without an object, an array of another routine) was worse:
+' the AST interpreter found it by accident and printed a result, five engines refused (s329_acik_kalan.coklu.txt, A1..A3).
+'
+' A bare name N called at node C is defined when ANY of these holds:
+'   * N is a built-in: the built-in signature registry (type_builtin_registry.fbs), the language word registry
+'     (uxb_surface_registry.fbs) or the union of the engine dispatch lists spelled out in SemUndefIsBuiltinName
+'     (HEX, SUPER, CPLEN, ... are in neither registry);
+'   * a type-like or task-like name N exists anywhere (CLASS / TYPE / ENUM / UNION / STRUCT / INTERFACE / THREAD / EVENT / PIPE /
+'     PARALEL / DEF FN), or a constant, class field or record field N: those are program-wide names;
+'   * a variable or parameter N of the routine C stands in, or of the main program (`a(2)` is an index expression: the parser
+'     writes an array element and a call with the same node, CALL_EXPR);
+'   * a SUB / FUNCTION / DECLARE N stands at the top level, in a NAMESPACE / MODULE that encloses C, or in a namespace opened
+'     with USING (every engine resolves USING program-wide, so this pass does the same), or USING names the routine itself;
+'   * C stands inside a CLASS and some class declares a method N (a bare method call inside a class body is rewritten to
+'     ME.method before this pass; what is left there belongs to the class gates).
+' A qualified call `S.F(...)` is checked only when `S` is a NAMESPACE / MODULE of this program (an object method call, a
+' library call and a CLASS call are the business of other gates). A routine of the compiler (_UXB_*, __UXB*) is ignored.
+
+Private Function SemUndefHash(ByRef key As String) As ULongInt
+    Dim h As ULongInt = 14695981039346656037ULL
+    Dim p As Integer
+    For p = 1 To Len(key)
+        h = (h Xor CULngInt(Asc(Mid(key, p, 1)))) * 1099511628211ULL
+    Next p
+    Return h
+End Function
+
+' open-addressing table: slots() holds the keys, vals() (same index) an optional value; "" marks a free slot
+Private Sub SemUndefPut(slots() As String, vals() As String, ByVal mask As ULongInt, ByRef key As String, ByRef valueText As String)
+    If key = "" Then Exit Sub
+    Dim idx As Integer = CInt(SemUndefHash(key) And mask)
+    Do
+        If slots(idx) = "" Then
+            slots(idx) = key
+            vals(idx) = valueText
+            Exit Sub
+        End If
+        If slots(idx) = key Then Exit Sub
+        idx = CInt((CULngInt(idx) + 1) And mask)
+    Loop
+End Sub
+
+Private Function SemUndefFind(slots() As String, ByVal mask As ULongInt, ByRef key As String) As Integer
+    If key = "" Then Return -1
+    Dim idx As Integer = CInt(SemUndefHash(key) And mask)
+    Do
+        If slots(idx) = "" Then Return -1
+        If slots(idx) = key Then Return idx
+        idx = CInt((CULngInt(idx) + 1) And mask)
+    Loop
+End Function
+
+Private Function SemUndefSetHas(slots() As String, ByVal mask As ULongInt, ByRef key As String) As Integer
+    Return IIf(SemUndefFind(slots(), mask, key) >= 0, 1, 0)
+End Function
+
+Private Function SemUndefLastDot(ByRef s As String) As Integer
+    Dim p As Integer
+    For p = Len(s) To 1 Step -1
+        If Mid(s, p, 1) = "." Then Return p
+    Next p
+    Return 0
+End Function
+
+' 1 for a SUB / FUNCTION / DECLARE: its visibility depends on where it stands
+Private Function SemUndefIsRoutineKind(ByRef k As String) As Integer
+    Select Case k
+    Case "SUB_STMT", "FUNCTION_STMT", "DECLARE_SUB_STMT", "DECLARE_FUNCTION_STMT"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' 1 for CLASS / TYPE / ... : a container of methods and fields
+Private Function SemUndefIsClassLikeKind(ByRef k As String) As Integer
+    Select Case k
+    Case "CLASS_STMT", "INTERFACE_STMT", "MIXIN_STMT", "TYPE_STMT", "UNION_STMT", "STRUCT_STMT"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' 1 for names that are visible in the whole program
+Private Function SemUndefIsGlobalNameKind(ByRef k As String) As Integer
+    Select Case k
+    Case "THREAD_STMT", "EVENT_STMT", "PIPE_STMT", "PARALEL_STMT", "DEF_FN_STMT", "ENUM_STMT", "DECORATOR_STMT", _
+         "CONST_DECL", "CLASS_FIELD", "TYPE_FIELD"
+        Return 1
+    End Select
+    Return SemUndefIsClassLikeKind(k)
+End Function
+
+' 1 for DIM / parameter: visible in the routine that declares it (or everywhere when declared at the top level)
+Private Function SemUndefIsLocalValueKind(ByRef k As String) As Integer
+    Select Case k
+    Case "DIM_DECL", "PARAM_DECL", "REDIM_DECL"
+        Return 1
+    End Select
+    Return 0
+End Function
+
+' Built-in call names. The signature registry (type_builtin_registry.fbs) and the word registry (uxb_surface_registry.fbs)
+' do not list every name an engine dispatches (HEX, SUPER, CPLEN, ... are in neither), so the union of the engine dispatch
+' lists is spelled out here: ExecEvalBuiltinCall (memory_exec.fbs), UXBMIRInterpBuiltinOpcodeFromCall (mir_interp_builtin.fbs),
+' UXBJsIsRuntimeBuiltinName (js_stmt_emit.fbs), MIRX64BuiltinRuntimeSymbol (mir_x64_builtins.fbs), X64BuiltinCallSymbol
+' (code_generator.fbs). The compiler-internal MIR operations (STR_CONCAT, STR_COMPARE) are not callable from source and are left out.
+' A name an engine adds later and nobody lists here is refused at compile time with the message below: add it to this list.
+Private Function SemUndefIsBuiltinName(ByRef nameUpper As String) As Integer
+    Dim sigReturn As String, sigArgs As String, sigTarget As String
+    If UXBBuiltinTypeRegistryReturnType(nameUpper, sigReturn, sigArgs, sigTarget) <> 0 Then Return 1
+    If UXBSurfaceKnown(nameUpper) <> 0 Then Return 1
+    Select Case nameUpper
+    Case "BOOL", "BOOLEAN", "I8", "I16", "I32", "I64", "U8", "U16", "U32", "U64", "F32", "F64", "PTR", "FP80", "FP128", "EXTFP", _
+         "BIGINIT", "BIGF", "BIGD", "BALL", "BIGI", "BIGINT"
+        Return 1    ' type conversions and extended-number constructors
+    Case "ABS", "SGN", "INT", "FIX", "SQR", "SQRT", "SIN", "COS", "TAN", "ATN", "EXP", "LOG", "POW", "RND", "TIMER", "VALINT", _
+         "CINT", "CLNG", "CDBL", "CSNG"
+        Return 1    ' numbers
+    Case "ASC", "CHR", "STR", "VAL", "LEN", "CPLEN", "LEFT", "RIGHT", "MID", "INSTR", "LCASE", "UCASE", "LTRIM", "RTRIM", "TRIM", _
+         "SPACE", "STRING", "HEX", "OCT", "BIN"
+        Return 1    ' text
+    Case "PEEK", "PEEKB", "PEEKW", "PEEKD", "PEEKQ", "VARPTR", "SADD", "LPTR", "CODEPTR", "LBOUND", "UBOUND", "SIZEOF", "OFFSETOF", _
+         "INSTANCEOF", "TYPEOF"
+        Return 1    ' memory, arrays and layout
+    Case "EOF", "LOF", "INKEY", "GETKEY", "CSRLIN", "POS"
+        Return 1    ' console and file state
+    Case "LIST_NEW", "DICT_NEW", "SET_NEW", "LISTLEN", "LISTGET", "LISTSET", "LISTADD", "LISTREMOVE", "LISTCLEAR", _
+         "DICTLEN", "DICTHAS", "DICTGET", "DICTSET", "DICTCLEAR", "SETLEN", "SETHAS", "SETADD", "SETREMOVE", "SETCLEAR"
+        Return 1    ' collections
+    Case "DLL", "API", "CALL"
+        Return 1    ' foreign function calls
+    Case "SUPER"
+        Return 1    ' SUPER(...) base-class constructor call; its own gate (semantic_declare.fbs) judges where it may stand
+    End Select
+    Return 0
+End Function
+
+' Collects the NAMESPACE / MODULE names a node sits in, innermost first (at most 6 levels). A node that is itself a NAMESPACE /
+' MODULE counts as the innermost one. Returns the number of names.
+Private Function SemUndefEnclosingNames(ByRef ps As ParseState, ByVal nodeIdx As Integer, names() As String) As Integer
+    Dim depth As Integer = 0
+    Dim up As Integer = nodeIdx
+    Dim hop As Integer = 0
+    Do While up >= 0 And up < ps.ast.count And hop < 4096 And depth < 6
+        Dim upKind As String = UCase(Trim(ps.ast.nodes(up).kind))
+        If upKind = "NAMESPACE_STMT" Or upKind = "MODULE_STMT" Then
+            Dim upName As String = UCase(Trim(ps.ast.nodes(up).value))
+            If upName <> "" Then
+                names(depth) = upName
+                depth += 1
+            End If
+        End If
+        up = ps.ast.nodes(up).parent
+        hop += 1
+    Loop
+    Return depth
+End Function
+
+' Path of the first (outermost) `count` levels of the names above, e.g. A, A.B, A.B.C (levels are numbered from the outside)
+Private Function SemUndefOuterPath(names() As String, ByVal depth As Integer, ByVal count As Integer) As String
+    Dim joined As String = ""
+    Dim m As Integer
+    For m = depth - 1 To depth - count Step -1
+        If joined <> "" Then joined &= "."
+        joined &= names(m)
+    Next m
+    Return joined
+End Function
+
+' Path of the innermost `count` levels, e.g. C, B.C, A.B.C: how a call from outside spells a member of the nested namespace
+Private Function SemUndefInnerPath(names() As String, ByVal count As Integer) As String
+    Dim joined As String = ""
+    Dim m As Integer
+    For m = count - 1 To 0 Step -1
+        If joined <> "" Then joined &= "."
+        joined &= names(m)
+    Next m
+    Return joined
+End Function
+
+' Where a declaration stands: 0 top level, 1 inside a NAMESPACE / MODULE (textOut = its full path), 2 inside a CLASS-like container
+' (textOut = its name)
+Private Function SemUndefContainerOf(ByRef ps As ParseState, ByVal declNode As Integer, ByRef textOut As String) As Integer
+    textOut = ""
+    Dim up As Integer = ps.ast.nodes(declNode).parent
+    Dim hop As Integer = 0
+    Do While up >= 0 And up < ps.ast.count And hop < 4096
+        Dim upKind As String = UCase(Trim(ps.ast.nodes(up).kind))
+        If upKind = "NAMESPACE_STMT" Or upKind = "MODULE_STMT" Then
+            Dim names(5) As String
+            Dim depth As Integer = SemUndefEnclosingNames(ps, up, names())
+            textOut = SemUndefOuterPath(names(), depth, depth)
+            Return 1
+        End If
+        If SemUndefIsClassLikeKind(upKind) <> 0 Then
+            textOut = UCase(Trim(ps.ast.nodes(up).value))
+            Return 2
+        End If
+        up = ps.ast.nodes(up).parent
+        hop += 1
+    Loop
+    Return 0
+End Function
+
+' 1 when the node stands inside a CLASS-like container
+Private Function SemUndefInsideClass(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
+    Dim up As Integer = ps.ast.nodes(nodeIdx).parent
+    Dim hop As Integer = 0
+    Do While up >= 0 And up < ps.ast.count And hop < 4096
+        If SemUndefIsClassLikeKind(UCase(Trim(ps.ast.nodes(up).kind))) <> 0 Then Return 1
+        up = ps.ast.nodes(up).parent
+        hop += 1
+    Loop
+    Return 0
+End Function
+
+Private Function SemValidateUndefinedRoutineCalls(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim i As Integer
+    Dim callCount As Integer = 0
+    Dim declCount As Integer = 0
+    Dim usingCount As Integer = 0
+    For i = 0 To ps.ast.count - 1
+        Dim kindProbe As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If kindProbe = "CALL_STMT" Or kindProbe = "CALL_EXPR" Then
+            callCount += 1
+        ElseIf kindProbe = "USING_ITEM" Then
+            usingCount += 1
+        ElseIf SemUndefIsRoutineKind(kindProbe) <> 0 Or SemUndefIsGlobalNameKind(kindProbe) <> 0 Or SemUndefIsLocalValueKind(kindProbe) <> 0 _
+               Or kindProbe = "CLASS_METHOD_DECL" Or kindProbe = "NAMESPACE_STMT" Or kindProbe = "MODULE_STMT" Then
+            declCount += 1
+        End If
+    Next i
+    If callCount = 0 Then Return 1
+
+    ' one key per declaration in most tables; the namespace tables take one per enclosing level (at most 6)
+    Dim size As Integer = 64
+    Do While size < (declCount + 16) * 2
+        size *= 2
+    Loop
+    Dim size2 As Integer = 64
+    Do While size2 < (declCount * 7 + 16) * 2
+        size2 *= 2
+    Loop
+    Dim mask As ULongInt = CULngInt(size - 1)
+    Dim mask2 As ULongInt = CULngInt(size2 - 1)
+    Dim gen(size - 1) As String, genV(size - 1) As String         ' program-wide names (types, tasks, constants, fields)
+    Dim vloc(size - 1) As String, vlocV(size - 1) As String       ' "ROUTINE|NAME": variables and parameters
+    Dim valAny(size - 1) As String, valAnyV(size - 1) As String   ' NAME: a variable of that name exists somewhere
+    Dim rtn(size - 1) As String, rtnV(size - 1) As String         ' "CONTAINER|NAME": SUB / FUNCTION / DECLARE
+    Dim meth(size - 1) As String, methV(size - 1) As String       ' NAME: methods of classes
+    Dim own(size - 1) As String, ownV(size - 1) As String         ' NAME -> where a routine that is not at the top level stands
+    Dim scoped(size2 - 1) As String, scopedV(size2 - 1) As String ' "NAMESPACE.PATH.NAME" of every declaration inside a namespace
+    Dim spaces(size2 - 1) As String, spacesV(size2 - 1) As String ' NAMESPACE / MODULE paths
+    Dim usingNs() As String
+    Dim usingTotal As Integer = 0
+    If usingCount > 0 Then ReDim usingNs(usingCount - 1)
+    Dim nsNames(5) As String
+    Dim none As String = ""
+
+    For i = 0 To ps.ast.count - 1
+        Dim k As String = UCase(Trim(ps.ast.nodes(i).kind))
+        Dim declName As String = UCase(Trim(ps.ast.nodes(i).value))
+        If declName = "" Then Continue For
+
+        If k = "USING_ITEM" Then
+            usingNs(usingTotal) = declName
+            usingTotal += 1
+            Continue For
+        End If
+
+        Dim isNs As Integer = IIf(k = "NAMESPACE_STMT" Or k = "MODULE_STMT", 1, 0)
+        Dim isRoutine As Integer = SemUndefIsRoutineKind(k)
+        Dim isMethod As Integer = IIf(k = "CLASS_METHOD_DECL", 1, 0)
+        Dim isGlobalName As Integer = SemUndefIsGlobalNameKind(k)
+        Dim isLocalValue As Integer = SemUndefIsLocalValueKind(k)
+        If isNs = 0 And isRoutine = 0 And isMethod = 0 And isGlobalName = 0 And isLocalValue = 0 Then Continue For
+
+        Dim declDot As Integer = SemUndefLastDot(declName)
+        Dim leaf As String = IIf(declDot > 0, Mid(declName, declDot + 1), declName)
+        Dim depth As Integer = SemUndefEnclosingNames(ps, i, nsNames())
+        Dim j As Integer
+
+        If isNs <> 0 Then
+            For j = 1 To depth
+                SemUndefPut spaces(), spacesV(), mask2, SemUndefInnerPath(nsNames(), j), none
+            Next j
+            SemUndefPut spaces(), spacesV(), mask2, declName, none
+            Continue For
+        End If
+
+        ' qualified spelling of everything that stands inside a namespace
+        For j = 1 To depth
+            SemUndefPut scoped(), scopedV(), mask2, SemUndefInnerPath(nsNames(), j) & "." & leaf, none
+            If declDot > 0 Then SemUndefPut scoped(), scopedV(), mask2, SemUndefInnerPath(nsNames(), j) & "." & declName, none
+        Next j
+
+        If isGlobalName <> 0 Then
+            SemUndefPut gen(), genV(), mask, leaf, none
+            Continue For
+        End If
+
+        If isLocalValue <> 0 Then
+            Dim routineIdx As Integer = UXBTaskEnclosingRoutine(ps, i)
+            SemUndefPut vloc(), vlocV(), mask, LTrim(Str(routineIdx)) & "|" & leaf, none
+            SemUndefPut valAny(), valAnyV(), mask, leaf, none
+            Continue For
+        End If
+
+        Dim containerText As String
+        Dim containerKind As Integer = SemUndefContainerOf(ps, i, containerText)
+        If isMethod <> 0 Or containerKind = 2 Then
+            SemUndefPut meth(), methV(), mask, leaf, none
+            SemUndefPut own(), ownV(), mask, leaf, "CLASS " & containerText
+            Continue For
+        End If
+        SemUndefPut rtn(), rtnV(), mask, containerText & "|" & leaf, none
+        If containerKind = 1 Then SemUndefPut own(), ownV(), mask, leaf, containerText
+    Next i
+
+    For i = 0 To ps.ast.count - 1
+        Dim callKind As String = UCase(Trim(ps.ast.nodes(i).kind))
+        If callKind <> "CALL_STMT" And callKind <> "CALL_EXPR" Then Continue For
+        Dim callName As String = UCase(Trim(ps.ast.nodes(i).value))
+        If Right(callName, 1) = "$" Then callName = Left(callName, Len(callName) - 1)
+        If callName = "" Then Continue For
+        If Left(callName, 5) = "_UXB_" Or Left(callName, 5) = "__UXB" Then Continue For
+
+        Dim lineShown As String = LTrim(Str(ps.ast.nodes(i).lineNo))
+        Dim dotAt As Integer = SemUndefLastDot(callName)
+
+        If dotAt > 0 Then
+            Dim ownerName As String = Left(callName, dotAt - 1)
+            Dim memberName As String = Mid(callName, dotAt + 1)
+            If memberName = "" Or ownerName = "" Then Continue For
+            If SemUndefSetHas(spaces(), mask2, ownerName) = 0 Then Continue For
+            If SemUndefSetHas(gen(), mask, ownerName) <> 0 Or SemUndefSetHas(valAny(), mask, ownerName) <> 0 Then Continue For   ' an object that shares the namespace spelling
+            If SemUndefSetHas(scoped(), mask2, callName) <> 0 Then Continue For
+            errText = "semantic: UXB_UNDEFINED_ROUTINE: '" & callName & "' is not declared in NAMESPACE " & ownerName & _
+                      "; declare " & memberName & " inside it or check the spelling [line " & lineShown & "]"
+            Return 0
+        End If
+
+        If SemUndefSetHas(gen(), mask, callName) <> 0 Then Continue For
+        If SemUndefIsBuiltinName(callName) <> 0 Then Continue For
+        If SemUndefSetHas(vloc(), mask, LTrim(Str(UXBTaskEnclosingRoutine(ps, i))) & "|" & callName) <> 0 Then Continue For
+        If SemUndefSetHas(vloc(), mask, "-1|" & callName) <> 0 Then Continue For
+        If SemUndefSetHas(rtn(), mask, "|" & callName) <> 0 Then Continue For
+
+        ' a routine of an enclosing namespace, outermost level first (A, then A.B)
+        Dim callNames(5) As String
+        Dim callDepth As Integer = SemUndefEnclosingNames(ps, i, callNames())
+        Dim visible As Integer = 0
+        Dim lvl As Integer
+        For lvl = 1 To callDepth
+            If SemUndefSetHas(rtn(), mask, SemUndefOuterPath(callNames(), callDepth, lvl) & "|" & callName) <> 0 Then visible = 1: Exit For
+        Next lvl
+        If visible <> 0 Then Continue For
+
+        ' a routine of a namespace opened with USING (the item may also name the routine itself: USING S.F)
+        Dim u As Integer
+        For u = 0 To usingTotal - 1
+            If SemUndefSetHas(rtn(), mask, usingNs(u) & "|" & callName) <> 0 Then visible = 1: Exit For
+            Dim usingDot As Integer = SemUndefLastDot(usingNs(u))
+            If usingDot > 0 Then
+                If Mid(usingNs(u), usingDot + 1) = callName And SemUndefSetHas(scoped(), mask2, usingNs(u)) <> 0 Then visible = 1: Exit For
+            End If
+        Next u
+        If visible <> 0 Then Continue For
+
+        If SemUndefSetHas(meth(), mask, callName) <> 0 Then
+            If SemUndefInsideClass(ps, i) <> 0 Then Continue For
+        End If
+
+        ' not visible here: say where the name does exist, when it does
+        Dim why As String = "is not declared as a FUNCTION or SUB, is not a variable and is not a built-in; declare it or check the spelling"
+        Dim ownAt As Integer = SemUndefFind(own(), mask, callName)
+        If ownAt >= 0 Then
+            If Left(ownV(ownAt), 6) = "CLASS " Then
+                why = "is a method of " & ownV(ownAt) & " and is not visible here; call it on an object (name.method(...))"
+            Else
+                why = "is declared inside NAMESPACE " & ownV(ownAt) & " and is not visible here; write " & ownV(ownAt) & "." & callName & " or open it with USING " & ownV(ownAt)
+            End If
+        ElseIf SemUndefSetHas(valAny(), mask, callName) <> 0 Then
+            why = "is a variable of another routine and is not visible here; declare it in this routine or at the top level"
+        End If
+        errText = "semantic: UXB_UNDEFINED_ROUTINE: '" & callName & "' " & why & " [line " & lineShown & "]"
+        Return 0
+    Next i
+    Return 1
+End Function
+
+#endif

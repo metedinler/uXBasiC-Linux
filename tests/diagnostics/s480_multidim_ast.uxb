@@ -1,0 +1,4 @@
+' S-480: AST multi-dimensional array access uses the shared flat layout.
+DIM m(2,3) AS I32
+m(1,2) = 42
+PRINT m(1,2)

@@ -1,0 +1,6 @@
+AST=does not implement INTERFACE IKONUM
+MIR=does not implement INTERFACE IKONUM
+x64=does not implement INTERFACE IKONUM
+AST-x64=does not implement INTERFACE IKONUM
+JS=does not implement INTERFACE IKONUM
+WASM=does not implement INTERFACE IKONUM

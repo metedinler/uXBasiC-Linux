@@ -1,0 +1,10 @@
+CLASS Vec2
+PUBLIC
+    x AS I32
+    y AS I32
+END CLASS
+
+DIM v AS Vec2
+v = NEW Vec2()
+DELETE v
+PRINT 0

@@ -1,0 +1,25 @@
+DIM total AS I64 = 0
+FUNCTION Accumulate(x AS I64) AS I64
+    total += x
+    RETURN total
+END FUNCTION
+FUNCTION Accumulate(x AS I64, y AS I64) AS I64
+    total += x + y
+    RETURN total
+END FUNCTION
+THREAD Work(count AS I64, pairMode AS I32) AS I64
+    DIM i AS I64
+    DIM value AS I64
+    FOR i = 1 TO count
+        IF pairMode = 0 THEN
+            value = Accumulate(1)
+        ELSE
+            value = Accumulate(1, 1)
+        END IF
+    NEXT i
+    RETURN count
+END THREAD
+DIM firstTask AS TASK OF I64 = SPAWN Work(1000, 0)
+DIM secondTask AS TASK OF I64 = SPAWN Work(1000, 1)
+DIM completed AS I64 = firstTask.JOIN() + secondTask.JOIN()
+PRINT total

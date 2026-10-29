@@ -1,0 +1,13 @@
+DIM shared AS F32 = 0.25
+FUNCTION Add(a AS F32, b AS F64) AS F64
+    RETURN a + b
+END FUNCTION
+THREAD Read() AS I32
+    DIM x AS F64 = Add(shared + shared, Add(shared, 0.25))
+    IF x = 1 THEN RETURN 1
+    RETURN 0
+END THREAD
+DIM a AS TASK OF I32 = SPAWN Read()
+DIM b AS TASK OF I32 = SPAWN Read()
+PRINT a.JOIN()
+PRINT b.JOIN()

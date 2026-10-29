@@ -1,0 +1,4 @@
+# Path-with-spaces fixture; BOM is exercised separately by bom.uxcli.
+run "tests/options/response_source.uxb"
+--interpreter-backend "MIR"
+--max-steps 1000

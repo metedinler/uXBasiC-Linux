@@ -1,0 +1,14 @@
+' S-608 (2026-10-17): a STATIC method called through an object variable (`x.Iki()`) needs no object. AST, MIR, JS and WASM ran it; native x64
+' stopped with "user function arg count mismatch" and legacy AST-x64 with "argument count mismatch for SAY_IKI expected=0".
+CLASS Say
+    PUBLIC
+    STATIC METHOD Iki() AS I32
+        RETURN 2
+    END METHOD
+    STATIC METHOD Topla(a AS I32, b AS I32) AS I32
+        RETURN a + b
+    END METHOD
+END CLASS
+DIM x AS Say = NEW Say()
+PRINT x.Iki()
+PRINT x.Topla(3, 4)

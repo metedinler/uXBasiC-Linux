@@ -1,0 +1,14 @@
+CLASS A
+    PUBLIC
+    DIM fa AS I32
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    CONSTRUCTOR()
+        SUPER()
+        PRINT 7
+    END CONSTRUCTOR
+END CLASS
+' S-487: SUPER() is valid even when no base class declares a constructor (there is nothing to run).
+DIM x AS B = NEW B()
+PRINT x.fa

@@ -1,0 +1,28 @@
+DIM initializations AS I32 = 0
+DIM total AS I32 = 0
+FUNCTION Seed() AS I32
+    initializations += 1
+    RETURN 100
+END FUNCTION
+FUNCTION Counter() AS I32
+    STATIC n AS I32 = Seed()
+    n += 1
+    RETURN n
+END FUNCTION
+THREAD Worker() AS I32
+    DIM i AS I32
+    FOR i = 1 TO 100
+        Counter()
+        total += 1
+    NEXT i
+    RETURN 1
+END THREAD
+DIM group AS TASKGROUP
+DIM i AS I32
+FOR i = 1 TO 8
+    group.ADD(SPAWN Worker())
+NEXT i
+group.JOIN()
+PRINT Counter()
+PRINT initializations
+PRINT total

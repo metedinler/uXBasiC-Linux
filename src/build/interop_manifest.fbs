@@ -2,6 +2,8 @@
 ' Bu dosya build sırasında include/import bilgilerini yönetir
 ' Include/import ve set dizileri kapasiteye göre dinamik büyütülür
 
+#include once "../common/report_writer.fbs"
+
 Type InteropIncludeEntry
     sourceFile As String
     includePath As String
@@ -744,6 +746,16 @@ Private Function CollectInteropRecursive(ByRef sourceFile As String, ByRef rootD
     Return 1
 End Function
 
+' S-666 (x86 emeklilik, Asama 3): UXB_TARGET_ARCH / TARGET_ARCH ile x86 adi verilirse eskiden sessizce
+' -m32 / win32 nesne komutlari uretilir, cikti EXE ise x64 kalirdi (G-CLI-13). Artik acik hata.
+Private Function InteropToolchainArchIsRetired(ByRef toolchain As InteropToolchainConfig) As Integer
+    Select Case UCase(Trim(toolchain.targetArch))
+    Case "X86", "X86_32", "I386", "I686", "WIN32", "WINDOWS32", "32"
+        Return 1
+    End Select
+    Return 0
+End Function
+
 Function ResolveInteropManifestForSource(ByRef sourceFile As String, ByRef manifest As InteropManifest, ByRef errText As String) As Integer
     InteropManifestInit manifest
     InteropToolchainApplyEnv manifest.toolchain
@@ -768,7 +780,14 @@ Function ResolveInteropManifestForSource(ByRef sourceFile As String, ByRef manif
     InteropSetInit includeOnce
     InteropSetInit importOnce
 
-    Return CollectInteropRecursive(normalizedSource, rootDir, manifest, parsedFiles, includeOnce, importOnce, errText)
+    If CollectInteropRecursive(normalizedSource, rootDir, manifest, parsedFiles, includeOnce, importOnce, errText) = 0 Then Return 0
+
+    If InteropToolchainArchIsRetired(manifest.toolchain) <> 0 Then
+        errText = "interop: TARGET_ARCH=" & manifest.toolchain.targetArch & " is a retired 32-bit (x86) target; only x64 is supported (check UXB_TARGET_ARCH and the INLINE ARCH= policy)"
+        Return 0
+    End If
+
+    Return 1
 End Function
 
 Private Function CsvEscape(ByRef textIn As String) As String
@@ -833,23 +852,13 @@ Private Function BuildObjectPath(ByRef outputDir As String, ByVal indexNo As Int
     Return PathNormalize(outputDir & "\import_objs\" & LCase(Hex(indexNo, 4)) & "_" & namePart & ".o")
 End Function
 
-Private Function InteropToolchainTargetArch(ByRef toolchain As InteropToolchainConfig) As String
-    Dim archText As String
-    archText = UCase(Trim(toolchain.targetArch))
-    Select Case archText
-    Case "X86", "X86_32", "I386", "WIN32", "32"
-        Return "X86"
-    End Select
-    Return "X64"
-End Function
-
 Private Function BuildCompileCommand(ByRef lang As String, ByRef importPath As String, ByRef objectPath As String, ByRef toolchain As InteropToolchainConfig) As String
-    Dim targetArch As String
-    targetArch = InteropToolchainTargetArch(toolchain)
+    ' S-666 (x86 emeklilik, Asama 3): 32 bit (-m32 / win32) hedef emekli edildi; ResolveInteropManifestForSource
+    ' x86 adlarini reddeder, bu yuzden nesne derleme komutlari her zaman x64 uretir.
     Dim cArchFlag As String
     Dim asmFormat As String
-    cArchFlag = IIf(targetArch = "X86", "-m32", "-m64")
-    asmFormat = IIf(targetArch = "X86", "win32", "win64")
+    cArchFlag = "-m64"
+    asmFormat = "win64"
 
     Select Case UCase(lang)
     Case "C"
@@ -887,9 +896,8 @@ Private Function BuildRspArgPath(ByRef pathIn As String) As String
 End Function
 
 Private Sub EnsureOutputDirs(ByRef outputDir As String)
-    MkDir "build"
-    MkDir outputDir
-    MkDir PathNormalize(outputDir & "\import_objs")
+    UXBReportEnsureDir outputDir
+    UXBReportEnsureDir PathNormalize(outputDir & "\import_objs")
 End Sub
 
 #include once "interop_manifest_emit_helpers.fbs"

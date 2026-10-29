@@ -1,0 +1,21 @@
+CLASS Box
+    PUBLIC
+    backing AS F64
+    gets AS I32
+    sets AS I32
+    PROPERTY Amount AS F64
+        GET
+            THIS.gets += 1
+            RETURN THIS.backing
+        END GET
+        SET
+            THIS.sets += 1
+            THIS.backing = VALUE
+        END SET
+END CLASS
+DIM b AS Box = NEW Box()
+b.backing = 0.5
+b.Amount += 0.25
+PRINT b.backing
+PRINT b.gets
+PRINT b.sets

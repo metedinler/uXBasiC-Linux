@@ -1,0 +1,9 @@
+DEFINT A-Z
+SETSTRINGSIZE 48
+
+a = 7
+b = a + 5
+
+PRINT a
+PRINT b
+PRINT LEN("abc")

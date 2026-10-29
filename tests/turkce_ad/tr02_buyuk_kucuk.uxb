@@ -1,0 +1,14 @@
+' S-579: büyük/küçük harf duyarsızlığı — ASCII çiftleri, ç/Ç ğ/Ğ ö/Ö ş/Ş ü/Ü; İ ve ASCII I, i harfinin büyüğüdür
+DIM ÇÖĞÜŞ AS I32 = 10
+PRINT çöğüş
+PRINT Çöğüş
+çöğüş = çöğüş + 1
+PRINT ÇÖĞÜŞ
+DIM KİŞİ_SAYISI AS I32 = 7
+PRINT kişi_sayisi
+PRINT Kişi_Sayisi
+PRINT KİŞİ_SAYİSİ
+DIM ÖĞRENCİ AS I32 = 3
+DIM ÜRÜN AS I32 = 4
+DIM ŞEKER AS I32 = 5
+PRINT öğrenci + ürün + şeker

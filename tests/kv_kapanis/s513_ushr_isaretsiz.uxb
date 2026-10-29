@@ -1,0 +1,14 @@
+' S-513: isaretsiz tiplerde (U8/U16/U32) SHR mantiksal kaydirmadir; isaretli tiplerde aritmetik. WASM eskiden hep 0 yaziyordu
+' (USHR komutu icin WAT karsiligi yoktu), simdi altı yolda da ayni deger.
+DIM a AS U8 = 129
+PRINT a SHR 1
+DIM u AS U32 = 16
+PRINT u SHR 2
+DIM v AS U32 = 4000000000
+PRINT v SHR 4
+DIM w AS U16 = 40000
+PRINT w SHR 3
+DIM i AS I32 = 20
+PRINT i SHR 2
+DIM n AS I32 = -8
+PRINT n SHR 1

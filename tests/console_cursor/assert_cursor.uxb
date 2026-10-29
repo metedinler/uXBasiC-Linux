@@ -1,0 +1,4 @@
+SUB CheckCursor(expectedRow AS I32, expectedCol AS I32)
+    IF CSRLIN() <> expectedRow THEN THROW "cursor row mismatch"
+    IF POS() <> expectedCol THEN THROW "cursor column mismatch"
+END SUB

@@ -1,0 +1,5 @@
+# Run this from the uxb directory: uxb @tests/options/run.uxcli
+run
+tests/options/response_source.uxb
+--interpreter-backend MIR
+--max-steps 1000

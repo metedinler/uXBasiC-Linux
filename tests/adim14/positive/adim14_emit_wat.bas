@@ -1,0 +1,3 @@
+DIM a AS I32
+a = 7
+PRINT a

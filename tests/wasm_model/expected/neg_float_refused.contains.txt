@@ -1,1 +1,1 @@
-WASM=does not support floating-point values
+# Historical test name retained; F64 now requires real positive output on WASM.

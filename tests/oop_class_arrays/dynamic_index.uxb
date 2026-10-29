@@ -1,0 +1,18 @@
+DIM calls AS I32 = 0
+FUNCTION Pick() AS I32
+    calls = calls + 1
+    RETURN -1
+END FUNCTION
+CLASS Ic
+    PUBLIC
+    n AS I32
+    METHOD Say() AS I32
+        RETURN THIS.n + 1
+    END METHOD
+END CLASS
+DIM arr(-2 TO 0) AS Ic
+arr(Pick()) = NEW Ic()
+arr(Pick()).n = 12
+PRINT arr(Pick()).n
+PRINT arr(Pick()).Say()
+PRINT calls

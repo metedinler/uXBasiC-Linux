@@ -1,0 +1,37 @@
+{
+  "integer_expr": {
+    "output": "5000000000\n5000000000\n5000000000\n16\n9",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  },
+  "float_expr": {
+    "output": "0.5\n0.5\n0.5\n1.25\n1.25",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  },
+  "narrow_expr": {
+    "output": "255\n0\n1\n-128\n-128\n18446744073709551615",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  },
+  "local_incdec_argument": {
+    "output": "0.25\n0.25\n0.25\n5000000002",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  },
+  "float_prefix_round": {
+    "output": "16777216\n16777216\n0.25\n2.25\n2.25",
+    "engines": [
+      "JS",
+      "WASM"
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+' S-484 (2026-10-17): THIS.m() is a DIRECT call (the implementation visible from the class that contains the call); ME.m() and a
+' bare m() dispatch virtually on the object's real class. The AST interpreter ran the base implementation for all three
+' (10 10 10) while every other engine ran the override for all three (20 20 20); the design (UXB OPP SISTEMI TASARIM) says 10 20 20.
+CLASS Taban
+    PUBLIC
+    VIRTUAL METHOD Deger() AS I32
+        RETURN 10
+    END METHOD
+    METHOD ViaThis() AS I32
+        RETURN THIS.Deger()
+    END METHOD
+    METHOD ViaMe() AS I32
+        RETURN ME.Deger()
+    END METHOD
+    METHOD Plain() AS I32
+        RETURN Deger()
+    END METHOD
+END CLASS
+CLASS Alt EXTENDS Taban
+    PUBLIC
+    OVERRIDE METHOD Deger() AS I32
+        RETURN 20
+    END METHOD
+    METHOD ViaSuper() AS I32
+        RETURN SUPER.Deger()
+    END METHOD
+END CLASS
+DIM o AS Alt = NEW Alt()
+PRINT o.ViaThis()
+PRINT o.ViaMe()
+PRINT o.Plain()
+PRINT o.ViaSuper()
+PRINT o.Deger()

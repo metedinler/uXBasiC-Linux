@@ -1,0 +1,8 @@
+FUNCTION Left(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION
+MAIN
+    DIM r AS I32
+    r = Left(3, 4)
+    PRINT r
+END MAIN

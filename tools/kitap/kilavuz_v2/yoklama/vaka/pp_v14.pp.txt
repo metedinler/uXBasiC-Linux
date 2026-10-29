@@ -1,0 +1,42 @@
+=== f64_tamsayi_sabit
+DIM r AS F64
+r = CALL(DLL, "ucrtbase.dll", "sqrt", F64, CDECL, "F64", 4)
+PRINT r
+=== f64_i32_degisken
+DIM r AS F64
+DIM x AS I32 = 9
+r = CALL(DLL, "ucrtbase.dll", "sqrt", F64, CDECL, "F64", x)
+PRINT r
+=== f64_f64_degisken
+DIM r AS F64
+DIM x AS F64 = 9.0
+r = CALL(DLL, "ucrtbase.dll", "sqrt", F64, CDECL, "F64", x)
+PRINT r
+=== api_argumanli
+DIM r AS I32
+r = CALL(API, "kernel32", "Sleep", I32, 1)
+PRINT "uyandi"
+=== api_dll_uzantili
+DIM t AS I32
+t = CALL(API, "kernel32.dll", "GetTickCount", I32)
+IF t >= 0 THEN PRINT "ok"
+=== dll_uzantisiz
+DIM r AS I32
+r = CALL(DLL, "ucrtbase", "abs", I32, CDECL, "I32", -3)
+PRINT r
+=== dll_buyuk_kucuk
+DIM r AS I32
+r = CALL(DLL, "UCRTBASE.DLL", "abs", I32, CDECL, "I32", -3)
+PRINT r
+=== dll_sembol_buyuk_kucuk
+DIM r AS I32
+r = CALL(DLL, "ucrtbase.dll", "ABS", I32, CDECL, "I32", -3)
+PRINT r
+=== dll_u32
+DIM r AS U32
+r = CALL(DLL, "ucrtbase.dll", "labs", U32, CDECL, "I32", -3)
+PRINT r
+=== dll_on_arguman
+DIM r AS I32
+r = CALL(DLL, "ucrtbase.dll", "abs", I32, CDECL, "I32,I32,I32,I32,I32,I32,I32,I32,I32,I32,I32", -3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+PRINT r

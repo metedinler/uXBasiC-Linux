@@ -1,0 +1,2 @@
+--interpreter-backend MIR
+--max-steps 1000

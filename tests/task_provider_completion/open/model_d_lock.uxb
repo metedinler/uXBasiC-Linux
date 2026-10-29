@@ -1,0 +1,15 @@
+DIM total AS I64
+THREAD Count(n AS I32) AS I32
+    DIM i AS I32
+    FOR i = 1 TO n
+        LOCK total
+            total = total + 1
+        END LOCK
+    NEXT
+    RETURN n
+END THREAD
+DIM a AS TASK OF I32 = SPAWN Count(100)
+DIM b AS TASK OF I32 = SPAWN Count(100)
+a.WAIT()
+b.WAIT()
+PRINT total

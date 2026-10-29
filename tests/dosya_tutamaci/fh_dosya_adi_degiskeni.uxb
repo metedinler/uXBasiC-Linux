@@ -1,0 +1,11 @@
+' S-622: the file name of OPEN is any STRING expression (the AST engine used to accept only a literal).
+DIM ad AS STRING
+DIM s AS STRING
+ad = "fh_vd"
+OPEN ad + ".txt" FOR OUTPUT AS #1
+PRINT #1, "icerik"
+CLOSE #1
+OPEN ad + ".txt" FOR INPUT AS #1
+INPUT #1, s
+PRINT s
+CLOSE #1

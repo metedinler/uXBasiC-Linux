@@ -23,8 +23,15 @@ Private Function ParsePrintStmt(ByRef ps As ParseState, ByRef firstTok As Token)
 
     Do
         Dim exprIdx As Integer
+        Dim exprStartCursor As Integer
+        exprStartCursor = ps.cursorIndex
         exprIdx = ParseExpression(ps)
-        If exprIdx = -1 Then Exit Do
+        If exprIdx = -1 Then
+            ' S-211: ifade BASLADI ama tamamlanamadi (`PRINT 1 +`, `PRINT (1 +`): ayristirma hatasi yutulmaz.
+            ' Hic token tuketilmediyse (bos PRINT, sondaki `;` ya da `,`) madde listesi eskisi gibi biter.
+            If ps.cursorIndex <> exprStartCursor Then Return -1
+            Exit Do
+        End If
 
         Dim printItem As Integer
         printItem = ASTNewNode(ps.ast, "PRINT_ITEM", "", "", ps.ast.nodes(exprIdx).lineNo, ps.ast.nodes(exprIdx).colNo)
@@ -272,6 +279,41 @@ Function ParseCallStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Integ
         If UXBParserNormalizeCallInteropNode(ps, canonicalStmtNode, firstTok) = 0 Then Return -1
 
         Return canonicalStmtNode
+    End If
+
+    ' S-601 (2026-10-17): `CALL ME.m(...)`, `CALL THIS.m(...)` and `CALL SUPER.m(...)`. The name-string form ("ME.M") has no receiver node,
+    ' so no engine could resolve it (AST called the method on a wrong receiver and printed 0, MIR / native x64 / JS stopped on an
+    ' unknown routine "ME.YAZ"). It is parsed as the expression statement it is equivalent to (`ME.m(...)`), which every engine runs.
+    Dim selfRecvTok As Token
+    selfRecvTok = CurToken(ps)
+    If selfRecvTok.kind = "KEYWORD" Or selfRecvTok.kind = "IDENT" Then
+        Dim selfRecvUpper As String
+        selfRecvUpper = UCase(Trim(selfRecvTok.lexeme))
+        If selfRecvUpper = "ME" Or selfRecvUpper = "THIS" Or selfRecvUpper = "SUPER" Then
+            Dim selfDotTok As Token
+            selfDotTok = LookToken(ps, 1)
+            If selfDotTok.kind = "OP" And selfDotTok.lexeme = "." Then
+                Dim selfCallExpr As Integer
+                selfCallExpr = ParseExpression(ps)
+                If selfCallExpr = -1 Then
+                    If ps.lastError = "" Then ps.lastError = "CALL: call expression expected"
+                    Return -1
+                End If
+                If UCase(Trim(ps.ast.nodes(selfCallExpr).kind)) <> "CALL_EXPR" Then
+                    ps.lastError = "CALL: missing ("
+                    Return -1
+                End If
+                If IsBasicStmtTerminator(CurToken(ps)) = 0 Then
+                    ps.lastError = "CALL: unexpected trailing tokens"
+                    Return -1
+                End If
+                ' the statement form of an expression call is EXPR_STMT(CALL_EXPR), exactly what ParseExpressionStatement builds for `ME.m()`
+                Dim selfCallStmt As Integer
+                selfCallStmt = ASTNewNode(ps.ast, "EXPR_STMT", "", "", firstTok.lineNo, firstTok.colNo)
+                ASTSetLeft ps.ast, selfCallStmt, selfCallExpr
+                Return selfCallStmt
+            End If
+        End If
     End If
 
     Dim calleeName As String

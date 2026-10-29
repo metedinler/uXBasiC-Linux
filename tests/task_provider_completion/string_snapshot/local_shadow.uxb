@@ -1,0 +1,16 @@
+DIM sharedText AS STRING = "old"
+FUNCTION ChangeText() AS I32
+    sharedText = "AB" + CHR(0) + "CD"
+    RETURN 7
+END FUNCTION
+FUNCTION ReadText(value AS STRING, marker AS I32) AS I32
+    PRINT value
+    RETURN marker
+END FUNCTION
+THREAD Worker() AS I32
+    DIM sharedText AS STRING = "local"
+    RETURN ReadText(sharedText, ChangeText())
+END THREAD
+DIM work AS TASK OF I32 = SPAWN Worker()
+PRINT work.JOIN()
+PRINT LEN(sharedText)

@@ -1,0 +1,39 @@
+FUNCTION Unexpected() AS I32
+    PRINT "UNEXPECTED_EVALUATION"
+    RETURN 1
+END FUNCTION
+MAIN
+    DIM x AS I32
+    x = 10
+    x += 2
+    x -= 3
+    x *= 4
+    x /= 2
+    x %= 7
+    x &= 3
+    x |= 4
+    x <<= 2
+    x >>= 1
+    PRINT x
+    x =+ 5
+    PRINT x
+    x =- 5
+    PRINT x
+    PRINT 2 + 3 * 4
+    PRINT 17 \ 3
+    PRINT 17 MOD 3
+    PRINT 17 % 3
+    PRINT 3 SHL 2
+    PRINT 12 SHR 2
+    PRINT 3 ROL 1
+    PRINT 6 ROR 1
+    PRINT ~0
+    PRINT !0
+    PRINT NOT 0
+    PRINT CINT(FALSE && Unexpected())
+    PRINT CINT(TRUE || Unexpected())
+    PRINT CINT(FALSE ANDALSO Unexpected())
+    PRINT CINT(TRUE ORELSE Unexpected())
+    PRINT TRUE ? 7 : Unexpected()
+    PRINT FALSE ? Unexpected() : 9
+END MAIN

@@ -1,0 +1,6 @@
+{
+  "consumer_order": {"engines":["AST","MIR","x64","AST-x64"],"output":"new!\ncondition\nnew!"},
+  "conditional_barrier": {"engines":["AST","MIR","x64","AST-x64"],"output":"selected\nold\n0"},
+  "return_finally_lifetime": {"engines":["AST","MIR","x64","AST-x64"],"output":"5\nnew\n0\n!"},
+  "selected_branch": {"engines":["AST","MIR","x64","AST-x64"],"output":"and branch\nor branch\nnew!\nnew!\n4"}
+}

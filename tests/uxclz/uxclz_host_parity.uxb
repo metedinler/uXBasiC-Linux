@@ -1,0 +1,28 @@
+INCLUDE "include/modules/uxclz.uxmh"
+
+DIM typeId AS U32
+DIM argsHandle AS U64
+DIM nativeResult AS U64
+
+ASSERT uxclz.Version() == uxclz.ABI_VERSION
+ASSERT uxclz.ResetRegistry() == 1
+
+typeId = uxclz.TypeRegister("ParityType", 0, uxclz.TYPE_CLASS)
+ASSERT typeId <> 0
+ASSERT uxclz.TypeName(typeId) == "ParityType"
+ASSERT uxclz.TypeIsA(typeId, typeId) == 1
+
+argsHandle = uxclz.ArgsNew()
+ASSERT argsHandle <> 0
+ASSERT uxclz.ArgsPushI64(argsHandle, 42) == 1
+ASSERT uxclz.ArgsPushString(argsHandle, "uxclz") == 1
+ASSERT uxclz.ArgsCount(argsHandle) == 2
+
+nativeResult = uxclz.ResultNew()
+ASSERT nativeResult <> 0
+ASSERT uxclz.ResultKind(nativeResult) == uxclz.VALUE_NULL
+
+uxclz.ResultFree(nativeResult)
+uxclz.ArgsFree(argsHandle)
+
+PRINT "UXCLZ_HOST_PARITY_PASS"

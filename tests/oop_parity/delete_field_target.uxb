@@ -1,0 +1,17 @@
+CLASS Ic
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT 5
+    END DESTRUCTOR
+END CLASS
+CLASS Kap
+    PUBLIC
+    DIM ic AS Ic
+END CLASS
+' S-574: the target of DELETE can be a field that holds an object - the destructor runs and the field becomes NOTHING.
+DIM c AS Kap = NEW Kap()
+c.ic = NEW Ic()
+DELETE c.ic
+IF c.ic = NOTHING THEN PRINT 1
+PRINT 9

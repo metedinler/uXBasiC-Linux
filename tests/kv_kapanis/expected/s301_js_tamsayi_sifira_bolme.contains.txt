@@ -1,0 +1,1 @@
+JS=division by zero

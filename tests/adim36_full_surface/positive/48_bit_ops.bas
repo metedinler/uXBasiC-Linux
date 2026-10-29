@@ -1,0 +1,6 @@
+DIM A AS I32
+A = 1 SHL 4
+A = A OR 3
+A = A XOR 2
+A = A AND 31
+PRINT A

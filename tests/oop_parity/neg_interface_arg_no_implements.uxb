@@ -1,0 +1,16 @@
+' S-577 (2026-10-16): a class that only HAS the interface's methods (no IMPLEMENTS) is not accepted where the interface type
+' is expected. The call used to pass the compile gate and then ran on AST/MIR and crashed differently on the other engines.
+INTERFACE IKonum
+    METHOD GetX() AS I32
+END INTERFACE
+CLASS Pt
+    PUBLIC
+    METHOD GetX() AS I32
+        RETURN 4
+    END METHOD
+END CLASS
+SUB Yaz(k AS IKonum)
+    PRINT k.GetX()
+END SUB
+DIM pp AS Pt = NEW Pt()
+Yaz(pp)

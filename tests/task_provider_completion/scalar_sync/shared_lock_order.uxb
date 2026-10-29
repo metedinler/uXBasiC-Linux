@@ -1,0 +1,16 @@
+DIM x AS I64 = 0
+DIM y AS I64 = 0
+THREAD Work() AS I64
+ DIM i AS I64
+ FOR i = 1 TO 1000
+ x = x + y * 0 + 1
+ y = y + x * 0 + 1
+ NEXT
+ RETURN 0
+END THREAD
+DIM a AS TASK OF I64 = SPAWN Work()
+DIM b AS TASK OF I64 = SPAWN Work()
+a.JOIN()
+b.JOIN()
+PRINT x
+PRINT y

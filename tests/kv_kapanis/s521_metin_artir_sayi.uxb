@@ -1,0 +1,5 @@
+' S-521: STRING degiskene sayi eklemek, bilesik atamayla da (s += 7), acik yazimdaki (s = s + 7) gibi altı yolda ayni
+' UXB_MIXED_STRING_NUMERIC derleme hatasidir (eskiden hata yoktu: AST/MIR/JS "a7", MIR-x64 coker).
+DIM s AS STRING = "a"
+s += 7
+PRINT s

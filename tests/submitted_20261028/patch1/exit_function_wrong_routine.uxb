@@ -1,0 +1,4 @@
+SUB Yaz()
+    EXIT FUNCTION
+END SUB
+Yaz()

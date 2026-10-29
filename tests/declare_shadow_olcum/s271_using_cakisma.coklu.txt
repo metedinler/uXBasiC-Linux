@@ -1,0 +1,173 @@
+U1_cakisma_ayni_ad_ayni_arite
+' K3 karari (Mete, 2026-10-28): iki USING'ten gelen ayni ad, nitelensiz cagri = DERLEME HATASI.
+' Hedef: altı yolda derleme hatasi, "once" HIC yazilmaz. Bugun: sessiz ilk-kazanan (7).
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+PRINT "once"
+PRINT Topla(3, 4)
+=====
+U2_nitelikli_korunur
+' Nitelikli cagri belirsiz degildir. Beklenen: 7 | 12
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+PRINT A.Topla(3, 4)
+PRINT B.Topla(3, 4)
+=====
+U3_tek_using_korunur
+' Tek USING belirsiz degildir. Beklenen: 7
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+PRINT Topla(3, 4)
+=====
+U4_kok_islev_kazanir
+' Kok duzeyde ayni adli gercek islev varsa USING'ten gelenler onunla belirsiz sayilmaz
+' (mir_lower_expr.fbs: "A real top-level routine wins"). Beklenen: 100
+FUNCTION Topla(x AS I32, y AS I32) AS I32
+    RETURN 100
+END FUNCTION
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+PRINT Topla(3, 4)
+=====
+U5_farkli_arite_belirsiz_degil
+' S-223 arite asiri yuklemesi: A.F tek, B.F iki parametre. F(5) -> A, F(5, 6) -> B. Beklenen: 10 | 30
+NAMESPACE A
+    FUNCTION F(x AS I32) AS I32
+        RETURN x * 2
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION F(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+PRINT F(5)
+PRINT F(5, 6)
+=====
+U6_cakisan_ad_hic_cagrilmaz
+' Belirsizlik CAGRI yerinde sorundur, USING satirinda degil. Beklenen: 7
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+PRINT A.Topla(3, 4)
+=====
+U7_ayni_namespace_iki_kez_using
+' Ayni NAMESPACE'in iki kez acilmasi belirsizlik degildir. Beklenen: 7
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING A
+PRINT Topla(3, 4)
+=====
+U8_namespace_ici_kendi_adi
+' NAMESPACE A'nin gövdesinde nitelensiz Topla kendi namespace'ine gider (S-141), B'nin USING'i belirsizlik uretmez.
+' Beklenen: 7
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING B
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+    FUNCTION Cagir(x AS I32, y AS I32) AS I32
+        RETURN Topla(x, y)
+    END FUNCTION
+END NAMESPACE
+PRINT A.Cagir(3, 4)
+=====
+U9_olu_dalda_cakisma
+' Cakisma calismayan dalda da DERLEME hatasidir (S-329 H3 ile ayni ilke). Hedef: derleme hatasi.
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+IF 0 THEN
+    PRINT Topla(3, 4)
+END IF
+PRINT "ok"
+=====
+U10_ucuncu_namespace_cakisma
+' Uc namespace'ten ikisi cakisiyor: yine hata. Hedef: derleme hatasi.
+NAMESPACE A
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x + y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION Topla(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+NAMESPACE C
+    FUNCTION Baska(x AS I32) AS I32
+        RETURN x
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+USING C
+PRINT Topla(1, 2)

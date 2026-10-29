@@ -1,0 +1,3 @@
+' S-549: a handle array element cannot be the target of `OPEN ... AS handle` (it would be evaluated more than once); use FREEFILE and `AS #n`.
+DIM h(3) AS FILE_HANDLE
+OPEN "fh_d1.txt" FOR OUTPUT AS h(2)

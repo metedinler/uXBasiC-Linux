@@ -1,0 +1,17 @@
+CLASS Ata
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(pa AS I32)
+        x = pa
+    END CONSTRUCTOR
+END CLASS
+CLASS Cocuk EXTENDS Ata
+    PUBLIC
+    CONSTRUCTOR()
+        SUPER(1)
+    END CONSTRUCTOR
+    METHOD Yap()
+        SUPER(3)
+    END METHOD
+END CLASS
+DIM p AS Cocuk = NEW Cocuk()

@@ -1,0 +1,5 @@
+DIM v AS I32
+OPEN "short.bin" FOR BINARY AS #1
+PUT #1, 1, 1, 7
+GET #1, 1, 4, v
+PRINT "UNREACHABLE"

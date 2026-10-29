@@ -1,0 +1,26 @@
+CLASS Box
+    text AS STRING
+END CLASS
+DIM currentBox AS Box = NEW Box()
+DIM savedBox AS Box
+savedBox = currentBox
+currentBox.text = "abcdef"
+DIM receiverCalls AS I32 = 0
+FUNCTION GetBox() AS Box
+    receiverCalls += 1
+    RETURN currentBox
+END FUNCTION
+FUNCTION SwapBox() AS STRING
+    currentBox = NEW Box()
+    currentBox.text = "other"
+    RETURN "XY"
+END FUNCTION
+MID(GetBox().text, 2, 2) = SwapBox()
+PRINT savedBox.text
+PRINT currentBox.text
+PRINT receiverCalls
+SUB UpdateBox(value AS Box)
+    MID(value.text, 3, 2) = "ZZ"
+END SUB
+UpdateBox(savedBox)
+PRINT savedBox.text

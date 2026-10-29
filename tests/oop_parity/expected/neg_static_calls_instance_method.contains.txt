@@ -1,0 +1,6 @@
+AST=STATIC METHOD SAY.G cannot call instance method DORT
+MIR=STATIC METHOD SAY.G cannot call instance method DORT
+x64=STATIC METHOD SAY.G cannot call instance method DORT
+AST-x64=STATIC METHOD SAY.G cannot call instance method DORT
+JS=STATIC METHOD SAY.G cannot call instance method DORT
+WASM=STATIC METHOD SAY.G cannot call instance method DORT

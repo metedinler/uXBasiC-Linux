@@ -1,0 +1,11 @@
+DIM calls AS I32 = 0
+FUNCTION NextValue() AS I32
+ calls += 1
+ RETURN calls
+END FUNCTION
+DIM labelText AS STRING = "value"
+DIM amount AS F64 = 1.25
+PRINT labelText, amount, NextValue(), NextValue()
+PRINT calls
+PRINT amount;
+PRINT "!"

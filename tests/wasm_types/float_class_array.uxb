@@ -1,0 +1,13 @@
+CLASS Kutu
+    PUBLIC
+    n AS F64
+    METHOD Oku() AS F64
+        RETURN THIS.n
+    END METHOD
+END CLASS
+DIM a(1 TO 2, 3 TO 4) AS Kutu
+a(2, 4) = NEW Kutu()
+a(2, 4).n = 1.5
+PRINT a(2, 4).Oku()
+a(2, 4).n += 2.25
+PRINT a(2, 4).n

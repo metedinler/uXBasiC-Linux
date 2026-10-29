@@ -1,0 +1,21 @@
+DIM orderCode AS I32 = 0
+FUNCTION PickFirst() AS I32
+    orderCode = orderCode * 10 + 1
+    RETURN -1
+END FUNCTION
+FUNCTION PickSecond() AS I32
+    orderCode = orderCode * 10 + 2
+    RETURN 3
+END FUNCTION
+CLASS Kutu
+    PUBLIC
+    n AS I32
+END CLASS
+DIM a(-1 TO 0, 2 TO 4) AS Kutu
+a(-1,3) = NEW Kutu()
+a(PickFirst(), PickSecond()).n += 7
+PRINT a(-1,3).n
+PRINT orderCode
+DELETE a(PickFirst(), PickSecond())
+PRINT orderCode
+PRINT a(-1,3) = NOTHING

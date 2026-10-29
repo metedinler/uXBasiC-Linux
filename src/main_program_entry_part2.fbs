@@ -28,6 +28,7 @@ If execMemMode Then
     Dim mirErrText As String
     Dim astRuntimeCalls As Integer
     Dim mirRuntimeCalls As Integer
+    Dim interpreterCompareStatus As String
     astRuntimeCalls = 0
     mirRuntimeCalls = 0
     astRan = 0
@@ -44,6 +45,7 @@ If execMemMode Then
     mirReturnText = ""
     astErrText = ""
     mirErrText = ""
+    interpreterCompareStatus = "SKIPPED"
 
     If interpreterBackend = "AST" Or interpreterBackend = "BOTH" Then
         UXBLayerEventBegin "AST_INTERPRETER", sourcePath
@@ -67,6 +69,15 @@ If execMemMode Then
             astStdErr = execErr
             UXBLayerEventDiagnostic "AST_INTERPRETER", "UXB_AST_INTERPRETER_FAILED", execErr
             UXBLayerEventEnd "AST_INTERPRETER", "fail", execErr
+            ' Runtime failures are part of the same diagnostic contract as
+            ' frontend failures.  Persist them before the final exit so a
+            ' non-zero process cannot leave all_diagnostics.json empty.
+            UXBOutputContractPushFailureDiagnostic frontendDiagnostics, "ast_interpreter", astErrText, sourcePath
+            Dim astRuntimeDiagErr As String
+            astRuntimeDiagErr = ""
+            If UXBOutputContractWriteDiagnosticList(outputContractPaths, frontendDiagnostics, astRuntimeDiagErr) = 0 Then
+                UxbError "AST runtime diagnostics yazilamadi: " & astRuntimeDiagErr
+            End If
             ' Artifactlar yazilsin diye hata cikisi blok sonunda verilir.
         Else
             astStatus = "PASS"
@@ -146,8 +157,10 @@ If execMemMode Then
             UXBLayerEventEnd "MIR_INTERPRETER", "fail", mirErrText
             ' Artifactlar yazilsin diye hata cikisi blok sonunda verilir.
         Else
-            Dim canonicalRun As UXBSemanticToCanonicalMIRBridgeResult
-            If UXBSemanticMIRToCanonicalMIR(mirModule, canonicalRun, mirRunErr, 1) = 0 Then
+            ' Reuse the verified view used by canonical JSON above. No MIR pass
+            ' mutates mirModule between construction and execution in this path.
+            If canonicalBridgeReady = 0 Then
+                mirRunErr = "verified canonical MIR execution view is not ready"
                 mirStatus = "FAIL"
                 mirErrText = mirRunErr
                 mirStdErr = mirRunErr
@@ -155,16 +168,10 @@ If execMemMode Then
                 UXBLayerEventEnd "MIR_INTERPRETER", "fail", mirRunErr
                 ' Artifactlar yazilsin diye hata cikisi blok sonunda verilir.
             Else
-                Dim mirInterpCtx As UXBInterpContext
-                ' The run path never reads the per-instruction trace, but every trace
-                ' event ReDim-Preserves an array of string-carrying records (O(n) per
-                ' event): with it on, a 2000-iteration loop took ~50 s. Off here.
-                UXBInterpContextInit mirInterpCtx, "native", 0
-                ' S-074: a pure MIR run streams PRINT output as it happens (like the
-                ' AST interpreter) instead of printing the collected text at the end.
-                If interpreterBackend = "MIR" Then mirInterpCtx.runtime.liveEcho = 1
                 Dim mirInterpResult As UXBInterpResult
-                mirInterpResult = UXBMIRInterpRunInstructions(canonicalRun.instructions(), canonicalRun.instructionCount, mirInterpCtx, mirRunErr)
+                ' Pure MIR streams output; BOTH collects it for comparison.
+                ' Per-instruction tracing stays opt-in, including the public API.
+                UXBRunMirInterpreterPublic canonicalBridge, mirInterpResult, mirRunErr, IIf(interpreterBackend = "MIR", 1, 0), 0
                 If mirInterpResult.statusText <> "PASS" Then
                     mirStatus = "FAIL"
                     mirErrText = mirRunErr
@@ -174,6 +181,14 @@ If execMemMode Then
                     mirRuntimeCalls = mirInterpResult.runtimeServiceCalls
                     UXBLayerEventDiagnostic "MIR_INTERPRETER", "UXB_MIR_INTERPRETER_FAILED", mirErrText
                     UXBLayerEventEnd "MIR_INTERPRETER", "fail", mirErrText
+                    ' Keep MIR runtime failures visible in the structured
+                    ' diagnostics artifacts, not only on stderr/exit status.
+                    UXBOutputContractPushFailureDiagnostic frontendDiagnostics, "mir_interpreter", mirErrText, sourcePath
+                    Dim mirRuntimeDiagErr As String
+                    mirRuntimeDiagErr = ""
+                    If UXBOutputContractWriteDiagnosticList(outputContractPaths, frontendDiagnostics, mirRuntimeDiagErr) = 0 Then
+                        UxbError "MIR runtime diagnostics yazilamadi: " & mirRuntimeDiagErr
+                    End If
                     ' Artifactlar yazilsin diye hata cikisi blok sonunda verilir.
                 Else
                     mirStatus = "PASS"
@@ -245,6 +260,11 @@ If execMemMode Then
             UxbError "Interpreter compare JSON yazilamadi: " & outputContractErr
             End 22
         End If
+        If UXBInterpreterCompareOutputsMatch(astStatus, mirStatus, astOutput, mirOutput) <> 0 Then
+            interpreterCompareStatus = "PASS"
+        Else
+            interpreterCompareStatus = "FAIL"
+        End If
     End If
 
     Dim runtimeTraceJson As String
@@ -278,6 +298,21 @@ If execMemMode Then
             UXBLayerEventEnd "INTERPRETER", "fail", "AST/MIR interpreter comparison prerequisite failed"
             UxbTraceEnd "EXECMEM", "FAIL", "AST/MIR interpreter comparison prerequisite failed"
             UxbError "AST/MIR interpreter BOTH modu basarisiz: AST=" & astStatus & " MIR=" & mirStatus
+            End 25
+        End If
+        If interpreterCompareStatus <> "PASS" Then
+            Dim compareMismatchText As String
+            compareMismatchText = "UXB_INTERPRETER_COMPARE_MISMATCH: AST ve MIR yorumlayicilarinin gozlenebilir program ciktilari farkli"
+            UXBLayerEventDiagnostic "INTERPRETER", "UXB_INTERPRETER_COMPARE_MISMATCH", compareMismatchText
+            UXBOutputContractPushFailureDiagnostic frontendDiagnostics, "interpreter_compare", compareMismatchText, sourcePath
+            Dim compareDiagErr As String
+            compareDiagErr = ""
+            If UXBOutputContractWriteDiagnosticList(outputContractPaths, frontendDiagnostics, compareDiagErr) = 0 Then
+                UxbError "Interpreter compare diagnostics yazilamadi: " & compareDiagErr
+            End If
+            UXBLayerEventEnd "INTERPRETER", "fail", compareMismatchText
+            UxbTraceEnd "EXECMEM", "FAIL", compareMismatchText
+            UxbError compareMismatchText
             End 25
         End If
     End If
@@ -316,10 +351,6 @@ If interopMode Then
         UxbError "FFI x64 codegen cikti yazimi basarisiz: " & LocalizeErrorMessage(interopErr)
         End 4
     End If
-
-    ' x86 backend retired: old x86 FFI artifact emitter is intentionally omitted here.
-    ' The old x86 files live under src/retired/x86 and are not active build inputs.
-    UxbTraceOutput "FFI_EMIT", "x86", "retired"
 
     If debugMode Then
         UxbInfo "Interop include sayisi: " & Str(manifest.includeCount)

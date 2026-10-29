@@ -1,0 +1,31 @@
+INCLUDE "include/modules/uxsystem.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxsystem.Architecture()
+        PRINT uxsystem.ComputerName()
+        PRINT uxsystem.CpuCount()
+        PRINT uxsystem.CurrentDirectory()
+        PRINT uxsystem.EnvironmentDelete("")
+        PRINT uxsystem.EnvironmentGet("")
+        PRINT uxsystem.EnvironmentSet("", "")
+        PRINT uxsystem.ErrorText()
+        PRINT uxsystem.ExecutablePath()
+        PRINT uxsystem.Is64Bit()
+        PRINT uxsystem.IsAdministrator()
+        PRINT uxsystem.MemoryAvailable()
+        PRINT uxsystem.MemoryLoadPercent()
+        PRINT uxsystem.MemoryTotal()
+        PRINT uxsystem.ProcessId()
+        PRINT uxsystem.ScreenHeight()
+        PRINT uxsystem.ScreenWidth()
+        PRINT uxsystem.SetCurrentDirectory("")
+        PRINT uxsystem.SystemDirectory()
+        PRINT uxsystem.TempDirectory()
+        PRINT uxsystem.ThreadId()
+        PRINT uxsystem.TickCountMs()
+        PRINT uxsystem.UserName()
+        PRINT uxsystem.WindowsDirectory()
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXSYSTEM"
+END MAIN

@@ -1,0 +1,14 @@
+' S-484 follow-up: a bare call of a NON-virtual method inside a destructor body (= ME.Kapat(), allowed because the method is not virtual).
+' The MIR interpreter only bound ME on method / constructor calls and failed with "method call on a null object reference".
+CLASS Kutu
+    PUBLIC
+    METHOD Kapat()
+        PRINT 5
+    END METHOD
+    DESTRUCTOR()
+        Kapat()
+    END DESTRUCTOR
+END CLASS
+DIM x AS Kutu = NEW Kutu()
+DELETE x
+PRINT 6

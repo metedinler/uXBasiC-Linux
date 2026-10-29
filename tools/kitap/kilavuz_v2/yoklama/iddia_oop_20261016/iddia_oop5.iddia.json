@@ -1,0 +1,70 @@
+[
+ {
+  "ad": "s01 ME ile sanal cagri",
+  "kod": "CLASS A1\n    PUBLIC\n    VIRTUAL METHOD Value() AS I32\n        RETURN 10\n    END METHOD\n    METHOD ViaMe() AS I32\n        RETURN ME.Value()\n    END METHOD\nEND CLASS\nCLASS B1 EXTENDS A1\n    PUBLIC\n    OVERRIDE METHOD Value() AS I32\n        RETURN 20\n    END METHOD\nEND CLASS\nDIM o AS B1 = NEW B1()\nPRINT o.ViaMe()\n"
+ },
+ {
+  "ad": "s02 SUPER ile taban uygulamasi",
+  "kod": "CLASS A1\n    PUBLIC\n    VIRTUAL METHOD Value() AS I32\n        RETURN 10\n    END METHOD\nEND CLASS\nCLASS B1 EXTENDS A1\n    PUBLIC\n    OVERRIDE METHOD Value() AS I32\n        RETURN SUPER.Value() + 5\n    END METHOD\nEND CLASS\nDIM o AS B1 = NEW B1()\nPRINT o.Value()\n"
+ },
+ {
+  "ad": "s03 DIM = fabrika islevi",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\n    CONSTRUCTOR(x AS I32)\n        v = x\n    END CONSTRUCTOR\nEND CLASS\nFUNCTION Uret(n AS I32) AS Kutu\n    RETURN NEW Kutu(n)\nEND FUNCTION\nDIM a1 AS Kutu = Uret(8)\nPRINT a1.v\n"
+ },
+ {
+  "ad": "s04 DIM = baska degisken (ayni nesne)",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nDIM a1 AS Kutu = NEW Kutu()\na1.v = 4\nDIM a2 AS Kutu = a1\na2.v = 9\nPRINT a1.v\n"
+ },
+ {
+  "ad": "s05 DIM = MAGIC ADD sonucu",
+  "kod": "CLASS Vek\n    PUBLIC\n    DIM x AS I32\n    DIM y AS I32\n    CONSTRUCTOR(ax AS I32, ay AS I32)\n        x = ax\n        y = ay\n    END CONSTRUCTOR\n    MAGIC ADD(diger AS Vek) AS Vek\n        RETURN NEW Vek(THIS.x + diger.x, THIS.y + diger.y)\n    END MAGIC\nEND CLASS\nDIM v1 AS Vek = NEW Vek(2, 3)\nDIM v2 AS Vek = NEW Vek(4, 1)\nDIM v3 AS Vek = v1 + v2\nPRINT v3.x\nPRINT v3.y\n"
+ },
+ {
+  "ad": "s06 DIM = yanlis sinif (tur uyusmazligi reddi)",
+  "kod": "CLASS Kutu\n    PUBLIC\n    DIM v AS I32\nEND CLASS\nCLASS Top\n    PUBLIC\n    DIM r AS I32\nEND CLASS\nDIM t1 AS Top = NEW Top()\nDIM k1 AS Kutu = t1\nPRINT 1\n"
+ },
+ {
+  "ad": "s alan + alan (beklenen 10)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k + k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "s alan * alan (beklenen 25)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k * k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "s THIS.alan * THIS.alan (beklenen 25)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN THIS.k * THIS.k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "s alan - alan (beklenen 0)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k - k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "s alan / alan (beklenen 1)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k / k\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "s alan * alan atama (beklenen 25)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        DIM r AS F64\n        r = k * k\n        RETURN r\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "s alan * 2.0 (kontrol) (beklenen 10)",
+  "kod": "CLASS T1\n    PRIVATE\n    DIM k AS F64\n    PUBLIC\n    CONSTRUCTOR()\n        k = 5.0\n    END CONSTRUCTOR\n    METHOD M() AS F64\n        RETURN k * 2.0\n    END METHOD\nEND CLASS\nDIM t AS T1 = NEW T1()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "s07 iki farkli F64 alan",
+  "kod": "CLASS Dik\n    PUBLIC\n    DIM en AS F64\n    DIM boy AS F64\n    CONSTRUCTOR(a AS F64, b AS F64)\n        en = a\n        boy = b\n    END CONSTRUCTOR\n    METHOD Alan() AS F64\n        RETURN en * boy\n    END METHOD\n    METHOD Cevre() AS F64\n        RETURN (en + boy) * 2.0\n    END METHOD\nEND CLASS\nDIM d AS Dik = NEW Dik(3.0, 4.0)\nPRINT d.Alan()\nPRINT d.Cevre()\n"
+ },
+ {
+  "ad": "s08 F32 alan carpimi",
+  "kod": "CLASS T2\n    PUBLIC\n    DIM a AS F32\n    CONSTRUCTOR()\n        a = 1.5\n    END CONSTRUCTOR\n    METHOD M() AS F32\n        RETURN a * a\n    END METHOD\nEND CLASS\nDIM t AS T2 = NEW T2()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "s09 I32 alan toplami (gerileme kontrolu)",
+  "kod": "CLASS T3\n    PUBLIC\n    DIM a AS I32\n    DIM b AS I32\n    CONSTRUCTOR()\n        a = 5\n        b = 7\n    END CONSTRUCTOR\n    METHOD M() AS I32\n        RETURN a * b + a\n    END METHOD\nEND CLASS\nDIM t AS T3 = NEW T3()\nPRINT t.M()\n"
+ },
+ {
+  "ad": "s10 dis nesne alani F64 toplama",
+  "kod": "CLASS T4\n    PUBLIC\n    DIM k AS F64\nEND CLASS\nDIM t AS T4 = NEW T4()\nt.k = 2.5\nPRINT t.k + t.k\n"
+ }
+]

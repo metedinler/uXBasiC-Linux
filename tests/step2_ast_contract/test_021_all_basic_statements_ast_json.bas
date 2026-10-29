@@ -1,0 +1,8 @@
+' Step 2 AST contract smoke
+DIM a AS INTEGER
+a=1
+PRINT a
+IF a=1 THEN PRINT 1
+FOR i=1 TO 2
+PRINT i
+NEXT

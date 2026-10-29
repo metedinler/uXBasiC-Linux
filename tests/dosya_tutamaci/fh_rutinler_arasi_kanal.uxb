@@ -1,0 +1,15 @@
+' S-621: a channel opened inside a routine stays open after the routine returns (the MIR interpreter used to lose it with the call scope).
+SUB Ac()
+    OPEN "fh_ra.txt" FOR OUTPUT AS #1
+END SUB
+SUB Yaz()
+    PRINT #1, "x"
+END SUB
+SUB Kapat()
+    CLOSE #1
+END SUB
+Ac()
+Yaz()
+PRINT "acildi"
+Kapat()
+PRINT "tamam"

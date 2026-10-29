@@ -1,0 +1,9 @@
+DIM values(1) AS I32
+values(0) = -7
+values(1) = 42
+PRINT CDBL(values(0))
+PRINT CSNG(values(1))
+DIM f AS F64 = CDBL(values(1)) + 0.25
+PRINT f
+DIM small AS F32 = CSNG(3.75)
+PRINT CDBL(small)

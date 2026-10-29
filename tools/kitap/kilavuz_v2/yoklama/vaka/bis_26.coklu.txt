@@ -1,0 +1,81 @@
+W1 sinifta PUBLIC: iki nokta (beklenen 4)
+CLASS Kutu
+PUBLIC:
+    DIM x AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.x = 4
+PRINT k.x
+=====
+W2 OPERATOR blok yazimi, atama ayri satirda (beklenen 3)
+CLASS Vek
+PUBLIC
+    DIM x AS I32
+    OPERATOR +(o AS Vek) AS Vek
+        DIM r AS Vek = NEW Vek()
+        r.x = x + o.x
+        RETURN r
+    END OPERATOR
+END CLASS
+DIM a AS Vek = NEW Vek()
+DIM b AS Vek = NEW Vek()
+DIM c AS Vek
+a.x = 1
+b.x = 2
+c = a + b
+PRINT c.x
+=====
+W3 READONLY / FRIEND / MUTABLE niteleyicileri
+CLASS Kutu
+PUBLIC
+    READONLY DIM x AS I32
+END CLASS
+PRINT "tamam"
+=====
+W4 ANDALSO ORELSE (beklenen 1 / 0)
+DIM a AS I32 = 3
+PRINT a > 1 ANDALSO a < 5
+PRINT a > 5 ORELSE a < 0
+=====
+W5 DEFEXT ve SETNEWOFFSET (sadece derlensin)
+DEFEXT e
+e = 2.5
+PRINT e
+=====
+W6 TYPE ... ABI CDECL PACK ALIGN (STRUCT)
+STRUCT Baslik
+    ABI CDECL
+    PACK 8
+    ALIGN 8
+    boyut AS U32
+    bayrak AS U32
+END STRUCT
+PRINT SIZEOF(Baslik)
+=====
+W7 LOCK ile MUTEX, gorev icinde RETURN ile cikis
+DIM m AS MUTEX
+DIM toplam AS I32 = 0
+THREAD Art(k AS I32)
+    LOCK m
+        toplam = toplam + k
+    END LOCK
+END THREAD
+DIM g AS TASKGROUP
+g.ADD(SPAWN Art(2))
+g.ADD(SPAWN Art(3))
+g.JOIN()
+PRINT toplam
+=====
+W8 BIGF / BIGD / BALL tip bildirimi
+DIM z AS BIGF
+PRINT "tamam"
+=====
+W9 FUNCTION_PTR / DLL_HANDLE / FILE_HANDLE tip adlari
+DIM f AS FUNCTION_PTR
+DIM h AS DLL_HANDLE
+DIM d AS FILE_HANDLE
+PRINT "tamam"
+=====
+W10 ANY / VARIANT / WSTRING tip adlari
+DIM v AS WSTRING
+PRINT "tamam"

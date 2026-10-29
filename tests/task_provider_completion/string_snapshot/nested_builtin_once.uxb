@@ -1,0 +1,21 @@
+DIM sharedText AS STRING = "old"
+DIM calls AS I32 = 0
+FUNCTION MakeText() AS STRING
+    calls += 1
+    RETURN "AB" + CHR(0) + "CD"
+END FUNCTION
+FUNCTION ChangeText() AS I32
+    sharedText = "new"
+    RETURN 7
+END FUNCTION
+FUNCTION CheckText(value AS STRING, size AS I32, marker AS I32) AS I32
+    PRINT value
+    PRINT size
+    RETURN marker
+END FUNCTION
+THREAD Worker() AS I32
+    RETURN CheckText(sharedText, LEN(MakeText()), ChangeText())
+END THREAD
+DIM work AS TASK OF I32 = SPAWN Worker()
+PRINT work.JOIN()
+PRINT calls

@@ -1,0 +1,10 @@
+' S-233: MAGIC TOSTRING'i olmayan bir sinif ornegini dogrudan yazdirmak altı yolda ayni DERLEME hatasidir.
+CLASS Duz
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+END CLASS
+DIM x AS Duz = NEW Duz(7)
+PRINT x

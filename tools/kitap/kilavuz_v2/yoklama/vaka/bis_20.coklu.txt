@@ -1,0 +1,259 @@
+A1 LIST icinde LIST, dogrudan ic ice cagri (beklenen 1 / 2 / 6)
+DIM dis AS LIST
+DIM ic AS LIST
+LISTADD(ic, 5)
+LISTADD(ic, 6)
+LISTADD(dis, ic)
+PRINT LISTLEN(dis)
+PRINT LISTLEN(LISTGET(dis, 0))
+PRINT LISTGET(LISTGET(dis, 0), 1)
+=====
+A2 LIST icinde LIST, tipli degiskene alma, referans mi (beklenen 2 / 2)
+DIM dis AS LIST
+DIM ic AS LIST
+LISTADD(ic, 5)
+LISTADD(dis, ic)
+DIM geri AS LIST
+geri = LISTGET(dis, 0)
+LISTADD(geri, 9)
+PRINT LISTLEN(ic)
+PRINT LISTLEN(geri)
+=====
+A3 DICT icinde LIST (beklenen 3 / 1)
+DIM d AS DICT
+DIM l AS LIST
+LISTADD(l, 1)
+LISTADD(l, 2)
+LISTADD(l, 3)
+DICTSET(d, "sayilar", l)
+PRINT LISTLEN(DICTGET(d, "sayilar"))
+PRINT DICTLEN(d)
+=====
+A4 LIST icinde DICT (beklenen 1)
+DIM l AS LIST
+DIM d AS DICT
+DICTSET(d, "a", 1)
+LISTADD(l, d)
+PRINT DICTGET(LISTGET(l, 0), "a")
+=====
+A5 DICT icinde DICT (beklenen 7)
+DIM d AS DICT
+DIM ic AS DICT
+DICTSET(ic, "x", 7)
+DICTSET(d, "ic", ic)
+PRINT DICTGET(DICTGET(d, "ic"), "x")
+=====
+B1 LIST icinde nesne (beklenen 7)
+CLASS Nokta
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(ax AS I32)
+        x = ax
+    END CONSTRUCTOR
+    METHOD Goster() AS I32
+        RETURN x
+    END METHOD
+END CLASS
+DIM l AS LIST
+DIM p1 AS Nokta = NEW Nokta(7)
+LISTADD(l, p1)
+DIM q AS Nokta
+q = LISTGET(l, 0)
+PRINT q.Goster()
+=====
+B2 FOR EACH ile nesne listesi (beklenen 3 / 4)
+CLASS Nokta
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(ax AS I32)
+        x = ax
+    END CONSTRUCTOR
+END CLASS
+DIM l AS LIST
+DIM a AS Nokta = NEW Nokta(3)
+DIM b AS Nokta = NEW Nokta(4)
+LISTADD(l, a)
+LISTADD(l, b)
+DIM n AS Nokta
+FOR EACH n IN l
+    PRINT n.x
+NEXT
+=====
+B3 nesne icinde LIST alani (beklenen 2 / armut)
+CLASS Sepet
+    PUBLIC
+    DIM urunler AS LIST
+    METHOD Ekle(u AS STRING)
+        LISTADD(urunler, u)
+    END METHOD
+    METHOD Say() AS I32
+        RETURN LISTLEN(urunler)
+    END METHOD
+END CLASS
+DIM s AS Sepet = NEW Sepet()
+s.Ekle("elma")
+s.Ekle("armut")
+PRINT s.Say()
+DIM u AS STRING
+FOR EACH u IN s.urunler
+    PRINT u
+NEXT
+=====
+B4 nesne icinde DICT alani (beklenen 2 / 5)
+CLASS Defter
+    PUBLIC
+    DIM kayit AS DICT
+    METHOD Yaz(k AS STRING, v AS I32)
+        DICTSET(kayit, k, v)
+    END METHOD
+    METHOD Say() AS I32
+        RETURN DICTLEN(kayit)
+    END METHOD
+END CLASS
+DIM d AS Defter = NEW Defter()
+d.Yaz("a", 5)
+d.Yaz("b", 6)
+PRINT d.Say()
+PRINT DICTGET(d.kayit, "a")
+=====
+B5 nesne icinde TYPE alani (beklenen 12 / 20)
+TYPE Nok
+    x AS I32
+    y AS I32
+END TYPE
+CLASS Sekil
+    PUBLIC
+    DIM merkez AS Nok
+    METHOD Tasi(dx AS I32)
+        merkez.x = merkez.x + dx
+    END METHOD
+END CLASS
+DIM s AS Sekil = NEW Sekil()
+s.merkez.x = 10
+s.merkez.y = 20
+s.Tasi(2)
+PRINT s.merkez.x
+PRINT s.merkez.y
+=====
+B6 nesne icinde dizi alani (beklenen 5 / 6)
+CLASS Hane
+    PUBLIC
+    DIM d(3) AS I32
+    METHOD Doldur()
+        DIM i AS I32
+        FOR i = 0 TO 3
+            d(i) = i + 5
+        NEXT
+    END METHOD
+END CLASS
+DIM h AS Hane = NEW Hane()
+h.Doldur()
+PRINT h.d(0)
+PRINT h.d(1)
+=====
+B7 nesne icinde nesne alani (beklenen 90 / 90)
+CLASS Motor
+    PUBLIC
+    DIM guc AS I32
+    CONSTRUCTOR(g AS I32)
+        guc = g
+    END CONSTRUCTOR
+END CLASS
+CLASS Araba
+    PUBLIC
+    DIM m AS Motor
+    CONSTRUCTOR(g AS I32)
+        m = NEW Motor(g)
+    END CONSTRUCTOR
+    METHOD Guc() AS I32
+        RETURN m.guc
+    END METHOD
+END CLASS
+DIM a AS Araba = NEW Araba(90)
+PRINT a.Guc()
+PRINT a.m.guc
+=====
+C1 TYPE icinde nesne alani (beklenen 90)
+CLASS Motor
+    PUBLIC
+    DIM guc AS I32
+    CONSTRUCTOR(g AS I32)
+        guc = g
+    END CONSTRUCTOR
+END CLASS
+TYPE Kayit
+    ad AS STRING
+    m AS Motor
+END TYPE
+DIM k AS Kayit
+k.ad = "x"
+k.m = NEW Motor(90)
+PRINT k.m.guc
+=====
+C2 LIST icinde TYPE kaydi (beklenen 3 / 4)
+TYPE Nok
+    x AS I32
+    y AS I32
+END TYPE
+DIM p AS Nok
+p.x = 3
+p.y = 4
+DIM l AS LIST
+LISTADD(l, p)
+DIM q AS Nok
+q = LISTGET(l, 0)
+PRINT q.x
+PRINT q.y
+=====
+C3 FUNCTION LIST dondurur (beklenen 4 / 16)
+FUNCTION Uret(n AS I32) AS LIST
+    DIM l AS LIST
+    DIM i AS I32
+    FOR i = 1 TO n
+        LISTADD(l, i * i)
+    NEXT
+    RETURN l
+END FUNCTION
+DIM sonuc AS LIST
+sonuc = Uret(4)
+PRINT LISTLEN(sonuc)
+PRINT LISTGET(sonuc, 3)
+=====
+C4 SUB LIST parametresi (beklenen 1)
+SUB Ekle3(l AS LIST)
+    LISTADD(l, 3)
+END SUB
+DIM x AS LIST
+Ekle3(x)
+PRINT LISTLEN(x)
+=====
+C5 FUNCTION nesne dondurur (beklenen 5)
+CLASS Nokta
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(ax AS I32)
+        x = ax
+    END CONSTRUCTOR
+END CLASS
+FUNCTION Yap(n AS I32) AS Nokta
+    RETURN NEW Nokta(n)
+END FUNCTION
+DIM p AS Nokta
+p = Yap(5)
+PRINT p.x
+=====
+D1 dizi icinde LIST (beklenen 1 / 2)
+DIM dz(2) AS LIST
+LISTADD(dz(0), 5)
+LISTADD(dz(1), 6)
+LISTADD(dz(1), 7)
+PRINT LISTLEN(dz(0))
+PRINT LISTLEN(dz(1))
+=====
+D2 SET icinde sayilar ve LIST (beklenen 2 / -1)
+DIM s AS SET
+SETADD(s, 4)
+SETADD(s, 4)
+SETADD(s, 9)
+PRINT SETLEN(s)
+PRINT SETHAS(s, 9)

@@ -1,0 +1,10 @@
+FUNCTION Oku(a AS I32[], i AS I32) AS I32
+    RETURN a(i)
+END FUNCTION
+FUNCTION Toplam(n AS I32) AS I32
+    DIM a(1 TO n) AS I32
+    a(n) = n
+    IF n > 1 THEN RETURN Toplam(n - 1) + Oku(a, n)
+    RETURN Oku(a, n)
+END FUNCTION
+PRINT Toplam(4)

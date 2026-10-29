@@ -1,0 +1,11 @@
+' S-605: a bare call of an INSTANCE method inside a STATIC method is a compile error on every engine.
+CLASS Say
+    PUBLIC
+    METHOD Dort() AS I32
+        RETURN 4
+    END METHOD
+    STATIC METHOD G() AS I32
+        RETURN Dort()
+    END METHOD
+END CLASS
+PRINT Say.G()

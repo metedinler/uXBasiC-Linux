@@ -1,0 +1,18 @@
+INCLUDE "include/modules/uxlogic.uxmh"
+
+DIM luaState AS U64
+PRINT "LOGIC_VERSION="; uxlogic.Version()
+PRINT "LUA_LOAD="; uxlogic.LuaLoad("lua54.dll")
+luaState = uxlogic.LuaNew()
+uxlogic.LuaSetNumber(luaState, "input_value", 21)
+PRINT "LUA_FILE="; uxlogic.LuaDoFile(luaState, "tests/logic_bridges/sample.lua")
+PRINT "LUA_ANSWER="; uxlogic.LuaGetNumber(luaState, "answer")
+PRINT "LUA_MESSAGE="; uxlogic.LuaGetString(luaState, "message")
+uxlogic.LuaClose(luaState)
+
+PRINT "TRIANGLE="; uxlogic.Triangle(5, 0, 5, 10)
+PRINT "FUZZY_AND="; uxlogic.FuzzyAnd(0.7, 0.4)
+PRINT "WEIGHTED="; uxlogic.Weighted(10, 1, 20, 3)
+
+PRINT "PROLOG_RUN="; uxlogic.PrologQuery("tests/logic_bridges/sample.pl", "print_ancestor,print_fuzzy")
+PRINT uxlogic.LastText()

@@ -1,0 +1,12 @@
+c_and_andalso | | PRINT 4 AND 2 ANDALSO 1
+e_andalso_and | | PRINT 2 ANDALSO 1 AND 4
+a_andalso_or | | PRINT 1 ANDALSO 0 OR 1
+c2_and_vv | | PRINT 4 AND 2 && 1
+e2_vv_and | | PRINT 2 && 1 AND 4
+a2_vv_or | | PRINT 1 && 0 OR 1
+g_or_orelse | | PRINT 8 OR 1 ORELSE 0
+h_orelse_or | | PRINT 0 ORELSE 1 OR 8
+i_vv_vvyok | | PRINT 0 || 1 && 0
+j_xor_andalso | | PRINT 6 XOR 3 ANDALSO 1
+k_amp_and | | PRINT 5 & 3 AND 1
+l_pipe_xor | | PRINT 1 | 6 ^ 3

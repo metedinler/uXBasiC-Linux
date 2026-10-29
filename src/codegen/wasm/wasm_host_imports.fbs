@@ -8,6 +8,11 @@ Public Function UXBWasmEmitHostImports() As String
     outText &= "  (import " & Chr(34) & "ux" & Chr(34) & " " & Chr(34) & "host_call16" & Chr(34) & " (func $uxb_host_call16 (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))" & Chr(10)
     outText &= "  (import " & Chr(34) & "ux" & Chr(34) & " " & Chr(34) & "print_i32" & Chr(34) & " (func $ux_print_i32 (param i32)))" & Chr(10)
     outText &= "  (import " & Chr(34) & "ux" & Chr(34) & " " & Chr(34) & "print_f64" & Chr(34) & " (func $ux_print_f64 (param f64)))" & Chr(10)
+    outText &= "  (import " & Chr(34) & "ux" & Chr(34) & " " & Chr(34) & "host_number4" & Chr(34) & " (func $uxb_host_number4 (param i32 f64 f64 f64 f64) (result f64)))" & Chr(10)
+    outText &= "  (import " & Chr(34) & "ux" & Chr(34) & " " & Chr(34) & "host_number16" & Chr(34) & " (func $uxb_host_number16 (param i32 f64 f64 f64 f64 f64 f64 f64 f64 f64 f64 f64 f64 f64 f64 f64 f64) (result f64)))" & Chr(10)
+    outText &= "  (import " & Chr(34) & "ux" & Chr(34) & " " & Chr(34) & "string_op" & Chr(34) & " (func $uxb_string_op (param i32 i32 i32) (result i32)))" & Chr(10)
+    outText &= "  (import " & Chr(34) & "ux" & Chr(34) & " " & Chr(34) & "print_string" & Chr(34) & " (func $uxb_print_string (param i32)))" & Chr(10)
+    outText &= "  (import " & Chr(34) & "ux" & Chr(34) & " " & Chr(34) & "print_f32" & Chr(34) & " (func $ux_print_f32 (param f32)))" & Chr(10)
     Return outText
 End Function
 

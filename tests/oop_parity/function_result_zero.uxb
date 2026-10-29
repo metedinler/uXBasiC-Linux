@@ -1,0 +1,51 @@
+' S-599 (2026-10-17): the result variable of a FUNCTION / METHOD starts as zero and is what a body that falls off its end returns:
+' a function that never assigned it (0), one that assigned it on one branch only (5 / 0), and `F = value` followed by other
+' statements (the value, not whatever the last statement left in a register).
+FUNCTION Bos() AS I32
+END FUNCTION
+FUNCTION Atanmaz(x AS I32) AS I32
+    DIM y AS I32
+    y = x + 1
+END FUNCTION
+FUNCTION TekDal(x AS I32) AS I32
+    IF x > 0 THEN
+        TekDal = 5
+    END IF
+END FUNCTION
+FUNCTION SonraDeyim(x AS I32) AS I32
+    SonraDeyim = 5
+    DIM y AS I32
+    y = 7
+    y = y + x
+END FUNCTION
+FUNCTION Dongu(x AS I32) AS I32
+    DIM i AS I32
+    DIM s AS I32
+    Dongu = x * 2
+    FOR i = 1 TO 3
+        s = s + i
+    NEXT
+END FUNCTION
+FUNCTION Donus(x AS I32) AS I32
+    IF x > 0 THEN
+        RETURN 9
+    END IF
+    Donus = 3
+END FUNCTION
+CLASS Kutu
+    PUBLIC
+    METHOD F(x AS I32) AS I32
+        DIM y AS I32
+        y = x
+    END METHOD
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+PRINT Bos()
+PRINT Atanmaz(3)
+PRINT TekDal(1)
+PRINT TekDal(0)
+PRINT SonraDeyim(1)
+PRINT Dongu(4)
+PRINT Donus(1)
+PRINT Donus(0)
+PRINT k.F(3)

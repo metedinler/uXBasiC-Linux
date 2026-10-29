@@ -55,9 +55,10 @@ End Function
 
 Private Function AstContract_GroupForNode(ByRef nodeName As String) As String
     Dim n As String = AstContract_U(nodeName)
+    If n = ASTK_CASE_RANGE_VALUE Then Return "CONTROL_FLOW"
     If n = ASTK_PROGRAM Then Return "PROGRAM_STRUCTURE"
     If n = ASTK_BLOCK Then Return "STATEMENT"
-    If n = ASTK_IF_STMT Or n = ASTK_ELSEIF_PART Or n = ASTK_ELSE_PART Or n = ASTK_SELECT_STMT Or n = ASTK_CASE_BLOCK Or n = ASTK_CASE_ELSE Or n = ASTK_CASE_IS_VALUE Or n = ASTK_FOR_STMT Or n = ASTK_FOR_EACH_STMT Or n = ASTK_EACH_ITEMS Or n = ASTK_EACH_BODY Or n = ASTK_DO_STMT Or n = ASTK_DO_EACH_STMT Or n = ASTK_EXIT_STMT Or n = ASTK_RETURN_STMT Or n = ASTK_GOTO_STMT Or n = ASTK_GOSUB_STMT Or n = ASTK_LABEL_STMT Or n = ASTK_END_STMT Then Return "CONTROL_FLOW"
+    If n = ASTK_IF_STMT Or n = ASTK_ELSEIF_PART Or n = ASTK_ELSE_PART Or n = ASTK_SELECT_STMT Or n = ASTK_CASE_BLOCK Or n = ASTK_CASE_ELSE Or n = ASTK_CASE_IS_VALUE Or n = ASTK_FOR_STMT Or n = ASTK_FOR_EACH_STMT Or n = ASTK_EACH_ITEMS Or n = ASTK_EACH_BODY Or n = ASTK_DO_STMT Or n = ASTK_DO_EACH_STMT Or n = ASTK_EXIT_STMT Or n = ASTK_CONTINUE_STMT Or n = ASTK_RETURN_STMT Or n = ASTK_GOTO_STMT Or n = ASTK_GOSUB_STMT Or n = ASTK_LABEL_STMT Or n = ASTK_END_STMT Then Return "CONTROL_FLOW"
     If n = ASTK_TRY_STMT Or n = ASTK_TRY_BODY Or n = ASTK_CATCH_PART Or n = ASTK_FINALLY_PART Or n = ASTK_THROW_STMT Or n = ASTK_ASSERT_STMT Then Return "ERROR_HANDLING"
     If n = ASTK_OPEN_STMT Or n = ASTK_MODE_REF Or n = ASTK_CLOSE_STMT Or n = ASTK_GET_STMT Or n = ASTK_PUT_STMT Or n = ASTK_SEEK_STMT Or n = ASTK_INPUT_STMT Or n = ASTK_INPUT_FILE_STMT Or n = ASTK_INPUTF_STMT Or n = ASTK_PROMPT_EXPR Or n = ASTK_LOCATE_STMT Or n = ASTK_COLOR_STMT Or n = ASTK_CLS_STMT Then Return "FILE_IO"
     If n = ASTK_POKEB_STMT Or n = ASTK_POKEW_STMT Or n = ASTK_POKED_STMT Or n = ASTK_POKEQ_STMT Or n = ASTK_POKES_STMT Or n = ASTK_MEMCOPYB_STMT Or n = ASTK_MEMCOPYW_STMT Or n = ASTK_MEMCOPYD_STMT Or n = ASTK_MEMCOPYQ_STMT Or n = ASTK_MEMFILLB_STMT Or n = ASTK_MEMFILLW_STMT Or n = ASTK_MEMFILLD_STMT Or n = ASTK_MEMFILLQ_STMT Or n = ASTK_SETNEWOFFSET_STMT Then Return "MEMORY"
@@ -171,6 +172,7 @@ Sub AstContract_Init()
     AstContract_RegisterKnown ASTK_CASE_BLOCK
     AstContract_RegisterKnown ASTK_CASE_ELSE
     AstContract_RegisterKnown ASTK_CASE_IS_VALUE
+    AstContract_RegisterKnown ASTK_CASE_RANGE_VALUE
     AstContract_RegisterKnown ASTK_CAST_EXPR
     AstContract_RegisterKnown ASTK_CATCH_PART
     AstContract_RegisterKnown ASTK_CLASS_ACCESS
@@ -202,6 +204,8 @@ Sub AstContract_Init()
     AstContract_RegisterKnown ASTK_DEFTYPE_STMT
     AstContract_RegisterKnown ASTK_DELETE_STMT
     AstContract_RegisterKnown ASTK_DIM_BOUNDS
+    AstContract_RegisterKnown ASTK_CLASS_ARRAY_SHAPE
+    AstContract_RegisterKnown ASTK_CLASS_ARRAY_RUNTIME
     AstContract_RegisterKnown ASTK_DIM_DECL
     AstContract_RegisterKnown ASTK_DIM_STMT
     AstContract_RegisterKnown ASTK_DO_EACH_STMT
@@ -216,6 +220,7 @@ Sub AstContract_Init()
     AstContract_RegisterKnown ASTK_ENUM_STMT
     AstContract_RegisterKnown ASTK_EVENT_STMT
     AstContract_RegisterKnown ASTK_EXIT_STMT
+    AstContract_RegisterKnown ASTK_CONTINUE_STMT
     AstContract_RegisterKnown ASTK_EXPR_STMT
     AstContract_RegisterKnown ASTK_FIELD_EXPR
     AstContract_RegisterKnown ASTK_FINALLY_PART

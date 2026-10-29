@@ -1,0 +1,11 @@
+DIM a AS STRING = "kept"
+DIM b AS STRING = a
+DIM s AS STRING = ""
+DIM i AS I32
+FOR i = 1 TO 600
+ s = s + "x"
+NEXT i
+PRINT LEN(s)
+PRINT LEFT(s, 3)
+PRINT b
+PRINT a

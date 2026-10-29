@@ -44,6 +44,11 @@ Private Function IsOctDigit(ByVal ch As String) As Integer
 End Function
 
 Private Function IsIdentStart(ByVal ch As String) As Integer
+    ' S-579: a byte >= &h80 belongs to a UTF-8 letter of a name. Which letters are allowed is decided once the whole word is read
+    ' (ReadIdentifier / LexerBadIdentChar: ç ğ ı ö ş ü and their capitals); everything else gets a diagnostic that names the character.
+    If ch <> "" Then
+        If Asc(ch) >= 128 Then Return 1
+    End If
     Return IsAlpha(ch) Or ch = "_"
 End Function
 

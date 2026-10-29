@@ -1,0 +1,9 @@
+DIM a(0 TO 1) AS I32
+DIM source AS I32 = 5
+FUNCTION Idx() AS I32
+    source = 9
+    RETURN 0
+END FUNCTION
+a(Idx()) = source + 1
+PRINT a(0)
+PRINT source

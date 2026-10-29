@@ -1,0 +1,31 @@
+' S-603 / S-604 (2026-10-17): STATIC methods called through the class name. Legacy AST-x64 did not build the call at all (the static
+' method got a hidden receiver slot it never receives), the MIR interpreter shifted every argument by one place (Say.Topla(3, 4) gave 3,
+' Say.Fark(20, 5, 3) gave -25) and the JS back end printed NaN for calls with arguments.
+CLASS Say
+    PUBLIC
+    STATIC METHOD Iki() AS I32
+        RETURN 2
+    END METHOD
+    STATIC METHOD Topla(a AS I32, b AS I32) AS I32
+        RETURN a + b
+    END METHOD
+    STATIC METHOD Fark(a AS I32, b AS I32, c AS I32) AS I32
+        RETURN a - b - c
+    END METHOD
+    METHOD Dort() AS I32
+        RETURN Say.Iki() * 2
+    END METHOD
+END CLASS
+CLASS Yardim
+    PUBLIC
+    STATIC METHOD Kare(n AS I32) AS I32
+        RETURN n * n
+    END METHOD
+END CLASS
+DIM x AS Say = NEW Say()
+PRINT x.Dort()
+PRINT Say.Iki()
+PRINT Say.Topla(3, 4)
+PRINT Say.Topla(Say.Iki(), 10)
+PRINT Say.Fark(20, 5, 3)
+PRINT Yardim.Kare(6)

@@ -1,0 +1,22 @@
+EVENT VeriGeldi
+    PRINT "EVENT_BODY"
+END EVENT
+
+THREAD SensorOku
+    PRINT "THREAD_BODY"
+END THREAD
+
+PIPE Donustur deger AS I32
+    RETURN deger
+END PIPE
+
+PARALEL SahaIzleme
+    PRINT "PARALEL_BODY"
+END PARALEL
+
+SLOT
+    Kaydet 5 ON EVENT VeriGeldi
+    Isci 6 ON THREAD SensorOku
+    Hat 7 OFF PIPE Donustur
+    Grup 8 ON PARALEL SahaIzleme
+END SLOT

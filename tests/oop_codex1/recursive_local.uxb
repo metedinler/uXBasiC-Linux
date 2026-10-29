@@ -1,0 +1,11 @@
+FUNCTION Fact(n AS I32) AS I32
+    DIM result AS I32
+    IF n <= 1 THEN
+        result = 1
+    ELSE
+        result = n * Fact(n - 1)
+    END IF
+    RETURN result
+END FUNCTION
+
+PRINT Fact(5)

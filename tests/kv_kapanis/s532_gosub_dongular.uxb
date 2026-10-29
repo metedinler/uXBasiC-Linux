@@ -1,0 +1,45 @@
+' S-532: dongu (FOR, DO WHILE, WHILE...WEND) ve IF icinden yapilan GOSUB, RETURN'den sonra GOSUB'un kaldigi yerden devam eder;
+' dongu bitmez. AST eskiden donusu GOSUB'u iceren EN UST DUZEY deyimin sonrasina koyuyor ve donguyu ilk turdan sonra bitiriyordu.
+DIM i AS I32
+DIM j AS I32
+DIM t AS I32
+t = 0
+FOR i = 1 TO 3
+    GOSUB Ekle
+NEXT
+PRINT t
+t = 0
+i = 1
+DO WHILE i <= 3
+    GOSUB Ekle
+    i = i + 1
+LOOP
+PRINT t
+t = 0
+i = 1
+WHILE i <= 3
+    GOSUB Ekle
+    i = i + 1
+WEND
+PRINT t
+t = 0
+FOR i = 1 TO 4
+    IF i MOD 2 = 0 THEN GOSUB Ekle
+NEXT
+PRINT t
+t = 0
+FOR i = 1 TO 3
+    GOSUB IkiTur
+NEXT
+PRINT t
+END
+
+Ekle:
+t = t + i
+RETURN
+
+IkiTur:
+FOR j = 1 TO 2
+    t = t + 1
+NEXT
+RETURN

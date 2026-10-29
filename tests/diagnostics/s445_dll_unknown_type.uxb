@@ -1,0 +1,3 @@
+DIM result AS I32
+result = CALL(DLL, "ucrtbase.dll", "abs", I32, CDECL, "BILINMEZ", -5)
+PRINT result

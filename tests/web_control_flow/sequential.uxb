@@ -1,0 +1,8 @@
+DIM x AS I32 = 1
+GOSUB Dbl
+GOSUB Dbl
+PRINT x
+END
+Dbl:
+x = x * 2
+RETURN

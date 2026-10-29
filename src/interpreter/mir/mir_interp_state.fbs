@@ -24,6 +24,11 @@ Type UXBMIRInterpVar
     pinWidth As Integer = 0
     pinType As String
     pinCell(0 To 15) As UByte
+    ' S-442: a UNION value owns one raw overlay cell. Keeping it on the
+    ' variable (rather than in a single interpreter-global scratch cell) makes
+    ' two UNION variables independent while preserving the canonical MIR ABI.
+    recordCellBytes As Integer = 0
+    recordCell(0 To 255) As UByte
     ' S-167: BYREF parametre cagiranin deposunun takma adidir (kopya degil). Sifir degilse bu
     ' hucre yalniz bir ad tasir; tum okuma/yazmalar hedef hucreye gider (UXBMIRInterpFindVar /
     ' UXBMIRInterpSetVar). Hedef daima daha dis bir kapsamdadir, bu hucreden once silinmez.
@@ -45,7 +50,20 @@ End Type
 ' through VARPTR need (the locked "one real backing storage" model) -- no
 ' mirror copy required. The destructor releases whatever is still alive when
 ' the interpreter run ends.
+#include once "../../common/uxb_stackdepth.fbs"
+
+' S-543: kullanici rutin cagri derinligi ust siniri (AST ile ayni deger). Gercek sinir UXBMirCallDepthLimit(): yigin
+' boyutundan hesaplanir. Asilinca "MIR: call stack limit exceeded". Onceden sayac yoktu: derinlik ~50'yi asan
+' ozyineleme iletisiz erisim ihlaliydi (MIR bir seviyede ~20-26 KB yigin tuketir).
+Const UXB_MIR_MAX_CALL_DEPTH As Integer = 1000
+Const UXB_MIR_BYTES_PER_CALL_LEVEL As Integer = 28672
+
+Function UXBMirCallDepthLimit() As Integer
+    Return UXBStackSafeCallDepth(UXB_MIR_BYTES_PER_CALL_LEVEL, UXB_MIR_MAX_CALL_DEPTH)
+End Function
+
 Type UXBMIRInterpState
+    invokeDepth As Integer = 0
     libraryHeap As UXBInterpHeap Ptr = 0
     vars(Any) As UXBMIRInterpVar Ptr
     varCount As Integer = 0
@@ -60,6 +78,7 @@ Type UXBMIRInterpState
     returnRequested As Integer
     returnValue As UXBInterpValue
     currentScopeDepth As Integer
+    visibleRoutineScope As Integer
     shellNowait As Integer
     shellTimeoutMs As Integer
     shellRunPath As String

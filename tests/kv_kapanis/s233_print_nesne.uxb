@@ -1,0 +1,16 @@
+' S-233: MAGIC TOSTRING'li bir sinif ornegini dogrudan yazdirmak PRINT STR(nesne) ile ayni sonucu verir (eskiden AST 0,
+' MIR OBJECT#0, native / eski AST-x64 adres, JS [object Object] yaziyordu).
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    MAGIC TOSTRING() AS STRING
+        RETURN "K" + STR(v)
+    END MAGIC
+END CLASS
+DIM x AS Kutu = NEW Kutu(7)
+PRINT x
+PRINT "n="; x
+PRINT STR(x)

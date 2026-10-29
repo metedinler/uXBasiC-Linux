@@ -1,0 +1,21 @@
+' S-599 / S-618 (2026-10-17): inside a FUNCTION whose name is also its result variable, `F(x)` is a RECURSIVE CALL and `F = value` stores the result.
+' The legacy AST-x64 result slot (S-599) was first found by the array-indexing path and `F(d - 1)` read garbage; the reference binary 20261014_0253 gave
+' 0 and 140702737836722 for the last two functions because `F = value` followed by other code returned a stray register.
+FUNCTION Rec(d AS I32) AS I32
+    IF d > 0 THEN RETURN Rec(d - 1)
+    RETURN 7
+END FUNCTION
+FUNCTION Fakt(n AS I32) AS I32
+    IF n <= 1 THEN
+        Fakt = 1
+    ELSE
+        Fakt = n * Fakt(n - 1)
+    END IF
+END FUNCTION
+FUNCTION Topla(n AS I32) AS I32
+    Topla = 0
+    IF n > 0 THEN Topla = n + Topla(n - 1)
+END FUNCTION
+PRINT Rec(3)
+PRINT Fakt(5)
+PRINT Topla(4)

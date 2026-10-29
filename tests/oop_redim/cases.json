@@ -1,0 +1,59 @@
+{
+  "global_sub": {
+    "output": "19\n-1\n2\n72"
+  },
+  "global_reset": {
+    "output": "-1\n-1\n4\n0\n48\n41"
+  },
+  "dynamic2d": {
+    "output": "17\n1\n3\n80\n-1\n29\n-2\n2\n144"
+  },
+  "preserve2d": {
+    "output": "42\n-1\n200\n42\n8\n-1\n42"
+  },
+  "preserve3d": {
+    "output": "73\n-1\n288\n-1\n5"
+  },
+  "local_recursive": {
+    "output": "60"
+  },
+  "parameter_shape": {
+    "output": "0\n2\n16\n8\n-1\n3\n96\n8"
+  },
+  "eval_once": {
+    "output": "2\n12\n4\n31\n31\n12"
+  },
+  "neg_axis": {
+    "error": "array index out of bounds"
+  },
+  "neg_bounds": {
+    "error": "invalid bounds"
+  },
+  "neg_overflow": {
+    "error": "class array byte size overflow"
+  },
+  "neg_rank": {
+    "error": "REDIM rank must match DIM"
+  },
+  "parameter_resize": {
+    "output": "8\n47\n8\n96"
+  },
+  "call_forward": {
+    "output": "8"
+  },
+  "shadow": {
+    "output": "33\n7\n32"
+  },
+  "numeric_widen": {
+    "output": "-7\n42\n42.25\n3.75"
+  },
+  "declare_forward": {
+    "output": "58"
+  },
+  "neg_parameter_rank": {
+    "error": "REDIM rank must match DIM"
+  },
+  "neg_element_type": {
+    "error": "REDIM element type must match DIM"
+  }
+}

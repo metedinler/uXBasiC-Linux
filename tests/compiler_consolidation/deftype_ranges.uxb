@@ -1,0 +1,5 @@
+DEFINT A-Z
+a = 7
+zebra = 9
+PRINT a + 5
+PRINT zebra

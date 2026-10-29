@@ -1,0 +1,121 @@
+THEN yok
+DIM a AS I32 = 1
+IF a > 0 PRINT "pozitif"
+=====
+dogruluk sifirdan farkli
+DIM a AS I32 = 5
+DIM b AS I32 = -1
+DIM c AS I32 = 0
+IF a THEN PRINT "a dogru"
+IF b THEN PRINT "b dogru"
+IF c THEN PRINT "c dogru" ELSE PRINT "c yanlis"
+=====
+dogruluk ondalik
+DIM f AS F64 = 0.5
+IF f THEN PRINT "f dogru" ELSE PRINT "f yanlis"
+=====
+CASE aralik listesi
+DIM n AS I32 = 8
+SELECT CASE n
+    CASE 1 TO 3, 7 TO 9
+        PRINT "listede"
+    CASE ELSE
+        PRINT "disinda"
+END SELECT
+=====
+CASE ondalik secici
+DIM f AS F64 = 2.5
+SELECT CASE f
+    CASE 2.5
+        PRINT "iki bucuk"
+    CASE ELSE
+        PRINT "baska"
+END SELECT
+=====
+CASE ilk eslesen
+DIM n AS I32 = 3
+SELECT CASE n
+    CASE 1 TO 5
+        PRINT "ilk"
+    CASE 3
+        PRINT "ikinci"
+END SELECT
+=====
+FOR baslangic buyuk adim pozitif
+FOR i = 5 TO 1
+    PRINT i
+NEXT
+PRINT "bitti"
+=====
+FOR negatif adim
+DIM i AS I32
+FOR i = 9 TO 1 STEP -4
+    PRINT i
+NEXT
+=====
+EXIT WHILE
+DIM i AS I32 = 0
+WHILE i < 10
+    i = i + 1
+    IF i = 3 THEN EXIT WHILE
+WEND
+PRINT i
+=====
+CONTINUE WHILE
+DIM i AS I32 = 0
+WHILE i < 5
+    i = i + 1
+    IF i = 2 THEN CONTINUE
+    PRINT i
+WEND
+=====
+CONTINUE DO
+DIM i AS I32 = 0
+DO WHILE i < 5
+    i = i + 1
+    IF i = 2 THEN CONTINUE
+    PRINT i
+LOOP
+=====
+ON GOTO
+DIM n AS I32 = 2
+ON n GOTO a, b
+a:
+PRINT "a"
+b:
+PRINT "b"
+=====
+blok yorum
+/' bu bir
+yorum '/
+PRINT "tamam"
+=====
+END yordam icinden
+SUB Bitir()
+    PRINT "bitiriyorum"
+    END
+END SUB
+PRINT "once"
+Bitir()
+PRINT "sonra"
+=====
+FOR EACH sira numarali
+DIM d(2) AS I32
+d(0) = 10
+d(1) = 20
+d(2) = 30
+DIM v AS I32
+DIM i AS I32
+FOR EACH v, i IN d
+    PRINT i; ":"; v
+NEXT
+=====
+FOR EACH DICT anahtar
+DIM s AS DICT
+s = DICT_NEW()
+DICTSET(s, "a", 1)
+DICTSET(s, "b", 2)
+DIM k AS STRING
+FOR EACH k IN s
+    PRINT k
+NEXT

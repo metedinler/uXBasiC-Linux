@@ -1,0 +1,12 @@
+DIM a AS U8 = U8(255)
+DIM old AS I32 = a++
+PRINT old
+PRINT a
+PRINT ++a
+DIM b AS I8 = I8(127)
+DIM after AS I32 = ++b
+PRINT after
+PRINT b
+DIM u AS U64 = U64(0)
+DIM v AS U64 = --u
+PRINT v

@@ -1,0 +1,2 @@
+DIM a AS INTEGER
+IF a = 0 THEN PRINT "target"

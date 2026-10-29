@@ -1,0 +1,115 @@
+=== metin_makro_parantez
+%%DEFINE SELAM ("merhaba dunya")
+PRINT SELAM
+=== metin_makro_cift_tirnak
+%%DEFINE SELAM """merhaba"""
+PRINT SELAM
+=== metin_makro_birlesik
+%%DEFINE SELAM "merhaba" + " dunya"
+PRINT SELAM
+=== ifc_metin
+%%DEFINE HEDEF web
+%%IFC HEDEF, WEB
+PRINT "web"
+%%ELSE
+PRINT "baska"
+%%ENDIF
+=== if_esit_metin
+%%DEFINE MOD_ADI hizli
+%%IF MOD_ADI == HIZLI
+PRINT "hizli mod"
+%%ENDIF
+=== if_esit_sayi
+%%DEFINE N 3
+%%IF N == 3
+PRINT "uc"
+%%ENDIF
+=== if_degil_esit
+%%DEFINE N 3
+%%IF N != 4
+PRINT "dort degil"
+%%ENDIF
+=== if_tanimsiz
+%%IF YOKTUR
+PRINT "var"
+%%ELSE
+PRINT "yok"
+%%ENDIF
+=== if_sifir
+%%DEFINE DEBUG 0
+%%IF DEBUG
+PRINT "debug"
+%%ELSE
+PRINT "surum"
+%%ENDIF
+=== if_mantik_ve
+%%DEFINE A 1
+%%DEFINE B 1
+%%IF A AND B
+PRINT "ikisi"
+%%ELSE
+PRINT "degil"
+%%ENDIF
+=== if_not
+%%DEFINE A 0
+%%IF NOT A
+PRINT "a yok"
+%%ELSE
+PRINT "a var"
+%%ENDIF
+=== ifn_makro_sayi
+%%DEFINE GEN 800
+%%IFN GEN >= 640
+PRINT "genis"
+%%ELSE
+PRINT "dar"
+%%ENDIF
+=== ifn_iki_makro
+%%DEFINE A 5
+%%DEFINE B 7
+%%IFN A < B
+PRINT "a kucuk"
+%%ENDIF
+=== elif_metin
+%%DEFINE T web
+%%IF T == js
+PRINT "js"
+%%ELIF T == web
+PRINT "web"
+%%ELSE
+PRINT "x"
+%%ENDIF
+=== eval_makro_kopya
+%%DEFINE A 4
+%%EVAL B = A
+PRINT B
+=== eval_toplam
+%%EVAL B = 2 + 3
+PRINT B
+=== set_boslukla
+%%SET TITLE Demo Uygulama
+PRINT TITLE
+=== macro_arg_sayisi
+%%MACRO IKI(X) X + X
+PRINT IKI(1, 2)
+=== macro_arg_yok
+%%MACRO IKI(X) X + X
+PRINT IKI()
+=== macro_parantez_ici_virgul
+%%MACRO ILK(A, B) A
+PRINT ILK(MAX(1, 2), 5)
+---
+=== macro_isim_oneki
+%%DEFINE N 5
+PRINT NN
+PRINT N1
+PRINT N
+=== define_ust_uste
+%%DEFINE N 5
+%%DEFINE N 6
+PRINT N
+=== target_makro
+%%TARGET WEB
+%%IF TARGET == WEB
+PRINT "web hedef"
+%%ENDIF

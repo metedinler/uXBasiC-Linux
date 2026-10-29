@@ -1,0 +1,14 @@
+MAIN
+    DIM s AS SINGLE
+    DIM d AS DOUBLE
+    s = 12
+    s =+ 3
+    PRINT CINT(s)
+    s =- 4
+    PRINT CINT(s)
+    d = 12
+    d =+ 3
+    PRINT CINT(d)
+    d =- 4
+    PRINT CINT(d)
+END MAIN

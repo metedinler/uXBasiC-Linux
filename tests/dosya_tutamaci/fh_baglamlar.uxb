@@ -1,0 +1,26 @@
+' S-549: the rewrite works in every statement context: one-line IF, FOR body, CLOSE list, SELECT CASE.
+DIM f AS FILE_HANDLE
+DIM g AS FILE_HANDLE
+DIM i AS I32
+DIM acik AS I32
+acik = 1
+IF acik = 1 THEN OPEN "fh_b1.txt" FOR OUTPUT AS f
+PRINT f
+IF acik = 1 THEN CLOSE f
+PRINT f
+FOR i = 1 TO 3
+    OPEN "fh_b2.txt" FOR OUTPUT AS g
+    PRINT g
+    CLOSE g
+NEXT
+OPEN "fh_b3.txt" FOR OUTPUT AS f
+OPEN "fh_b4.txt" FOR OUTPUT AS g
+PRINT f; g
+CLOSE f, g
+PRINT f; g; FREEFILE
+SELECT CASE acik
+CASE 1
+    OPEN "fh_b5.txt" FOR OUTPUT AS f
+    PRINT f
+    CLOSE f
+END SELECT

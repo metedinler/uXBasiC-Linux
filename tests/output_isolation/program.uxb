@@ -1,0 +1,2 @@
+INCLUDE "constant.uxbh"
+PRINT "etiket="; VALUE

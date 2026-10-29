@@ -1,0 +1,19 @@
+FUNCTION MakeText() AS STRING
+    RETURN "A" + CHR(0) + "B"
+END FUNCTION
+FUNCTION EmptyText() AS STRING
+    DIM scratch AS STRING
+    DIM i AS I32
+    FOR i = 1 TO 128
+        scratch = STR(i) + "-temporary"
+    NEXT
+    RETURN ""
+END FUNCTION
+FUNCTION Mixed(a AS STRING, b AS F32, c AS STRING, d AS I64, e AS STRING, f AS F64) AS F64
+    PRINT LEN(a)
+    PRINT LEN(c)
+    PRINT ASC(MID(c, 2, 1))
+    PRINT LEN(e)
+    RETURN b + f + d
+END FUNCTION
+PRINT Mixed("one", 1.5, MakeText(), 9, EmptyText(), 2.25)

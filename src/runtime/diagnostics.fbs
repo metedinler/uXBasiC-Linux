@@ -1,4 +1,5 @@
 #include once "../common/error_system_adim45.fbs"
+#include once "../common/ident_names.fbs"
 
 Type DiagState
     initialized As Integer
@@ -24,8 +25,9 @@ Private Sub AppendLineToFile(ByRef pPath As String, ByRef pLine As String)
     On Error GoTo 0
     Exit Sub
 _apx_err:
+    Dim fileError As Integer = Err
     On Error GoTo 0
-    Exit Sub
+    UXBErrorLogWriteFailure45 pPath, fileError
 End Sub
 
 Private Function DirNameFromPath(ByRef p As String) As String
@@ -96,12 +98,12 @@ Private Sub UxbInit()
     ' CLI calls this before resolving its output contract. Defer file I/O until
     ' UxbConfigure supplies the actual path; console diagnostics remain usable.
     If Trim(gDiag.logPath) = "" Then Exit Sub
+    On Error GoTo _uerr
     EnsureLogDir(gDiag.logPath)
     EnsureLogDir(gDiag.debugLogPath)
 
     Dim f As Integer
     f = FreeFile
-    On Error GoTo _uerr
     Open gDiag.logPath For Append As #f
     Print #f, "---- oturum basladi " & Date$ & " " & Time$ & " ----"
     Close #f
@@ -109,8 +111,9 @@ Private Sub UxbInit()
     gDiag.initialized = 1
     Exit Sub
 _uerr:
+    Dim fileError As Integer = Err
     On Error GoTo 0
-    Exit Sub
+    UXBErrorLogWriteFailure45 gDiag.logPath, fileError
 End Sub
 
 Private Sub UxbConfigure(ByRef logPath As String, ByRef debugLogPath As String, ByVal quiet As Integer, ByVal debugOn As Integer, ByVal traceOn As Integer, ByVal debugToken As Integer, ByRef sourceBaseName As String)
@@ -125,7 +128,9 @@ Private Sub UxbConfigure(ByRef logPath As String, ByRef debugLogPath As String, 
     UxbInit
 End Sub
 
-Private Sub UxbInfo(ByRef msgText As String)
+Private Sub UxbInfo(ByRef msgTextRaw As String)
+    Dim msgText As String
+    msgText = UxbIdentDisplayText(msgTextRaw) ' S-579: names with Turkish letters are shown as written
     Dim outLine As String
     outLine = "INFO: " & msgText
     AppendLineToFile gDiag.logPath, outLine
@@ -133,20 +138,34 @@ Private Sub UxbInfo(ByRef msgText As String)
     If gDiag.quietMode = 0 Then Print outLine
 End Sub
 
-Private Sub UxbWarn(ByRef msgText As String)
+Private Sub UxbWarn(ByRef msgTextRaw As String)
+    Dim msgText As String
+    msgText = UxbIdentDisplayText(msgTextRaw)
     Dim outLine As String
     outLine = "WARN: " & msgText
     AppendLineToFile gDiag.logPath, outLine
     UXBErrorEmitInferred45 "WARN", msgText, "runtime/diagnostics.fbs", "api=UxbWarn"
-    If gDiag.quietMode = 0 Then Print outLine
+    If gUXBError45.terminalFormat = "json" Then
+        Print UXBErrorLegacyJson45("warning", msgText)
+    ElseIf gDiag.quietMode = 0 Then
+        Print outLine
+    End If
 End Sub
 
-Private Sub UxbError(ByRef msgText As String)
+Private Sub UxbError(ByRef msgTextRaw As String, ByVal writeArtifacts As Integer = 1)
+    Dim msgText As String
+    msgText = UxbIdentDisplayText(msgTextRaw)
     Dim outLine As String
     outLine = "ERROR: " & msgText
-    AppendLineToFile gDiag.logPath, outLine
-    UXBErrorEmitLegacy45 msgText, "runtime/diagnostics.fbs", "api=UxbError"
-    Print outLine
+    If writeArtifacts <> 0 Then
+        AppendLineToFile gDiag.logPath, outLine
+        UXBErrorEmitLegacy45 msgText, "runtime/diagnostics.fbs", "api=UxbError"
+    End If
+    If gUXBError45.terminalFormat = "json" Then
+        Print UXBErrorLegacyJson45("error", msgText)
+    Else
+        Print outLine
+    End If
 End Sub
 
 Private Sub UxbDebug(ByRef msgText As String)
@@ -179,11 +198,7 @@ Private Sub DiagBilgi(ByRef msgText As String)
 End Sub
 
 Private Sub DiagHata(ByRef msgText As String)
-    Dim outLine As String
-    outLine = "HATA: " & msgText
-    AppendLineToFile gDiag.logPath, outLine
-    UXBErrorEmitLegacy45 msgText, "runtime/diagnostics.fbs", "api=DiagHata"
-    Print outLine
+    UxbError msgText
 End Sub
 
 Private Sub DiagUyari(ByRef msgText As String)

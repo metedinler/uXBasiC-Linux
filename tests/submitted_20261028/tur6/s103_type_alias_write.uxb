@@ -1,0 +1,12 @@
+TYPE Pair
+    x AS I32
+    y AS I32
+END TYPE
+DECLARE SUB UpdatePair(a AS Pair[])
+SUB UpdatePair(a AS Pair[])
+    a(1).y = 23
+END SUB
+DIM cells(0 TO 2) AS Pair
+UpdatePair(cells)
+PRINT cells(1).y
+' EXPECT: 23 (write in callee observable in caller)

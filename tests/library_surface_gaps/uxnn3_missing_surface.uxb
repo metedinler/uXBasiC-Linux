@@ -1,0 +1,25 @@
+INCLUDE "include/modules/uxnn3.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxnn3.EvalBinaryAccuracy(0, 0, 0.0)
+        PRINT uxnn3.EvalMSE(0, 0)
+        PRINT uxnn3.LastError()
+        PRINT uxnn3.Load("")
+        PRINT uxnn3.MinMax(0, 0.0, 0.0)
+        PRINT uxnn3.PredictArgMax(0, 0, 0)
+        PRINT uxnn3.Rows(0)
+        PRINT uxnn3.Save(0, "")
+        PRINT uxnn3.SaveCSV(0, "", 0)
+        PRINT uxnn3.Shuffle(0, 0)
+        PRINT uxnn3.SplitTest(0, 0.0, 0)
+        PRINT uxnn3.SplitTrain(0, 0.0, 0)
+        PRINT uxnn3.Standardize(0)
+        PRINT uxnn3.TrainDataset(0, 0, 0, 0, 0, 0)
+        PRINT uxnn3.XGet(0, 0, 0)
+        PRINT uxnn3.XPtr(0)
+        PRINT uxnn3.YGet(0, 0, 0)
+        PRINT uxnn3.YPtr(0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXNN3"
+END MAIN

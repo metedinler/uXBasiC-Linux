@@ -1,0 +1,12 @@
+test_id,polarity,source,chain,native_only,notes
+CORE_FLOW,positive,tests/adim30_10step/positive/01_core_flow.bas,ALL,NO,Core control flow + functions
+TYPE_CLASS_LAYOUT,positive,tests/adim30_10step/positive/02_type_class_layout.bas,"LEX,PAR,AST,SEM,MIR,VERIFY,X64",NO,TYPE/CLASS layout and methods
+EVENT_PIPE_MEMORY,positive,tests/adim30_10step/positive/03_event_pipe_memory.bas,"LEX,PAR,AST,SEM,MIR,VERIFY,INTERP,X64",NO,Event/thread/pipe/memory surface
+FILE_STRING_RUNTIME,positive,tests/adim30_10step/positive/04_file_string_runtime.bas,"LEX,PAR,AST,SEM,MIR,VERIFY,INTERP",NO,Runtime/file/string/math
+GUI_WINAPI_NATIVE,positive,tests/adim30_10step/positive/05_ffi_winapi_gui_native.bas,"LEX,PAR,AST,SEM,MIR,VERIFY,X64,NATIVE_ONLY_WEB_NEG",YES,Windows GUI through user32.dll API
+SCIENCE_DLL_ROUTES,positive,tests/adim30_10step/positive/06_science_dll_routes.bas,"LEX,PAR,AST,SEM,MIR,VERIFY,X64,NATIVE_ONLY_WEB_NEG",YES,Scientific library DLL route
+BROWSER_META,positive,tests/adim30_10step/positive/07_browser_meta_artifacts.uxb,"LEX,PAR,AST,SEM,MIR,VERIFY,JS,WAT,BROWSER",NO,Meta/browser artifact directives
+BROWSER_CANVAS_PROGRAM,positive,tests/adim30_10step/positive/08_browser_canvas_program.bas,ALL_WEB,NO,Browser-friendly program
+NEG_BAD_SYNTAX,negative,tests/adim30_10step/negative/90_bad_syntax_missing_end.bas,NEG_PARSER,NO,Parser failure expected
+NEG_NATIVE_JS,negative,tests/adim30_10step/negative/91_native_only_on_js.bas,NEG_NATIVE_JS,YES,Native-only diagnostic expected
+NEG_INCLUDE_CYCLE,negative,tests/adim30_10step/negative/92_include_cycle_a.uxb,NEG_LEXER,NO,Include cycle expected

@@ -1,0 +1,21 @@
+INCLUDE "include/modules/uxhttp.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxhttp.AddHeader(0, "")
+        uxhttp.Close(0)
+        PRINT uxhttp.ErrorText(0)
+        PRINT uxhttp.FollowRedirects(0, 0)
+        PRINT uxhttp.Open()
+        PRINT uxhttp.Perform(0)
+        PRINT uxhttp.ResponseSize(0)
+        PRINT uxhttp.ResponseText(0)
+        PRINT uxhttp.SaveResponse(0, "")
+        PRINT uxhttp.SetBody(0, "")
+        PRINT uxhttp.SetMethod(0, "")
+        PRINT uxhttp.SetTimeout(0, 0)
+        PRINT uxhttp.SetUrl(0, "")
+        PRINT uxhttp.Status(0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXHTTP"
+END MAIN

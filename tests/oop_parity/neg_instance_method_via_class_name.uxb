@@ -1,0 +1,9 @@
+' S-606 (2026-10-17): `Say.Dort()` names an INSTANCE method through its class. The AST interpreter ran it (printed 4 with no object); MIR,
+' native x64, JS, WASM and legacy AST-x64 refused it. Every engine now stops at compile time with the same message.
+CLASS Say
+    PUBLIC
+    METHOD Dort() AS I32
+        RETURN 4
+    END METHOD
+END CLASS
+PRINT Say.Dort()

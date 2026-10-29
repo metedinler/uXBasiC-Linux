@@ -151,6 +151,11 @@ Function TypeBindingCreate(ByRef typeKind As String, ByRef typeName As String) A
         tb.sizeBytes = 4
         tb.alignBytes = 4
         tb.isSigned = IIf(k = "I32", 1, 0)
+    Case "ENUM"
+        tb.sizeBytes = 4
+        tb.alignBytes = 4
+        tb.isSigned = 1
+        tb.elemTypeName = "I32"
     Case "I64", "U64"
         tb.sizeBytes = 8
         tb.alignBytes = 8
@@ -300,6 +305,7 @@ Function TypeBindingResolve(ByRef typeName As String, ByRef errText As String) A
     Dim libIdx As Integer
     libIdx = UXBLibraryTypeRegistryFind(userName)
     If libIdx <> -1 Then
+        UXBLibraryTypeMarkUsed userName
         userIdx = TypeBindingAdd()
         gTypeBindings(userIdx) = TypeBindingCreate("TYPE", userName)
         gTypeBindings(userIdx).sizeBytes = gUXBLibraryTypes(libIdx).sizeBytes

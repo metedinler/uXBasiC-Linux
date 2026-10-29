@@ -1,0 +1,19 @@
+CLASS Cell
+ PUBLIC
+ value AS I32
+END CLASS
+DIM a(-1 TO 0, 2 TO 3) AS Cell
+SUB ResetGrid()
+ REDIM a(4 TO 5, -2 TO 0) AS Cell
+END SUB
+a(-1,2) = NEW Cell()
+a(-1,2).value = 41
+DIM saved AS Cell = a(-1,2)
+CALL ResetGrid()
+PRINT a(4,-2) = NULL
+PRINT a(5,0) = NULL
+PRINT LBOUND(a,1)
+PRINT UBOUND(a,2)
+PRINT SIZEOF(a)
+PRINT saved.value
+DELETE saved

@@ -1,0 +1,13 @@
+' S-576: a bare call of a VIRTUAL method (= ME.m()) in a constructor is a compile error on every engine (the object is half built).
+CLASS Taban
+    PUBLIC
+    DIM v AS I32
+    VIRTUAL METHOD Deger() AS I32
+        RETURN 1
+    END METHOD
+    CONSTRUCTOR()
+        v = Deger()
+    END CONSTRUCTOR
+END CLASS
+DIM x AS Taban = NEW Taban()
+PRINT x.v

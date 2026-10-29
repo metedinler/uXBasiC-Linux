@@ -1,0 +1,17 @@
+DIM a AS I32 = 3
+DIM b AS I32 = 4
+PRINT a = b
+PRINT a <> b
+PRINT a < b
+PRINT a <= b
+PRINT a > b
+PRINT a >= b
+PRINT NOT a
+PRINT NOT (a = b)
+PRINT NOT (a < b)
+DIM x AS U32 = 4294967295
+DIM y AS U32 = 1
+PRINT x > y
+PRINT x < y
+PRINT x >= y
+PRINT x <= y

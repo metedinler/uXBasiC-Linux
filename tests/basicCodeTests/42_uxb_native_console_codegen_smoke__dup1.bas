@@ -1,0 +1,12 @@
+DEFINT A-Z
+SETSTRINGSIZE 64
+CLS
+COLOR 14, 1
+LOCATE 1, 1
+x = 10
+INC x
+DEC x
+PRINT "native console smoke"
+PRINT LEN("abc")
+PRINT TIMER("ms")
+

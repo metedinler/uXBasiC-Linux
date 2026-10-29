@@ -1,0 +1,62 @@
+bos nesne metot
+CLASS K
+    PUBLIC
+    DIM v AS I32
+    METHOD Don() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+DIM o AS K
+PRINT "once"
+PRINT o.Don()
+PRINT "sonra"
+=====
+bos nesne alan okuma
+CLASS K
+    PUBLIC
+    DIM v AS I32
+    METHOD Don() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+DIM o AS K
+PRINT "once"
+PRINT o.v
+PRINT "sonra"
+=====
+bos nesne alan yazma
+CLASS K
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM o AS K
+PRINT "once"
+o.v = 5
+PRINT "sonra"
+=====
+DELETE sonrasi kullanim
+CLASS K
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM o AS K = NEW K()
+o.v = 3
+DELETE o
+PRINT "once"
+PRINT o.v
+PRINT "sonra"
+=====
+dosya yok sonra EOF
+PRINT "once"
+OPEN "yok_dosya_xyz.txt" FOR INPUT AS #1
+PRINT "acildi"
+PRINT EOF(1)
+CLOSE #1
+PRINT "sonra"
+=====
+dosya yok yazma dizini
+PRINT "once"
+OPEN "Z:\yok_klasor\x.txt" FOR OUTPUT AS #1
+PRINT #1, "a"
+CLOSE #1
+PRINT "sonra"

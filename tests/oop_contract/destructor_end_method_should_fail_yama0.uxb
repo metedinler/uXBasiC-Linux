@@ -1,0 +1,5 @@
+CLASS BadDtor
+    DESTRUCTOR()
+        PRINT "bad"
+    END METHOD
+END CLASS

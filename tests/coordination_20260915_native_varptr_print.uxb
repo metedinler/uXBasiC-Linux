@@ -1,0 +1,3 @@
+DIM X AS I64
+X = 0
+PRINT VARPTR(X)

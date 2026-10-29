@@ -1,0 +1,6 @@
+AST=declares no CONSTRUCTOR of its own
+MIR=declares no CONSTRUCTOR of its own
+x64=declares no CONSTRUCTOR of its own
+AST-x64=declares no CONSTRUCTOR of its own
+JS=declares no CONSTRUCTOR of its own
+WASM=declares no CONSTRUCTOR of its own

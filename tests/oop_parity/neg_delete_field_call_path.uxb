@@ -1,0 +1,17 @@
+CLASS Ic
+    PUBLIC
+    DIM n AS I32
+    DESTRUCTOR()
+        PRINT 5
+    END DESTRUCTOR
+END CLASS
+CLASS Kap
+    PUBLIC
+    DIM ic AS Ic
+    DIM n AS I32
+END CLASS
+FUNCTION Hazir() AS Kap
+    RETURN NEW Kap()
+END FUNCTION
+' S-615: the path of a DELETEd field is evaluated twice, so a call in it is refused (copy the owner into a variable first).
+DELETE Hazir().ic

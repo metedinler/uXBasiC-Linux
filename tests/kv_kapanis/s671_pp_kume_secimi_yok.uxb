@@ -1,0 +1,3 @@
+' S-671: Tek ortak onislemci var; %%PP A / %%PP B diye bir yonerge yoktur, bilinmeyen yonerge olarak reddedilir.
+%%PP A
+PRINT 1

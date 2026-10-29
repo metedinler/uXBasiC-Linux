@@ -1,0 +1,7 @@
+' S-248: GOTO ile geriye atlama (JS'te sonsuz dongu uretiyordu).
+DIM n AS I32 = 0
+etiket:
+PRINT "bas"
+n = n + 1
+IF n < 2 THEN GOTO etiket
+PRINT "son"

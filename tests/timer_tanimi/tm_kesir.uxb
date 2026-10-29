@@ -1,0 +1,13 @@
+' S-624: TIMER kesirlidir (tam saniyeye yuvarlanmaz): kesir kismi sifirdan buyuk, birden kucuk bir okuma bulunur.
+DIM n AS I32 = 0
+DIM t AS F64 = TIMER
+DIM k AS I32 = I32(t)
+DIM f AS F64 = t - F64(k)
+DO WHILE (f = 0) AND (n < 50000000)
+    t = TIMER
+    k = I32(t)
+    f = t - F64(k)
+    n += 1
+LOOP
+PRINT f > 0
+PRINT f < 1

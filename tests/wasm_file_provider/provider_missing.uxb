@@ -1,0 +1,2 @@
+OPEN "browser_no_provider.txt" FOR OUTPUT AS #1
+PRINT "UNREACHABLE"

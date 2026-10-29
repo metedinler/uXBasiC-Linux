@@ -1,0 +1,15 @@
+INCLUDE "include/modules/uxuuid.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxuuid.Equal("", "")
+        PRINT uxuuid.ErrorText()
+        PRINT uxuuid.IsNil("")
+        PRINT uxuuid.IsValid("")
+        PRINT uxuuid.NewUuid()
+        PRINT uxuuid.Nil()
+        PRINT uxuuid.Normalize("")
+        PRINT uxuuid.WithoutBraces("")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXUUID"
+END MAIN

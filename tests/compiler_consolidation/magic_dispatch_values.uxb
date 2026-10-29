@@ -1,0 +1,40 @@
+CLASS NumberBox
+    PUBLIC:
+    DIM value AS I32
+    MAGIC ADD(other AS NumberBox) AS NumberBox
+        DIM result AS NumberBox = NEW NumberBox()
+        result.value = value + other.value
+        RETURN result
+    END MAGIC
+    MAGIC SUB(other AS NumberBox) AS I64
+        RETURN I64(value - other.value)
+    END MAGIC
+    MAGIC TOSTRING() AS STRING
+        RETURN "[" + STR(value) + "]"
+    END MAGIC
+END CLASS
+DIM calls AS I32
+DIM leftBox AS NumberBox = NEW NumberBox()
+DIM rightBox AS NumberBox = NEW NumberBox()
+FUNCTION GetBox() AS NumberBox
+    calls += 1
+    RETURN leftBox
+END FUNCTION
+leftBox.value = 8
+rightBox.value = 3
+DIM sum AS NumberBox = NEW NumberBox()
+sum = leftBox + rightBox
+PRINT sum.value
+PRINT leftBox - rightBox
+PRINT STR(leftBox)
+PRINT STR(GetBox())
+PRINT calls
+CLASS NumericText
+    PUBLIC:
+    MAGIC TOSTRING() AS I32
+        RETURN 2026
+    END MAGIC
+END CLASS
+DIM numeric AS NumericText = NEW NumericText()
+PRINT STR(numeric)
+PRINT STR("text")

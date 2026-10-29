@@ -1,0 +1,2 @@
+DIM t AS TASK OF I64
+PRINT t.JOIN()

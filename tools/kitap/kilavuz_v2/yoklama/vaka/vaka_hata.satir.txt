@@ -1,0 +1,22 @@
+private_metot_disari | CLASS Kutu\n    PRIVATE\n    METHOD Gizli() AS I32\n        RETURN 5\n    END METHOD\n    PUBLIC\n    DIM acik AS I32\nEND CLASS | DIM k1 AS Kutu = NEW Kutu()\nPRINT k1.Gizli()
+try_yakala_metin | | TRY\n    THROW "kotu"\nCATCH\n    PRINT "yakalandi"\nEND TRY
+try_hata_metni | | TRY\n    THROW "kotu"\nCATCH e\n    PRINT e\nEND TRY
+try_hata_metni2 | | TRY\n    THROW "kotu"\nCATCH ex AS STRING\n    PRINT ex\nEND TRY
+try_err | | TRY\n    THROW "kotu"\nCATCH\n    PRINT ERR\nEND TRY
+try_errtext | | TRY\n    THROW "kotu"\nCATCH\n    PRINT ERRORTEXT\nEND TRY
+throw_sayi | | TRY\n    THROW 42\nCATCH\n    PRINT "sayi"\nEND TRY
+try_finally_hata_yok | | TRY\n    PRINT "a"\nFINALLY\n    PRINT "b"\nEND TRY
+try_ic_ice | | TRY\n    TRY\n        THROW "ic"\n    CATCH\n        PRINT "ic yakaladi"\n        THROW "dis"\n    END TRY\nCATCH\n    PRINT "dis yakaladi"\nEND TRY
+try_finally_return | FUNCTION F() AS I32\n    TRY\n        RETURN 1\n    FINALLY\n        PRINT "temizlik"\n    END TRY\n    RETURN 2\nEND FUNCTION | PRINT F()
+try_rutinden | SUB Patla()\n    THROW "p"\nEND SUB | TRY\n    Patla()\nCATCH\n    PRINT "yakaladi"\nEND TRY
+throw_yakalanmamis | | PRINT "once"\nTHROW "yakalanmadi"\nPRINT "sonra"
+assert_basarisiz | | ASSERT 1 = 2\nPRINT "gorunmez"
+assert_mesajli | | ASSERT 1 = 2, "bir esit degil iki"\nPRINT "gorunmez"
+assert_basarili | | ASSERT 2 = 2\nPRINT "gecti"
+try_dizi_siniri | DIM a(1) AS I32 | TRY\n    a(5) = 1\nCATCH\n    PRINT "sinir yakalandi"\nEND TRY
+try_sifira_bol | DIM z AS I32 = 0 | TRY\n    PRINT 5 \ z\nCATCH\n    PRINT "bolme yakalandi"\nEND TRY
+try_null_nesne | CLASS Kutu\n    PUBLIC\n    DIM v AS I32\nEND CLASS | DIM k1 AS Kutu\nTRY\n    PRINT k1.v\nCATCH\n    PRINT "null yakalandi"\nEND TRY
+catch_finally_sira | | TRY\n    THROW "x"\nCATCH\n    PRINT "c"\nFINALLY\n    PRINT "f"\nEND TRY\nPRINT "son"
+try_dongu_icinde | DIM i AS I32 | FOR i = 1 TO 3\n    TRY\n        IF i = 2 THEN THROW "iki"\n        PRINT i\n    CATCH\n        PRINT "atla"\n    END TRY\nNEXT
+throw_f64 | | TRY\n    THROW 2.5\nCATCH\n    PRINT "ondalik"\nEND TRY
+throw_degiskensiz | | TRY\n    THROW\nCATCH\n    PRINT "bos"\nEND TRY

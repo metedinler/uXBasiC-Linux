@@ -1,0 +1,6 @@
+' S-301: JS'te tamsayi MOD sifir acik calisma ani hatasidir.
+DIM z AS I32 = 0
+DIM r AS I32
+PRINT "once"
+r = 10 MOD z
+PRINT "yanlis"

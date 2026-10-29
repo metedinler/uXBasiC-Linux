@@ -20,8 +20,15 @@ Private Function MIRX64EmitNullObjectCheck(ByRef cg As MIRX64Context, ByRef regN
         Return 0
     End If
     MIRX64EmitRuntimeExtern cg, "__uxb_rt_runtime_error_exit"
+    ' S-574 (2026-10-17): a DESTROYED object is the same error as a NULL one. DELETE zeroes the header word (the vtable pointer every
+    ' object starts with) and keeps the block, so a reference that survived the DELETE (an alias, a field, a parameter) is caught here.
+    Dim deadLabel As String
+    deadLabel = MIRX64NextLabel(cg, "obj_bad")
     MIRX64Emit cg, "    test " & regName & ", " & regName
-    MIRX64Emit cg, "    jnz " & okLabel
+    MIRX64Emit cg, "    jz " & deadLabel
+    MIRX64Emit cg, "    cmp qword [" & regName & "], 0"
+    MIRX64Emit cg, "    jne " & okLabel
+    MIRX64Emit cg, deadLabel & ":"
     MIRX64Emit cg, "    lea rcx, [rel " & msgLabel & "]"
     MIRX64Emit cg, "    sub rsp, 32"
     MIRX64Emit cg, "    call __uxb_rt_runtime_error_exit"
@@ -150,6 +157,109 @@ Function MIRX64EmitStoreFieldSynthetic(ByRef ins As MIRIRInstruction, ByRef cg A
     Return 1
 End Function
 
+' S-442: UNION fields are overlays in the value's own storage, not heap
+' object fields. The root address is therefore resolved directly and no
+' receiver/null-object protocol is emitted.
+Private Sub MIRX64UnionCellShape(ByRef typeRaw As String, ByVal widthValue As Integer, ByRef signedOut As Integer, ByRef floatKindOut As Integer)
+    signedOut = 1
+    floatKindOut = 0
+    Dim t As String = UCase(Trim(typeRaw))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    Select Case t
+    Case "U8", "UBYTE", "U16", "USHORT", "U32", "UINTEGER", "UINT", "ULONG", "U64", "ULONGINT", "BOOLEAN", "BOOL"
+        signedOut = 0
+    Case "F32", "SINGLE"
+        floatKindOut = 1
+    Case "F64", "DOUBLE"
+        floatKindOut = 2
+    End Select
+    If widthValue <> 1 And widthValue <> 2 And widthValue <> 4 And widthValue <> 8 Then floatKindOut = -1
+End Sub
+
+Function MIRX64EmitLoadUnionFieldSynthetic(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
+    If ins.operandCount <> 5 Or Trim(ins.result) = "" Then
+        errText = "MIR x64 UNION field: LOAD requires root, field, offset, width, type and result"
+        Return 0
+    End If
+    Dim offsetValue As Integer = Val(ins.operands(2))
+    Dim widthValue As Integer = Val(ins.operands(3))
+    If offsetValue < 0 Or widthValue <= 0 Or widthValue > 8 Or offsetValue + widthValue > 256 Then
+        errText = "MIR x64 UNION field: invalid offset/width"
+        Return 0
+    End If
+    Dim signedValue As Integer
+    Dim floatKind As Integer
+    MIRX64UnionCellShape ins.operands(4), widthValue, signedValue, floatKind
+    If floatKind < 0 Or (floatKind = 1 And widthValue <> 4) Or (floatKind = 2 And widthValue <> 8) Then
+        errText = "MIR x64 UNION field: type/width mismatch for " & ins.operands(4)
+        Return 0
+    End If
+    If floatKind = 1 Or floatKind = 2 Then
+        If MIRX64AddressOfVarToReg(cg, ins.operands(0), "r10", errText) = 0 Then Return 0
+        Dim floatAddr As String = IIf(offsetValue = 0, "[r10]", "[r10 + " & MIRX64ToStr(offsetValue) & "]")
+        If floatKind = 1 Then
+            MIRX64Emit cg, "    cvtss2sd xmm0, dword " & floatAddr
+        Else
+            MIRX64Emit cg, "    movsd xmm0, qword " & floatAddr
+        End If
+        Return MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText)
+    End If
+
+    If MIRX64AddressOfVarToReg(cg, ins.operands(0), "r10", errText) = 0 Then Return 0
+    Dim intAddr As String = IIf(offsetValue = 0, "[r10]", "[r10 + " & MIRX64ToStr(offsetValue) & "]")
+    Select Case widthValue
+    Case 1
+        MIRX64Emit cg, IIf(signedValue <> 0, "    movsx rax, byte ", "    movzx eax, byte ") & intAddr
+    Case 2
+        MIRX64Emit cg, IIf(signedValue <> 0, "    movsx rax, word ", "    movzx eax, word ") & intAddr
+    Case 4
+        MIRX64Emit cg, IIf(signedValue <> 0, "    movsxd rax, dword ", "    mov eax, dword ") & intAddr
+    Case 8
+        MIRX64Emit cg, "    mov rax, qword " & intAddr
+    End Select
+    Return MIRX64StoreRegToVar(cg, "rax", ins.result, errText)
+End Function
+
+Function MIRX64EmitStoreUnionFieldSynthetic(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Context, ByRef errText As String) As Integer
+    If ins.operandCount <> 6 Then
+        errText = "MIR x64 UNION field: STORE requires root, field, value, offset, width and type"
+        Return 0
+    End If
+    Dim offsetValue As Integer = Val(ins.operands(3))
+    Dim widthValue As Integer = Val(ins.operands(4))
+    If offsetValue < 0 Or widthValue <= 0 Or widthValue > 8 Or offsetValue + widthValue > 256 Then
+        errText = "MIR x64 UNION field: invalid offset/width"
+        Return 0
+    End If
+    Dim signedValue As Integer
+    Dim floatKind As Integer
+    MIRX64UnionCellShape ins.operands(5), widthValue, signedValue, floatKind
+    If floatKind < 0 Or (floatKind = 1 And widthValue <> 4) Or (floatKind = 2 And widthValue <> 8) Then
+        errText = "MIR x64 UNION field: type/width mismatch for " & ins.operands(5)
+        Return 0
+    End If
+    If MIRX64AddressOfVarToReg(cg, ins.operands(0), "r10", errText) = 0 Then Return 0
+    Dim storeAddr As String = IIf(offsetValue = 0, "[r10]", "[r10 + " & MIRX64ToStr(offsetValue) & "]")
+    If floatKind = 1 Or floatKind = 2 Then
+        If MIRX64LoadFloatOperandToXmm(cg, ins.operands(2), "xmm0", errText) = 0 Then Return 0
+        If floatKind = 1 Then
+            MIRX64Emit cg, "    cvtsd2ss xmm0, xmm0"
+            MIRX64Emit cg, "    movss dword " & storeAddr & ", xmm0"
+        Else
+            MIRX64Emit cg, "    movsd qword " & storeAddr & ", xmm0"
+        End If
+        Return 1
+    End If
+    If MIRX64LoadOperandToReg(cg, ins.operands(2), "rax", errText) = 0 Then Return 0
+    Select Case widthValue
+    Case 1: MIRX64Emit cg, "    mov byte " & storeAddr & ", al"
+    Case 2: MIRX64Emit cg, "    mov word " & storeAddr & ", ax"
+    Case 4: MIRX64Emit cg, "    mov dword " & storeAddr & ", eax"
+    Case 8: MIRX64Emit cg, "    mov qword " & storeAddr & ", rax"
+    End Select
+    Return 1
+End Function
+
 
 Function MIRX64FindVTableFunctionIndex(ByRef cg As MIRX64Context, ByRef className As String, ByVal slotIndex As Integer) As Integer
     If cg.modulePtr = 0 Then Return -1
@@ -222,68 +332,19 @@ Private Function MIRX64EmitStaticMethodCallSynthetic(ByRef ins As MIRIRInstructi
         Return 0
     End If
 
-    Dim argCount As Integer
-    argCount = ins.operandCount - 4
-    If argCount < 0 Then argCount = 0
-    If cg.modulePtr->functions(fnIdx).paramVarCount <> argCount Then
-        errText = "MIR x64 static method ABI parameter count mismatch for " & targetName
-        Return 0
-    End If
-
-    Dim extraCount As Integer
-    extraCount = argCount - 4
-    If extraCount < 0 Then extraCount = 0
-    Dim callBytes As Integer
-    callBytes = UXBWin64AlignStackBytes(UXB_WIN64_SHADOW_SPACE_BYTES + extraCount * 8)
-    MIRX64Emit cg, "    sub rsp, " & MIRX64ToStr(callBytes)
-
-    Dim ai As Integer
-    For ai = 4 To argCount - 1
-        Dim stackType As String
-        stackType = UCase(Trim(cg.modulePtr->functions(fnIdx).paramVarTypes(ai)))
-        If MIRX64TypeIsFloat(stackType) <> 0 Then
-            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(ai + 4), "xmm0", errText) = 0 Then Return 0
-            If stackType = "F32" Then
-                MIRX64Emit cg, "    cvtsd2ss xmm0, xmm0"
-                MIRX64Emit cg, "    movd eax, xmm0"
-            Else
-                MIRX64Emit cg, "    movq rax, xmm0"
-            End If
-        Else
-            If MIRX64LoadOperandToReg(cg, ins.operands(ai + 4), "rax", errText) = 0 Then Return 0
-        End If
-        MIRX64Emit cg, "    mov qword [rsp+" & MIRX64ToStr(UXB_WIN64_SHADOW_SPACE_BYTES + (ai - 4) * 8) & "], rax"
-    Next ai
-
-    Dim regCount As Integer
-    regCount = argCount
-    If regCount > 4 Then regCount = 4
-    For ai = 0 To regCount - 1
-        Dim paramType As String
-        paramType = UCase(Trim(cg.modulePtr->functions(fnIdx).paramVarTypes(ai)))
-        If MIRX64TypeIsFloat(paramType) <> 0 Then
-            Dim xmmReg As String
-            xmmReg = UXBWin64FloatArgReg(ai)
-            If MIRX64LoadFloatOperandToXmm(cg, ins.operands(ai + 4), xmmReg, errText) = 0 Then Return 0
-            If paramType = "F32" Then MIRX64Emit cg, "    cvtsd2ss " & xmmReg & ", " & xmmReg
-        Else
-            Dim intReg As String
-            intReg = UXBWin64IntegerArgReg(ai)
-            If MIRX64LoadOperandToReg(cg, ins.operands(ai + 4), intReg, errText) = 0 Then Return 0
-        End If
-    Next ai
-
-    MIRX64Emit cg, "    call " & MIRX64FunctionLabel(cg.modulePtr->functions(fnIdx).name)
-    MIRX64Emit cg, "    add rsp, " & MIRX64ToStr(callBytes)
-    If Trim(ins.result) <> "" Then
-        If MIRX64TypeIsFloat(cg.modulePtr->functions(fnIdx).returnType) <> 0 Then
-            If UCase(Trim(cg.modulePtr->functions(fnIdx).returnType)) = "F32" Then MIRX64Emit cg, "    cvtss2sd xmm0, xmm0"
-            If MIRX64StoreXmmToVar(cg, "xmm0", ins.result, errText) = 0 Then Return 0
-        Else
-            If MIRX64StoreRegToVar(cg, "rax", ins.result, errText) = 0 Then Return 0
-        End If
-    End If
-    Return 1
+    ' S-610 (2026-10-17): a STATIC method is an ordinary routine without a hidden receiver. The hand-written copy of the call sequence that lived
+    ' here knew neither BYREF parameters (the callee received the VALUE where it expected an address and crashed with an access violation)
+    ' nor array parameters; the general user-call emitter knows both, so the call is handed over to it: target + the real arguments.
+    Dim staticCallIns As MIRIRInstruction
+    staticCallIns = ins
+    staticCallIns.opcode = "CALL"
+    staticCallIns.operandCount = ins.operandCount - 3
+    staticCallIns.operands(0) = targetName
+    Dim staticArgIdx As Integer
+    For staticArgIdx = 4 To ins.operandCount - 1
+        staticCallIns.operands(staticArgIdx - 3) = ins.operands(staticArgIdx)
+    Next staticArgIdx
+    Return MIRX64EmitCallInstruction(staticCallIns, cg, errText)
 End Function
 
 ' S-037: `test reg, reg` + a clean runtime error when the receiver is null. Before this the
@@ -298,8 +359,14 @@ Private Function MIRX64EmitNullReceiverCheck(ByRef cg As MIRX64Context, ByRef re
         Return 0
     End If
     MIRX64EmitRuntimeExtern cg, "__uxb_rt_runtime_error_exit"
+    ' S-574: a destroyed receiver (header word zeroed by DELETE) is the same error as a NULL one
+    Dim deadRecvLabel As String
+    deadRecvLabel = MIRX64NextLabel(cg, "recv_bad")
     MIRX64Emit cg, "    test " & regName & ", " & regName
-    MIRX64Emit cg, "    jnz " & okLabel
+    MIRX64Emit cg, "    jz " & deadRecvLabel
+    MIRX64Emit cg, "    cmp qword [" & regName & "], 0"
+    MIRX64Emit cg, "    jne " & okLabel
+    MIRX64Emit cg, deadRecvLabel & ":"
     MIRX64Emit cg, "    lea rcx, [rel " & msgLabel & "]"
     MIRX64Emit cg, "    sub rsp, 32"
     MIRX64Emit cg, "    call __uxb_rt_runtime_error_exit"

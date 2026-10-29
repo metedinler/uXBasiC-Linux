@@ -1,0 +1,13 @@
+DIM total AS I64 = 1
+DIM values(0 TO 1) AS I64
+FUNCTION Observe() AS I64
+    RETURN total * 10
+END FUNCTION
+THREAD Worker() AS I32
+    values(0) = total++ + Observe()
+    RETURN 1
+END THREAD
+DIM job AS TASK OF I32 = SPAWN Worker()
+PRINT job.JOIN()
+PRINT total
+PRINT values(0)

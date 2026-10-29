@@ -15,9 +15,9 @@ c = PEEKD(x + 8)
 p = VARPTR(a)
 s = SADD("abc")
 l = LPTR(label1)
-k = CODEPTR(proc1)
 label1:
 DECLARE SUB proc1()
+k = CODEPTR(proc1)
 SETNEWOFFSET a, 8192
 q = VARPTR(a)
 r = (1 SHL 4) OR 1
@@ -25,3 +25,6 @@ m = 10 MOD 4
 t = 1 ROL 3
 INC a
 DEC a
+' S-544 (2026-10-17): a DECLARE needs a definition in the program (strict DECLARE rule)
+SUB proc1()
+END SUB

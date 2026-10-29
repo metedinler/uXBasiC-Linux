@@ -1,0 +1,13 @@
+PIPE Resolve(x AS I32) AS I32
+    TASKOUT = 1
+    IF x > 0 THEN
+        Resolve = x + 1
+    ELSE
+        TASKOUT = -1
+    END IF
+    PRINT "body"
+END PIPE
+TRIGGER PIPE Resolve, 41
+PRINT TASKOUT
+TRIGGER PIPE Resolve, -1
+PRINT TASKOUT

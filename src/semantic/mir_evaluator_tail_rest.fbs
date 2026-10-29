@@ -1,3 +1,4 @@
+#include once "../common/report_writer.fbs"
 ' Extracted post-controlflow evaluator block
 
 Private Function MIREvaluateDeclarationInstruction(ByRef state As MIREvaluatorState, ByRef errMsg As String) As Integer
@@ -227,7 +228,37 @@ Private Function MIRApplyLogic16Int(ByRef op As String, ByVal A As LongInt, ByVa
     Return 0
 End Function
 
-Function MIRBinaryOp(ByRef op As String, ByRef lhs As MIRValue, ByRef rhs As MIRValue, ByRef result As MIRValue, ByRef errMsg As String) As Integer
+Private Function MIRRotateByDeclaredType(ByVal sourceValue As ULongInt, ByVal countValue As LongInt, ByRef declaredTypeRaw As String, ByVal rotateRight As Integer) As ULongInt
+    Dim typeName As String
+    typeName = UCase(Trim(UXBStep3StorageType(declaredTypeRaw)))
+    If Left(typeName, 5) = "TYPE_" Then typeName = Mid(typeName, 6)
+
+    Dim widthBits As Integer
+    widthBits = 64
+    Select Case typeName
+    Case "U8", "UBYTE", "I8", "BYTE", "SBYTE": widthBits = 8
+    Case "U16", "USHORT", "I16", "SHORT": widthBits = 16
+    Case "U32", "UINTEGER", "UINT", "ULONG", "I32", "INTEGER", "INT", "LONG": widthBits = 32
+    End Select
+
+    Dim mask As ULongInt
+    mask = &hFFFFFFFFFFFFFFFFULL
+    If widthBits = 8 Then mask = &hFFULL
+    If widthBits = 16 Then mask = &hFFFFULL
+    If widthBits = 32 Then mask = &hFFFFFFFFULL
+
+    Dim bits As ULongInt
+    bits = sourceValue And mask
+    Dim shiftBits As Integer
+    shiftBits = countValue And (widthBits - 1)
+    If shiftBits = 0 Then Return bits
+    If rotateRight = 0 Then
+        Return ((bits Shl shiftBits) Or (bits Shr (widthBits - shiftBits))) And mask
+    End If
+    Return ((bits Shr shiftBits) Or (bits Shl (widthBits - shiftBits))) And mask
+End Function
+
+Function MIRBinaryOp(ByRef op As String, ByRef lhs As MIRValue, ByRef rhs As MIRValue, ByRef result As MIRValue, ByRef errMsg As String, ByRef declaredType As String) As Integer
     Dim opUpper As String
     opUpper = UCase(Trim(op))
 
@@ -371,9 +402,11 @@ Function MIRBinaryOp(ByRef op As String, ByRef lhs As MIRValue, ByRef rhs As MIR
             Case MIR_OP_USHR:
                 result.intValue = CLngInt(CULngInt(lhs.intValue) Shr (rhs.intValue And 63))
             Case MIR_OP_ROL:
-                result.intValue = CLngInt(MIRRol64(CULngInt(lhs.intValue), rhs.intValue))
+                result.intValue = CLngInt(MIRRotateByDeclaredType(CULngInt(lhs.intValue), rhs.intValue, declaredType, 0))
+                If Trim(declaredType) <> "" Then MIRApplyDeclaredScalarType result, declaredType
             Case MIR_OP_ROR:
-                result.intValue = CLngInt(MIRRor64(CULngInt(lhs.intValue), rhs.intValue))
+                result.intValue = CLngInt(MIRRotateByDeclaredType(CULngInt(lhs.intValue), rhs.intValue, declaredType, 1))
+                If Trim(declaredType) <> "" Then MIRApplyDeclaredScalarType result, declaredType
             Case Else:
                 errMsg = "MIR: Bilinmeyen tamsayı işlemi: " & op
                 Return 0
@@ -658,15 +691,12 @@ Function MIRWriteOpcodeSurfaceJson(ByRef outPath As String, ByRef errMsg As Stri
     jsonText &= "]" & Chr(10)
     jsonText &= "}" & Chr(10)
 
-    Dim f As Integer
-    f = FreeFile
-    Open outPath For Output As #f
-    If Err <> 0 Then
-        errMsg = "MIR: opcode json open failed " & outPath
+    ' S-466 (ayni sinif): ust klasor yokken ciplak `Open` -exx altinda programi iptal ediyordu; ortak yazici klasoru olusturur.
+    Dim writeErr As String
+    If UXBReportWriteText(outPath, jsonText, writeErr) = 0 Then
+        errMsg = "MIR: opcode json open failed " & outPath & " (" & writeErr & ")"
         Return 0
     End If
-    Print #f, jsonText;
-    Close #f
     errMsg = ""
     Return 1
 End Function

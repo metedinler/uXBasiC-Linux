@@ -1,0 +1,13 @@
+' S-329 koruma (gorunurluk): her yordamin ayni adli kendi dizisi var.
+SUB Bir()
+    DIM v(3) AS I32
+    v(1) = 4
+    PRINT v(1)
+END SUB
+SUB Iki()
+    DIM v(3) AS I32
+    v(1) = 9
+    PRINT v(1)
+END SUB
+Bir()
+Iki()

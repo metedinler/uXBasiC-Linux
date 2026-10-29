@@ -1,0 +1,9 @@
+CLASS MagicBox
+    MAGIC GE(other AS I32) AS I32
+        RETURN 1
+    END MAGIC
+
+    MAGIC TOSTRING() AS I32
+        RETURN 2026
+    END MAGIC
+END CLASS

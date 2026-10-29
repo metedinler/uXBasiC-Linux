@@ -34,7 +34,7 @@ Function UXBParserSurfaceRouteForKeyword(ByRef keywordText As String) As Integer
     Select Case k
     Case "PRINT", "INPUT", "INPUTF", "OPEN", "CLOSE", "GET", "PUT", "SEEK", "LOCATE", "COLOR", "CLS", "SHELL"
         Return UXB_PARSE_ROUTE_STATEMENT
-    Case "IF", "SELECT", "FOR", "DO", "GOTO", "GOSUB", "RETURN", "EXIT", "END", "TRY", "THROW", "ASSERT"
+    Case "IF", "SELECT", "FOR", "DO", "GOTO", "GOSUB", "RETURN", "EXIT", "CONTINUE", "END", "TRY", "THROW", "ASSERT"
         Return UXB_PARSE_ROUTE_STATEMENT
     Case "CALL", "INLINE", "DELETE", "INC", "DEC", "RANDOMIZE", "POKE", "POKEB", "POKEW", "POKED", "POKEQ", "POKES"
         Return UXB_PARSE_ROUTE_STATEMENT

@@ -1,0 +1,45 @@
+I64 + metin
+DIM n AS I64 = 5
+PRINT n + "a"
+=====
+U8 + metin
+DIM n AS U8 = 5
+PRINT n + "a"
+=====
+F32 + metin
+DIM n AS F32 = 2.5
+PRINT n + "a"
+=====
+sabit ondalik + metin
+PRINT 2.5 + "a"
+=====
+metin + F64 degisken
+DIM n AS F64 = 2.5
+PRINT "a" + n
+=====
+LEN(sayi + metin)
+DIM n AS I32 = 5
+PRINT LEN(n + "a")
+=====
+metin += sayi
+DIM s AS STRING = "x"
+s += 7
+PRINT s
+=====
+sayi - metin
+DIM n AS I32 = 5
+PRINT n - "a"
+=====
+metin - metin
+PRINT "ab" - "a"
+=====
+sayi * metin
+DIM n AS I32 = 5
+PRINT n * "a"
+=====
+karsilastirma sayi = metin
+DIM n AS I32 = 5
+PRINT n = "5"
+=====
+karsilastirma metin < sayi
+PRINT "a" < 5

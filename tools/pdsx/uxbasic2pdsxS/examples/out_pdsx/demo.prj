@@ -1,0 +1,23 @@
+[project]
+name = demo
+main = basx/main.basx
+output = build/demo.py
+source_map = build/demo.map.json
+diagnostics = build/diagnostics.json
+alias_report = build/aliases.json
+
+[folders]
+basx = basx/
+headers = hx/
+profiles = profiles/
+build = build/
+docs = docs/
+tests = tests/
+
+[profiles]
+use = py30_std
+
+[vscode]
+live_build = true
+live_errors = true
+show_generated_python = true

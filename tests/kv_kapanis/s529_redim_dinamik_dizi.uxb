@@ -1,0 +1,58 @@
+' S-529: REDIM ile (ya da calisma anindaki sinirla) boyutu degisen dizi gercekten buyur/kuculur; PRESERVE kesisen elemanlari korur,
+' PRESERVE'siz REDIM sifirlar; UBOUND/LBOUND guncel sinirlari verir. Eski AST-x64 ilk DIM'in boyutunu sabitliyor, yeni elemanlar
+' komsu degiskenlerin ustune yaziyor (ve SUB'dan donuste cokuyordu).
+DIM z AS I32 = 123
+DIM e(0 TO 1) AS I32
+DIM y AS I32 = 456
+e(0) = 5
+e(1) = 6
+REDIM PRESERVE e(0 TO 4) AS I32
+DIM i AS I32
+FOR i = 2 TO 4
+    e(i) = i * 10
+NEXT
+FOR i = 0 TO 4
+    PRINT e(i)
+NEXT
+PRINT z
+PRINT y
+PRINT UBOUND(e)
+REDIM e(1 TO 3) AS I32
+PRINT e(1)
+e(2) = 7
+PRINT e(2)
+PRINT LBOUND(e)
+PRINT UBOUND(e)
+DIM n AS I32 = 6
+DIM d(1 TO 2) AS F64
+REDIM d(1 TO n) AS F64
+DIM s AS F64
+FOR i = 1 TO n
+    d(i) = i * 1.5
+NEXT
+FOR i = 1 TO n
+    s = s + d(i)
+NEXT
+PRINT s
+FUNCTION Topla(a AS I32[], lo AS I32, hi AS I32) AS I32
+    DIM t AS I32
+    DIM j AS I32
+    FOR j = lo TO hi
+        t = t + a(j)
+    NEXT
+    RETURN t
+END FUNCTION
+REDIM e(2 TO 5) AS I32
+FOR i = 2 TO 5
+    e(i) = i
+NEXT
+PRINT Topla(e, 2, 5)
+SUB Yerel()
+    DIM q(0 TO 1) AS I32
+    q(0) = 1
+    REDIM PRESERVE q(0 TO 3) AS I32
+    q(3) = 33
+    PRINT q(0) + q(3)
+END SUB
+Yerel()
+Yerel()

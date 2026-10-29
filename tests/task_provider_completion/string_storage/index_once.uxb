@@ -1,0 +1,18 @@
+DIM a(0 TO 2) AS STRING
+DIM calls AS I32 = 0
+DIM trace AS I32 = 0
+FUNCTION NextIndex() AS I32
+    calls += 1
+    trace = trace * 10 + 1
+    RETURN 0
+END FUNCTION
+FUNCTION RightValue() AS STRING
+    trace = trace * 10 + 2
+    RETURN "x"
+END FUNCTION
+a(0) = "AB" + CHR(0) + "CD"
+a(NextIndex()) += RightValue()
+PRINT LEN(a(0))
+PRINT ASC(MID(a(0), 3, 1))
+PRINT calls
+PRINT trace

@@ -1,0 +1,3 @@
+%%REQUIRE_HOST_BINDING ON
+%%WAT_IMPORT "env", "missing", "missing", "(param i32)"
+PRINT "x"

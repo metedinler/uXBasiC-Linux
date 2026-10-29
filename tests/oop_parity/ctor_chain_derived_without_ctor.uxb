@@ -1,0 +1,22 @@
+' S-485 (2026-10-17): a derived class WITHOUT a constructor of its own still runs its bases' constructors (MIR returned from NEW as
+' soon as the instantiated class had no constructor: the inherited field stayed 0 while every other engine ran the base one).
+CLASS Taban
+    PUBLIC
+    DIM v AS I32
+    METHOD Duz() AS I32
+        RETURN 7
+    END METHOD
+    CONSTRUCTOR()
+        v = 5 + THIS.Duz()
+    END CONSTRUCTOR
+END CLASS
+CLASS Alt EXTENDS Taban
+    PUBLIC
+END CLASS
+CLASS Alt2 EXTENDS Alt
+    PUBLIC
+END CLASS
+DIM x AS Alt = NEW Alt()
+PRINT x.v
+DIM y AS Alt2 = NEW Alt2()
+PRINT y.v

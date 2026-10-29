@@ -1,0 +1,24 @@
+' S-514: ROL/ROR her tamsayi genisliginde kendi genisligi icinde doner (8/16/32 bit) ve sayim genislige gore mod alinir.
+' WASM eskiden hicbir tipte calismiyor, hep 0 yaziyordu. (U32'nin 2^31 ustu degerlerini yazdirma ayri kayittir: S-216.)
+DIM a AS U8 = 129
+PRINT a ROL 1
+PRINT a ROR 1
+DIM s AS I8 = -127
+PRINT s ROL 1
+PRINT s ROR 1
+DIM b AS U16 = 32769
+PRINT b ROL 1
+PRINT b ROR 1
+DIM t AS I16 = -32767
+PRINT t ROL 1
+PRINT t ROR 1
+DIM c AS U32 = 2147483649
+PRINT c ROL 1
+DIM i AS I32 = -2147483647
+PRINT i ROL 1
+PRINT i ROR 1
+DIM d AS U32 = 1
+PRINT (d ROR 1) SHR 30
+DIM n AS I32 = 20
+PRINT n ROL 33
+PRINT n ROR 33

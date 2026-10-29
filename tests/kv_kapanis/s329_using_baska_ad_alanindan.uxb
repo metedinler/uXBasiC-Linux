@@ -1,0 +1,13 @@
+' S-329 koruma (gorunurluk): USING ile acilan ad alani, baska bir ad alaninin icinden de nitelensiz cagrilir.
+NAMESPACE L
+    FUNCTION Uc(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+END NAMESPACE
+USING L
+NAMESPACE A
+    FUNCTION Say(a AS I32) AS I32
+        RETURN Uc(a)
+    END FUNCTION
+END NAMESPACE
+PRINT A.Say(3)

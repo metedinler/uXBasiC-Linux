@@ -74,7 +74,7 @@ Private Sub LexSource(ByRef st As LexerState)
             Continue Do
         End If
 
-        If IsDigit(ch) Or (ch = "&" And (UCase(PeekChEx(st, 1)) = "H" Or UCase(PeekChEx(st, 1)) = "O")) Or (ch = "%" And UCase(PeekChEx(st, 1)) = "B") Then
+        If IsDigit(ch) Or (ch = "&" And (UCase(PeekChEx(st, 1)) = "H" Or UCase(PeekChEx(st, 1)) = "O" Or UCase(PeekChEx(st, 1)) = "B")) Or (ch = "%" And UCase(PeekChEx(st, 1)) = "B") Then
             ReadNumber st
             Continue Do
         End If

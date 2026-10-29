@@ -1,0 +1,11 @@
+CLASS Cell
+ PUBLIC
+ value AS I32
+END CLASS
+FUNCTION Collapse(items AS Cell[]) AS I32
+ REDIM items(0 TO 1) AS Cell
+ RETURN 0
+END FUNCTION
+DIM n AS I32 = 1
+DIM a(0 TO n, 0 TO n) AS Cell
+PRINT Collapse(a)

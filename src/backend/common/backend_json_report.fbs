@@ -18,6 +18,17 @@ Function UXBBackendReportJson(ByRef ctx As UXBBackendContext, ByRef r As UXBBack
     Return j
 End Function
 
+Function UXBBackendFlatReportJson(ByRef ctx As UXBBackendContext, ByRef r As UXBBackendResult) As String
+    ' Preserve the public result fields while exposing static and execution evidence.
+    Dim j As String = UXBBackendResultToJson(r)
+    j = Left(j, Len(j) - 1)
+    j &= "," & Chr(10) & "  " & Chr(34) & "verification" & Chr(34) & ": {" & Chr(10)
+    j &= "    " & Chr(34) & "mir_static_passed" & Chr(34) & ": " & IIf(ctx.verifyPassed <> 0, "true", "false") & "," & Chr(10)
+    j &= "    " & Chr(34) & "mir_interpreter_passed" & Chr(34) & ": " & IIf(ctx.mirInterpreterPassed <> 0, "true", "false") & Chr(10)
+    j &= "  }" & Chr(10) & "}"
+    Return j
+End Function
+
 Function UXBBackendWriteTextFile(ByVal filePath As String, ByVal textValue As String, ByRef errText As String) As Integer
     Dim ff As Integer
     errText = ""

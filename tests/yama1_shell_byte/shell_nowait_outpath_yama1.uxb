@@ -1,0 +1,2 @@
+SHELL "cmd /c echo UXB_SHELL_NOWAIT" NOWAIT OUTPATH("reports\\uxb_shell_nowait.txt")
+PRINT "SHELL_NOWAIT_SUBMITTED"

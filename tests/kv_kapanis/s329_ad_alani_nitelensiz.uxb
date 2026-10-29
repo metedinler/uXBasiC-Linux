@@ -1,0 +1,9 @@
+' S-329 (gorunurluk): ad yalniz NAMESPACE S icinde, USING yok, nitelensiz cagri = alti yolda ayni DERLEME hatasi.
+' Eskiden AST yorumlayici bunu bulup 6 yazardi, diger bes yol reddederdi (tests/declare_shadow_olcum/s329_acik_kalan.coklu.txt A1).
+NAMESPACE S
+    FUNCTION F(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+END NAMESPACE
+PRINT "once"
+PRINT F(2)

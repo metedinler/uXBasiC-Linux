@@ -1,0 +1,11 @@
+peeks_pokes | | POKES 100, "abc"\nPRINT PEEKS(100, 3)
+peeks2 | | POKES 100, "abc"\nDIM s AS STRING = PEEKS(100)\nPRINT s
+virtual_65536 | | VIRTUAL 65536\nPOKEB 5000, 7\nPRINT PEEKB(5000)
+virtual_buyuk | | VIRTUAL 1048576\nPOKEB 900000, 7\nPRINT PEEKB(900000)
+dolayli_x | | POKEQ 120, 300\nPOKEB 301, 77\nDIM x AS I32 = 1\nPRINT PEEKB(PEEKQ(120 + 0) + x)
+input_prompt | | DIM s AS STRING\ns = INPUT("ad: ")\nPRINT "["; s; "]"
+input_klasik | | DIM s AS STRING\nINPUT s\nPRINT "["; s; "]"
+input_istemli | | DIM s AS STRING\nINPUT "ad: ", s\nPRINT "["; s; "]"
+peek_isaretsiz | | POKEB 10, 255\nPRINT PEEKB(10); " "; PEEK(10)
+poke_isaretli | | POKED 20, -1\nPRINT PEEKD(20); " "; PEEK(20)
+memcopy_adet | | POKED 0, 1: POKED 4, 2: POKED 8, 3\nMEMCOPYD 100, 0, 3\nPRINT PEEKD(100); PEEKD(104); PEEKD(108)

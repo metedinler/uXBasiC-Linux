@@ -1,0 +1,9 @@
+' S-572 / S-360: SEALED CLASS is FINAL CLASS's documented synonym; the class itself is usable.
+SEALED CLASS Config
+    PUBLIC
+    METHOD F() AS I32
+        RETURN 7
+    END METHOD
+END CLASS
+DIM c AS Config = NEW Config()
+PRINT c.F()

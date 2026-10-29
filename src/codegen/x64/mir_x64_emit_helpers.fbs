@@ -57,12 +57,14 @@ Function MIRX64LocalIsByRef(ByRef cg As MIRX64Context, ByRef nameText As String)
     Return cg.locals(idx).isByRef
 End Function
 
-Function MIRX64SetLocalType(ByRef cg As MIRX64Context, ByRef nameText As String, ByRef typeName As String) As Integer
+Function MIRX64SetLocalType(ByRef cg As MIRX64Context, ByRef nameText As String, ByRef typeName As String, ByVal isDeclaration As Integer = 0) As Integer
     Dim idx As Integer
     If MIRX64FindLocalIndex(cg, nameText, idx) = 0 Then Return 0
+    If isDeclaration = 0 And cg.locals(idx).hasDeclaredType <> 0 Then Return 0
     Dim normalizedType As String
-    normalizedType = UCase(Trim(typeName))
+    normalizedType = UCase(Trim(UXBStep3StorageType(typeName)))
     If normalizedType = "" Then Return 0
+    If isDeclaration <> 0 And normalizedType <> "VARIANT" And normalizedType <> "TYPE_VARIANT" And normalizedType <> "ANY" And normalizedType <> "TYPE_ANY" Then cg.locals(idx).hasDeclaredType = 1
     If cg.locals(idx).typeName = normalizedType Then Return 0
     cg.locals(idx).typeName = normalizedType
     Return 1
@@ -191,6 +193,7 @@ Function MIRX64EnsureLocalSlot(ByRef cg As MIRX64Context, ByRef nameText As Stri
     cg.locals(idx).nameText = norm
     cg.locals(idx).sizeBytes = 8
     cg.locals(idx).typeName = "I64"
+    cg.locals(idx).isFloatWide = 0
     cg.locals(idx).offset = MIRX64LocalSlotOffset(idx)
 
     offsetOut = cg.locals(idx).offset
@@ -258,6 +261,12 @@ Function MIRX64StringToNasmDb(ByRef rawText As String) As String
     outText &= "0"
     Return outText
 End Function
+
+' S-537: ana programdaki (MAIN) etkin GOSUB sayisi (.bss, ilk kullanimda ayrilir). GOSUB artirir; bir GOSUB bolgesindeki
+' RETURN once sayinin sifirdan buyuk oldugunu denetler (sifirsa GOSUB'suz RETURN acik hatasi), sonra azaltir.
+Sub MIRX64EnsureGosubDepthSlot(ByRef cg As MIRX64Context)
+    If InStr(cg.bssText, "__uxb_gosub_depth") = 0 Then MIRX64EmitBss cg, "__uxb_gosub_depth: resq 1"
+End Sub
 
 Function MIRX64EnsureStringLiteralLabel(ByRef cg As MIRX64Context, ByRef literalText As String, ByRef labelOut As String) As Integer
     Dim As String raw = MIRX64Unquote(literalText)
@@ -466,10 +475,9 @@ Sub MIRX64EmitOwnedStringStore(ByRef cg As MIRX64Context, ByRef slotAddrSetup As
     MIRX64Emit cg, "    add rsp, 32"
 End Sub
 
-' MIR gecici degerleri (__tN) halkadaki metni gosterebilir; yalniz kullanici yuvalari sahipli kopya tutar.
+' Every STRING value slot owns its bytes, including call/STR_SNAPSHOT
+' temporaries. A later user call can wrap the runtime's temporary ring.
 Function MIRX64IsOwnedStringSlotName(ByRef cg As MIRX64Context, ByRef varName As String) As Integer
-    Dim u As String = UCase(Trim(varName))
-    If Left(u, 3) = "__T" Then Return 0
     Return MIRX64OperandIsString(cg, varName)
 End Function
 

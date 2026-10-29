@@ -78,8 +78,11 @@ Private Function UXBAdim14WriteWasmRunner(ByRef moduleValue As MIRModule, ByRef 
     runnerText &= "  globalThis.uxbWasmInstance = instance;" & Chr(10)
     runnerText &= "  const entry = instance.exports[" & Chr(34) & entryName & Chr(34) & "];" & Chr(10)
     runnerText &= "  if (typeof entry !== 'function') throw new Error('WASM entry export missing: " & entryName & "');" & Chr(10)
-    runnerText &= "  entry();" & Chr(10)
-    runnerText &= "}).catch((error) => { console.error(error); process.exitCode = 1; });" & Chr(10)
+    runnerText &= "  let failure;" & Chr(10)
+    runnerText &= "  try { entry(); } catch(error) { if(!error || !error.uxbProgramEnd) failure=error; }" & Chr(10)
+    runnerText &= "  finally { try { if(globalThis.uxbWasmCloseFiles) globalThis.uxbWasmCloseFiles(); } catch(error) { failure ??= error; } }" & Chr(10)
+    runnerText &= "  if(failure) throw failure;" & Chr(10)
+    runnerText &= "}).catch((error) => { if (error && error.uxbProgramEnd) return; console.error(error); process.exitCode = 1; });" & Chr(10)
     Return UXBAdim14WasmWriteText(runnerPath, runnerText, errText)
 End Function
 

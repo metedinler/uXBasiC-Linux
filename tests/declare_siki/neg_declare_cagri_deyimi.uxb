@@ -1,0 +1,5 @@
+' S-544: the CALL statement form is a use too.
+CALL Selam()
+SUB Selam()
+    PRINT 7
+END SUB

@@ -1,0 +1,57 @@
+=== attr_uydurma
+REM %%ATTR BU_YOK_BOYLE_BIR_OZNITELIK 1 2 3
+REM %%MIR INLINE
+FUNCTION Kare(x AS I32) AS I32
+    RETURN x * x
+END FUNCTION
+PRINT Kare(3)
+=== attr_foreach
+%%FOREACH T IN ("I32", "I64")
+REM %%ATTR TEST
+FUNCTION Test_{{T}}() AS {{T}}
+    RETURN 5
+END FUNCTION
+%%ENDFOREACH
+PRINT Test_I32() + Test_I64()
+=== attr_hedefsiz
+REM %%ATTR TEST
+PRINT 1
+=== foreach_parantezsiz_liste
+%%FOREACH T IN "I32,F64"
+PRINT "{{T}}"
+%%ENDFOREACH
+=== foreach_tip_uret
+%%FOREACH T IN (I32, I64, F64)
+FUNCTION Buyuk_{{T}}(a AS {{T}}, b AS {{T}}) AS {{T}}
+    IF a > b THEN RETURN a
+    RETURN b
+END FUNCTION
+%%ENDFOREACH
+PRINT Buyuk_I32(3, 9); " "; Buyuk_I64(7, 2); " "; Buyuk_F64(1.5, 0.5)
+=== define_ifade_uzun
+%%DEFINE DERINLIK 3
+%%FOREACH D IN (1, 2, 3)
+%%IFN {{D}} <= DERINLIK
+PRINT "d={{D}}"
+%%ENDIF
+%%ENDFOREACH
+=== foreach_icinde_define
+%%FOREACH N IN (1, 2, 3)
+%%DEFINE SON {{N}}
+%%ENDFOREACH
+PRINT SON
+=== foreach_icinde_macro
+%%FOREACH N IN (2, 3)
+%%MACRO KATLA{{N}}(X) (X) * {{N}}
+%%ENDFOREACH
+PRINT KATLA2(5); " "; KATLA3(5)
+=== foreach_uretilen_for
+%%FOREACH N IN (2, 3)
+%%FOR J = 1 TO {{N}}
+PRINT "{{N}}-{{J}}"
+%%ENDFOR
+%%ENDFOREACH
+=== makro_iki_katman
+%%DEFINE AD ECE
+%%DEFINE SELAM "merhaba AD"
+PRINT SELAM

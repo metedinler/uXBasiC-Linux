@@ -1,0 +1,12 @@
+' S-570 (2026-10-16): writing a field through a NULL class reference must stop with an error and must
+' not touch any other object (the MIR interpreter used to overwrite the first object's field: `d.v` became 5).
+CLASS Box
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM d AS Box = NEW Box()
+d.v = 9
+DIM k AS Box
+PRINT "before"
+k.v = 5
+PRINT d.v

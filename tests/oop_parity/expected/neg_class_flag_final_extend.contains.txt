@@ -1,0 +1,4 @@
+AST=cannot extend FINAL/SEALED base
+MIR=cannot extend FINAL/SEALED base
+x64=cannot extend FINAL/SEALED base
+AST-x64=cannot extend FINAL/SEALED base

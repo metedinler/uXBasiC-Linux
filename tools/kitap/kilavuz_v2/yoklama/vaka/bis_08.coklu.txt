@@ -1,0 +1,86 @@
+H1 I64 dongu degiskeni ile dizi indeksi
+MAIN
+    DIM kul(7) AS I32
+    DIM j AS I64
+    FOR j = 0 TO 3
+        kul(j) = 1
+    NEXT
+    PRINT kul(2)
+END MAIN
+=====
+H2 uc dizi: I32, STRING, I64
+MAIN
+    DIM kul(7) AS I32
+    DIM adlar(7) AS STRING
+    DIM top(7) AS I64
+    DIM j AS I32
+    FOR j = 0 TO 3
+        adlar(j) = "a" + STR(j)
+        top(j) = j * 100
+        kul(j) = 0
+    NEXT
+    PRINT adlar(2); " "; top(2); " "; kul(2)
+END MAIN
+=====
+H3 IF dongu icinde dizi okuma, ELSEIF
+MAIN
+    DIM kul(3) AS I32
+    DIM top(3) AS I64
+    DIM j AS I32
+    DIM en AS I32
+    FOR j = 0 TO 3
+        top(j) = j * 5
+        kul(j) = 0
+    NEXT
+    en = -1
+    FOR j = 0 TO 3
+        IF kul(j) = 0 THEN
+            IF en = -1 THEN
+                en = j
+            ELSEIF top(j) > top(en) THEN
+                en = j
+            END IF
+        END IF
+    NEXT
+    PRINT en
+END MAIN
+=====
+H4 dizi bildirimi adi kullanilmis
+MAIN
+    DIM kullanilmis(7) AS I32
+    DIM j AS I32
+    FOR j = 0 TO 3
+        kullanilmis(j) = 1
+    NEXT
+    PRINT kullanilmis(2)
+END MAIN
+=====
+H5 dizi bildirimi sonra kutuphane cagrisi olmadan buyuk MAIN
+MAIN
+    DIM n AS I64 = 4
+    DIM kullanilmis(7) AS I32
+    DIM adlar(7) AS STRING
+    DIM toplam(7) AS I64
+    DIM j AS I64
+    DIM k AS I64
+    DIM en AS I64
+    FOR j = 0 TO n - 1
+        adlar(j) = "u" + STR(j)
+        toplam(j) = j * 7 MOD 5
+        kullanilmis(j) = 0
+    NEXT
+    FOR k = 0 TO n - 1
+        en = -1
+        FOR j = 0 TO n - 1
+            IF kullanilmis(j) = 0 THEN
+                IF en = -1 THEN
+                    en = j
+                ELSEIF toplam(j) > toplam(en) THEN
+                    en = j
+                END IF
+            END IF
+        NEXT
+        kullanilmis(en) = 1
+        PRINT adlar(en); toplam(en)
+    NEXT
+END MAIN

@@ -1,0 +1,14 @@
+' S-548: an explicit channel written as a call is evaluated ONCE and still reaches the ledger (4 is used, so FREEFILE after 1, 2, 3 is 5).
+FUNCTION KanalNo() AS I32
+    RETURN 4
+END FUNCTION
+OPEN "fh_cag4.txt" FOR OUTPUT AS #KanalNo()
+OPEN "fh_cag1.txt" FOR OUTPUT AS #1
+OPEN "fh_cag2.txt" FOR OUTPUT AS #2
+OPEN "fh_cag3.txt" FOR OUTPUT AS #3
+PRINT FREEFILE
+CLOSE #KanalNo()
+PRINT FREEFILE
+CLOSE #1
+CLOSE #2
+CLOSE #3

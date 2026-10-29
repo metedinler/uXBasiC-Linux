@@ -1,0 +1,2 @@
+GOTO MissingLabel
+PRINT "never"

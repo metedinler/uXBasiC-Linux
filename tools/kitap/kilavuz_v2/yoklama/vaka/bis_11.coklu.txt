@@ -1,0 +1,86 @@
+M1 gercek asama-4 yapisi uxcollections ile
+INCLUDE "include/modules/uxcollections.uxmh"
+MAIN
+    DIM sureler AS U64 = uxcollections.DictNew()
+    uxcollections.DictSetI64(sureler, "ali", 210)
+    uxcollections.DictSetI64(sureler, "ayse", 300)
+    uxcollections.DictSetI64(sureler, "can", 120)
+    DIM anahtarlar AS U64 = uxcollections.DictKeysAsList(sureler)
+    uxcollections.ListSortAlpha(anahtarlar)
+    DIM n AS I64 = uxcollections.ListCount(anahtarlar)
+    DIM kullanilmis(7) AS I32
+    DIM adlar(7) AS STRING
+    DIM toplam(7) AS I64
+    DIM sira AS STRING = ""
+    DIM j AS I64
+    DIM k AS I64
+    DIM en AS I64
+    FOR j = 0 TO n - 1
+        adlar(j) = uxcollections.ListGetStr(anahtarlar, j)
+        toplam(j) = uxcollections.DictGetI64(sureler, adlar(j))
+        kullanilmis(j) = 0
+    NEXT
+    FOR k = 0 TO n - 1
+        en = -1
+        FOR j = 0 TO n - 1
+            IF kullanilmis(j) = 0 THEN
+                IF en = -1 THEN
+                    en = j
+                ELSEIF toplam(j) > toplam(en) THEN
+                    en = j
+                END IF
+            END IF
+        NEXT
+        kullanilmis(en) = 1
+        IF k > 0 THEN sira = sira + ", "
+        sira = sira + adlar(en) + " " + STR(toplam(en)) + " sn"
+    NEXT
+    PRINT sira
+END MAIN
+=====
+M2 ayni ama kullanilmis dizisi baska ad
+INCLUDE "include/modules/uxcollections.uxmh"
+MAIN
+    DIM sureler AS U64 = uxcollections.DictNew()
+    uxcollections.DictSetI64(sureler, "ali", 210)
+    uxcollections.DictSetI64(sureler, "ayse", 300)
+    DIM anahtarlar AS U64 = uxcollections.DictKeysAsList(sureler)
+    DIM n AS I64 = uxcollections.ListCount(anahtarlar)
+    DIM bayrak(7) AS I32
+    DIM j AS I64
+    FOR j = 0 TO n - 1
+        bayrak(j) = 0
+    NEXT
+    FOR j = 0 TO n - 1
+        IF bayrak(j) = 0 THEN PRINT "x"
+    NEXT
+END MAIN
+=====
+M3 ayni, uxjson de eklenmis
+INCLUDE "include/modules/uxjson.uxmh"
+INCLUDE "include/modules/uxcollections.uxmh"
+MAIN
+    DIM sureler AS U64 = uxcollections.DictNew()
+    DIM anahtarlar AS U64 = uxcollections.DictKeysAsList(sureler)
+    DIM n AS I64 = uxcollections.ListCount(anahtarlar)
+    DIM bayrak(7) AS I32
+    DIM j AS I64
+    FOR j = 0 TO n - 1
+        bayrak(j) = 0
+    NEXT
+    PRINT "tamam"
+END MAIN
+=====
+M4 dort kutuphane
+INCLUDE "include/modules/uxjson.uxmh"
+INCLUDE "include/modules/uxregex.uxmh"
+INCLUDE "include/modules/uxcollections.uxmh"
+INCLUDE "include/modules/uxstats.uxmh"
+MAIN
+    DIM bayrak(7) AS I32
+    DIM j AS I64
+    FOR j = 0 TO 3
+        bayrak(j) = 0
+    NEXT
+    IF bayrak(1) = 0 THEN PRINT "tamam"
+END MAIN

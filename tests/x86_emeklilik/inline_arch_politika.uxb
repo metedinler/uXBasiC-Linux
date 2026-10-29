@@ -1,0 +1,4 @@
+INLINE("x64","nasm","sub","abi=win64;preserve=rbx;stack=16;shadow=32;arch=x86")
+mov rax, 1
+END INLINE
+PRINT 42

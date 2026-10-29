@@ -1,0 +1,49 @@
+' S-528 / S-157-L: bir STRING degisken, dizi elemani ya da alan atanan metnin KENDI kopyasini tutar. Eski AST-x64 yalniz isaretciyi
+' sakliyor, STR(...) sonucu (tek yuva) ve birlestirme/LEFT sonucu (32 yuvalik halka) sonraki metin isleminde eziliyordu.
+DIM a AS STRING = STR(5000)
+DIM b AS STRING = STR(4)
+PRINT a
+a = STR(111)
+b = STR(222)
+IF a <> b THEN PRINT "farkli" ELSE PRINT "ayni"
+PRINT a
+DIM c AS STRING = "abc" + "def"
+DIM t AS STRING
+DIM i AS I32
+FOR i = 1 TO 40
+    t = "x" + "y"
+NEXT
+PRINT c
+FUNCTION F(n AS I32) AS STRING
+    RETURN STR(n)
+END FUNCTION
+DIM p AS STRING = F(1234)
+DIM q AS STRING = F(5)
+PRINT p
+PRINT q
+DIM arr(2) AS STRING
+arr(0) = STR(10)
+arr(1) = STR(20)
+arr(2) = "a" + "b"
+PRINT arr(0)
+PRINT arr(1)
+PRINT arr(2)
+TYPE Kayit
+    ad AS STRING
+    no AS I32
+END TYPE
+DIM k1 AS Kayit
+DIM k2 AS Kayit
+k1.ad = STR(111)
+k2.ad = STR(222)
+PRINT k1.ad
+PRINT k2.ad
+DIM acc AS STRING
+FOR i = 1 TO 2000
+    acc = acc + "ab"
+NEXT
+PRINT LEN(acc)
+p = q
+q = "yeni"
+PRINT p
+PRINT q

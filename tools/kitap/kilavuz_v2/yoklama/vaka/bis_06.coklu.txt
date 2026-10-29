@@ -1,0 +1,79 @@
+S1 eleman takasi sayisal alanli
+TYPE K
+    a AS I32
+    b AS I32
+END TYPE
+DIM k(2) AS K
+DIM t AS K
+DIM i AS I32
+FOR i = 0 TO 2
+    k(i).a = i
+    k(i).b = i * 10
+NEXT
+t = k(0)
+k(0) = k(1)
+k(1) = t
+PRINT k(0).a; " "; k(0).b; " | "; k(1).a; " "; k(1).b
+=====
+S2 eleman takasi STRING alanli
+TYPE K
+    ad AS STRING
+    u AS I32
+END TYPE
+DIM k(2) AS K
+DIM t AS K
+DIM i AS I32
+FOR i = 0 TO 2
+    k(i).ad = "k" + STR(i)
+    k(i).u = i * 10
+NEXT
+t = k(0)
+k(0) = k(1)
+k(1) = t
+PRINT k(0).ad; " "; k(0).u; " | "; k(1).ad; " "; k(1).u
+=====
+S3 TYPE icinde sayisal dizi alan
+TYPE V
+    v(2) AS I32
+    n AS I32
+END TYPE
+DIM a AS V
+a.n = 3
+a.v(1) = 5
+PRINT a.n; " "; a.v(1)
+=====
+S4 iki boyutlu kayit dizisi
+TYPE H
+    d AS I32
+END TYPE
+DIM m(1, 1) AS H
+m(1, 1).d = 7
+PRINT m(1, 1).d
+=====
+S5 STRING alanli kayit dizisi degisken indeks
+TYPE K
+    ad AS STRING
+    u AS I32
+END TYPE
+DIM k(2) AS K
+DIM i AS I32
+FOR i = 0 TO 2
+    k(i).ad = "k" + STR(i)
+NEXT
+PRINT k(0).ad; k(1).ad; k(2).ad
+=====
+S6 kayit atama (ic ice) b = a
+TYPE N
+    x AS I32
+END TYPE
+TYPE C
+    a AS N
+    ad AS STRING
+END TYPE
+DIM p AS C
+DIM q AS C
+p.a.x = 5
+p.ad = "p"
+q = p
+q.a.x = 9
+PRINT p.a.x; " "; q.a.x; " "; q.ad

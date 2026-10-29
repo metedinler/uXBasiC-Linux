@@ -1,0 +1,27 @@
+' S-581 (2026-10-16): F64 constructor parameters, alone and mixed with an integer one. The legacy AST-x64 backend passed
+' every NEW argument in an integer register while the constructor prologue reads a typed F64 parameter from the xmm
+' register of its position, so the fields held garbage (8.9e-308).
+CLASS T1
+    PUBLIC
+    DIM x AS F64
+    DIM y AS F64
+    CONSTRUCTOR(a AS F64, b AS F64)
+        x = a
+        y = b
+    END CONSTRUCTOR
+END CLASS
+CLASS Mix
+    PUBLIC
+    DIM n AS I32
+    DIM f AS F64
+    CONSTRUCTOR(an AS I32, af AS F64)
+        n = an
+        f = af
+    END CONSTRUCTOR
+END CLASS
+DIM t AS T1 = NEW T1(1.5, 2.5)
+PRINT t.x
+PRINT t.y
+DIM m AS Mix = NEW Mix(7, 0.25)
+PRINT m.n
+PRINT m.f

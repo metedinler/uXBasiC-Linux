@@ -1,0 +1,5 @@
+' S-579: INCLUDE edilen dosyada Türkçe harfli ad (sabit ve işlev)
+CONST DAHİL_SABİT = 11
+FUNCTION Dahil_Çarp(a AS I32, b AS I32) AS I32
+    RETURN a * b
+END FUNCTION

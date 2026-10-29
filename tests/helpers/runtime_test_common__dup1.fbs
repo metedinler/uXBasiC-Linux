@@ -1,0 +1,73 @@
+Private Function RTAssertEq(ByVal actualValue As Integer, ByVal expectedValue As Integer, ByRef msg As String) As Integer
+    If actualValue <> expectedValue Then
+        Print "FAIL "; msg; " expected="; expectedValue; " actual="; actualValue
+        Return 0
+    End If
+    Return 1
+End Function
+
+Private Function RTParseProgram(ByRef src As String, ByRef psOut As ParseState, ByRef errOut As String) As Integer
+    Dim st As LexerState
+    LexerInit st, src
+
+    ParserInit psOut, st
+    If ParseProgram(psOut) = 0 Then
+        errOut = psOut.lastError
+        Return 0
+    End If
+
+    Return 1
+End Function
+
+Private Function RTExecProgram(ByRef ps As ParseState, ByRef errOut As String) As Integer
+    If ExecRunMemoryProgram(ps, errOut) = 0 Then Return 0
+    Return 1
+End Function
+
+Private Function RTParseExpectFail(ByRef src As String, ByRef expectedPart As String, ByRef errOut As String) As Integer
+    Dim st As LexerState
+    LexerInit st, src
+
+    Dim ps As ParseState
+    ParserInit ps, st
+
+    If ParseProgram(ps) <> 0 Then
+        errOut = "expected parse failure"
+        Return 0
+    End If
+
+    errOut = ps.lastError
+    If Instr(UCase(errOut), UCase(expectedPart)) = 0 Then
+        errOut = "unexpected parse error text: " & errOut
+        Return 0
+    End If
+
+    Return 1
+End Function
+
+Private Function RTExecExpectFail(ByRef src As String, ByRef expectedPart As String, ByRef errOut As String) As Integer
+    Dim st As LexerState
+    LexerInit st, src
+
+    Dim ps As ParseState
+    ParserInit ps, st
+
+    If ParseProgram(ps) = 0 Then
+        errOut = ps.lastError
+        Return 0
+    End If
+
+    Dim execErr As String
+    If ExecRunMemoryProgram(ps, execErr) <> 0 Then
+        errOut = "expected exec failure"
+        Return 0
+    End If
+
+    errOut = execErr
+    If Instr(UCase(errOut), UCase(expectedPart)) = 0 Then
+        errOut = "unexpected exec error text: " & errOut
+        Return 0
+    End If
+
+    Return 1
+End Function

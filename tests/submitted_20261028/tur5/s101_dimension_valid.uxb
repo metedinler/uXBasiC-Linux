@@ -1,0 +1,5 @@
+DIM a(0 TO 2, 1 TO 4) AS I32
+PRINT LBOUND(a, 1)
+PRINT UBOUND(a, 2)
+PRINT LBOUND(a, &H2)
+' EXPECTED stdout lines: 0, 4, 1

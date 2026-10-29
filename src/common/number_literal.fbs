@@ -22,4 +22,43 @@ Function UXBNumberLiteralIsFloat(ByRef literalText As String) As Integer
     Return 0
 End Function
 
+' S-101 / TUR5: dimensions are positive integer literals, never truncated
+' floating point values. Parse radix digits directly and reject I32 overflow.
+Function UXBArrayDimensionLiteral(ByRef rawText As String, ByRef dimensionOut As Integer) As Integer
+    dimensionOut = 0
+    Dim t As String = UCase(Trim(rawText))
+    If t = "" Then Return 0
+    Dim baseValue As Integer = 10
+    If Left(t, 2) = "&H" Or Left(t, 2) = "0X" Then
+        baseValue = 16
+        t = Mid(t, 3)
+    ElseIf Left(t, 2) = "&O" Or Left(t, 2) = "0O" Then
+        baseValue = 8
+        t = Mid(t, 3)
+    ElseIf Left(t, 2) = "&B" Or Left(t, 2) = "%B" Or Left(t, 2) = "0B" Then
+        baseValue = 2
+        t = Mid(t, 3)
+    End If
+    If t = "" Then Return 0
+    Dim acc As LongInt = 0
+    Dim sawDigit As Integer = 0
+    For i As Integer = 1 To Len(t)
+        Dim ch As String = Mid(t, i, 1)
+        If ch = "_" Then Continue For
+        Dim digit As Integer = -1
+        If ch >= "0" And ch <= "9" Then
+            digit = Asc(ch) - Asc("0")
+        ElseIf ch >= "A" And ch <= "F" Then
+            digit = 10 + Asc(ch) - Asc("A")
+        End If
+        If digit < 0 Or digit >= baseValue Then Return 0
+        If acc > (2147483647LL - CLngInt(digit)) \ CLngInt(baseValue) Then Return 0
+        acc = acc * CLngInt(baseValue) + CLngInt(digit)
+        sawDigit = 1
+    Next i
+    If sawDigit = 0 Or acc = 0 Then Return 0
+    dimensionOut = CInt(acc)
+    Return 1
+End Function
+
 #endif

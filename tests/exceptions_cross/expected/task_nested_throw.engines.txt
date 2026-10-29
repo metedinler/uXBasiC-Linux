@@ -1,1 +1,1 @@
-AST-x64=reject:legacy AST-x64
+AST-x64=run

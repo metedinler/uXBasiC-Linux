@@ -6,7 +6,8 @@
 
 Function MIRCanonicalTypeName2(ByVal typeText As String) As String
     Dim t As String
-    t = UCase(Trim(typeText))
+    t = UCase(Trim(UXBStep3StorageType(typeText)))
+    If Left(t, 5) = "TYPE_" And (UXBStep3TypeIsKnownScalar(t) <> 0 Or t = "TYPE_TASK" Or t = "TYPE_TASKGROUP") Then t = Mid(t, 6)
     If t = "" Then Return "I64"
     Select Case t
     Case "INTEGER", "INT": Return "I32"

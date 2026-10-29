@@ -1,0 +1,14 @@
+' S-612 (2026-10-17): a PARAMETER with the routine's own name is the parameter, not the result variable. The AST interpreter zeroed it when the
+' call began (Deger(4) returned 1); after the S-599 result-variable initialization the MIR-based engines did the same for a FUNCTION (Topla(4) -> 1).
+CLASS Say
+    PUBLIC
+    METHOD Deger(deger AS I32) AS I32
+        RETURN deger + 1
+    END METHOD
+END CLASS
+FUNCTION Topla(topla AS I32) AS I32
+    RETURN topla + 1
+END FUNCTION
+DIM s AS Say = NEW Say()
+PRINT s.Deger(4)
+PRINT Topla(4)

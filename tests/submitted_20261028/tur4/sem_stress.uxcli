@@ -1,0 +1,4 @@
+sem
+tests/submitted_20261028/tur4/s111_many_bounds_generated.uxb
+--out-root
+build/test_outputs/semantic_benchmark34

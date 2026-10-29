@@ -1,0 +1,9 @@
+CLASS Ata
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(pa AS I32)
+        x = pa
+    END CONSTRUCTOR
+END CLASS
+' S-619: TOO MANY arguments were an error only in AST; MIR and native x64 silently dropped the extra ones.
+DIM p AS Ata = NEW Ata(1, 2)

@@ -1,0 +1,14 @@
+CLASS Box
+    PUBLIC
+    n AS I64
+    f AS F32
+END CLASS
+DIM b AS Box = NEW Box()
+b.n = 10
+b.f = 0.25
+DIM a AS Box = b
+DIM old AS I64 = a.n++
+PRINT old
+PRINT b.n
+PRINT a.f++
+PRINT b.f

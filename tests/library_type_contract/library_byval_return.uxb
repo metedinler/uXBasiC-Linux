@@ -1,0 +1,13 @@
+LIBTYPE "owned_text.library_type.json"
+FUNCTION NormalizeCopy(x AS TEXT_VALUE) AS TEXT_VALUE
+    x = TEXT_VALUE.NORMALIZE(x)
+    RETURN x
+END FUNCTION
+MAIN
+    DIM a AS TEXT_VALUE
+    DIM b AS TEXT_VALUE
+    a = TEXT_VALUE.CONSTRUCT("hello")
+    b = NormalizeCopy(a)
+    PRINT a
+    PRINT b
+END MAIN

@@ -1,0 +1,22 @@
+CLASS Ata
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(pa AS I32)
+        x = pa
+        PRINT 1
+    END CONSTRUCTOR
+END CLASS
+CLASS Cocuk EXTENDS Ata
+    PUBLIC
+    DIM y AS I32
+    CONSTRUCTOR(pb AS I32)
+        SUPER(pb * 2)
+        y = pb
+        PRINT 2
+    END CONSTRUCTOR
+END CLASS
+' S-487 (P0.2, 2026-10-17): SUPER(args) constructs the base part of THIS object with its own arguments; the base constructor runs first.
+' Before: AST "object is not callable", MIR / native x64 / JS unresolved call, WASM and legacy x64 silently ignored it.
+DIM p AS Cocuk = NEW Cocuk(4)
+PRINT p.x
+PRINT p.y

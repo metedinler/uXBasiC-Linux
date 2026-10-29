@@ -1,0 +1,15 @@
+' S-532: GOSUB'un kendi kendini 300 kez cagirmasi (ic ice GOSUB) alti yolda aynidir; her seviye kendi RETURN'unde cozulur.
+' 1 + 2 + ... + 300 = 45150
+DIM n AS I32
+DIM t AS I32
+n = 0
+t = 0
+GOSUB Dal
+PRINT t
+END
+
+Dal:
+n = n + 1
+t = t + n
+IF n < 300 THEN GOSUB Dal
+RETURN

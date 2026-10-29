@@ -1,0 +1,9 @@
+PROFILE "py30_std"
+
+' Bu yorum aynen geçecek
+DIM A AS INTEGER
+A = 10
+CALL(DLL, "user32.dll", "MessageBoxA", 0, "Merhaba", "uXBasic", 0)
+REM uxbasic2pdsxS: CALL DLL satırı aynen korundu.
+REM uxbasic2pdsxS: pdsX/Python tarafında ctypes, cffi, pywin32, pythonnet veya özel .hx/.py sarmalayıcı ile programcı çözer.
+PRINT A

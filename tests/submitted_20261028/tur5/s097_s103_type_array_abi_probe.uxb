@@ -1,0 +1,11 @@
+TYPE Point
+    x AS I32
+END TYPE
+DECLARE FUNCTION ReadFirst(a AS Point[]) AS I32
+FUNCTION ReadFirst(a AS Point[]) AS I32
+    RETURN a(0).x
+END FUNCTION
+DIM points(0 TO 1) AS Point
+points(0).x = 7
+PRINT ReadFirst(points)
+' TARGET: AST, MIR and eventually x64/JS/WASM output 7; current native TYPE[] may fail explicitly.

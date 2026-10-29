@@ -1,3 +1,5 @@
+#include once "../common/report_writer.fbs"
+#include once "../common/console_cursor.fbs"
 Type UXBConsoleEvent
     opName As String
     textValue As String
@@ -60,15 +62,9 @@ Private Function UxbConsoleJsonEscape(ByRef rawText As String) As String
 End Function
 
 Private Function UxbConsoleWriteTextFile(ByRef filePath As String, ByRef textIn As String) As Integer
-    Dim f As Integer
-    f = FreeFile
-
-    Open filePath For Output As #f
-    If Err <> 0 Then Return 0
-
-    Print #f, textIn;
-    Close #f
-    Return 1
+    ' S-466 (ayni sinif): ust klasor yokken ciplak `Open` -exx altinda programi iptal ediyordu; ortak yazici klasoru olusturur.
+    Dim writeErr As String
+    Return UXBReportWriteText(filePath, textIn, writeErr)
 End Function
 
 Private Sub UxbConsoleRecordEvent(ByRef opName As String, ByRef textValue As String)
@@ -127,8 +123,8 @@ Sub UxbConsolePrintText(ByRef textValue As String)
 
     gUxbConsole.outputText &= textValue
     gUxbConsole.screenText &= textValue
-    gUxbConsole.col += Len(textValue)
-    gUxbConsole.printColumnPos += Len(textValue)
+    UXBConsoleAdvance textValue, gUxbConsole.row, gUxbConsole.printColumnPos
+    gUxbConsole.col = gUxbConsole.printColumnPos + 1
     UxbConsoleRecordEvent "PRINT", textValue
 End Sub
 
@@ -178,12 +174,15 @@ Sub UxbConsoleCls()
 End Sub
 
 Sub UxbConsoleLocate(ByVal rowValue As Integer, ByVal colValue As Integer)
+    If rowValue < 1 Then rowValue = 1
+    If colValue < 1 Then colValue = 1
     If UxbConsoleIsDirectMode() <> 0 Then
         Locate rowValue, colValue
     End If
 
     gUxbConsole.row = rowValue
     gUxbConsole.col = colValue
+    gUxbConsole.printColumnPos = colValue - 1
     UxbConsoleRecordEvent "LOCATE", LTrim(Str(rowValue)) & "," & LTrim(Str(colValue))
 End Sub
 

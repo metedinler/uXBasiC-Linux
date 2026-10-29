@@ -1,0 +1,14 @@
+' Yalnız tamsayı yazdıran program: WASM hedefi metin yazdırmayı henüz desteklemez (G-WASM-8)
+FUNCTION Fakt(n AS I32) AS I32
+    IF n <= 1 THEN RETURN 1
+    RETURN n * Fakt(n - 1)
+END FUNCTION
+
+DIM i AS I32
+DIM toplam AS I32 = 0
+FOR i = 1 TO 5
+    toplam += i * i
+    PRINT i * i
+NEXT
+PRINT toplam
+PRINT Fakt(6)

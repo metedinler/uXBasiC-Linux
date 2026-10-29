@@ -1,0 +1,18 @@
+TYPE V2
+    X AS I32
+    Y AS I32
+END TYPE
+
+CLASS BOX
+    X AS I32
+END CLASS
+
+DIM p AS V2
+p.X = 10
+p.Y = p.X + 5
+PRINT p.X
+PRINT p.Y
+
+DIM b AS BOX = NEW BOX()
+b.X = 33
+PRINT b.X

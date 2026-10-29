@@ -1,0 +1,10 @@
+' S-624: TIMER = yerel gece yarisindan beri gecen saniye (F64, kesirli); her motorda 0 <= TIMER < 86400.
+DIM t AS F64
+t = TIMER
+PRINT (t >= 0) AND (t < 86400)
+DIM a AS F64 = TIMER
+DIM b AS F64 = TIMER
+PRINT (b - a) >= 0
+PRINT (b - a) < 5
+DIM s AS I32 = I32(TIMER)
+PRINT (s >= 0) AND (s < 86400)

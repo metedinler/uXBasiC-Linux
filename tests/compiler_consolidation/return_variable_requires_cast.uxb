@@ -1,0 +1,5 @@
+FUNCTION Bad() AS I8
+  DIM source AS I32 = 127
+  RETURN source
+END FUNCTION
+PRINT Bad()

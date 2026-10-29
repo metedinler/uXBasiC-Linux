@@ -1,0 +1,198 @@
+{
+  "index_once": {
+    "output": "10\n11\n1",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "float_array": {
+    "output": "0.5\n0.5\n1.5\n0.25\n2.25\n2.25",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "type_fields": {
+    "output": "-128\n-128\n0.5\n0.5",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "class_index_once": {
+    "output": "10\n11\n1\n1.25\n2\n10\n3",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "multidim_class": {
+    "output": "4\n5\n12",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "shared_array": {
+    "output": "1\n1\n10000\n10000.5",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "index_advances": {
+    "output": "10\n11\n50\n1",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "local_parameter_float": {
+    "output": "1.5",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "type_array_field": {
+    "output": "10\n11\n1.25\n2",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "narrow_array": {
+    "output": "255\n0\n-128\n-128",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "alias_field": {
+    "output": "10\n11\n0.25\n1.25",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "null_field": {
+    "error": "null",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "deleted_alias": {
+    "error": "null",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "property_once": {
+    "output": "0.5\n1.5\n1\n1\n0.5\n0.5\n2\n2",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "property_value_outside": {
+    "error": "unknown symbol",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "property_value_getter": {
+    "error": "unknown symbol",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "type_float_storage": {
+    "output": "0.25\n0.5\n0.25\n1.25",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "property_f32": {
+    "output": "0.5\n1.5\n1\n1\n0.5\n0.5\n2\n2",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "property_assignment": {
+    "output": "0.5\n1\n1.5\n2\n2",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "type_field_widen": {
+    "output": "1\n2\n2\n1",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "property_value_arithmetic": {
+    "output": "1\n1.25\n4.5",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "property_value_shadow": {
+    "output": "1\nabc",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  }
+}

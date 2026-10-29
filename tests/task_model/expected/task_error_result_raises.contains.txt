@@ -1,3 +1,4 @@
 AST=exec: gorev hatasi (boom): exec: THROW(1001) THROW patladi
 MIR=gorev hatasi (BOOM): MIR: uncaught THROW/ASSERT patladi
 x64=gorev hatasi (BOOM): native: uncaught THROW patladi
+AST-x64=gorev hatasi (BOOM): native: uncaught THROW patladi

@@ -1,0 +1,5 @@
+' Regression: CLNG rounds; FIX truncates toward zero.
+PRINT CLNG(2.9)
+PRINT FIX(5.9)
+PRINT CLNG(-2.9)
+PRINT FIX(-5.9)

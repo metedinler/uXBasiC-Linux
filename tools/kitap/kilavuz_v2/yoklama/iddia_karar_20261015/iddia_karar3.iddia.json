@@ -1,0 +1,34 @@
+[
+ {
+  "ad": "e01 SUB icinde ileri GOTO etiket",
+  "kod": "SUB S()\n    GOTO Son\n    PRINT 1\nSon:\n    PRINT 2\nEND SUB\nS()\n"
+ },
+ {
+  "ad": "e02 SUB icinde geri GOTO dongusu",
+  "kod": "SUB S()\n    DIM i AS I32 = 0\nBas:\n    i = i + 1\n    IF i < 3 THEN GOTO Bas\n    PRINT i\nEND SUB\nS()\n"
+ },
+ {
+  "ad": "e03 SUB icinde GOSUB ve RETURN",
+  "kod": "SUB S()\n    GOSUB Alt\n    PRINT 2\n    EXIT SUB\nAlt:\n    PRINT 1\n    RETURN\nEND SUB\nS()\n"
+ },
+ {
+  "ad": "e04 modul duzeyi ileri GOTO",
+  "kod": "GOTO Son\nPRINT 1\nSon:\nPRINT 2\n"
+ },
+ {
+  "ad": "e05 FUNCTION icinde etiket",
+  "kod": "FUNCTION F() AS I32\n    GOTO Son\n    RETURN 1\nSon:\n    RETURN 2\nEND FUNCTION\nPRINT F()\n"
+ },
+ {
+  "ad": "e06 UBOUND sabit sinir",
+  "kod": "DIM a(5) AS I32\nPRINT UBOUND(a)\n"
+ },
+ {
+  "ad": "e07 UBOUND ve LBOUND",
+  "kod": "DIM a(2 TO 6) AS I32\nPRINT LBOUND(a)\nPRINT UBOUND(a)\n"
+ },
+ {
+  "ad": "e08 etiketli satir ayni satirda deyim",
+  "kod": "GOTO Son\nPRINT 1\nSon: PRINT 2\n"
+ }
+]

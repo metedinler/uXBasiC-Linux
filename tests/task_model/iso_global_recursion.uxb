@@ -1,5 +1,7 @@
 ' S-146 Model D (2026-09-26): gorevde global kullanimi serbest ve otomatik senkron (eski negatif test neg_iso_recursion)
 DIM g AS I32
+' S-544 (2026-10-17): B is used by A before B's definition, so it is announced first (strict DECLARE rule)
+DECLARE FUNCTION B(n AS I32) AS I32
 FUNCTION A(n AS I32) AS I32
  IF n = 0 THEN RETURN g
  RETURN B(n - 1)

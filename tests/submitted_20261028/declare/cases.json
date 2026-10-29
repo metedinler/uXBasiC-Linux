@@ -1,0 +1,11 @@
+{
+  "01_tanim_once_declaresiz": {"output":"8"},
+  "02_ileri_cagri_declaresiz": {"output":"8"},
+  "03_ileri_cagri_declare_ile": {"output":"8"},
+  "04_tanimsiz_declare_hata": {"error":"UXB_DECLARE_MISSING_DEFINITION"},
+  "05_yanlis_imza_hata": {"error":"declaration signature mismatch"},
+  "06_namespace_ileri_cagri": {"output":"8"},
+  "overload_binding": {"output":"4\n9"},
+  "namespace_overloads": {"output":"3\n5.5"},
+  "overload_tasks": {"engines":["x64","AST-x64"],"environment":{"UXB_TASK_WORKERS":"2"},"output":"3000"}
+}

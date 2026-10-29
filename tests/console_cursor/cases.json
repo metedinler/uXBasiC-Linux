@@ -1,0 +1,9 @@
+{
+  "print_locate_cls": {"raw_stdout": "ABCD\n\nX             YZ       QPASS\n"},
+  "unicode_controls": {"raw_stdout": "ç漢🙂\rZ\t\b\u0000\nP             PASS\n"},
+  "typed_file_separation": {"engines": ["AST", "MIR", "x64", "AST-x64", "WASM"], "raw_stdout": "1.25-2!\nX              PASS\n", "files": {"ALL": {"cursor_output.txt": {"text": "FILE ONLY\r\n"}}}},
+  "variable_names": {"output": "17\n23\n3\n1"},
+  "inline_queries": {"raw_stdout": "1\n2\nAB3\nX             15\n5:3\n"},
+  "negative_csrlin_arg": {"error": "CSRLIN expects"},
+  "negative_pos_arg": {"error": "POS expects"}
+}

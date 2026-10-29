@@ -1,0 +1,13 @@
+DIM f AS F32
+f = 16777217
+PRINT f
+
+DIM h AS F32
+h = 1.0 / 3.0
+PRINT h * 3
+
+PRINT F32(0.1)
+
+DIM d AS F64
+d = 1.25
+PRINT F64(F32(d))

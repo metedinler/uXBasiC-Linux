@@ -1,0 +1,7 @@
+PRINT "A", "B"
+PRINT "C"; "D"
+PRINT
+PRINT "E",
+PRINT "F"
+PRINT "G";
+PRINT "H"

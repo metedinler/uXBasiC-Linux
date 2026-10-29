@@ -1,0 +1,7 @@
+' S-544: a DECLARE before the first use lets the SUB be defined further down.
+DECLARE SUB Selam()
+Selam()
+Selam()
+SUB Selam()
+    PRINT 7
+END SUB

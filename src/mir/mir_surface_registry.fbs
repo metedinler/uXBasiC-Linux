@@ -47,7 +47,7 @@ Function UXBMIRStep4SurfaceKnown(ByRef surfaceText As String) As Integer
         Return 1
     Case "DICT", "DIM", "DO", "EACH", "ELSE"
         Return 1
-    Case "ELSEIF", "END", "EOF", "EVENT", "EXIT"
+    Case "ELSEIF", "END", "EOF", "EVENT", "EXIT", "CONTINUE"
         Return 1
     Case "EXP", "F128", "F32", "F64", "F80"
         Return 1

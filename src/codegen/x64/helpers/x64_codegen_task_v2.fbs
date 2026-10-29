@@ -1,0 +1,301 @@
+' S-030: AST-direct adapter to the SAME native v2 OS worker pool as MIR-x64.
+' No synchronous fallback and no private task registry in the generated program.
+Private Function X64TaskUsesV2(ByRef ps As ParseState) As Integer
+    For n As Integer = 0 To ps.ast.count - 1
+        Dim k As String = X64Upper(ps.ast.nodes(n).kind)
+        If k = "SPAWN_EXPR" Then Return 1
+        If k = "TYPE_REF" Or k = "RETURN_TYPE" Then
+            Dim t As String = X64Upper(ps.ast.nodes(n).value)
+            If t = "TASK" Or t = "TASKGROUP" Then Return 1
+        End If
+    Next
+    Return 0
+End Function
+
+Private Function X64TaskLaneIsSpawned(ByRef ps As ParseState, ByVal declNode As Integer) As Integer
+    For n As Integer = 0 To ps.ast.count - 1
+        If X64Upper(ps.ast.nodes(n).kind) <> "SPAWN_EXPR" Then Continue For
+        Dim c As Integer = ps.ast.nodes(n).left
+        If c < 0 Then Continue For
+        If X64Upper(ps.ast.nodes(c).value) = X64Upper(ps.ast.nodes(declNode).value) Then Return 1
+    Next
+    Return 0
+End Function
+
+Private Function X64TaskMemberInfo(ByRef ps As ParseState, ByVal n As Integer, ByRef cg As X64CodegenContext, ByRef sym As String, ByRef resultType As String, ByRef receiver As Integer, ByRef argCount As Integer) As Integer
+    If n < 0 Or n >= ps.ast.count Then Return 0
+    Dim k As String = X64Upper(ps.ast.nodes(n).kind)
+    If k <> "CALL_EXPR" And k <> "CALL_STMT" And k <> "FIELD_EXPR" Then Return 0
+    receiver = ps.ast.nodes(n).left
+    If receiver < 0 Or receiver >= ps.ast.count Then Return 0
+    Dim rt As String, reason As String
+    If UXBStep3InferExprType(ps, receiver, rt, reason) = 0 Then
+        If X64TryResolveReceiverExprType(ps, receiver, cg, rt, reason) = 0 Then Return 0
+    End If
+    rt = X64Upper(Trim(rt))
+    If Left(rt, 5) = "TYPE_" Then rt = Mid(rt, 6)
+    If rt <> "TASK" And rt <> "TASKGROUP" Then Return 0
+    Dim member As String = X64MethodLeafName(ps.ast.nodes(n).value)
+    If member = "" Then member = ps.ast.nodes(n).value
+    member = X64Upper(member)
+    Dim isCall As Integer = IIf(k = "FIELD_EXPR", 0, 1)
+    argCount = 0
+    resultType = "VOID"
+    sym = ""
+    If rt = "TASK" Then
+        If isCall <> 0 Then
+            Select Case member
+            Case "JOIN": sym = "__uxb_rt_task_join"
+            Case "WAIT": sym = "__uxb_rt_task_wait"
+            Case "CANCEL": sym = "__uxb_rt_task_cancel"
+            End Select
+        Else
+            Select Case member
+            Case "RESULT": sym = "__uxb_rt_task_result"
+            Case "STATUS": sym = "__uxb_rt_task_status": resultType = "STRING"
+            Case "ERRORTEXT": sym = "__uxb_rt_task_error": resultType = "STRING"
+            End Select
+        End If
+        If member = "JOIN" Or member = "RESULT" Then
+            Dim isTask As Integer
+            resultType = UXBTaskExprResultType(ps, receiver, isTask)
+            If resultType = "" Then resultType = "I64"
+        End If
+    ElseIf isCall <> 0 Then
+        Select Case member
+        Case "ADD": sym = "__uxb_rt_task_group_add": argCount = 1
+        Case "JOIN": sym = "__uxb_rt_task_group_join"
+        End Select
+    End If
+    ' Recognized receiver with unknown member remains an explicit error at emission.
+    Return 1
+End Function
+
+Private Function X64TaskEmitValue(ByRef ps As ParseState, ByVal n As Integer, ByRef cg As X64CodegenContext, ByRef handled As Integer, ByRef errText As String) As Integer
+    handled = 0
+    Dim sym As String, resultType As String, receiver As Integer, argc As Integer
+    If X64TaskMemberInfo(ps, n, cg, sym, resultType, receiver, argc) = 0 Then Return 1
+    handled = 1
+    If sym = "" Then
+        errText = "legacy AST-x64: bilinmeyen veya henuz uygulanmamis TASK/TASKGROUP uyesi: " & ps.ast.nodes(n).value
+        Return 0
+    End If
+    If X64ChildCount(ps, n) <> argc Then
+        errText = "legacy AST-x64: TASK/TASKGROUP uye arguman sayisi uyusmuyor"
+        Return 0
+    End If
+    If X64EmitExprToRax(ps, receiver, cg, errText) = 0 Then Return 0
+    If argc = 1 Then
+        X64EmitText cg, "    push rax"
+        If X64EmitExprToRax(ps, X64ChildAt(ps, n, 0), cg, errText) = 0 Then Return 0
+        X64EmitText cg, "    mov rdx, rax"
+        X64EmitText cg, "    pop rcx"
+    Else
+        X64EmitText cg, "    mov rcx, rax"
+    End If
+    X64EmitCall0 cg, sym
+    Return 1
+End Function
+
+Private Function X64TaskEmitSpawn(ByRef ps As ParseState, ByVal n As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
+    Dim c As Integer = ps.ast.nodes(n).left
+    If c < 0 Then
+        errText = "legacy AST-x64: SPAWN hedef cagrisi eksik"
+        Return 0
+    End If
+    Dim declNode As Integer = -1
+    For d As Integer = 0 To ps.ast.count - 1
+        Dim dk As String = X64Upper(ps.ast.nodes(d).kind)
+        If dk <> "THREAD_STMT" And dk <> "PARALEL_STMT" Then Continue For
+        If X64Upper(ps.ast.nodes(d).value) = X64Upper(ps.ast.nodes(c).value) Then declNode = d: Exit For
+    Next
+    If declNode < 0 Then
+        errText = "legacy AST-x64: SPAWN hedefi THREAD/PARALEL bulunamadi"
+        Return 0
+    End If
+    Dim argc As Integer = X64ChildCount(ps, c)
+    Dim lane As String = LCase(X64SanitizeSymbol(ps.ast.nodes(declNode).value))
+    X64RegisterRoutineSignatureAs ps, declNode, cg, lane
+    If argc <> X64CountRoutineParams(ps, declNode) Or argc > 61 Then
+        errText = "legacy AST-x64: SPAWN arguman sayisi uyusmuyor veya 61 siniri asildi"
+        Return 0
+    End If
+    Dim bytes As Integer = X64Align16(8 + argc * 8)
+    Dim mask As LongInt = 0
+    X64EmitText cg, "    sub rsp, " & X64ToStr(bytes)
+    X64EmitText cg, "    mov qword [rsp], 0"
+    For i As Integer = 0 To argc - 1
+        Dim pt As String
+        X64TryGetRoutineParamType cg, lane, i, pt
+        Dim fk As Integer = X64TypeToFloatKind(pt)
+        If X64IsExtFpKind(fk) <> 0 Then
+            errText = "legacy AST-x64: SPAWN F80/F128 native v2 arguman ABI henuz uygulanmadi"
+            Return 0
+        End If
+        If fk = UXF_F32 Or fk = UXF_F64 Then
+            If X64EmitExprToXmm0As(ps, X64ChildAt(ps, c, i), cg, fk, errText) = 0 Then Return 0
+            If fk = UXF_F32 Then X64EmitText cg, "    movd eax, xmm0" Else X64EmitText cg, "    movq rax, xmm0"
+        Else
+            If X64EmitRoutineArgToRax(ps, X64ChildAt(ps, c, i), cg, pt, errText) = 0 Then Return 0
+            If X64TypeNameIsStringLike(pt) <> 0 Then mask = mask Or (1LL Shl i)
+        End If
+        X64EmitText cg, "    mov qword [rsp+" & X64ToStr(8 + i * 8) & "], rax"
+    Next
+    Dim retType As String = X64Upper(X64ExtractRoutineReturnType(ps, declNode))
+    If X64IsExtFpKind(X64TypeToFloatKind(retType)) <> 0 Then
+        errText = "legacy AST-x64: SPAWN F80/F128 native v2 sonuc ABI henuz uygulanmadi"
+        Return 0
+    End If
+    Dim resultKind As Integer = 1
+    If retType = "" Or retType = "VOID" Then resultKind = 0
+    If X64TypeToFloatKind(retType) <> 0 Then resultKind = 2
+    If X64TypeNameIsStringLike(retType) <> 0 Then resultKind = 3
+    ' S-709: match the canonical definition key used by MIR/native diagnostics;
+    ' the lexer spelling is lowercase and changed task error text to (boom).
+    Dim canonicalTaskName As String = X64Upper(Trim(ps.ast.nodes(declNode).value))
+    Dim nameLabel As String = X64CreateCStringConstant(cg, canonicalTaskName, "task_name")
+    ' Nested expressions can leave an outstanding push. Preserve the block address
+    ' while aligning the six-argument Win64 call; [rsp+48] is outside shadow/args.
+    X64EmitText cg, "    mov rdx, rsp"
+    X64EmitText cg, "    sub rsp, 64"
+    X64EmitText cg, "    and rsp, -16"
+    X64EmitText cg, "    mov [rsp+48], rdx"
+    X64EmitText cg, "    lea rcx, [rel __uxb_ast_task_thunk_" & X64ToStr(declNode) & "]"
+    X64EmitText cg, "    mov r8, " & X64ToStr(bytes)
+    X64EmitText cg, "    lea r9, [rel " & nameLabel & "]"
+    X64EmitText cg, "    mov qword [rsp+32], " & X64ToStr(resultKind)
+    X64EmitText cg, "    mov rax, " & LTrim(Str(mask))
+    X64EmitText cg, "    mov [rsp+40], rax"
+    X64EmitText cg, "    call __uxb_rt_task_spawn"
+    X64EmitText cg, "    mov rsp, [rsp+48]"
+    X64EmitText cg, "    add rsp, " & X64ToStr(bytes)
+    Return 1
+End Function
+
+Private Sub X64TaskEmitThunk(ByRef ps As ParseState, ByVal d As Integer, ByRef cg As X64CodegenContext)
+    Dim lane As String = LCase(X64SanitizeSymbol(ps.ast.nodes(d).value))
+    Dim argc As Integer = X64CountRoutineParams(ps, d)
+    Dim extra As Integer = argc - 4
+    If extra < 0 Then extra = 0
+    Dim frameBytes As Integer = 32 + extra * 8
+    If frameBytes Mod 16 = 0 Then frameBytes += 8
+    X64EmitLabel cg, "__uxb_ast_task_thunk_" & X64ToStr(d)
+    X64EmitText cg, "    push rbp"
+    X64EmitText cg, "    mov rbp, rsp"
+    X64EmitText cg, "    push rbx"
+    X64EmitText cg, "    sub rsp, " & X64ToStr(frameBytes)
+    X64EmitText cg, "    mov rbx, rcx"
+    For i As Integer = 4 To argc - 1
+        X64EmitText cg, "    mov rax, [rbx+" & X64ToStr(8 + i * 8) & "]"
+        X64EmitText cg, "    mov [rsp+" & X64ToStr(32 + (i - 4) * 8) & "], rax"
+    Next
+    For i As Integer = 0 To IIf(argc < 4, argc, 4) - 1
+        Dim pt As String
+        X64TryGetRoutineParamType cg, lane, i, pt
+        Dim fk As Integer = X64TypeToFloatKind(pt)
+        Dim off As String = X64ToStr(8 + i * 8)
+        If fk = UXF_F32 Then
+            X64EmitText cg, "    movd " & UXBWin64FloatArgReg(i) & ", dword [rbx+" & off & "]"
+        ElseIf fk = UXF_F64 Then
+            X64EmitText cg, "    movq " & UXBWin64FloatArgReg(i) & ", qword [rbx+" & off & "]"
+        Else
+            X64EmitText cg, "    mov " & UXBWin64IntegerArgReg(i) & ", [rbx+" & off & "]"
+        End If
+    Next
+    X64EmitText cg, "    call " & lane
+    Dim rt As String = X64ExtractRoutineReturnType(ps, d)
+    Dim fk As Integer = X64TypeToFloatKind(rt)
+    If fk = UXF_F32 Or fk = UXF_F64 Then
+        If fk = UXF_F32 Then X64EmitText cg, "    cvtss2sd xmm0, xmm0"
+        X64EmitText cg, "    movq [rbx], xmm0"
+    Else
+        X64EmitText cg, "    mov [rbx], rax"
+    End If
+    ' Nested SUB/FUNCTION failures arrive through the common exception state.
+    ' Record the error on this task, once, before the task context is restored.
+    X64EmitText cg, "    mov ecx, 1"
+    X64EmitCall0 cg, "__uxb_rt_exc_uncaught"
+    X64EmitText cg, "    xor eax, eax"
+    X64EmitText cg, "    add rsp, " & X64ToStr(frameBytes)
+    X64EmitText cg, "    pop rbx"
+    X64EmitText cg, "    pop rbp"
+    X64EmitText cg, "    ret"
+End Sub
+
+Private Sub X64TaskCheckException(ByRef cg As X64CodegenContext)
+    Dim saved As Integer = X64EnsureLocalSlot(cg, X64NextLabel(cg, "call_exception_value"), 2, 8)
+    X64EmitText cg, "    mov " & X64FormatRbpRef(saved) & ", rax"
+    X64EmitText cg, "    movq " & X64FormatRbpRef(saved + 8) & ", xmm0"
+    X64EmitCall0 cg, "__uxb_rt_exc_active"
+    Dim okLabel As String = X64NextLabel(cg, "call_no_exception")
+    X64EmitText cg, "    test rax, rax"
+    X64EmitText cg, "    jz " & okLabel
+    If cg.currentRoutineLabel <> "" And cg.currentEpilogLabel <> "" Then
+        X64EmitText cg, "    jmp " & cg.currentEpilogLabel
+    Else
+        X64EmitText cg, "    xor ecx, ecx"
+        X64EmitCall0 cg, "__uxb_rt_exc_uncaught"
+        X64EmitNativeRuntimeAbort cg
+    End If
+    X64EmitLabel cg, okLabel
+    X64EmitText cg, "    mov rax, " & X64FormatRbpRef(saved)
+    X64EmitText cg, "    movq xmm0, " & X64FormatRbpRef(saved + 8)
+End Sub
+
+' Local LIST creation/length/add consume the existing native collection API.
+Private Function X64ListEmitValue(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef handled As Integer, ByRef errText As String) As Integer
+    handled = 0
+    If ps.ast.nodes(nodeIdx).left <> -1 Then Return 1
+    Dim nameText As String = UCase(Trim(ps.ast.nodes(nodeIdx).value))
+    If nameText <> "LIST_NEW" And nameText <> "LISTLEN" And nameText <> "LISTADD" Then Return 1
+    handled = 1
+    Dim argc As Integer = X64ChildCount(ps, nodeIdx)
+    Dim want As Integer = IIf(nameText = "LIST_NEW", 0, IIf(nameText = "LISTLEN", 1, 2))
+    If argc <> want Then errText = "legacy AST-x64: " & nameText & " argument count mismatch": Return 0
+    If argc = 0 Then X64EmitCall0 cg, "__uxb_rt_list_new": Return 1
+    Dim frame As Integer = X64EnsureLocalSlot(cg, X64NextLabel(cg, "list_call"), 2, 8)
+    If X64EmitExprToRax(ps, X64ChildAt(ps, nodeIdx, 0), cg, errText) = 0 Then Return 0
+    X64EmitText cg, "    mov " & X64FormatRbpRef(frame) & ", rax"
+    If argc = 1 Then
+        X64EmitText cg, "    mov rcx, rax"
+        X64EmitCall0 cg, "__uxb_rt_list_len"
+        Return 1
+    End If
+    Dim arg As Integer = X64ChildAt(ps, nodeIdx, 1), vt As String
+    If UXBStep3InferExprType(ps, arg, vt, errText) = 0 Then Return 0
+    Dim fk As Integer = X64TypeToFloatKind(vt), valueKind As Integer = 1
+    Dim firstText As Integer = gX64CallTextCount, ownedText As Integer = 0
+    If X64TypeNameIsStringLike(vt) <> 0 Then
+        valueKind = 3
+        ownedText = X64CreateCallTextSlot(cg, errText)
+        If ownedText = 0 Then Return 0
+    ElseIf fk <> 0 Then
+        valueKind = 2
+    End If
+    If X64SyncEmitArgument(ps, arg, cg, fk, errText, ownedText) = 0 Then Return 0
+    If fk <> 0 Then
+        If fk = UXF_F32 Then X64EmitText cg, "    cvtss2sd xmm0, xmm0"
+        X64EmitText cg, "    movq rax, xmm0"
+    End If
+    X64EmitText cg, "    mov r8, rax"
+    X64EmitText cg, "    mov edx, " & X64ToStr(valueKind)
+    X64EmitText cg, "    mov rcx, " & X64FormatRbpRef(frame)
+    X64EmitCall0 cg, "__uxb_rt_list_add"
+    X64EmitText cg, "    mov " & X64FormatRbpRef(frame + 8) & ", rax"
+    X64ReleaseCallText cg, firstText
+    X64EmitText cg, "    mov rax, " & X64FormatRbpRef(frame + 8)
+    Return 1
+End Function
+
+' Cooperative cancellation also covers helpers called by task lanes.
+' Runtime returns zero outside a task, so ordinary calls keep their behavior.
+Private Sub X64TaskEmitCancelPoint(ByRef ps As ParseState, ByRef cg As X64CodegenContext)
+    If X64TaskUsesV2(ps) = 0 Or cg.currentRoutineLabel = "" Or cg.currentEpilogLabel = "" Then Exit Sub
+    Dim okLabel As String = X64NextLabel(cg, "task_not_cancelled")
+    X64EmitCall0 cg, "__uxb_rt_task_cancel_point"
+    X64EmitText cg, "    test rax, rax"
+    X64EmitText cg, "    jz " & okLabel
+    X64EmitText cg, "    xor eax, eax"
+    X64EmitText cg, "    jmp " & cg.currentEpilogLabel
+    X64EmitLabel cg, okLabel
+End Sub

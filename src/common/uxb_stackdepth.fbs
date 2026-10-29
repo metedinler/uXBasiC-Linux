@@ -1,0 +1,40 @@
+#ifndef UXB_STACKDEPTH_FBS
+#define UXB_STACKDEPTH_FBS
+
+' ===========================================================================
+' S-543 / G-YORDAM-8: yorumlayicilar (AST, MIR) kullanici ozyinelemesini FreeBASIC ozyinelemesiyle yurutur. Windows'ta
+' varsayilan 1 MB yigin MIR'de derinlik ~50, AST'de ~200 civarinda iletisiz erisim ihlaliyle (0xC0000005) dusuruyordu
+' (x64 ve JS 2000'i rahat geciyordu). Iki parca:
+'   1) Resmi derleme yigini buyutur: fbc ... -t 65536 (64 MB; sanal adres ayrilir, yalniz kullanilan bellek tutulur).
+'      Not: -exx yigin denetimi yalniz bu bayrakla buyuyen ANA is parcacigi yigina uyar; ThreadCreate ile buyuk
+'      yiginli is parcacigi -exx altinda yine "Aborting : stack overflow" verir (denendi).
+'      Bayrak degeri BILEREK 64 MB: exe basligindaki yigin boyutu surecteki HER is parcacigina uygulanir ve imaj
+'      tabani 0x400000 / ASLR kapali oldugundan buyuk yigin heap adreslerini yukari iter (olculen: ~4,7 x yigin). 256 MB'ta
+'      VARPTR adresleri ~1,14 GB'a cikti ve uxffi.dll'in 0x40000000-0x7FFFFFFF "isaretci belirteci" bandina girip
+'      "stale or invalid pointer handle token" verdi (tests/language_guards/print_order_direct_write, MIR). Bkz. S-653.
+'   2) Bu dosya: guvenli ozyineleme derinligini islemin GERCEK yigin boyutundan hesaplar. Bayraksiz (1 MB) bir derlemede
+'      sinir kendiliginden dusuk kalir ve asilinca iletisiz coken program yerine temiz "call stack limit exceeded" verilir.
+' ===========================================================================
+#ifdef __FB_WIN32__
+Declare Sub UxbStackGetLimits StdCall Lib "kernel32" Alias "GetCurrentThreadStackLimits" (ByVal lowLimit As ULongInt Ptr, ByVal highLimit As ULongInt Ptr)
+#endif
+
+' bytesPerLevel: yorumlayicinin bir kullanici ozyineleme seviyesindeki en kotu yigin tuketimi. Sonuc [8, maxDepth] araligindadir.
+' Her cagirdigi is parcaciginin yigin sinirlarini okur (gorev is parcaciklari ana is parcacigindan farkli yiginli olabilir).
+Function UXBStackSafeCallDepth(ByVal bytesPerLevel As Integer, ByVal maxDepth As Integer) As Integer
+#ifdef __FB_WIN32__
+    Dim stackLow As ULongInt
+    Dim stackHigh As ULongInt
+    UxbStackGetLimits @stackLow, @stackHigh
+    Dim usableBytes As LongInt = CLngInt(stackHigh - stackLow) - 262144   ' koruma sayfalari + calisma zamani payi
+    If usableBytes < 0 Then usableBytes = 0
+    Dim safeDepth As LongInt = usableBytes \ bytesPerLevel
+    If safeDepth > maxDepth Then safeDepth = maxDepth
+    If safeDepth < 8 Then safeDepth = 8
+    Return CInt(safeDepth)
+#else
+    Return maxDepth
+#endif
+End Function
+
+#endif

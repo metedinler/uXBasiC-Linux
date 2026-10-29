@@ -1,3 +1,4 @@
+#include once "../common/report_writer.fbs"
 Private Function MIRStageJsonStatus(ByRef stageName As String) As String
     Select Case UCase(Trim(stageName))
     Case "LEXER", "PARSER", "AST", "SEMANTIC", "HIR", "MIR", "MIR_OPT", "INTERPRETER_BACKEND", "CODEGEN_BACKEND", "INTEROP_BUILD", "RUNTIME_LIBRARY", "FINAL_BUILD_LINK"
@@ -29,15 +30,12 @@ Function MIRWritePipelineFlowJson(ByRef outPath As String, ByRef errText As Stri
     jsonText &= "  ]" & Chr(10)
     jsonText &= "}" & Chr(10)
 
-    Dim f As Integer
-    f = FreeFile
-    Open outPath For Output As #f
-    If Err <> 0 Then
-        errText = "MIR: pipeline json open failed " & outPath
+    ' S-466 (ayni sinif): ust klasor yokken ciplak `Open` -exx altinda programi iptal ediyordu; ortak yazici klasoru olusturur.
+    Dim writeErr As String
+    If UXBReportWriteText(outPath, jsonText, writeErr) = 0 Then
+        errText = "MIR: pipeline json open failed " & outPath & " (" & writeErr & ")"
         Return 0
     End If
-    Print #f, jsonText;
-    Close #f
 
     errText = ""
     Return 1

@@ -1,0 +1,8 @@
+%%TARGET WEB
+%%HTML_BEGIN "index.html" BODY
+<canvas id="screen" width="320" height="200"></canvas>
+%%HTML_END
+%%JS_BEGIN "canvas.js" RUNTIME
+const c = document.getElementById('screen');
+%%JS_END
+PRINT "CANVAS_SURFACE"

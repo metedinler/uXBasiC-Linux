@@ -1,0 +1,15 @@
+' S-579: Türkçe harfli işlev, altyordam ve parametre adları (özyineleme dahil)
+FUNCTION Çarp(ğ AS I32, Ş AS I32) AS I32
+    RETURN ğ * Ş
+END FUNCTION
+FUNCTION Faktöriyel(n AS I32) AS I32
+    IF n <= 1 THEN RETURN 1
+    RETURN n * Faktöriyel(n - 1)
+END FUNCTION
+SUB Yazdır(değer AS I32)
+    PRINT değer
+END SUB
+PRINT ÇARP(6, 7)
+PRINT faktöriyel(5)
+Yazdır(42)
+Yazdır(çarp(3, 3))

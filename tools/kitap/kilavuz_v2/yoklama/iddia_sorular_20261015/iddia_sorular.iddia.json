@@ -1,0 +1,278 @@
+[
+ {
+  "ad": "d01 SUB ileri kullanim, DECLARE yok",
+  "kod": "Selam(3)\nSUB Selam(n AS I32)\n    PRINT n\nEND SUB"
+ },
+ {
+  "ad": "d02 FUNCTION ileri kullanim, DECLARE yok",
+  "kod": "PRINT Iki(4)\nFUNCTION Iki(x AS I32) AS I32\n    RETURN x * 2\nEND FUNCTION"
+ },
+ {
+  "ad": "d03 KONTROL FUNCTION DECLARE ile (kitap 8.5)",
+  "kod": "DECLARE FUNCTION Iki(x AS I32) AS I32\nPRINT Iki(4)\nFUNCTION Iki(x AS I32) AS I32\n    RETURN x * 2\nEND FUNCTION"
+ },
+ {
+  "ad": "d04 SUB DECLARE ile",
+  "kod": "DECLARE SUB Selam(n AS I32)\nSelam(3)\nSUB Selam(n AS I32)\n    PRINT n\nEND SUB"
+ },
+ {
+  "ad": "d05 DECLARE imzasi tanimla uyusmuyor",
+  "kod": "DECLARE FUNCTION Iki(x AS I32) AS I32\nPRINT Iki(4)\nFUNCTION Iki(x AS F64) AS F64\n    RETURN x * 2\nEND FUNCTION"
+ },
+ {
+  "ad": "d06 DECLARE var, tanim yok, cagri yok",
+  "kod": "DECLARE FUNCTION Yok(x AS I32) AS I32\nPRINT 1"
+ },
+ {
+  "ad": "d06b DECLARE var, tanim yok, cagri VAR",
+  "kod": "DECLARE FUNCTION Yok(x AS I32) AS I32\nPRINT Yok(3)"
+ },
+ {
+  "ad": "d07 DECLARE THREAD",
+  "kod": "DECLARE THREAD Hesapla(n AS I32) AS I32\nDIM t AS TASK OF I32 = SPAWN Hesapla(5)\nPRINT t.JOIN()\nTHREAD Hesapla(n AS I32) AS I32\n    RETURN n * n\nEND THREAD"
+ },
+ {
+  "ad": "d08 DECLARE EVENT",
+  "kod": "DECLARE EVENT Gelen(v AS I32)\nTRIGGER EVENT Gelen, 7\nEVENT Gelen(v AS I32)\n    PRINT v\nEND EVENT"
+ },
+ {
+  "ad": "d09 DECLARE PIPE",
+  "kod": "DECLARE PIPE Olc(v AS I32) AS I32\nTRIGGER PIPE Olc, 4\nPRINT CINT(TASKOUT)\nPIPE Olc(v AS I32) AS I32\n    RETURN v * 2\nEND PIPE"
+ },
+ {
+  "ad": "d10 DECLARE PARALEL",
+  "kod": "DECLARE PARALEL Toplu(a AS I32, b AS I32) AS I32\nDIM t AS TASK OF I32 = SPAWN Toplu(2, 3)\nPRINT t.JOIN()\nPARALEL Toplu(a AS I32, b AS I32) AS I32\n    RETURN a + b\nEND PARALEL"
+ },
+ {
+  "ad": "d11 THREAD tanimdan once SPAWN, DECLARE yok",
+  "kod": "DIM t AS TASK OF I32 = SPAWN Hesapla(5)\nPRINT t.JOIN()\nTHREAD Hesapla(n AS I32) AS I32\n    RETURN n * n\nEND THREAD"
+ },
+ {
+  "ad": "d12 EVENT tanimdan once TRIGGER, DECLARE yok",
+  "kod": "TRIGGER EVENT Gelen, 7\nEVENT Gelen(v AS I32)\n    PRINT v\nEND EVENT"
+ },
+ {
+  "ad": "d13 PIPE tanimdan once TRIGGER, DECLARE yok",
+  "kod": "TRIGGER PIPE Olc, 4\nPRINT CINT(TASKOUT)\nPIPE Olc(v AS I32) AS I32\n    RETURN v * 2\nEND PIPE"
+ },
+ {
+  "ad": "d14 PARALEL tanimdan once SPAWN, DECLARE yok",
+  "kod": "DIM t AS TASK OF I32 = SPAWN Toplu(2, 3)\nPRINT t.JOIN()\nPARALEL Toplu(a AS I32, b AS I32) AS I32\n    RETURN a + b\nEND PARALEL"
+ },
+ {
+  "ad": "d15 KONTROL SLOT blogu",
+  "kod": "EVENT VeriGeldi(v AS I32)\n    PRINT v\nEND EVENT\nSLOT\n    Kaydet 5 ON EVENT VeriGeldi\nEND SLOT\nTRIGGER EVENT VeriGeldi, 3"
+ },
+ {
+  "ad": "d16 TRIGGER slot adiyla",
+  "kod": "EVENT VeriGeldi(v AS I32)\n    PRINT v\nEND EVENT\nSLOT\n    Kaydet 5 ON EVENT VeriGeldi\nEND SLOT\nTRIGGER Kaydet, 4"
+ },
+ {
+  "ad": "d17 DECLARE SLOT",
+  "kod": "DECLARE SLOT Kaydet\nPRINT 1"
+ },
+ {
+  "ad": "f01 KONTROL kanal numarasi degisken",
+  "kod": "DIM f AS I32 = 3\nOPEN \"C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/dosya_deney/f01.txt\" FOR OUTPUT AS #f\nPRINT #f, \"merhaba\"\nCLOSE #f\nDIM s AS STRING\nOPEN \"C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/dosya_deney/f01.txt\" FOR INPUT AS #f\nINPUT #f, s\nCLOSE #f\nPRINT s"
+ },
+ {
+  "ad": "f02 FREEFILE",
+  "kod": "DIM f AS I32 = FREEFILE\nOPEN \"C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/dosya_deney/f02.txt\" FOR OUTPUT AS #f\nPRINT #f, \"x\"\nCLOSE #f\nPRINT f"
+ },
+ {
+  "ad": "f03 kanal TYPE alanindan",
+  "kod": "TYPE Kanal\n    no AS I32\nEND TYPE\nDIM k AS Kanal\nk.no = 4\nOPEN \"C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/dosya_deney/f03.txt\" FOR OUTPUT AS #k.no\nPRINT #k.no, \"y\"\nCLOSE #k.no\nPRINT \"tamam\""
+ },
+ {
+  "ad": "f04 dosya tutamaci tipi FILE",
+  "kod": "DIM f AS FILE\nOPEN \"C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/dosya_deney/f04.txt\" FOR OUTPUT AS f\nPRINT #f, \"z\"\nCLOSE f\nPRINT \"tamam\""
+ },
+ {
+  "ad": "f05 dosya tutamaci tipi FILE_HANDLE",
+  "kod": "DIM f AS FILE_HANDLE\nf = OPEN(\"C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/dosya_deney/f05.txt\" FOR OUTPUT)\nPRINT \"tamam\""
+ },
+ {
+  "ad": "f06 kanal ifade",
+  "kod": "OPEN \"C:/Users/mete/AppData/Local/Temp/claude/C--Users-mete-Downloads-BasicOyunSource-UXBc-Clean-UXBc-uxb/b85b832d-c86f-49e6-b0a0-47af736f8686/scratchpad/dosya_deney/f06.txt\" FOR OUTPUT AS #(1 + 1)\nPRINT #(1 + 1), \"w\"\nCLOSE #(1 + 1)\nPRINT \"tamam\""
+ },
+ {
+  "ad": "v01 dizi baslangic degeri suslu",
+  "kod": "DIM a(2) AS I32 = {1, 2, 3}\nPRINT a(0); a(1); a(2)"
+ },
+ {
+  "ad": "v02 LIST koseli sabit",
+  "kod": "DIM l AS LIST = [1, 2, 3]\nPRINT LISTLEN(l)"
+ },
+ {
+  "ad": "v03 DICT suslu sabit",
+  "kod": "DIM d AS DICT = {\"a\": 1, \"b\": 2}\nPRINT DICTLEN(d)"
+ },
+ {
+  "ad": "v04 SET suslu sabit",
+  "kod": "DIM s AS SET = {1, 2, 3}\nPRINT SETLEN(s)"
+ },
+ {
+  "ad": "v05 TUPLE parantez sabit",
+  "kod": "DIM t AS TUPLE = (1, 2, 3)\nPRINT 1"
+ },
+ {
+  "ad": "v06 DATAFRAME tipi",
+  "kod": "DIM df AS DATAFRAME\nPRINT 1"
+ },
+ {
+  "ad": "v07 DATA READ RESTORE",
+  "kod": "DATA 10, 20, 30\nDIM a AS I32\nREAD a\nPRINT a\nREAD a\nPRINT a\nRESTORE\nREAD a\nPRINT a"
+ },
+ {
+  "ad": "v08 READ dizi elemanina",
+  "kod": "DIM a(2) AS I32\nDIM i AS I32\nDATA 5, 6, 7\nFOR i = 0 TO 2\n    READ a(i)\nNEXT\nPRINT a(0); a(1); a(2)"
+ },
+ {
+  "ad": "v09 KONTROL DATA ad olarak kullanilabilir",
+  "kod": "DIM data AS I32 = 5\nPRINT data"
+ },
+ {
+  "ad": "v10 KONTROL LIST islev ile",
+  "kod": "DIM l AS LIST\nLISTADD(l, 1)\nLISTADD(l, 2)\nLISTADD(l, 3)\nPRINT LISTLEN(l)"
+ },
+ {
+  "ad": "t01 ANY degisken tipi",
+  "kod": "DIM x AS ANY\nPRINT 1"
+ },
+ {
+  "ad": "t02 VARIANT degisken tipi",
+  "kod": "DIM x AS VARIANT\nPRINT 1"
+ },
+ {
+  "ad": "t03 OBJECT degisken tipi",
+  "kod": "DIM x AS OBJECT\nPRINT 1"
+ },
+ {
+  "ad": "t04 NONE degisken tipi",
+  "kod": "DIM x AS NONE\nPRINT 1"
+ },
+ {
+  "ad": "t05 NODE degisken tipi",
+  "kod": "DIM x AS NODE\nPRINT 1"
+ },
+ {
+  "ad": "t06 VOID degisken tipi",
+  "kod": "DIM x AS VOID\nPRINT 1"
+ },
+ {
+  "ad": "t07 NAN tip degisken tipi",
+  "kod": "DIM x AS NAN\nPRINT 1"
+ },
+ {
+  "ad": "t08 NaN degeri 0/0",
+  "kod": "DIM z AS F64 = 0.0\nDIM n AS F64 = z / z\nPRINT n\nPRINT n = n"
+ },
+ {
+  "ad": "t09 NAN sabiti",
+  "kod": "PRINT NAN"
+ },
+ {
+  "ad": "t10 ISNAN",
+  "kod": "DIM z AS F64 = 0.0\nPRINT ISNAN(z / z)"
+ },
+ {
+  "ad": "o01 coklu kalitim EXTENDS A, B",
+  "kod": "CLASS A\n    PUBLIC\n    METHOD Fa() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nCLASS B\n    PUBLIC\n    METHOD Fb() AS I32\n        RETURN 2\n    END METHOD\nEND CLASS\nCLASS C EXTENDS A, B\n    PUBLIC\nEND CLASS\nDIM c AS C = NEW C()\nPRINT c.Fa(); c.Fb()"
+ },
+ {
+  "ad": "o02 MIXIN bloku",
+  "kod": "MIXIN Selamla\n    METHOD Selam() AS I32\n        RETURN 7\n    END METHOD\nEND MIXIN\nPRINT 1"
+ },
+ {
+  "ad": "o03 ABSTRACT CLASS",
+  "kod": "ABSTRACT CLASS Sekil\n    PUBLIC\n    ABSTRACT METHOD Alan() AS I32\nEND CLASS\nPRINT 1"
+ },
+ {
+  "ad": "o04 FINAL CLASS",
+  "kod": "FINAL CLASS Tek\n    PUBLIC\n    METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND CLASS\nPRINT 1"
+ },
+ {
+  "ad": "o05 KONTROL iki arayuz (kitap 11.5)",
+  "kod": "INTERFACE IToplayici\n    METHOD Topla(a AS I32, b AS I32) AS I32\nEND INTERFACE\nINTERFACE ICarpici\n    METHOD Carp(a AS I32, b AS I32) AS I32\nEND INTERFACE\nCLASS Islemci IMPLEMENTS IToplayici, ICarpici\n    PUBLIC\n    METHOD Topla(a AS I32, b AS I32) AS I32\n        RETURN a + b\n    END METHOD\n    METHOD Carp(a AS I32, b AS I32) AS I32\n        RETURN a * b\n    END METHOD\nEND CLASS\nDIM t AS IToplayici = NEW Islemci()\nPRINT t.Topla(1, 2)"
+ },
+ {
+  "ad": "o06 STATIC alan",
+  "kod": "CLASS Sayac\n    PUBLIC\n    STATIC DIM adet AS I32\nEND CLASS\nSayac.adet = 5\nPRINT Sayac.adet"
+ },
+ {
+  "ad": "o07 STATIC metot",
+  "kod": "CLASS Y\n    PUBLIC\n    STATIC METHOD Yap() AS I32\n        RETURN 9\n    END METHOD\nEND CLASS\nPRINT Y.Yap()"
+ },
+ {
+  "ad": "o08 ic ice sinif",
+  "kod": "CLASS Dis\n    PUBLIC\n    CLASS Ic\n        PUBLIC\n        DIM x AS I32\n    END CLASS\nEND CLASS\nPRINT 1"
+ },
+ {
+  "ad": "o09 arayuzde varsayilan metot govdesi",
+  "kod": "INTERFACE IA\n    METHOD F() AS I32\n        RETURN 1\n    END METHOD\nEND INTERFACE\nPRINT 1"
+ },
+ {
+  "ad": "o10 jenerik sinif",
+  "kod": "CLASS Kutu<T>\n    PUBLIC\n    DIM v AS T\nEND CLASS\nPRINT 1"
+ },
+ {
+  "ad": "o11 INSTANCEOF",
+  "kod": "CLASS Hayvan\n    PUBLIC\n    VIRTUAL METHOD Ses() AS STRING\n        RETURN \"...\"\n    END METHOD\nEND CLASS\nCLASS Kopek EXTENDS Hayvan\n    PUBLIC\nEND CLASS\nDIM k AS Kopek = NEW Kopek()\nDIM h AS Hayvan = k\nPRINT h INSTANCEOF Kopek"
+ },
+ {
+  "ad": "o12 sinif sabiti CONST",
+  "kod": "CLASS K\n    PUBLIC\n    CONST SINIR = 10\nEND CLASS\nPRINT 1"
+ },
+ {
+  "ad": "o13 USES bilesim",
+  "kod": "CLASS Motor\n    PUBLIC\n    METHOD Calis() AS I32\n        RETURN 3\n    END METHOD\nEND CLASS\nCLASS Araba USES Motor\n    PUBLIC\nEND CLASS\nPRINT 1"
+ },
+ {
+  "ad": "o14 SUPER ile taban kurucusu",
+  "kod": "CLASS A\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR(ax AS I32)\n        x = ax\n    END CONSTRUCTOR\nEND CLASS\nCLASS B EXTENDS A\n    PUBLIC\n    CONSTRUCTOR(bx AS I32)\n        SUPER(bx)\n    END CONSTRUCTOR\nEND CLASS\nDIM b AS B = NEW B(5)\nPRINT b.x"
+ },
+ {
+  "ad": "o15 operator yukleme MAGIC (kontrol)",
+  "kod": "CLASS V\n    PUBLIC\n    DIM x AS I32\n    MAGIC ADD(o AS V) AS V\n        DIM r AS V = NEW V()\n        r.x = x + o.x\n        RETURN r\n    END MAGIC\nEND CLASS\nDIM a AS V = NEW V()\na.x = 2\nDIM b AS V = NEW V()\nb.x = 3\nDIM c AS V = a + b\nPRINT c.x"
+ },
+ {
+  "ad": "a01 pp ALIAS anahtar sozcuge",
+  "kod": "%%ALIAS YAZ AS PRINT\nYAZ \"merhaba\""
+ },
+ {
+  "ad": "a02 KONTROL dil ALIAS ad alani (kitap 16.3)",
+  "kod": "NAMESPACE Cok_Uzun_Bir_Ad_Alani\n    FUNCTION Kare(x AS I32) AS I32\n        RETURN x * x\n    END FUNCTION\nEND NAMESPACE\nALIAS KA = Cok_Uzun_Bir_Ad_Alani\nPRINT KA.Kare(7)"
+ },
+ {
+  "ad": "a03 pp ALIAS dongu",
+  "kod": "%%ALIAS A AS B\n%%ALIAS B AS A\nPRINT 1"
+ },
+ {
+  "ad": "a04 dil ALIAS tip",
+  "kod": "ALIAS Sayi = I32\nDIM x AS Sayi = 5\nPRINT x"
+ },
+ {
+  "ad": "a05 dil ALIAS islev",
+  "kod": "FUNCTION Topla(a AS I32, b AS I32) AS I32\n    RETURN a + b\nEND FUNCTION\nALIAS Plus = Topla\nPRINT Plus(2, 3)"
+ },
+ {
+  "ad": "a06 pp ALIAS komuta (SUB adi)",
+  "kod": "%%ALIAS Selam AS Merhaba\nSUB Merhaba()\n    PRINT \"ok\"\nEND SUB\nSelam()"
+ },
+ {
+  "ad": "a07 meta REM %%ALIAS (hedef tasarim)",
+  "kod": "REM %%ALIAS KISA AS UZUN\nPRINT 1"
+ },
+ {
+  "ad": "m01 KONTROL (adres),Y dolayli (kitap 14.5)",
+  "kod": "POKEQ 100, 200\nPOKEB 200, 10\nPOKEB 201, 20\nPOKEB 202, 30\nDIM y AS I32 = 2\nPRINT PEEKB(PEEKQ(100) + y)\nPRINT PEEKB(PEEKQ(100 + 0) + 1)"
+ },
+ {
+  "ad": "m02 ADDR etkin adres islevi",
+  "kod": "PRINT ADDR(100, 2, 4, 8)"
+ },
+ {
+  "ad": "m03 sifir sayfasi sarmasi (zp,X) elle",
+  "kod": "POKEB 32, 7\nPOKEB 16, 99\nDIM x AS I32 = 240\nPRINT PEEKB((32 + x) AND 255)"
+ }
+]

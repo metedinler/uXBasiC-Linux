@@ -1,0 +1,15 @@
+NAMESPACE S
+    DECLARE FUNCTION Left(left AS I32, right AS I32) AS I32
+    FUNCTION Left(left AS I32, right AS I32) AS I32
+        RETURN left + right
+    END FUNCTION
+END NAMESPACE
+TYPE Pair
+    left AS I32
+    right AS I32
+END TYPE
+DIM pairValue AS Pair
+pairValue.left = 11
+PRINT LEFT("Merhaba", 3)
+PRINT S.Left(3, 4)
+PRINT pairValue.left

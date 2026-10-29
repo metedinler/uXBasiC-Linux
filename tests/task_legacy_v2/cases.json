@@ -1,0 +1,133 @@
+{
+  "nested_fib": {
+    "output": "377",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "group_sum": {
+    "output": "75480\nDONE",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "string_snapshot": {
+    "output": "ababab\nBOZULDU",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "nul_snapshot": {
+    "output": "3\n6\n66\n0\n90",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "zero_args": {
+    "output": "42\nDONE\n42",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "mixed_six_args": {
+    "output": "42\n42\n1.75\n1.75",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "empty_group": {
+    "output": "EMPTY",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "cancel_running": {
+    "output": "CANCELLED\nCANCELLED",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "task_error": {
+    "output": "ERROR\n-1",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "null_join": {
+    "output": "",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ],
+    "error": "bos (NULL) gorev tutamaci"
+  },
+  "unread_error": {
+    "output": "",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ],
+    "error": "okunmamis gorev hatasi"
+  },
+  "local_dim_zero": {
+    "output": "5050\n3\n5050",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64",
+      "JS",
+      "WASM"
+    ]
+  },
+  "ffi_plan_order": {
+    "output": "-1\n42\n42",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "numeric_result_conversion": {
+    "output": "3\n3\n4\n-1",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  },
+  "numeric_result_requires_cast": {
+    "error": "assignment requires explicit cast TYPE_F64 to TYPE_I32",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "AST-x64"
+    ]
+  }
+}

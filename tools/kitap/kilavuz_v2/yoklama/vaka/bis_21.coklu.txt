@@ -1,0 +1,238 @@
+N1a sinif alani LIST, kurucuda LIST_NEW (beklenen 2 / armut)
+CLASS Sepet
+    PUBLIC
+    DIM urunler AS LIST
+    CONSTRUCTOR()
+        urunler = LIST_NEW()
+    END CONSTRUCTOR
+    METHOD Ekle(u AS STRING)
+        LISTADD(urunler, u)
+    END METHOD
+    METHOD Say() AS I32
+        RETURN LISTLEN(urunler)
+    END METHOD
+END CLASS
+DIM s AS Sepet = NEW Sepet()
+s.Ekle("elma")
+s.Ekle("armut")
+PRINT s.Say()
+DIM u AS STRING
+FOR EACH u IN s.urunler
+    PRINT u
+NEXT
+=====
+N1b sinif alani DICT, kurucuda DICT_NEW (beklenen 2 / 5)
+CLASS Defter
+    PUBLIC
+    DIM kayit AS DICT
+    CONSTRUCTOR()
+        kayit = DICT_NEW()
+    END CONSTRUCTOR
+    METHOD Yaz(k AS STRING, v AS I32)
+        DICTSET(kayit, k, v)
+    END METHOD
+    METHOD Say() AS I32
+        RETURN DICTLEN(kayit)
+    END METHOD
+END CLASS
+DIM d AS Defter = NEW Defter()
+d.Yaz("a", 5)
+d.Yaz("b", 6)
+PRINT d.Say()
+PRINT DICTGET(d.kayit, "a")
+=====
+N2 dizi elemani LIST, LIST_NEW ile (beklenen 1 / 2)
+DIM dz(2) AS LIST
+dz(0) = LIST_NEW()
+dz(1) = LIST_NEW()
+LISTADD(dz(0), 5)
+LISTADD(dz(1), 6)
+LISTADD(dz(1), 7)
+PRINT LISTLEN(dz(0))
+PRINT LISTLEN(dz(1))
+=====
+N3a DIM ... AS LIST = LISTGET (beklenen 1)
+DIM dis AS LIST
+DIM ic AS LIST
+LISTADD(ic, 5)
+LISTADD(dis, ic)
+DIM geri AS LIST = LISTGET(dis, 0)
+PRINT LISTLEN(geri)
+=====
+N3b LIST(...) donusumu (beklenen 1)
+DIM dis AS LIST
+DIM ic AS LIST
+LISTADD(ic, 5)
+LISTADD(dis, ic)
+DIM geri AS LIST
+geri = LIST(LISTGET(dis, 0))
+PRINT LISTLEN(geri)
+=====
+N4 FOR EACH ile ic listeyi gezmek (beklenen 5 / 6)
+DIM dis AS LIST
+DIM ic AS LIST
+LISTADD(ic, 5)
+LISTADD(ic, 6)
+LISTADD(dis, ic)
+DIM v AS I32
+FOR EACH v IN LISTGET(dis, 0)
+    PRINT v
+NEXT
+=====
+N5 LIST icinde TYPE kaydi, FOR EACH ile (beklenen 3 / 4)
+TYPE Nok
+    x AS I32
+    y AS I32
+END TYPE
+DIM p AS Nok
+p.x = 3
+p.y = 4
+DIM l AS LIST
+LISTADD(l, p)
+DIM q AS Nok
+FOR EACH q IN l
+    PRINT q.x
+    PRINT q.y
+NEXT
+=====
+N6a nesne alani, kurucuda THIS ile (beklenen 90)
+CLASS Motor
+    PUBLIC
+    DIM guc AS I32
+    CONSTRUCTOR(g AS I32)
+        guc = g
+    END CONSTRUCTOR
+END CLASS
+CLASS Araba
+    PUBLIC
+    DIM m AS Motor
+    CONSTRUCTOR(g AS I32)
+        THIS.m = NEW Motor(g)
+    END CONSTRUCTOR
+END CLASS
+DIM a AS Araba = NEW Araba(90)
+PRINT a.m.guc
+=====
+N6b nesne alani, disaridan atama (beklenen 90)
+CLASS Motor
+    PUBLIC
+    DIM guc AS I32
+    CONSTRUCTOR(g AS I32)
+        guc = g
+    END CONSTRUCTOR
+END CLASS
+CLASS Araba
+    PUBLIC
+    DIM m AS Motor
+END CLASS
+DIM a AS Araba = NEW Araba()
+a.m = NEW Motor(90)
+PRINT a.m.guc
+=====
+N6c nesne alani, yerel degiskenle atama (beklenen 90)
+CLASS Motor
+    PUBLIC
+    DIM guc AS I32
+    CONSTRUCTOR(g AS I32)
+        guc = g
+    END CONSTRUCTOR
+END CLASS
+CLASS Araba
+    PUBLIC
+    DIM m AS Motor
+END CLASS
+DIM mm AS Motor = NEW Motor(90)
+DIM a AS Araba = NEW Araba()
+a.m = mm
+PRINT a.m.guc
+PRINT mm.guc
+=====
+N7a sinif alani TYPE, disaridan guncelleme (beklenen 12 / 20)
+TYPE Nok
+    x AS I32
+    y AS I32
+END TYPE
+CLASS Sekil
+    PUBLIC
+    DIM merkez AS Nok
+END CLASS
+DIM s AS Sekil = NEW Sekil()
+s.merkez.x = 10
+s.merkez.y = 20
+s.merkez.x = s.merkez.x + 2
+PRINT s.merkez.x
+PRINT s.merkez.y
+=====
+N7b sinif alani TYPE, yerel kopya ile metot icinden (beklenen 12 / 20)
+TYPE Nok
+    x AS I32
+    y AS I32
+END TYPE
+CLASS Sekil
+    PUBLIC
+    DIM merkez AS Nok
+    METHOD Tasi(dx AS I32)
+        DIM t AS Nok
+        t = merkez
+        t.x = t.x + dx
+        merkez = t
+    END METHOD
+END CLASS
+DIM s AS Sekil = NEW Sekil()
+s.merkez.x = 10
+s.merkez.y = 20
+s.Tasi(2)
+PRINT s.merkez.x
+PRINT s.merkez.y
+=====
+N7c sinif alani TYPE, metot sadece okur (beklenen 30)
+TYPE Nok
+    x AS I32
+    y AS I32
+END TYPE
+CLASS Sekil
+    PUBLIC
+    DIM merkez AS Nok
+    METHOD Topla() AS I32
+        RETURN merkez.x + merkez.y
+    END METHOD
+END CLASS
+DIM s AS Sekil = NEW Sekil()
+s.merkez.x = 10
+s.merkez.y = 20
+PRINT s.Topla()
+=====
+N8 sinif alani dizi, erisim metotlariyla (beklenen 5 / 6)
+CLASS Hane
+    PUBLIC
+    DIM d(3) AS I32
+    METHOD Koy(i AS I32, v AS I32)
+        d(i) = v
+    END METHOD
+    METHOD Al(i AS I32) AS I32
+        RETURN d(i)
+    END METHOD
+END CLASS
+DIM h AS Hane = NEW Hane()
+h.Koy(0, 5)
+h.Koy(1, 6)
+PRINT h.Al(0)
+PRINT h.Al(1)
+=====
+N9 TYPE alani nesne, yerel degiskenle (beklenen 90)
+CLASS Motor
+    PUBLIC
+    DIM guc AS I32
+    CONSTRUCTOR(g AS I32)
+        guc = g
+    END CONSTRUCTOR
+END CLASS
+TYPE Kayit
+    ad AS STRING
+    m AS Motor
+END TYPE
+DIM mm AS Motor = NEW Motor(90)
+DIM k AS Kayit
+k.ad = "x"
+k.m = mm
+PRINT k.m.guc

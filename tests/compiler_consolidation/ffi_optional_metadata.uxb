@@ -1,0 +1,5 @@
+DIM pid AS U32
+pid = CALL(API, "kernel32", "GetCurrentProcessId", U32)
+PRINT pid > 0
+PRINT CALL(DLL, "ucrtbase.dll", "strlen", U64, "STRPTR", "uXBasic")
+PRINT CALL(DLL, "ucrtbase.dll", "strlen", U64, CDECL, "STRPTR", "abcd")

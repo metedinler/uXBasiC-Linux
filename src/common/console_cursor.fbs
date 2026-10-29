@@ -1,0 +1,24 @@
+#ifndef UXB_CONSOLE_CURSOR_FBS
+#define UXB_CONSOLE_CURSOR_FBS
+
+' Portable console coordinates: row is one-based, column offset zero-based.
+' Count UTF-8 scalar starts, not continuation bytes; controls do not occupy cells.
+Sub UXBConsoleAdvance(ByRef textValue As String, ByRef rowValue As Integer, ByRef columnOffset As Integer)
+    For cursorByte As Integer = 1 To Len(textValue)
+        Dim b As Integer = Asc(textValue, cursorByte)
+        Select Case b
+        Case 10
+            rowValue += 1: columnOffset = 0
+        Case 13
+            columnOffset = 0
+        Case 9
+            columnOffset += 8 - (columnOffset Mod 8)
+        Case 8
+            If columnOffset > 0 Then columnOffset -= 1
+        Case Else
+            If b >= 32 And b <> 127 And (b And &HC0) <> &H80 Then columnOffset += 1
+        End Select
+    Next
+End Sub
+
+#endif

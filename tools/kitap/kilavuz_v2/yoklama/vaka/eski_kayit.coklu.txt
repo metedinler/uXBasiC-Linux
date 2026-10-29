@@ -1,0 +1,177 @@
+S083 tek satir IF THEN ELSE (beklenen yes)
+DIM x AS I32 = 5
+IF x > 3 THEN PRINT "yes" ELSE PRINT "no"
+=====
+S084 degisken adi tur adiyla cakisir (beklenen 5)
+DIM i64 AS I64
+i64 = 5
+PRINT i64
+=====
+S132 F32 degiskene sabit atama (beklenen 2.5)
+DIM x AS F32
+x = 2.5
+PRINT x
+=====
+S132 F32 degiskene CSNG ile atama (beklenen 2.5)
+DIM x AS F32
+x = CSNG(2.5)
+PRINT x
+=====
+S132 F32 degiskene F32(d) ile atama (beklenen 2.5)
+DIM d AS F64 = 2.5
+DIM x AS F32
+x = F32(d)
+PRINT x
+=====
+S161 genel degisken + degistiren cagri sirasi (AST 1 mi, MIR/native 100 mu)
+DIM g AS I32 = 1
+FUNCTION F() AS I32
+    g = 100
+    RETURN 0
+END FUNCTION
+g = g + F()
+PRINT g
+=====
+S166 FUNCTION I32 donusu F64 deger (beklenen: acik ret ya da 3)
+FUNCTION G(x AS I32) AS I32
+    DIM d AS F64 = 2.7
+    RETURN x + d
+END FUNCTION
+PRINT G(1)
+=====
+S097 dizi siniri disina yazma
+DIM a(3) AS I32
+a(9) = 7
+PRINT "devam"
+=====
+S097 dizi siniri disindan okuma
+DIM a(3) AS I32
+DIM v AS I32
+v = a(9)
+PRINT v
+=====
+S103 TYPE elemanli dizi parametresi (beklenen 7 ve 11)
+TYPE Pt
+    X AS I32
+    Y AS I32
+END TYPE
+SUB Dolas(arr AS Pt[])
+    PRINT arr(0).X
+    arr(1).Y = 11
+END SUB
+DIM p(2) AS Pt
+p(0).X = 7
+Dolas(p)
+PRINT p(1).Y
+=====
+S078 buyuk sabit toplama (beklenen 9223372036854775817 tasar; I64 sarar)
+PRINT 9223372036854775807 + 10
+=====
+S078 2^53 ustu I64 sabiti (beklenen 9007199254740993)
+DIM a AS I64 = 9007199254740993
+PRINT a
+=====
+S078 onaltili 48 bit sabit (beklenen 140737488355327)
+DIM h AS I64 = &H7FFFFFFFFFFF
+PRINT h
+=====
+S087 STR U64 (beklenen 18446744073709551615)
+DIM u AS U64 = 0
+u = u - 1
+PRINT STR(u)
+=====
+S087 HEX U64 (beklenen FFFFFFFFFFFFFFFF)
+DIM u AS U64 = 0
+u = u - 1
+PRINT HEX(u)
+=====
+S079 SIZEOF F80 (beklenen 10)
+PRINT SIZEOF(F80)
+=====
+S079 SIZEOF I32 (beklenen 4)
+PRINT SIZEOF(I32)
+=====
+S089 I64 dizi indeksi (beklenen 7)
+DIM a(5) AS I32
+DIM i AS I64 = 3
+a(i) = 7
+PRINT a(i)
+=====
+S089 SELECT CASE I64 buyuk deger (beklenen buyuk)
+DIM v AS I64 = 5000000000
+SELECT CASE v
+    CASE 5000000000
+        PRINT "buyuk"
+    CASE ELSE
+        PRINT "baska"
+END SELECT
+=====
+S092 F80 dizisi (beklenen 1.5)
+DIM a(2) AS F80
+a(1) = 1.5
+PRINT a(1)
+=====
+S198-1 CALL(API) GetTickCount (beklenen ok)
+DIM t AS I32
+t = CALL(API, "kernel32", "GetTickCount", I32)
+PRINT "ok"
+=====
+S198-2 MAGIC TOSTRING (beklenen (1,2))
+CLASS Nokta
+    PUBLIC:
+    DIM x AS I32
+    DIM y AS I32
+    MAGIC TOSTRING() AS STRING
+        RETURN "(" + STR(x) + "," + STR(y) + ")"
+    END MAGIC
+END CLASS
+
+DIM p AS Nokta = NEW Nokta()
+p.x = 1
+p.y = 2
+PRINT STR(p)
+=====
+S198-3 MAGIC ADD (beklenen 4)
+CLASS Sayi
+    PUBLIC:
+    DIM v AS I32
+    MAGIC ADD(other AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = v + other.v
+        RETURN r
+    END MAGIC
+END CLASS
+
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+a.v = 1
+b.v = 3
+c = a + b
+PRINT c.v
+=====
+S149 JOIN sonucunu I32 degiskene atama (beklenen 42)
+THREAD Is(x AS I32) AS I32
+    RETURN x * 2
+END THREAD
+DIM t AS TASK OF I32 = SPAWN Is(21)
+DIM n AS I32
+n = t.JOIN()
+PRINT n
+=====
+WASM-metin BYTELEN (oneri; bugun yok)
+DIM s AS STRING
+s = "ÇİP"
+PRINT BYTELEN(s)
+=====
+WASM-metin LEN ve LEFT Turkce (oneri LEN=3 LEFT=Ç)
+DIM s AS STRING
+s = "ÇİP"
+PRINT LEN(s)
+PRINT LEFT(s, 1)
+=====
+WASM-metin ASC ve MID Turkce
+DIM s AS STRING
+s = "çğaö"
+PRINT MID(s, 2, 2)
+PRINT ASC(s)

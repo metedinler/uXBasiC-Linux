@@ -1,0 +1,6 @@
+' S-549 (F3): `OPEN ... AS handle` on a handle that already holds a channel is a run-time error.
+DIM f AS FILE_HANDLE
+OPEN "fh_u1.txt" FOR OUTPUT AS f
+PRINT f
+OPEN "fh_u2.txt" FOR OUTPUT AS f
+PRINT "olmamali"

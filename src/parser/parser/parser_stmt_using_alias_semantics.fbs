@@ -37,7 +37,8 @@ Private Function TryParseAliasTargetRef(ByRef targetText As String, ByRef refOut
         Dim code As Integer
         code = Asc(ch)
 
-        If (code >= 65 And code <= 90) Or (code >= 48 And code <= 57) Or ch = "_" Or ch = "." Then
+        ' S-579: bytes >= 128 are the UTF-8 Turkish letters of an alias target name
+        If (code >= 65 And code <= 90) Or (code >= 48 And code <= 57) Or ch = "_" Or ch = "." Or code >= 128 Then
             ' allowed
         Else
             Return 0

@@ -1,0 +1,9 @@
+DIM A AS F80
+DIM B AS F80
+DIM C AS F80
+
+A = 1.25
+B = 2.50
+C = A + B
+
+PRINT C

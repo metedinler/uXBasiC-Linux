@@ -1,7 +1,13 @@
 ' parser.fbs: see the removal note in inline_backend.fbs (found 2026-09-06).
 #include once "var_mapping.fbs"
 
+Dim Shared gX64TaskWorkers As Integer
+Dim Shared gX64ProgramHasLocks As Integer
+Dim Shared gX64ProgramHasFileIo As Integer
+
 Type X64CodegenContext
+    literalSpans As String
+    literalSpanCount As Integer
     textSection As String
     dataSection As String
     bssSection As String
@@ -22,6 +28,8 @@ Type X64CodegenContext
     nativeRuntimeUsed As Integer
 End Type
 
+Dim Shared gX64FfiNodeIndices(0 To 4095) As Integer
+
 Dim Shared gX64SymbolKeys(0 To 4095) As String
 Dim Shared gX64SymbolLabels(0 To 4095) As String
 Dim Shared gX64GlobalKeys(0 To 4095) As String
@@ -29,6 +37,7 @@ Dim Shared gX64GlobalLabels(0 To 4095) As String
 Dim Shared gX64GlobalSlots(0 To 4095) As Integer
 Dim Shared gX64GlobalElemBytes(0 To 4095) As Integer
 Dim Shared gX64LoopVars(0 To 255) As String
+Dim Shared gX64LoopKinds(0 To 255) As String
 Dim Shared gX64LoopStartLabels(0 To 255) As String
 Dim Shared gX64LoopEndLabels(0 To 255) As String
 Dim Shared gX64LoopStepLabels(0 To 255) As String
@@ -132,11 +141,16 @@ Declare Function X64ArrayLowerBoundOf(ByRef ps As ParseState, ByRef varName As S
 ' S-068: `arr AS T[]` parameters (see x64_codegen_runtime_emit_helpers.fbs).
 Declare Function X64ParamArrayElemBytes(ByRef cg As X64CodegenContext, ByRef varName As String, ByRef elemBytesOut As Integer) As Integer
 Declare Function X64LocalArrayLowerBoundOf(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByRef varName As String) As LongInt
-Declare Sub X64EmitLocalArrayBaseToRcx(ByRef cg As X64CodegenContext, ByRef varName As String, ByVal baseOffset As Integer)
+Declare Sub X64EmitLocalArrayBaseToRcx(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByRef varName As String, ByVal baseOffset As Integer)
 Declare Function X64TryGetRoutineReturnType(ByRef cg As X64CodegenContext, ByRef routineName As String, ByRef returnTypeOut As String) As Integer
 Declare Function X64GetElemBytesForDeclaredType(ByRef ps As ParseState, ByRef typeName As String) As Integer
 Declare Function X64ExprReturnsString(ByRef ps As ParseState, ByVal nodeIdx As Integer) As Integer
 Declare Function X64TypeNameIsStringLike(ByRef typeName As String) As Integer
+' S-529: scalar arrays whose size changes at run time (REDIM / non-literal bounds) live behind a three-qword descriptor
+' (block pointer, lower, upper) like the dynamic CLASS arrays and the MIR-x64 arrays; see x64_codegen_dynamic_class_arrays.fbs.
+Declare Function X64SdaKind(ByRef ps As ParseState, ByRef nameText As String) As Integer
+Declare Function X64SdaStride(ByRef ps As ParseState, ByRef nameText As String) As Integer
+Declare Function X64EmitSdaElementAddr(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByRef varName As String) As Integer
 Declare Function X64ExprIsStringLike(ByRef ps As ParseState, ByVal exprNode As Integer, ByRef cg As X64CodegenContext) As Integer
 Declare Function X64EmitTryStmt(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
 Declare Function X64EmitThrowStmt(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer

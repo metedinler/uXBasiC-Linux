@@ -1,6 +1,8 @@
 #ifndef UXB_MIR_EXC_PASS_FBS
 #define UXB_MIR_EXC_PASS_FBS
 
+Declare Sub MIRAppendManagedFunctionDrops(ByRef module As MIRModule, ByVal fnIdx As Integer, ByVal blkIdx As Integer)
+
 ' ===========================================================================
 ' S-160 (2026-09-26): THROW/ASSERT istisnasi rutin sinirini gecer.
 ' Istisna durumu `__mir_exc_active` / `__mir_exc_value` ile tasinir (MIR yorumlayicisi:
@@ -55,6 +57,7 @@ Private Sub MIRExcMake(ByRef ins As MIRIRInstruction, ByRef tmpl As MIRIRInstruc
     ins.result = resultName
     ins.srcLoc = tmpl.srcLoc
     ins.flags = tmpl.flags
+    ins.bareReturn = tmpl.bareReturn
     ins.stmtSeq = tmpl.stmtSeq
     ins.tryTargetPlus1 = tmpl.tryTargetPlus1
     ins.operandCount = nOps
@@ -125,8 +128,13 @@ Function MIRExcPassModule(ByRef ps As ParseState, ByRef m As MIRModule, ByRef te
             cp->instructionCount = cCount
 
             Dim bp As MIRBasicBlock Ptr = @m.functions(fi).blocks(bi)
-            Dim headCount As Integer = splitAt + 1 + 3
-            ReDim Preserve bp->instructions(headCount - 1)
+            Dim headPrefixCount As Integer = splitAt + 1 + 2
+            ' Reserve room for provider DROP calls before a synthetic RET on
+            ' exception propagation. MIRAppendInstruction may grow this again;
+            ' the explicit reserve keeps the subsequent in-place tail write
+            ' valid for a function with managed locals and BYVAL parameters.
+            Dim headCapacity As Integer = headPrefixCount + m.functions(fi).localVarCount + m.functions(fi).paramVarCount + 1
+            ReDim Preserve bp->instructions(headCapacity - 1)
             Dim tEx As String = MIRNextTemp(tempSeed)
             Dim ld As MIRIRInstruction, jz As MIRIRInstruction, esc As MIRIRInstruction
             MIRExcMake ld, callIns, "LOAD_VAR", tEx, 1, "__mir_exc_active"
@@ -140,8 +148,13 @@ Function MIRExcPassModule(ByRef ps As ParseState, ByRef m As MIRModule, ByRef te
             ld.blockId = bi : jz.blockId = bi : esc.blockId = bi
             bp->instructions(splitAt + 1) = ld
             bp->instructions(splitAt + 2) = jz
-            bp->instructions(splitAt + 3) = esc
-            bp->instructionCount = headCount
+            bp->instructionCount = headPrefixCount
+            If callIns.tryTargetPlus1 <= 0 Then
+                MIRAppendManagedFunctionDrops m, fi, bi
+            End If
+            ReDim Preserve bp->instructions(bp->instructionCount)
+            bp->instructions(bp->instructionCount) = esc
+            bp->instructionCount += 1
             bi += 1
         Loop
     Next fi

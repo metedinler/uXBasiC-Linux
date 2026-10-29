@@ -1,0 +1,113 @@
+=== mod_sinif_using
+MODULE M
+    CLASS Nokta
+        PUBLIC
+        DIM x AS I32
+    END CLASS
+END MODULE
+USING M
+DIM p AS Nokta = NEW Nokta()
+p.x = 3
+PRINT p.x
+=== mod_thread_using
+MODULE M
+    THREAD W(x AS I32) AS I32
+        RETURN x * 2
+    END THREAD
+END MODULE
+USING M
+DIM t AS TASK OF I32 = SPAWN W(4)
+PRINT t.JOIN()
+=== mod_const_disarida
+MODULE M
+    CONST SINIR AS I32 = 10
+END MODULE
+PRINT M.SINIR
+=== mod_const_icerde_using
+MODULE M
+    CONST SINIR AS I32 = 10
+    FUNCTION Ust() AS I32
+        RETURN SINIR
+    END FUNCTION
+END MODULE
+USING M
+PRINT Ust()
+=== mod_global_const_icerde
+CONST SINIR AS I32 = 10
+MODULE M
+    FUNCTION Ust() AS I32
+        RETURN SINIR
+    END FUNCTION
+END MODULE
+PRINT M.Ust()
+=== mod_modul_icinden_digeri
+MODULE A
+    FUNCTION F() AS I32
+        RETURN 1
+    END FUNCTION
+END MODULE
+MODULE B
+    FUNCTION G() AS I32
+        RETURN A.F() + 1
+    END FUNCTION
+END MODULE
+PRINT B.G()
+=== mod_ayni_modulden_nitelensiz
+MODULE A
+    FUNCTION F() AS I32
+        RETURN 1
+    END FUNCTION
+    FUNCTION G() AS I32
+        RETURN F() + 1
+    END FUNCTION
+END MODULE
+PRINT A.G()
+=== mod_degisken_ilk_deger
+MODULE A
+    DIM n AS I32 = 7
+    FUNCTION Oku() AS I32
+        RETURN n
+    END FUNCTION
+END MODULE
+PRINT A.Oku()
+=== mod_kayit_tipi
+MODULE A
+    TYPE Nokta
+        x AS I32
+        y AS I32
+    END TYPE
+END MODULE
+USING A
+DIM p AS Nokta
+p.x = 2
+PRINT p.x
+=== mod_enum
+MODULE A
+    ENUM Renk
+        Kirmizi
+        Mavi
+    END ENUM
+END MODULE
+USING A
+PRINT Mavi
+=== namespace_sinif
+NAMESPACE N
+    CLASS K
+        PUBLIC
+        DIM v AS I32
+    END CLASS
+END NAMESPACE
+DIM k AS N.K = NEW N.K()
+k.v = 4
+PRINT k.v
+=== using_sonradan_kapsam
+MODULE A
+    FUNCTION F() AS I32
+        RETURN 1
+    END FUNCTION
+END MODULE
+FUNCTION Sar() AS I32
+    USING A
+    RETURN F()
+END FUNCTION
+PRINT Sar()

@@ -136,6 +136,11 @@ Function UXBPreHandleWebManifestDirective(ByRef head As String, ByRef restText A
         End If
         If UXBPreSplitAsWord(beforeSig, leftHost, aliasHost) = 0 Then Return -1
         UXBPreAddHostImport result, leftHost, aliasHost, sig
+        ' the same record as %%WAT_IMPORT: the WASM module imports module.name (the host provides the function)
+        Dim hostDot As Integer = InStr(leftHost, ".")
+        If hostDot > 1 And hostDot < Len(leftHost) Then
+            PreprocessResultAddWatImport result, Left(leftHost, hostDot - 1), Mid(leftHost, hostDot + 1), UXBPreStripQuotes(aliasHost), sig, 1
+        End If
 
     Case "GEN_FILE"
         Dim genPath As String, genKind As String
@@ -148,7 +153,7 @@ Function UXBPreHandleWebManifestDirective(ByRef head As String, ByRef restText A
         UXBPreManifestSet result, "features." & UXBPreStripQuotes(restText), "true"
 
     Case "TEST_EXPECT"
-        UXBPreManifestSet result, "tests.expect." & LTrim(Str(result.manifestCount)), restText
+        UXBPreManifestSet result, "tests.expect." & LTrim(Str(result.manifestCount)), UXBPreStripQuotes(restText)
 
     Case "DOC"
         Dim docKey As String, docVal As String

@@ -1,0 +1,50 @@
+MAGIC AND sonucu I32 degiskene
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC AND(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = v AND o.v
+        RETURN r
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+a.v = 12
+b.v = 4
+DIM x AS I32
+x = a AND b
+PRINT x
+=====
+MAGIC AND sonucu Sayi degiskene
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC AND(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = v AND o.v
+        RETURN r
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+c.v = 77
+a.v = 12
+b.v = 4
+c = a AND b
+PRINT c.v
+=====
+MAGIC CALL ornegi
+CLASS K
+    PUBLIC
+    DIM v AS I32
+    MAGIC CALL(x AS I32) AS I32
+        RETURN v + x
+    END MAGIC
+END CLASS
+DIM a AS K = NEW K()
+a.v = 5
+DIM r AS I32
+r = a(3)
+PRINT r

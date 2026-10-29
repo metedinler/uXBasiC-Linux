@@ -1,0 +1,2 @@
+%%DEFINE VALUE 42
+PRINT "etiket="; VALUE

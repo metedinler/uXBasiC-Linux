@@ -1,0 +1,3 @@
+' S-329 / Mete K1 2026-10-28: hic tanimlanmamis yordam cagrisi (ifade) = alti yolda ayni DERLEME hatasi; "once" HIC yazilmaz.
+PRINT "once"
+PRINT Yok(4)

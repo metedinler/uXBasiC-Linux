@@ -1,0 +1,21 @@
+INCLUDE "include/modules/uxconfig.uxmh"
+
+MAIN
+    IF FALSE THEN
+        uxconfig.Close(0)
+        PRINT uxconfig.DeleteKey(0, "", "")
+        PRINT uxconfig.DeleteSection(0, "")
+        PRINT uxconfig.ErrorText()
+        PRINT uxconfig.GetBoolean(0, "", "", 0)
+        PRINT uxconfig.GetI64(0, "", "", 0)
+        PRINT uxconfig.GetString(0, "", "", "")
+        PRINT uxconfig.HasKey(0, "", "")
+        PRINT uxconfig.Open("")
+        PRINT uxconfig.Path(0)
+        PRINT uxconfig.SetBoolean(0, "", "", 0)
+        PRINT uxconfig.SetF64(0, "", "", 0.0)
+        PRINT uxconfig.SetI64(0, "", "", 0)
+        PRINT uxconfig.SetString(0, "", "", "")
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXCONFIG"
+END MAIN

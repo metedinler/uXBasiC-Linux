@@ -1,0 +1,6 @@
+AST=STATIC METHOD SAY.OKU cannot use instance field N
+MIR=STATIC METHOD SAY.OKU cannot use instance field N
+x64=STATIC METHOD SAY.OKU cannot use instance field N
+AST-x64=STATIC METHOD SAY.OKU cannot use instance field N
+JS=STATIC METHOD SAY.OKU cannot use instance field N
+WASM=STATIC METHOD SAY.OKU cannot use instance field N

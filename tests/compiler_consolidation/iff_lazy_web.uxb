@@ -1,0 +1,14 @@
+DIM hits AS I32 = 0
+FUNCTION Hit() AS I32
+  hits += 1
+  RETURN hits
+END FUNCTION
+FUNCTION Explode() AS I32
+  RETURN 1 \ 0
+END FUNCTION
+PRINT IFF(1, Hit(), Explode())
+PRINT IFF(0, Explode(), Hit())
+PRINT hits
+PRINT IFF(1, IFF(0, 100, 7), Explode())
+PRINT 1 IFF 1
+PRINT 1 IFF 0

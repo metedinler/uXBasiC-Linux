@@ -1,0 +1,13 @@
+' S-611: a PROPERTY (its accessors) and a method parameter of the same name.
+CLASS Say
+    PUBLIC
+    DIM d AS I32
+    PROPERTY Deger AS I32
+    METHOD Kat(deger AS I32) AS I32
+        RETURN deger * 3
+    END METHOD
+END CLASS
+DIM s AS Say = NEW Say()
+s.Deger = 4
+PRINT s.Deger
+PRINT s.Kat(5)

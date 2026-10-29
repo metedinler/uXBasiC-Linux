@@ -1,0 +1,51 @@
+I1 %%DERIVE (tasarim)
+TYPE Balik
+    ph AS F64
+END TYPE
+%%DERIVE JSON, EQ, HASH FOR Balik
+PRINT "tamam"
+=====
+I2 %%GENERATE (tasarim)
+%%GENERATE REST_HANDLERS
+PRINT "tamam"
+=====
+I3 %%BRIDGE_BEGIN (tasarim)
+%%BRIDGE_BEGIN
+%%BRIDGE_END
+PRINT "tamam"
+=====
+I4 tamamen uydurma yonerge
+%%BU_YOK 1
+PRINT "tamam"
+=====
+I5 %%PATCH_BLOCK (tasarim)
+%%PATCH_BLOCK a.txt REPLACE
+x
+%%PATCH_END
+PRINT "tamam"
+=====
+I6 %%FOREACH_FIELD (tasarim)
+TYPE Balik
+    ph AS F64
+END TYPE
+%%FOREACH_FIELD F IN Balik
+PRINT "{{F}}"
+%%ENDFOREACH
+PRINT "tamam"
+=====
+I7 REM %%ATTR TEST (yorum sayilir)
+REM %%ATTR BU_YOK
+PRINT "tamam"
+=====
+I8 %%PP B ve eski kume
+%%PP B
+%%DEFINE X 3
+PRINT X
+=====
+I9 JS_OBJECT ve WASM_EXTERNREF tip adlari
+DIM a AS JS_OBJECT
+PRINT "tamam"
+=====
+I10 DECLARE FUNCTION ... CDECL LIB ... ALIAS (var)
+DECLARE FUNCTION strlen CDECL LIB "msvcrt.dll" ALIAS "strlen" (s AS STRPTR) AS I64
+PRINT "tamam"

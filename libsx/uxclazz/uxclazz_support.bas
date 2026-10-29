@@ -2,6 +2,9 @@
 
 NAMESPACE uxclazz_support
 
+' S-544 (2026-10-17): HashI64 calls HashString before its definition, so it is announced first (strict DECLARE rule)
+DECLARE FUNCTION HashString(value AS STRING) AS U64
+
 FUNCTION HashCombine(seed AS U64, value AS U64) AS U64
     RETURN (seed XOR value) * 1099511628211
 END FUNCTION

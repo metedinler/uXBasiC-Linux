@@ -25,6 +25,7 @@ Private Function MIRIsLikelyVariableArgToken(ByRef tokenText As String) As Integ
         If c >= 48 And c <= 57 Then Continue For
         If c >= 65 And c <= 90 Then Continue For
         If c >= 97 And c <= 122 Then Continue For
+        If c >= 128 Then Continue For ' S-579: UTF-8 Turkish letter of a variable name
         Return 0
     Next i
 

@@ -185,6 +185,11 @@ Function UXBSemanticStep5BuildTypeFacts(ByRef ps As ParseState, ByRef r As UXBSe
         r.typeTable.facts(i).kind = k
         r.typeTable.facts(i).name = UXBStep5NodeName(ps, i)
         r.typeTable.facts(i).typeName = UCase(Trim(ps.ast.nodes(i).typeName))
+        If UCase(Trim(ps.ast.nodes(i).role)) = "DEFTYPE_RANGE_METADATA" Then
+            r.typeTable.facts(i).typeStatus = "NOT_REQUIRED"
+            r.typeTable.facts(i).symbolIndex = -1
+            Continue For
+        End If
 
         ' YAMA2-OOP-POSTFIX-2:
         ' SUPER/THIS/ME normal degisken degildir. Bunlar OOP dispatch alicilaridir.

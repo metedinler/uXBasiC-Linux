@@ -1,0 +1,9 @@
+' S-544: routines are told apart by name AND parameter count (the front end pairs overloads that way): the one-parameter Topla comes first, the two-parameter one is used before its definition.
+FUNCTION Topla(a AS I32) AS I32
+    RETURN a
+END FUNCTION
+PRINT Topla(1)
+PRINT Topla(1, 2)
+FUNCTION Topla(a AS I32, b AS I32) AS I32
+    RETURN a + b
+END FUNCTION

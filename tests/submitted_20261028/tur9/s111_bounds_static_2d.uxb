@@ -1,0 +1,3 @@
+DIM m(1, 2) AS I32
+PRINT LBOUND(m, 2)
+PRINT UBOUND(m, 2)

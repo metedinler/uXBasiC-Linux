@@ -1,0 +1,63 @@
+S1 THIS ile yazma/okuma (beklenen 42 / 42)
+CLASS Sayac6
+PUBLIC
+    DIM deger AS I32
+    CONSTRUCTOR(baslangic AS I32)
+        THIS.deger = baslangic
+    END CONSTRUCTOR
+    METHOD Ekle(d AS I32) AS I32
+        THIS.deger = THIS.deger + d
+        RETURN THIS.deger
+    END METHOD
+    METHOD Al() AS I32
+        RETURN THIS.deger
+    END METHOD
+END CLASS
+DIM c AS Sayac6 = NEW Sayac6(10)
+DIM r AS I32
+r = c.Ekle(32)
+PRINT r
+PRINT c.Al()
+=====
+S2 ciplak adla yalniz okuma, THIS ile yazma
+CLASS Sayac7
+PUBLIC
+    DIM deger AS I32
+    CONSTRUCTOR(baslangic AS I32)
+        deger = baslangic
+    END CONSTRUCTOR
+    METHOD Ekle(d AS I32) AS I32
+        THIS.deger = deger + d
+        RETURN deger
+    END METHOD
+END CLASS
+DIM c AS Sayac7 = NEW Sayac7(10)
+DIM r AS I32
+r = c.Ekle(32)
+PRINT r
+=====
+S3 yalniz kurucuda ciplak yazma, metotta okuma
+CLASS Sayac8
+PUBLIC
+    DIM deger AS I32
+    CONSTRUCTOR(baslangic AS I32)
+        deger = baslangic
+    END CONSTRUCTOR
+    METHOD Al() AS I32
+        RETURN deger
+    END METHOD
+END CLASS
+DIM c AS Sayac8 = NEW Sayac8(10)
+PRINT c.Al()
+=====
+S4 metotta ciplak yazma, disaridan okuma
+CLASS Sayac9
+PUBLIC
+    DIM deger AS I32
+    METHOD Koy(d AS I32)
+        deger = d
+    END METHOD
+END CLASS
+DIM c AS Sayac9 = NEW Sayac9()
+c.Koy(7)
+PRINT c.deger

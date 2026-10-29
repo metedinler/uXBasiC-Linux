@@ -1,0 +1,4 @@
+' S-549: the same for CLOSE handle.
+DIM h(3) AS FILE_HANDLE
+h(1) = 1
+CLOSE h(1)

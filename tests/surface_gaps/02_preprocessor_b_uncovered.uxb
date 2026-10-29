@@ -1,0 +1,8 @@
+' Shared preprocessor commands; selectors removed.
+%%TARGET WEB
+%%CAPABILITY console ON
+%%EXPORT_BASIC AddTwo AS "I32(I32,I32)"
+%%HOST_IMPORT env.print_i32 AS host_print SIG "I32(I32)"
+%%REPEAT 2
+PRINT "REPEAT_OK"
+%%ENDREPEAT

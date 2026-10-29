@@ -1,0 +1,32 @@
+CONST LIMIT AS I32 = 5
+DIM i AS I32
+DIM total AS I32
+total = 0
+FOR i = 1 TO LIMIT STEP 1
+    total = total + i
+NEXT i
+IF total = 15 THEN
+    PRINT "CORE_FLOW_OK"
+ELSEIF total > 15 THEN
+    PRINT "CORE_FLOW_HIGH"
+ELSE
+    PRINT "CORE_FLOW_LOW"
+END IF
+SELECT CASE total
+CASE 15
+    PRINT "SELECT_OK"
+CASE ELSE
+    PRINT "SELECT_FAIL"
+END SELECT
+DIM j AS I32
+j = 0
+DO WHILE j < 2
+    j = j + 1
+LOOP
+GOSUB local_sub
+GOTO end_label
+local_sub:
+PRINT "GOSUB_OK"
+RETURN
+end_label:
+PRINT "END_OK"

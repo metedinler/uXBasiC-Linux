@@ -1,0 +1,5 @@
+' S-544: taking the address of a routine (CODEPTR) is a use too.
+DIM p AS PTR = CODEPTR(Selam)
+SUB Selam()
+    PRINT 7
+END SUB

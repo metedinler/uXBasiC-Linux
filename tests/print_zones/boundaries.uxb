@@ -1,0 +1,8 @@
+PRINT "12345678901234",
+PRINT "X"
+PRINT "a";
+PRINT "b",
+PRINT "c"
+PRINT "x" + CHR(10) + "y",
+PRINT "z"
+PRINT "1234567890123", "t", "u"

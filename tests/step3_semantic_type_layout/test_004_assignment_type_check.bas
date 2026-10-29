@@ -1,0 +1,3 @@
+DIM a AS INTEGER
+a = 1 + 2
+PRINT a

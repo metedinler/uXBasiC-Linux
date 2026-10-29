@@ -1,0 +1,7 @@
+' NAMESPACE declares names; execute the qualified forward call outside it.
+PRINT A.Iki(4)
+NAMESPACE A
+    FUNCTION Iki(x AS I32) AS I32
+        RETURN x * 2
+    END FUNCTION
+END NAMESPACE

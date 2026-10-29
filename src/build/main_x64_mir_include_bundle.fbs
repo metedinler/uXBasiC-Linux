@@ -33,7 +33,6 @@
 #include once "../codegen/x64/mir_x64_field_synthetic.fbs"
 #include once "../codegen/x64/mir_x64_keyword_surface.fbs"
 #include once "../codegen/x64/mir_x64_capability.fbs"
-#include once "../codegen/x64/mir_x64_abi_gate.fbs"
 #include once "../codegen/x64/mir_x64_emit_registry_adim13.fbs"
 #include once "../codegen/x64/mir_x64_source_emit.fbs"
 #include once "../codegen/x64/mir_x64_surface_closure.fbs"
@@ -44,16 +43,15 @@
 #include once "../codegen/x64/mir_x64_extfp_emit_helpers.fbs"
 #include once "../codegen/x64/mir_x64_typed_locals.fbs"
 #include once "../codegen/x64/mir_x64_opcode_surface_emitters.fbs"
-' mir_x64_codegen.fbs: already #include once'd a few lines down (transitively, via
-' x64_codegen.fbs's own "mir_x64_codegen.fbs" bare-string include) -- that different
-' spelling didn't dedupe against this one (found 2026-09-06, blocking a from-scratch
-' build). Removed this redundant direct include.
+' mir_x64_codegen.fbs: included ONCE, from main_backend_include_bundle.fbs (main.bas includes that bundle BEFORE
+' this one). It used to arrive via backend_step6.fbs -> x64_codegen.fbs's own bare-string include, and a second
+' direct include with a different spelling did not dedupe (found 2026-09-06, blocking a from-scratch build).
+' x64_codegen.fbs (an uncalled Adim13 step-6 wrapper) was retired by S-688; never add a second spelling here.
 
 #include once "../codegen/x64/var_mapping.fbs"
 #include once "../codegen/x64/x64_codegen_registry.fbs"
 #include once "../codegen/x64/x64_codegen_policy.fbs"
 #include once "../codegen/x64/x64_emit_fail_closed.fbs"
 #include once "../codegen/x64/x64_json_report.fbs"
-#include once "../codegen/x64/x64_codegen.fbs"
 
 #endif

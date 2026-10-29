@@ -116,7 +116,7 @@ Private Function MemoryModeChildOffset(ByRef ps As ParseState, ByVal nodeIdx As 
     Return 0
 End Function
 
-Function ValidateLayoutIntrinsicSemantics(ByRef ps As ParseState) As Integer
+Function ValidateLayoutIntrinsicSemantics(ByRef ps As ParseState, ByVal deferClassArrayShape As Integer = 0) As Integer
     Dim i As Integer
 
     For i = 0 To ps.ast.count - 1
@@ -137,15 +137,45 @@ Function ValidateLayoutIntrinsicSemantics(ByRef ps As ParseState) As Integer
                 sizeofResolvedAsArray = 0
                 sizeofArgNode = LayoutChildAt(ps, i, 0)
                 If sizeofArgNode <> -1 And UCase(Trim(ps.ast.nodes(sizeofArgNode).kind)) = "IDENT" Then
+                    Dim deferParameterShape As Integer = 0
+                    If deferClassArrayShape <> 0 Then
+                        For parameter As Integer = 0 To ps.ast.count - 1
+                            If ps.ast.nodes(parameter).kind <> "PARAM_DECL" Then Continue For
+                            If UCase(ps.ast.nodes(parameter).value) <> UCase(ps.ast.nodes(sizeofArgNode).value) Then Continue For
+                            Dim part As Integer = ps.ast.nodes(parameter).firstChild
+                            Do While part >= 0
+                                If ps.ast.nodes(part).kind = "TYPE_REF" Then
+                                    Dim parameterType As String = ps.ast.nodes(part).value
+                                    If Right(parameterType, 2) = "[]" Then
+                                        Dim classLayout As Integer = FindTypeLayoutIndex(Left(parameterType, Len(parameterType)-2))
+                                        If classLayout >= 0 AndAlso UCase(gTypeLayouts(classLayout).recordKind) = "CLASS" Then deferParameterShape = 1
+                                    End If
+                                End If
+                                part = ps.ast.nodes(part).nextSibling
+                            Loop
+                        Next parameter
+                    End If
+                    If deferParameterShape <> 0 Then Continue For
                     Dim arrayInfo As UXBArrayMemoryInfo
                     Dim arrayErr As String
                     If UXBFindArrayMemoryInfo(ps, ps.ast.nodes(sizeofArgNode).value, arrayInfo, arrayErr) = 0 Then
+                        ' Parsing precedes CLASS shape normalization. Defer this
+                        ' specific case to the mandatory semantic/layout gate;
+                        ' it runs again after SIZEOF becomes the source byte size.
+                        If deferClassArrayShape <> 0 And arrayInfo.found <> 0 And arrayErr = "memory-ref currently requires a one-dimensional array" Then
+                            Dim classLayout As Integer = FindTypeLayoutIndex(arrayInfo.elementType)
+                            If classLayout >= 0 AndAlso UCase(gTypeLayouts(classLayout).recordKind) = "CLASS" Then Continue For
+                        End If
                         ps.lastError = "SIZEOF(array) failed: " & arrayErr
                         Return 0
                     End If
                     If arrayInfo.found <> 0 Then
                         sizeofResolvedAsArray = 1
                         If arrayInfo.dynamicBounds <> 0 Then
+                            If deferClassArrayShape <> 0 Then
+                                Dim classLayout As Integer = FindTypeLayoutIndex(arrayInfo.elementType)
+                                If classLayout >= 0 AndAlso UCase(gTypeLayouts(classLayout).recordKind) = "CLASS" Then Continue For
+                            End If
                             ps.lastError = "SIZEOF(array) requires compile-time array bounds"
                             Return 0
                         End If

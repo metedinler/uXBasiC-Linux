@@ -1,0 +1,9 @@
+DIM x AS I32
+
+FUNCTION f(a AS I32) AS I32
+    DIM y AS I32
+    y = a + x
+    RETURN y
+END FUNCTION
+
+PRINT f(2)

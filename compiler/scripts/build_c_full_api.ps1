@@ -14,6 +14,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot '../../UXB-Common.ps1')
 
 function Resolve-Root([string]$Value) {
     $candidate = (Resolve-Path -LiteralPath $Value).Path
@@ -96,14 +97,7 @@ function Find-VendorDll([object]$Library) {
 }
 
 function Get-ImportedDlls([string]$DllPath) {
-    $text = & $script:Objdump -p $DllPath 2>$null
-    if ($LASTEXITCODE -ne 0) { return @() }
-    return @(
-        $text |
-        Select-String -Pattern "DLL Name:\s*(.+)$" |
-        ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() } |
-        Sort-Object -Unique
-    )
+    @(Get-UxbPeImportedDllNames -Path $DllPath -Objdump $script:Objdump)
 }
 
 function Test-SystemDll([string]$Name) {

@@ -1,0 +1,32 @@
+sabit sayi + sabit metin
+PRINT 5 + "a"
+=====
+I32 degisken + sabit metin
+DIM n AS I32 = 5
+PRINT n + "a"
+=====
+I32 degisken + STRING degisken
+DIM n AS I32 = 5
+DIM s AS STRING = "a"
+PRINT n + s
+=====
+sabit metin + sabit sayi
+PRINT "a" + 5
+=====
+sabit metin + I32 degisken
+DIM n AS I32 = 5
+PRINT "a" + n
+=====
+STR(n) + metin
+DIM n AS I32 = 5
+PRINT STR(n) + "a"
+=====
+F64 degisken + metin
+DIM n AS F64 = 2.5
+PRINT n + "a"
+=====
+metin degisken atamasi: s = n + "a"
+DIM n AS I32 = 5
+DIM s AS STRING
+s = n + "a"
+PRINT s

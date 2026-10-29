@@ -187,13 +187,23 @@ Function UXBMIRInterpExecLibraryTypeCall(ByRef ins As UXBMIRInstructionRecord, B
     providerName = ""
     If contractIdx >= 0 And contractIdx < gUXBLibraryTypeCount Then providerName = UCase(Trim(gUXBLibraryTypes(contractIdx).mirProvider))
 
+    If UXBLibraryTypeProviderIsRegistered("MIR", providerName) = 0 Then
+        Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "UXB_LIBTYPE_PROVIDER_MISSING: library type provider missing: " & UCase(Trim(typeName)) & "." & UCase(Trim(memberName)) & " via " & providerName)
+    End If
+    If UXBLibraryTypeProviderSupportsType("MIR", providerName, typeName) = 0 Then
+        Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "UXB_LIBTYPE_PROVIDER_TYPE_MISMATCH: library type provider type mismatch: " & UCase(Trim(typeName)) & " via " & providerName)
+    End If
+    If UXBLibraryTypeProviderSupportsOperation("MIR", providerName, typeName, memberName) = 0 Then
+        Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "UXB_LIBTYPE_PROVIDER_OPERATION_UNAVAILABLE: library type provider operation unavailable: " & UCase(Trim(typeName)) & "." & UCase(Trim(memberName)) & " via " & providerName)
+    End If
+
     Select Case providerName
     Case "OWNED_TEXT_REFERENCE"
         Return UXBMIRInterpExecOwnedTextProvider(ins, st, typeName, memberName)
     Case "RATIONAL_REFERENCE"
         Return UXBMIRInterpExecRationalProvider(ins, st, memberName)
     Case Else
-        Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "library type provider missing: " & UCase(Trim(typeName)) & "." & UCase(Trim(memberName)) & " via " & providerName)
+        Return UXBInterpValueError(UXB_INTERP_ERR_RUNTIME_SERVICE, "UXB_LIBTYPE_PROVIDER_MISSING: library type provider missing: " & UCase(Trim(typeName)) & "." & UCase(Trim(memberName)) & " via " & providerName)
     End Select
 
     Return UXBInterpValueVoid()

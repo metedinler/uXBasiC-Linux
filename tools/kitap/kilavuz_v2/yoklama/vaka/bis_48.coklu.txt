@@ -1,0 +1,71 @@
+F80 boyutu ve dizi boyutu
+PRINT SIZEOF(F80)
+DIM a(3) AS F80
+PRINT SIZEOF(a)
+=====
+Skaler VARPTR F64 ve U64
+DIM x AS F64 = 12.5
+DIM p AS PTR
+p = VARPTR(x)
+PRINT HEX(PEEKQ(p))
+DIM u AS U64 = &H0123456789ABCDEF
+DIM q AS PTR
+q = VARPTR(u)
+PRINT HEX(PEEKQ(q))
+=====
+VARPTR dizi elemani ve SIZEOF dizi
+DIM a(0 TO 9) AS I32
+DIM p1 AS PTR
+DIM p2 AS PTR
+p1 = VARPTR(a)
+p2 = VARPTR(a(3))
+PRINT p2 - p1
+DIM b(10 TO 20) AS I32
+DIM c1 AS PTR
+DIM c2 AS PTR
+c1 = VARPTR(b)
+c2 = VARPTR(b(11))
+PRINT c2 - c1
+PRINT SIZEOF(a)
+=====
+Acik bellek sinifi on eki VIRTUAL
+POKED VIRTUAL, 100, 12345
+PRINT PEEKD(VIRTUAL, 100)
+MEMFILLW VIRTUAL, 200, 513, 2
+PRINT PEEKB(VIRTUAL, 200); " "; PEEKB(VIRTUAL, 201); " "; PEEKB(VIRTUAL, 203)
+=====
+Acik bellek sinifi on eki NATIVE
+DIM a(3) AS I32
+MEMFILLD NATIVE, VARPTR(a), 7, 4
+PRINT a(0); " "; a(3)
+POKED NATIVE, VARPTR(a), 11
+PRINT a(0)
+=====
+AUTO PTR yazilmis degisken NATIVE
+DIM y AS I32 = 3
+DIM q AS PTR
+q = VARPTR(y)
+POKED q, 9
+PRINT y
+POKED VARPTR(y), 21
+PRINT y
+=====
+FOR EACH metin uzerinde
+DIM s AS STRING = "abc"
+DIM ch AS STRING
+FOR EACH ch IN s
+    PRINT ch
+NEXT
+=====
+Dolayli adresleme zinciri
+DIM tablo(3) AS U8
+tablo(0) = 10
+tablo(1) = 20
+tablo(2) = 30
+DIM p AS PTR
+p = VARPTR(tablo)
+DIM isaretci AS I64
+isaretci = p
+DIM yer AS PTR
+yer = VARPTR(isaretci)
+PRINT PEEKB(PTR(PEEKQ(yer)) + 2)

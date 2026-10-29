@@ -1,0 +1,36 @@
+' S-523: parametreli kurucuyla NEW yapildiktan sonra acilan sayisal degiskenler, sinifta MAGIC TOSTRING varken de
+' kendi degerlerini yazdirir. AST eskiden kurucu cercevesinden kalan THIS/ME sinifini (runtimeClassType) yeni degiskenin
+' yuvasinda birakiyor, degisken nesne sanilip MAGIC TOSTRING calisiyor ve 0 yaziyordu.
+CLASS Balik
+    PUBLIC
+    DIM b AS F64
+    DIM k AS I32
+    CONSTRUCTOR(x AS F64, y AS I32)
+        b = x
+        k = y
+    END CONSTRUCTOR
+    METHOD GetB() AS F64
+        RETURN b
+    END METHOD
+    METHOD GetK() AS I32
+        RETURN k
+    END METHOD
+    MAGIC TOSTRING() AS STRING
+        RETURN "balik"
+    END MAGIC
+END CLASS
+DIM f AS Balik = NEW Balik(2.5, 7)
+DIM v AS F64
+DIM n AS I32
+v = f.GetB()
+n = f.GetK()
+PRINT v
+PRINT n
+DIM m AS I32
+m = 9
+PRINT m
+PRINT STR(m)
+PRINT "m=" + STR(m)
+PRINT STR(f)
+DIM c AS F64 = f.GetB()
+PRINT c

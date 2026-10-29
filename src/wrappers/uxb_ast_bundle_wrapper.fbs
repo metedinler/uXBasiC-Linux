@@ -1,0 +1,5 @@
+#include once "../hooks/uxb_ast_hook.fbs"
+#include once "../parser/token_kinds.fbs"
+#include once "../parser/lexer.fbs"
+#include once "../parser/ast.fbs"
+#include once "../parser/parser.fbs"

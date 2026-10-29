@@ -98,7 +98,7 @@ Private Function ParseIdentOrKeywordPrimary(ByRef ps As ParseState, ByRef tk As 
 
         Dim nextTok As Token
         nextTok = LookToken(ps, 1)
-        If IsDisabledUnderscoreCommand(tk.lexeme, nextTok) And nextTok.kind = "OP" And nextTok.lexeme = "(" Then
+        If IsDisabledUnderscoreCommand(tk.lexeme, nextTok, ps.trustedGeneratedInput) And nextTok.kind = "OP" And nextTok.lexeme = "(" Then
             ps.lastError = "underscore commands are disabled"
             Return -1
         End If

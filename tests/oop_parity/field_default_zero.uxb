@@ -1,0 +1,14 @@
+' S-598 (2026-10-17): a class field that was never written reads as the zero value of its type. JS objects start empty, so the
+' load printed `undefined` and `x.v + 1` was NaN.
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    DIM f AS F64
+END CLASS
+DIM x AS Kutu = NEW Kutu()
+PRINT x.v
+x.v = x.v + 1
+PRINT x.v
+PRINT x.f
+x.f = x.f + 1.5
+PRINT x.f

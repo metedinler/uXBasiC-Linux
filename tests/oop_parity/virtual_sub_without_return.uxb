@@ -1,0 +1,21 @@
+' S-600 (2026-10-17): a VIRTUAL / OVERRIDE method keeps a hidden CLASS_METHOD_SLOT child after its statements. The AST interpreter
+' treated that bookkeeping node as a statement ("exec: unsupported statement kind CLASS_METHOD_SLOT") the moment a SUB-style
+' virtual method (no RETURN, so no early exit) ran to its last line; the other five engines ran it.
+CLASS Taban
+    PUBLIC
+    VIRTUAL METHOD San()
+        PRINT 2
+    END METHOD
+END CLASS
+CLASS Alt EXTENDS Taban
+    PUBLIC
+    OVERRIDE METHOD San()
+        PRINT 3
+        PRINT 4
+    END METHOD
+END CLASS
+DIM t AS Taban = NEW Alt()
+t.San()
+DIM u AS Taban = NEW Taban()
+u.San()
+PRINT 9

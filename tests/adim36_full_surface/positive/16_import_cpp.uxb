@@ -1,0 +1,3 @@
+IMPORT(CPP, "tests/adim36_full_surface/imports/cpp/scale_f64.cpp")
+DECLARE FUNCTION uxb_test_scale_f64 LIB "uxb_imports.dll" ALIAS "uxb_test_scale_f64" (BYVAL x AS F64, BYVAL k AS F64) AS F64
+PRINT "IMPORT_CPP_SURFACE"

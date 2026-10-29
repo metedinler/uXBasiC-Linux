@@ -1,0 +1,10 @@
+DIM value AS I32
+OPEN "records.bin" FOR RANDOM AS #2 LEN = 2
+PUT #2, 1, 1000
+PUT #2, 3, 2000
+PRINT LOF(2)
+GET #2, 1, value
+PRINT value
+GET #2, 3, value
+PRINT value
+CLOSE #2

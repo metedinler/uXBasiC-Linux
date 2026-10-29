@@ -1,0 +1,38 @@
+' S-607 (2026-10-17): a bare call of a STATIC method (`B()`, `Kat(2)`, a recursive `Fakt(k - 1)`, or `Fakt(4)` from a derived class) is the
+' class-qualified call `Say.B()`. It used to be an unknown routine on every engine ("unsupported call B", host binding missing, ...), and WASM
+' silently ran something else (6 came out as 1, 50 as 30).
+CLASS Say
+    PUBLIC
+    DIM n AS I32
+    STATIC METHOD B() AS I32
+        RETURN 5
+    END METHOD
+    STATIC METHOD A() AS I32
+        RETURN B() + 1
+    END METHOD
+    STATIC METHOD Kat(a AS I32) AS I32
+        RETURN a * 10
+    END METHOD
+    STATIC METHOD Fakt(k AS I32) AS I32
+        IF k <= 1 THEN
+            RETURN 1
+        END IF
+        RETURN k * Fakt(k - 1)
+    END METHOD
+    METHOD Hesapla() AS I32
+        n = 3
+        RETURN Say.Kat(n) + Kat(2)
+    END METHOD
+END CLASS
+CLASS Alt EXTENDS Say
+    PUBLIC
+    METHOD Kullan() AS I32
+        RETURN Fakt(4)
+    END METHOD
+END CLASS
+DIM x AS Say = NEW Say()
+DIM y AS Alt = NEW Alt()
+PRINT Say.A()
+PRINT x.Hesapla()
+PRINT Say.Fakt(5)
+PRINT y.Kullan()

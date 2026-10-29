@@ -1,0 +1,21 @@
+ENUM Palette
+    Red
+END ENUM
+ENUM Small AS I8
+    Low = -128
+END ENUM
+ENUM Largest AS U64
+    Maximum = 18446744073709551615
+END ENUM
+DIM colorValue AS Palette = Palette(Small.Low)
+PRINT colorValue
+colorValue = Palette(-1)
+PRINT colorValue
+DIM smallValue AS Small = Small(255)
+PRINT smallValue
+DIM largestValue AS Largest = Largest(-1)
+PRINT largestValue
+FUNCTION Echo(value AS Palette) AS Palette
+    RETURN Palette(I32(value))
+END FUNCTION
+PRINT Echo(colorValue)

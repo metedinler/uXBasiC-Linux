@@ -1,0 +1,14 @@
+%%TARGET WEB
+%%OUTDIR "dist/adim36_meta"
+%%SET TITLE = "ADIM36 Web"
+%%HTML_BEGIN "index.html" BODY
+<h1>{{TITLE}}</h1>
+<script src="program.js"></script>
+%%HTML_END
+%%CSS_BEGIN "style.css"
+body { font-family: sans-serif; }
+%%CSS_END
+%%JS_BEGIN "program.js" RUNTIME
+console.log("ADIM36");
+%%JS_END
+PRINT "BROWSER_META"

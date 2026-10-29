@@ -1,0 +1,42 @@
+DIM sharedText AS STRING = "AB" + CHR(0) + "CD"
+FUNCTION HoldText(value AS STRING, ready AS I64, doneEvent AS I64) AS I32
+    DIM rc AS I32
+    UNSAFE
+        CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", ready)
+        rc = CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", doneEvent, 5000)
+    END UNSAFE
+    IF rc <> 0 THEN RETURN -100
+    PRINT LEN(value)
+    PRINT ASC(MID(value, 1, 1))
+    PRINT ASC(MID(value, 3, 1))
+    PRINT ASC(MID(value, 5, 1))
+    RETURN 1
+END FUNCTION
+THREAD Reader(ready AS I64, doneEvent AS I64) AS I32
+    RETURN HoldText(sharedText, ready, doneEvent)
+END THREAD
+THREAD Writer(ready AS I64, doneEvent AS I64) AS I32
+    DIM rc AS I32
+    UNSAFE
+        rc = CALL(DLL, "kernel32.dll", "WaitForSingleObject", I32, STDCALL, "I64,U32", ready, 5000)
+    END UNSAFE
+    IF rc <> 0 THEN RETURN -200
+    sharedText = "changed"
+    DIM scratch AS STRING
+    DIM i AS I32
+    FOR i = 1 TO 128
+        scratch = STR(i) + "-temporary"
+    NEXT
+    UNSAFE
+        CALL(DLL, "kernel32.dll", "SetEvent", I32, STDCALL, "I64", doneEvent)
+    END UNSAFE
+    RETURN 1
+END THREAD
+DIM ready AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM doneEvent AS I64 = CALL(DLL, "kernel32.dll", "CreateEventW", I64, STDCALL, "PTR,I32,I32,PTR", 0, 1, 0, 0)
+DIM first AS TASK OF I32 = SPAWN Reader(ready, doneEvent)
+DIM second AS TASK OF I32 = SPAWN Writer(ready, doneEvent)
+PRINT first.JOIN()
+PRINT second.JOIN()
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", ready)
+CALL(DLL, "kernel32.dll", "CloseHandle", I32, STDCALL, "I64", doneEvent)

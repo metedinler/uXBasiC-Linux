@@ -1,0 +1,13 @@
+CLASS Ata
+    PUBLIC
+    DIM x AS I32
+    CONSTRUCTOR(pa AS I32)
+        x = pa
+    END CONSTRUCTOR
+END CLASS
+CLASS Cocuk EXTENDS Ata
+    PUBLIC
+    DIM y AS I32
+END CLASS
+' S-487: a derived class without a constructor cannot construct a base class that needs arguments.
+DIM p AS Cocuk = NEW Cocuk()

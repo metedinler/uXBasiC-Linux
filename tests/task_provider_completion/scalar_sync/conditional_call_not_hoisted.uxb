@@ -1,0 +1,13 @@
+DIM total AS I64 = 0
+DIM calls AS I64 = 0
+FUNCTION Unexpected() AS I64
+ calls = calls + 1
+ RETURN 99
+END FUNCTION
+THREAD Work() AS I64
+ total = TRUE ? 7 : Unexpected()
+ RETURN total
+END THREAD
+DIM a AS TASK OF I64 = SPAWN Work()
+PRINT a.JOIN()
+PRINT calls

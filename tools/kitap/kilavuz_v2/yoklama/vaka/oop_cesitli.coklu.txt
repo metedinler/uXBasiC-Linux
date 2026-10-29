@@ -1,0 +1,64 @@
+coklu EXTENDS (plan: yok)
+CLASS A
+    PUBLIC
+    DIM x AS I32
+END CLASS
+CLASS B
+    PUBLIC
+    DIM y AS I32
+END CLASS
+CLASS C EXTENDS A, B
+    PUBLIC
+    DIM z AS I32
+END CLASS
+DIM nc AS C = NEW C()
+PRINT 1
+=====
+THIS yeniden atama (plan: yasak)
+CLASS Kk
+    PUBLIC
+    METHOD F() AS I32
+        THIS = NEW Kk()
+        RETURN 1
+    END METHOD
+END CLASS
+DIM nk AS Kk = NEW Kk()
+PRINT nk.F()
+=====
+ME ile turetilmis siniftaki alana erisim (plan: yasak) basit
+CLASS Ab
+    PUBLIC
+    METHOD Oku() AS I32
+        RETURN ME.sadece
+    END METHOD
+END CLASS
+CLASS Cd EXTENDS Ab
+    PUBLIC
+    DIM sadece AS I32
+END CLASS
+DIM nc AS Cd = NEW Cd()
+PRINT nc.Oku()
+=====
+INTERFACE eksik metot (plan: derleme hatasi)
+INTERFACE IA
+    METHOD F() AS I32
+END INTERFACE
+CLASS Kk IMPLEMENTS IA
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM nk AS Kk = NEW Kk()
+PRINT 1
+=====
+PROTECTED alan disaridan erisim
+CLASS Pp
+    PROTECTED
+    DIM gizli AS I32
+    PUBLIC
+    METHOD Ac() AS I32
+        RETURN gizli
+    END METHOD
+END CLASS
+DIM np AS Pp = NEW Pp()
+np.gizli = 5
+PRINT np.Ac()

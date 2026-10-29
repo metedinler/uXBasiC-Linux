@@ -1,0 +1,3 @@
+' S-579: INCLUDE edilen dosyadaki Türkçe harfli adlar ana programdan kullanılır
+INCLUDE "tr16_yardimci.uxbh"
+PRINT dahil_çarp(3, 4) + dahil_sabit

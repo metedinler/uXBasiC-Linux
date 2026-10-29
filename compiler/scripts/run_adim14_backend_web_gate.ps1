@@ -78,7 +78,7 @@ $buildLog = Join-Path $current "adim14_compile.log"
 $buildBatCandidates = @(
     "compiler/scripts/build_uxb_main_64.bat",
     "build_64.bat",
-    "compiler/wrappers/build_uxb_main_64.bat"
+    "compiler/scripts/build_uxb_main_64.bat"
 )
 $buildBat = $null
 foreach ($b in $buildBatCandidates) { if (Test-Path $b) { $buildBat = $b; break } }
@@ -108,8 +108,7 @@ if (-not $compileOk) {
 } else {
     $exeCandidates = @(
         "build/uxb_main_64.exe",
-        "compiler/wrappers/uxb_main_wrapper_64.exe",
-        "compiler/wrappers/uxb_main_64.exe",
+        "bin/uxb.exe",
         "uxb_main_64.exe",
         "dist/uxb_main_64.exe"
     )

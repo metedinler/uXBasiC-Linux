@@ -1,0 +1,11 @@
+TYPE Point
+    x AS I32
+END TYPE
+DECLARE FUNCTION FirstX(a AS Point[]) AS I32
+FUNCTION FirstX(a AS Point[]) AS I32
+    RETURN a(0).x
+END FUNCTION
+DIM items(0 TO 1) AS Point
+items(0).x = 7
+PRINT FirstX(items)
+' DESIGN EXPECTED: 7; not a currently accepted multi-engine test.

@@ -1,0 +1,23 @@
+CLASS A
+    PUBLIC
+    DIM fa AS I32
+    CONSTRUCTOR()
+        fa = 4
+        PRINT 1
+    END CONSTRUCTOR
+END CLASS
+CLASS B EXTENDS A
+    PUBLIC
+    DIM fb AS I32
+END CLASS
+CLASS C EXTENDS B
+    PUBLIC
+    CONSTRUCTOR()
+        PRINT 3
+    END CONSTRUCTOR
+END CLASS
+' S-485: a class WITHOUT a constructor whose base chain has one still constructs the base part (it gets an empty constructor that calls SUPER()).
+DIM x AS C = NEW C()
+PRINT x.fa
+DIM y AS B = NEW B()
+PRINT y.fa

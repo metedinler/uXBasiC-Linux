@@ -1,0 +1,10 @@
+' S-123 (2026-10-17): GOSUB/RETURN artik WASM ve JS'te de calisir (donus adresi yigini var); AST ile ayni cikti beklenir. Eski surumde WASM NET red verirdi (test neg_gosub_refused idi).
+DIM x AS I32
+x = 1
+GOSUB Dbl
+GOSUB Dbl
+PRINT x
+END
+Dbl:
+    x = x * 2
+RETURN

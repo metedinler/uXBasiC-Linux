@@ -6,8 +6,7 @@
 
 Private Function UXBCliReadTextFile(ByRef filePath As String, ByRef textOut As String) As Integer
     Dim f As Integer = FreeFile
-    Open filePath For Input As #f
-    If Err <> 0 Then Return 0
+    If Open(filePath For Input As #f) <> 0 Then Return 0
     textOut = ""
     Do While Not Eof(f)
         Dim lineText As String
@@ -27,6 +26,10 @@ Private Function UXBCliTokenizeText(ByRef textIn As String, ByRef outArgs As UXB
         Dim ch As String = Mid(textIn, i, 1)
         If inQuote = 0 Then
             If ch = "#" Then
+                If token <> "" Then
+                    If UXBCliArgListAdd(outArgs, token) = 0 Then Return 0
+                    token = ""
+                End If
                 Do While i <= Len(textIn) And Mid(textIn, i, 1) <> Chr(10)
                     i += 1
                 Loop
@@ -57,7 +60,10 @@ Function UXBCliExpandResponseFilesRecursive(ByRef inputArgs As UXBCliArgList, By
     If depth > 8 Then errText = "CLI_RESPONSE_FILE_DEPTH_LIMIT": Return 0
     Dim i As Integer
     For i = 0 To inputArgs.count - 1
-        Dim item As String = Trim(inputArgs.items(i))
+        Dim item As String = inputArgs.items(i)
+        ' A bare .uxcli is the documented shorthand for @file. It is never
+        ' handed to the source-extension validator as a BASIC program.
+        If depth = 0 And i = 0 And LCase(Right(item, 6)) = ".uxcli" And Left(item, 1) <> "@" And Left(item, 1) <> "-" Then item = "@" & item
         If UXBCliIsResponseFile(item) <> 0 Then
             Dim pathText As String = Mid(item, 2)
             If Trim(pathText) = "" Then errText = "CLI_RESPONSE_FILE_EMPTY": Return 0

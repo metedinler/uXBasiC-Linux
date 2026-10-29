@@ -1502,22 +1502,22 @@ END FUNCTION
 FUNCTION UnpackR(rgba AS U32) AS I32
     DIM v AS I64
     v = rgba
-    RETURN v MOD 256
+    RETURN I32(v MOD 256)
 END FUNCTION
 FUNCTION UnpackG(rgba AS U32) AS I32
     DIM v AS I64
     v = rgba
-    RETURN (v \ 256) MOD 256
+    RETURN I32((v \ 256) MOD 256)
 END FUNCTION
 FUNCTION UnpackB(rgba AS U32) AS I32
     DIM v AS I64
     v = rgba
-    RETURN (v \ 65536) MOD 256
+    RETURN I32((v \ 65536) MOD 256)
 END FUNCTION
 FUNCTION UnpackA(rgba AS U32) AS I32
     DIM v AS I64
     v = rgba
-    RETURN (v \ 16777216) MOD 256
+    RETURN I32((v \ 16777216) MOD 256)
 END FUNCTION
 ' 1 when the window currently has the given WINDOW_* flag (e.g. HasWindowFlag(win, WINDOW_MAXIMIZED)).
 FUNCTION HasWindowFlag(winHandle AS I64, flag AS I64) AS I32

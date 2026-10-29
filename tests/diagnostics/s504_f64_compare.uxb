@@ -1,0 +1,6 @@
+DIM x AS F64 = 2.5
+PRINT x >= 0
+DIM b AS I32
+b = (x >= 0)
+PRINT b
+PRINT TIMER >= 0

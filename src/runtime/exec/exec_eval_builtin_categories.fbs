@@ -80,9 +80,6 @@ Private Function ExecEvalDllCallCore(ByRef ps As ParseState, ByRef es As ExecSta
         Return 0
     End If
 
-    Dim resolverMode As String
-    resolverMode = ExecGetFfiResolverMode()
-
     Dim ffiArgRuntimeCount As Integer
     ffiArgRuntimeCount = ffiArgCount - effectiveArgStartPos
     If ffiArgRuntimeCount < 0 Then ffiArgRuntimeCount = 0
@@ -137,42 +134,10 @@ Private Function ExecEvalDllCallCore(ByRef ps As ParseState, ByRef es As ExecSta
         Return 0
     End If
 
-    Dim cleanupType As String
-    Dim resolverErr As String
-        If ExecResolveX86InteropTarget(dllName, symbolName, signatureText, callingConventionText, ffiArgRuntimeCount, cleanupType, resolverErr) = 0 Then
-            If resolverMode = "ENFORCE" Then
-                errText = resolverErr
-                Return 0
-            End If
-            If resolverErr <> "" Then UxbWarn "FFI x86 resolver fallback: " & resolverErr
-
-            Dim directInvokedValue As Integer
-            Dim directInvokedOut As Integer
-            Dim directInvokeErr As String
-            If ExecTryInvokeDirectX86I32(ps, es, callNodeIdx, effectiveArgStartPos, dllName, symbolName, signatureText, callingConventionText, ffiArgRuntimeCount, directInvokedValue, directInvokedOut, directInvokeErr) = 0 Then
-                errText = directInvokeErr
-                If errText = "" Then errText = "exec: CALL(DLL/API) x86 direct invocation failed"
-                Return 0
-            ElseIf directInvokedOut <> 0 Then
-                Return directInvokedValue
-            End If
-        Else
-            UxbInfo "FFI x86 resolver matched cleanup=" & cleanupType & " args=" & LTrim(Str(ffiArgRuntimeCount))
-
-        Dim invokedValue As Integer
-        Dim invokedOut As Integer
-        Dim invokeErr As String
-            If ExecTryInvokeResolvedX86I32(ps, es, callNodeIdx, effectiveArgStartPos, dllName, symbolName, signatureText, callingConventionText, ffiArgRuntimeCount, invokedValue, invokedOut, invokeErr) = 0 Then
-                errText = invokeErr
-                If errText = "" Then errText = "exec: CALL(DLL/API) x86 invocation failed"
-                Return 0
-            ElseIf invokedOut <> 0 Then
-                Return invokedValue
-            End If
-        End If
-
-        errText = "exec: CALL(DLL/API) invoke path unavailable signature=" & UCase(Trim(signatureText)) & " args=" & LTrim(Str(ffiArgRuntimeCount))
-        Return 0
+    ' S-666 (x86 emeklilik, Asama 2): 32 bit (x86) FFI yolu emekli edildi. Calisma zamani ABI adi 64 bit derlemede her zaman
+    ' "WIN64-MSABI" oldugundan buraya yalniz 32 bit derlenmis bir derleyici ulasirdi; o artik uretilmiyor.
+    errText = "exec: CALL(DLL/API) x86 (32 bit) hedefi emekli edildi; yalniz WIN64-MSABI desteklenir"
+    Return 0
 End Function
 
 Private Function ExecEvalBuiltinFfiCategory(ByRef ps As ParseState, ByRef es As ExecState, ByVal callName As String, ByVal callNodeIdx As Integer, ByRef errText As String) As Integer
@@ -668,14 +633,14 @@ Private Function ExecResolveInstanceOfObjectClass(ByRef ps As ParseState, ByRef 
         objVarIdx = ExecFindVar(es, ps.ast.nodes(objNode).value)
         If objVarIdx <> -1 Then
             Dim runtimeClass As String
-            runtimeClass = UCase(Trim(es.vars(objVarIdx).runtimeClassType))
+            runtimeClass = UCase(Trim(ExecVarAt(es, objVarIdx).runtimeClassType))
             If runtimeClass <> "" Then
                 classOut = runtimeClass
                 Return 1
             End If
 
             Dim declClass As String
-            declClass = UCase(Trim(es.vars(objVarIdx).declType))
+            declClass = UCase(Trim(ExecVarAt(es, objVarIdx).declType))
             If declClass <> "" And ExecFindClassDeclNode(ps, declClass) <> -1 Then
                 classOut = declClass
                 Return 1
@@ -800,28 +765,16 @@ Private Function ExecBuiltinArgAsNumericFloat(ByRef ps As ParseState, ByRef es A
 End Function
 
 Private Function ExecEvalBuiltinScalarCategory(ByRef ps As ParseState, ByRef es As ExecState, ByVal callName As String, ByVal callNodeIdx As Integer, ByRef errText As String) As Integer
-    Select Case callName
-    Case "BOOLEAN", "BOOL", "I8", "U8", "I16", "U16", "I32", "U32", "PTR"
-        Dim castValue As Integer
-        If ExecBuiltinArgAsInt(ps, es, callNodeIdx, callName, castValue, errText, 1) = 0 Then Return 0
-        Select Case callName
-        Case "BOOLEAN", "BOOL": Return IIf(castValue <> 0, -1, 0)
-        Case "U8": Return castValue And &hFF
-        Case "I8"
-            castValue And= &hFF
-            If (castValue And &h80) <> 0 Then castValue -= &h100
-            Return castValue
-        Case "U16": Return castValue And &hFFFF
-        Case "I16"
-            castValue And= &hFFFF
-            If (castValue And &h8000) <> 0 Then castValue -= &h10000
-            Return castValue
-        Case Else: Return castValue
-        End Select
-
-    Case "I64", "U64", "F32", "F64"
-        errText = "exec: typed scalar conversion requires ExecEvalExpression: " & callName
-        Return 0
+    Dim effectiveName As String = UCase(Trim(UXBStep3StorageType(callName)))
+    If Left(effectiveName, 5) = "TYPE_" Then effectiveName = Mid(effectiveName, 6)
+    Select Case effectiveName
+    Case "BOOLEAN", "BOOL", "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "F32", "F64", "PTR"
+        Dim argNode As Integer = ExecChildAt(ps, callNodeIdx, 0)
+        If argNode < 0 Then errText = "exec: scalar conversion argument missing": Return 0
+        Dim sourceValue As ExecValue, converted As ExecValue
+        If ExecEvalExpression(ps, argNode, es, sourceValue, errText) = 0 Then Return 0
+        If ExecApplyDeclaredType(sourceValue, callName, converted, errText) = 0 Then Return 0
+        Return ExecValueToInteger(converted)
 
     Case "LEN"
         Dim lenText As String
@@ -973,6 +926,10 @@ End Function
 
 Private Function ExecEvalBuiltinTimeRandomCategory(ByRef ps As ParseState, ByRef es As ExecState, ByVal callName As String, ByVal callNodeIdx As Integer, ByRef errText As String) As Integer
     Select Case callName
+    Case "CSRLIN"
+        Return gUxbConsole.row
+    Case "POS"
+        Return gUxbConsole.col
     Case "RND"
         Dim rndArgc As Integer
         rndArgc = ExecChildCount(ps, callNodeIdx)
@@ -991,59 +948,14 @@ Private Function ExecEvalBuiltinTimeRandomCategory(ByRef ps As ParseState, ByRef
         Return ExecClampI32(Int(rndValue))
 
     Case "TIMER"
-        Dim timerArgc As Integer
-        timerArgc = ExecChildCount(ps, callNodeIdx)
-
-        If timerArgc = 0 Then
-            Return ExecClampI32(Timer)
-        ElseIf timerArgc = 1 Then
-            Dim tu0 As Integer
-            tu0 = ExecChildAt(ps, callNodeIdx, 0)
-            If tu0 = -1 Or UCase(ps.ast.nodes(tu0).kind) <> "STRING" Then
-                errText = "exec: TIMER(unit) expects string unit"
-                Return 0
-            End If
-
-            Dim scale1 As Double
-            If ExecTimerUnitScale(ps.ast.nodes(tu0).value, scale1) = 0 Then
-                errText = "exec: invalid TIMER unit"
-                Return 0
-            End If
-
-            Return ExecClampI32(Timer * scale1)
-        ElseIf timerArgc = 3 Then
-            Dim t0 As Integer
-            Dim t1 As Integer
-            Dim t2 As Integer
-            t0 = ExecChildAt(ps, callNodeIdx, 0)
-            t1 = ExecChildAt(ps, callNodeIdx, 1)
-            t2 = ExecChildAt(ps, callNodeIdx, 2)
-            If t0 = -1 Or t1 = -1 Or t2 = -1 Then
-                errText = "exec: TIMER(start,end,unit) args missing"
-                Return 0
-            End If
-            If UCase(ps.ast.nodes(t2).kind) <> "STRING" Then
-                errText = "exec: TIMER(start,end,unit) expects string unit"
-                Return 0
-            End If
-
-            Dim startValue As Integer
-            Dim endValue As Integer
-            startValue = ExecEvalNode(ps, es, t0, errText)
-            If errText <> "" Then Return 0
-            endValue = ExecEvalNode(ps, es, t1, errText)
-            If errText <> "" Then Return 0
-
-            Dim scale3 As Double
-            If ExecTimerUnitScale(ps.ast.nodes(t2).value, scale3) = 0 Then
-                errText = "exec: invalid TIMER unit"
-                Return 0
-            End If
-
-            Return ExecClampI32((CDbl(endValue) - CDbl(startValue)) * scale3)
+        ' S-624: TIMER ortak saati kullanir (src/common/uxb_clock.fbs). S-651: birimli biciimler (TIMER("ms"),
+        ' TIMER(bas, bit, "s")) anlam cozumlemede `TIMER * olcek` / `(bit - bas) * olcek` ifadesine yeniden yazilir
+        ' (SemRewriteTimerUnitCalls); yurutmeye yalniz argumansiz TIMER ulasir.
+        If ExecChildCount(ps, callNodeIdx) = 0 Then
+            Return ExecClampI32(UXBClockTimerSeconds())
         End If
 
-        errText = "exec: TIMER expects 0, 1 or 3 arguments"
+        errText = "exec: TIMER takes no arguments at run time (unit forms are rewritten by the semantic pass)"
         Return 0
     End Select
 
@@ -1302,7 +1214,10 @@ Private Function ExecEvalBuiltinArrayBoundsCategory(ByRef ps As ParseState, ByRe
             errText = "exec: " & callName & " dimension must be an integer literal"
             Return 0
         End If
-        dimNo = ValInt(Trim(ps.ast.nodes(dimNode).value))
+        If UXBArrayDimensionLiteral(ps.ast.nodes(dimNode).value, dimNo) = 0 Then
+            errText = "exec: " & callName & " dimension must be a positive integer literal in range 1..2147483647"
+            Return 0
+        End If
     End If
 
     Dim varIdx As Integer
@@ -1311,7 +1226,7 @@ Private Function ExecEvalBuiltinArrayBoundsCategory(ByRef ps As ParseState, ByRe
         errText = "exec: " & callName & ": " & arrayName & " is not an array"
         Return 0
     End If
-    If es.vars(varIdx).isArray = 0 Then
+    If ExecVarAt(es, varIdx).isArray = 0 Then
         errText = "exec: " & callName & ": " & arrayName & " is not an array"
         Return 0
     End If
@@ -1332,7 +1247,7 @@ Private Function ExecEvalBuiltinArrayBoundsCategory(ByRef ps As ParseState, ByRe
     End If
 
     If dimCount = 1 Then
-        Return IIf(wantUpper <> 0, es.vars(varIdx).arrayUpper, es.vars(varIdx).arrayLower)
+        Return IIf(wantUpper <> 0, ExecVarAt(es, varIdx).arrayUpper, ExecVarAt(es, varIdx).arrayLower)
     End If
 
     Dim boundNode As Integer
@@ -1376,10 +1291,10 @@ Private Function ExecEvalBuiltinPointerCategory(ByRef ps As ParseState, ByRef es
         Dim varIdx As Integer
         varIdx = ExecFindVar(es, identUpper)
         If varIdx <> -1 And identUpper <> "THIS" And identUpper <> "ME" Then
-            If es.vars(varIdx).isArray <> 0 Then
-                If ExecDeclTypeIsNativeScalar(es.vars(varIdx).declType) <> 0 Then
+            If ExecVarAt(es, varIdx).isArray <> 0 Then
+                If ExecDeclTypeIsNativeScalar(ExecVarAt(es, varIdx).declType) <> 0 Then
                     Dim arrId As Integer
-                    arrId = es.vars(varIdx).arrayId
+                    arrId = ExecVarAt(es, varIdx).arrayId
                     If arrId < 0 Or arrId >= es.arrayCount Then
                         errText = "exec: VARPTR array not initialized"
                         Return 0
@@ -1401,7 +1316,7 @@ Private Function ExecEvalBuiltinPointerCategory(ByRef ps As ParseState, ByRef es
                     arrNativeAddr = CULngInt(@es.arrays(arrId).rawData(0))
                     Return CInt(arrNativeAddr)
                 End If
-            ElseIf ExecDeclTypeIsNativeScalar(es.vars(varIdx).declType) <> 0 Then
+            ElseIf ExecDeclTypeIsNativeScalar(ExecVarAt(es, varIdx).declType) <> 0 Then
                 ' S-071: VARPTR of a scalar is the address of its raw,
                 ' declared-WIDTH cell (ExecVar.pinCell), not of one of the
                 ' ExecValue's separate int/u64/float fields -- which field is
@@ -1410,7 +1325,7 @@ Private Function ExecEvalBuiltinPointerCategory(ByRef ps As ParseState, ByRef es
                 ' U64, PTR and F32. The variable is pinned: FindVar refreshes
                 ' its value from the cell before every read and every write
                 ' stores back into it.
-                Dim pinTypeText As String = UCase(Trim(es.vars(varIdx).declType))
+                Dim pinTypeText As String = UCase(Trim(ExecVarAt(es, varIdx).declType))
                 If Left(pinTypeText, 5) = "TYPE_" Then pinTypeText = Mid(pinTypeText, 6)
                 If pinTypeText = "" Then pinTypeText = "I32"
                 Dim pinWidthValue As Integer = ExecPinWidth(pinTypeText)
@@ -1418,13 +1333,13 @@ Private Function ExecEvalBuiltinPointerCategory(ByRef ps As ParseState, ByRef es
                     errText = "exec: VARPTR: no native scalar layout for type " & pinTypeText & " (" & identUpper & ")"
                     Return 0
                 End If
-                If es.vars(varIdx).pinned = 0 Then
-                    es.vars(varIdx).pinType = pinTypeText
-                    es.vars(varIdx).pinWidth = pinWidthValue
+                If ExecVarAt(es, varIdx).pinned = 0 Then
+                    ExecVarAt(es, varIdx).pinType = pinTypeText
+                    ExecVarAt(es, varIdx).pinWidth = pinWidthValue
                     ExecVarPinStore es, varIdx
-                    es.vars(varIdx).pinned = 1
+                    ExecVarAt(es, varIdx).pinned = 1
                 End If
-                Dim scalarNativeAddr As UInteger = CULngInt(@es.vars(varIdx).pinCell(0))
+                Dim scalarNativeAddr As UInteger = CULngInt(@(ExecVarAt(es, varIdx).pinCell(0)))
                 Return CInt(scalarNativeAddr)
             End If
         End If

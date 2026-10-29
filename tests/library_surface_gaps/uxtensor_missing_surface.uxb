@@ -1,0 +1,35 @@
+INCLUDE "include/modules/uxtensor.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxtensor.Add(0, 0)
+        PRINT uxtensor.Backend()
+        PRINT uxtensor.Clone(0)
+        PRINT uxtensor.Create3D(0, 0, 0)
+        PRINT uxtensor.Create4D(0, 0, 0, 0)
+        PRINT uxtensor.DType(0)
+        PRINT uxtensor.DataPtr(0)
+        PRINT uxtensor.Dim(0, 0)
+        PRINT uxtensor.Divide(0, 0)
+        PRINT uxtensor.Dot(0, 0)
+        PRINT uxtensor.ElemSize(0)
+        uxtensor.Fill(0, 0.0)
+        PRINT uxtensor.Get3D(0, 0, 0, 0)
+        PRINT uxtensor.Get4D(0, 0, 0, 0, 0)
+        PRINT uxtensor.MatVec(0, 0)
+        PRINT uxtensor.Mean(0)
+        PRINT uxtensor.Multiply(0, 0)
+        PRINT uxtensor.NDim(0)
+        PRINT uxtensor.Norm2(0)
+        PRINT uxtensor.Scale(0, 0.0)
+        uxtensor.Set3D(0, 0, 0, 0, 0.0)
+        uxtensor.Set4D(0, 0, 0, 0, 0, 0.0)
+        PRINT uxtensor.Size(0)
+        PRINT uxtensor.SliceAxis0(0, 0, 0)
+        PRINT uxtensor.Stride(0, 0)
+        PRINT uxtensor.Subtract(0, 0)
+        PRINT uxtensor.Transpose2D(0)
+        uxtensor.Zero(0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXTENSOR"
+END MAIN

@@ -1,0 +1,17 @@
+' S-611: a constructor parameter and a method parameter with the same name and different types (I32 / STRING).
+CLASS Kutu
+    PUBLIC
+    DIM v AS I32
+    CONSTRUCTOR(a AS I32)
+        v = a
+    END CONSTRUCTOR
+    METHOD Ekle(a AS STRING) AS STRING
+        RETURN a + "!"
+    END METHOD
+    METHOD Al() AS I32
+        RETURN v
+    END METHOD
+END CLASS
+DIM k AS Kutu = NEW Kutu(7)
+PRINT k.Al()
+PRINT k.Ekle("hey")

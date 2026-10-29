@@ -1,0 +1,14 @@
+DIM smallSigned AS I8 = -128
+DIM smallUnsigned AS U8 = 255
+DIM shortSigned AS I16 = -32768
+DIM shortUnsigned AS U16 = 65535
+FUNCTION SmallResult() AS I8
+  RETURN 127
+END FUNCTION
+PRINT smallSigned
+PRINT smallUnsigned
+PRINT shortSigned
+PRINT shortUnsigned
+PRINT SmallResult()
+PRINT I8(255)
+PRINT U8(256)

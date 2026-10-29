@@ -1,0 +1,3 @@
+' S-544 acceptance 6: a DECLARE ... LIB import has no definition in the program and needs none (native engines only; the web targets refuse DECLARE_EXTERNAL).
+DECLARE FUNCTION MutlakDeger CDECL LIB "msvcrt.dll" ALIAS "abs" (BYVAL x AS I32) AS I32
+PRINT 1

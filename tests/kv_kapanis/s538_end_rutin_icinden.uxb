@@ -1,0 +1,17 @@
+' S-538: bir SUB/FUNCTION icinden END de tum programi bitirir (cagirana donmez, sonraki deyimler calismaz).
+SUB Bitir(n AS I32)
+    PRINT "icerde"
+    IF n = 1 THEN END
+    PRINT "olmamali"
+END SUB
+FUNCTION Iki(n AS I32) AS I32
+    PRINT "iki"
+    IF n = 5 THEN Bitir(1)
+    RETURN n * 2
+END FUNCTION
+DIM i AS I32
+FOR i = 1 TO 3
+    PRINT i
+    IF i = 2 THEN Bitir(1)
+NEXT
+PRINT "sonra olmamali"

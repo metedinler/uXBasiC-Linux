@@ -1,0 +1,32 @@
+=== inline_asm_nop
+INLINE ASM "nop"
+PRINT 5
+=== inline_blok
+INLINE("x64","nasm","sub","abi=win64;preserve=rbx,rsi,rdi,r12,r13,r14,r15;stack=16;shadow=32")
+mov rax, 1
+END INLINE
+PRINT 6
+=== api_cagri
+DIM t AS I32
+t = CALL(API, "kernel32", "GetTickCount", I32)
+IF t >= 0 THEN PRINT "ok"
+=== dll_atoi
+PRINT CALL(DLL, "ucrtbase.dll", "atoi", I32, CDECL, "STRPTR", "1234") + 1
+=== dll_pow
+PRINT CALL(DLL, "ucrtbase.dll", "pow", F64, CDECL, "F64,F64", 2.0, 10.0)
+=== dll_abs
+PRINT CALL(DLL, "ucrtbase.dll", "abs", I32, CDECL, "I32", -17)
+=== dll_toupper
+PRINT CHR(CALL(DLL, "ucrtbase.dll", "toupper", I32, CDECL, "I32", ASC("q")))
+=== dll_strncmp
+PRINT CALL(DLL, "ucrtbase.dll", "strncmp", I32, CDECL, "STRPTR,STRPTR,U64", "merhaba", "merhamet", 5)
+=== dll_sqrt_f64
+PRINT CALL(DLL, "ucrtbase.dll", "sqrt", F64, CDECL, "F64", 2.0)
+=== dll_i64_donus
+PRINT CALL(DLL, "ucrtbase.dll", "llabs", I64, CDECL, "I64", -5000000000)
+=== dll_kernel32_getcurrentprocessid
+DIM p AS I32
+p = CALL(DLL, "kernel32.dll", "GetCurrentProcessId", I32, STDCALL, "")
+IF p > 0 THEN PRINT "pid var"
+=== dll_bos_arguman_listesi
+PRINT CALL(DLL, "ucrtbase.dll", "rand", I32, CDECL, "") >= 0

@@ -342,18 +342,18 @@ Private Sub ExecSlotRestoreParam(ByRef es As ExecState, ByRef paramName As Strin
         If idx = -1 Then
             idx = ExecEnsureVar(es, paramName)
         End If
-        If idx <> -1 Then es.vars(idx) = previousVar
+        If idx <> -1 Then ExecVarAt(es, idx) = previousVar
         Exit Sub
     End If
 
     If idx = -1 Then Exit Sub
     Dim i As Integer
     For i = idx To es.count - 2
-        es.vars(i) = es.vars(i + 1)
+        ExecVarAt(es, i) = ExecVarAt(es, i + 1)
     Next i
     If es.count > 0 Then
         Dim emptyVar As ExecVar
-        es.vars(es.count - 1) = emptyVar
+        ExecVarAt(es, es.count - 1) = emptyVar
         es.count -= 1
     End If
 End Sub
@@ -385,7 +385,7 @@ Private Function ExecSlotRunBlockBody(ByRef ps As ParseState, ByRef es As ExecSt
             previousIdx = ExecFindVar(es, paramName)
             If previousIdx <> -1 Then
                 paramHadPrevious = 1
-                paramPrevious = es.vars(previousIdx)
+                paramPrevious = ExecVarAt(es, previousIdx)
             End If
             Dim pipeInput As ExecValue
             ExecValueInit pipeInput

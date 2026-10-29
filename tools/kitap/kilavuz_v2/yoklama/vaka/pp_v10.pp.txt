@@ -1,0 +1,53 @@
+=== ust_makro_alt_dosyada
+%%DEFINE GEN 640
+%%INCLUDE "k.uxbh"
+--- k.uxbh
+PRINT GEN
+=== alt_makro_ustte_baslik
+%%INCLUDE "k.uxbh"
+PRINT GEN
+--- k.uxbh
+%%DEFINE GEN 640
+=== alt_makro_ustte_duz
+INCLUDE "k.uxb"
+PRINT GEN
+--- k.uxb
+%%DEFINE GEN 640
+=== ust_makro_alt_duz
+%%DEFINE GEN 640
+INCLUDE "k.uxb"
+--- k.uxb
+PRINT GEN
+=== alt_makro_alt_icinde
+INCLUDE "k.uxb"
+--- k.uxb
+%%DEFINE GEN 640
+PRINT GEN
+=== yonerge_yorum_ortada
+%%DEFINE X 3 ' aciklama
+PRINT X; " tamam"
+=== foreach_if_ic
+%%DEFINE MOD hizli
+%%FOREACH N IN (1, 2)
+%%IFC MOD, hizli
+PRINT "{{N}} hizli"
+%%ELSE
+PRINT "{{N}} yavas"
+%%ENDIF
+%%ENDFOREACH
+=== foreach_ifn_deger
+%%FOREACH N IN (1, 5)
+%%IFN {{N}} >= 3
+PRINT "{{N}} buyuk"
+%%ELSE
+PRINT "{{N}} kucuk"
+%%ENDIF
+%%ENDFOREACH
+=== macro_icinde_macro_cagrisi_define
+%%DEFINE KATSAYI 3
+%%MACRO UC_KAT(X) ((X) * KATSAYI)
+PRINT UC_KAT(5)
+=== define_define_icinde
+%%DEFINE A 4
+%%DEFINE B A
+PRINT B

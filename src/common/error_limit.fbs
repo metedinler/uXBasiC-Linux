@@ -1,0 +1,20 @@
+#ifndef UXB_ERROR_LIMIT_FBS
+#define UXB_ERROR_LIMIT_FBS
+
+Dim Shared gUXBDiagnosticErrorLimit As Integer = 20
+
+Function UXBConfigureErrorLimit(ByVal rawValue As String) As Integer
+    Dim text As String = Trim(rawValue)
+    If text = "" Then Return 0
+    Dim value As Integer = 0
+    For i As Integer = 1 To Len(text)
+        Dim digit As Integer = Asc(Mid(text, i, 1)) - Asc("0")
+        If digit < 0 Or digit > 9 Then Return 0
+        If value > (1000000 - digit) \ 10 Then Return 0
+        value = value * 10 + digit
+    Next i
+    If value < 1 Then Return 0
+    gUXBDiagnosticErrorLimit = value
+    Return 1
+End Function
+#endif

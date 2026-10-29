@@ -1,0 +1,49 @@
+' ============================================================================
+' uXBasic Yama Paketi 1 -- Katman B test programi (qb_compat_test.uxb)
+' Calistirma: uxbasic run qb_compat_test.uxb
+' Beklenen cikti sirayla: SWAP ok / SLEEP ~1 sn / kova 3 ogge / saat ss:dd:ss
+' / MID degistirme / imlec izi. DateText yalniz X64 motorunda deger uretir;
+' yorumlayicida SHELL NATIVE hizmeti olmadigindan bos metin doner.
+' ============================================================================
+%%INCLUDE "qb_compat.ppc"
+DIM __uxb_data(QBDATA_MAX) AS STRING
+DIM __uxb_data_i AS I32
+DIM __uxb_csr_r AS I32
+DIM __uxb_csr_c AS I32
+DIM __uxb_swapt AS STRING
+DIM __uxb_sleept AS F64
+__uxb_data_i = 1
+MAIN
+  DIM a AS I32
+  DIM b AS I32
+  DIM ad AS STRING
+  DIM soyad AS STRING
+  DIM metin AS STRING
+  a = 10
+  b = 20
+  QSWAP(a, b)
+  PRINT "SWAP: a="; a; " b="; b
+  PRINT "SLEEP 1 saniye basliyor..."
+  QSLEEP(1)
+  PRINT "SLEEP bitti."
+  QDATA(1, "elma")
+  QDATA(2, "armut")
+  QDATA(3, "kiraz")
+  QREAD(ad)
+  QREAD(soyad)
+  QREAD(metin)
+  PRINT "Kova: "; ad; " "; soyad; " "; metin
+  QSEEK(2)
+  QREAD(soyad)
+  PRINT "QSEEK 2 sonrasi: "; soyad
+  QRESTORE
+  QREAD(ad)
+  PRINT "QRESTORE sonrasi: "; ad
+  PRINT "Saat: "; TimeText()
+  PRINT "Tarih: "; DateText()
+  metin = "uXBasic"
+  metin = MidReplace(metin, 3, 1, "*")
+  PRINT "MidReplace: "; metin
+  QLOCATE(2, 5)
+  PRINT "Imlec izi: satir="; QCSR; " kolon="; QPOS
+END MAIN

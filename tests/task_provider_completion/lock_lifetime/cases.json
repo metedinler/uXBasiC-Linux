@@ -1,0 +1,8 @@
+{
+  "argument_registers": {"engines":["AST","MIR","x64","AST-x64"],"output":"15.75\nreleased\n60.75"},
+  "static_once": {"engines":["AST","MIR","x64","AST-x64"],"output":"84\n1\n42"},
+  "atomic_nested_arguments": {"engines":["AST","MIR","x64","AST-x64"],"output":"-2147483648\n0\n-2147483647\n1.75\n-1\n2.5\n1"},
+  "atomic_widths": {"engines":["AST","MIR","x64","AST-x64"],"output":"-128\n0\n-32768\n0\n-2147483648\n0\n42\n42\n-128\n-1\n-128"},
+  "nested_console": {"engines":["x64","AST-x64"],"environment":{"UXB_TASK_WORKERS":"1"},"output":"child\nparent42"},
+  "rnd_reseed": {"engines":["AST","MIR","x64","AST-x64"],"output":"-1\n-1\n-1\n-1"}
+}

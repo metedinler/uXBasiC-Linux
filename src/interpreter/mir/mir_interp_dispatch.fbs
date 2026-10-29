@@ -26,11 +26,13 @@ Sub UXBMIRInterpStateInit(ByRef st As UXBMIRInterpState)
     st.labelCount = 0
     st.gosubDepth = 0
     st.gosubMaxDepth = 4096
+    st.invokeDepth = 0   ' S-543
     st.nextIndex = 0
     st.jumpRequested = 0
     st.returnRequested = 0
     st.returnValue = UXBInterpValueVoid()
     st.currentScopeDepth = 0
+    st.visibleRoutineScope = 0
     st.shellNowait = 0
     st.shellTimeoutMs = 0
     st.shellRunPath = ""
@@ -81,6 +83,7 @@ Function UXBMIRInterpFindVar(ByRef st As UXBMIRInterpState, ByVal nameText As St
     Dim key As String = UXBMIRInterpNormName(nameText)
     Dim i As Integer
     For i = st.varCount - 1 To 0 Step -1
+        If st.vars(i)->scopeDepth <> 0 And st.vars(i)->scopeDepth <> st.visibleRoutineScope Then Continue For
         If st.vars(i)->nameKey = key Then
             i = UXBMIRInterpResolveAliasIdx(st, i)
             ' S-071: a pinned scalar's truth is its raw cell (a POKE through
@@ -320,7 +323,20 @@ Function UXBMIRInterpExecStorage(ByRef ins As UXBMIRInstructionRecord, ByRef ctx
             Return UXBInterpValueVoid()
         End If
         Dim declValue As UXBInterpValue = UXBInterpValueDefaultForType(ins.resultType)
-        If ins.operandCount > 0 Then declValue = UXBInterpApplyDeclaredType(UXBMIRInterpGetOperand(st, ins.operands(0)), ins.resultType)
+        If ins.operandCount > 0 Then
+            declValue = UXBMIRInterpGetOperand(st, ins.operands(0))
+            ' S-564 (2026-10-17): a declaration whose type is a CLASS / INTERFACE name keeps a plain number as it is - that number is the NULL
+            ' reference. The generic declared-type rule knows no class names (every unknown name canonicalizes to VARIANT), so it turned the 0
+            ' passed for an empty object parameter into an empty VARIANT tagged with the class name, which equals nothing - not even NOTHING.
+            ' (MIR interpreter only: AST, native x64, JS and WASM compared the empty parameter with 0 correctly.)
+            Dim declKeepPlain As Integer = 0
+            If UXBInterpCanonicalType(ins.resultType) = UXB_VAL_VARIANT Then
+                Dim declNameUpper As String = UCase(Trim(ins.resultType))
+                If Left(declNameUpper, 5) = "TYPE_" Then declNameUpper = Mid(declNameUpper, 6)
+                If declNameUpper <> "" And declNameUpper <> "VARIANT" And declNameUpper <> "VAR" Then declKeepPlain = 1
+            End If
+            If declKeepPlain = 0 Then declValue = UXBInterpApplyDeclaredType(declValue, ins.resultType)
+        End If
         UXBMIRInterpSetVar st, ins.resultName, declValue
         Return UXBInterpValueVoid()
     Case "MIR_LOAD_LOCAL", "MIR_LOAD_GLOBAL", "MIR_LOAD"

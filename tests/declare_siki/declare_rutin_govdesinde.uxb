@@ -1,0 +1,9 @@
+' S-544: a DECLARE written inside a routine body announces the routine from that point on (the call after it is fine).
+SUB Once()
+    DECLARE SUB Sonra()
+    Sonra()
+END SUB
+SUB Sonra()
+    PRINT 7
+END SUB
+Once()

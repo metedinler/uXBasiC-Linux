@@ -1,0 +1,26 @@
+' S-580 (2026-10-16): two F64 FIELDS in one expression. The lowering gave a member read (THIS.k) no float kind, so
+' `en * boy` became an INTEGER multiply of two IEEE bit patterns: native x64 printed 0 or -6.7e-308.
+CLASS Dik
+    PUBLIC
+    DIM en AS F64
+    DIM boy AS F64
+    METHOD Alan() AS F64
+        RETURN en * boy
+    END METHOD
+    METHOD Cevre() AS F64
+        RETURN (en + boy) * 2.0
+    END METHOD
+    METHOD Kare() AS F64
+        RETURN THIS.en * THIS.en
+    END METHOD
+    METHOD Fark() AS F64
+        RETURN boy - en
+    END METHOD
+END CLASS
+DIM d AS Dik = NEW Dik()
+d.en = 3.0
+d.boy = 4.0
+PRINT d.Alan()
+PRINT d.Cevre()
+PRINT d.Kare()
+PRINT d.Fark()

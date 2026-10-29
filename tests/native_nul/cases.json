@@ -1,0 +1,20 @@
+{
+  "operations": {
+    "output": "3\n2\n66\n2\n0\n0\n-1\n3\n3\n3\n3\n3"
+  },
+  "ownership": {
+    "output": "3\n5\n90\n7"
+  },
+  "fields": {
+    "output": "3\n3\n3\n66\n3"
+  },
+  "print_bytes": {
+    "output": "A\u0000B\n[A\u0000B]\n3"
+  },
+  "zero_values": {
+    "output": "1\n0\n2\n4\n3\n1\n66"
+  },
+  "literal_bytes": {
+    "output": "3\n66"
+  }
+}

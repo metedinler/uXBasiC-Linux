@@ -1,0 +1,5 @@
+DIM count AS I32 = 0
+IF 1 THEN count += 1 ELSE count += 100
+PRINT count
+IF 0 THEN count += 100 ELSE count += 10
+PRINT count

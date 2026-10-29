@@ -1,0 +1,15 @@
+' S-564 / S-613 (2026-10-17): an INTERFACE-typed parameter receiving an empty reference (an unassigned variable or NOTHING) is empty on every
+' engine. The MIR interpreter re-typed the 0 as an empty VARIANT named after the interface, which equalled nothing - not even NOTHING.
+INTERFACE IX
+    METHOD A() AS I32
+END INTERFACE
+SUB Yaz(i AS IX)
+    IF i = NOTHING THEN
+        PRINT 1
+    ELSE
+        PRINT 2
+    END IF
+END SUB
+DIM x AS IX
+Yaz(x)
+Yaz(NOTHING)

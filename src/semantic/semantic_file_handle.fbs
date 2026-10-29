@@ -1,0 +1,617 @@
+#ifndef UXB_SEMANTIC_FILE_HANDLE_FBS
+#define UXB_SEMANTIC_FILE_HANDLE_FBS
+
+' S-548 / S-549 (2026-10-17, Mete's approval 2026-10-15): FREEFILE and the typed file handle FILE_HANDLE.
+'
+'   DIM f AS FILE_HANDLE                     ' a channel NUMBER with a name; default 0 = "not open"; same storage and arithmetic as I32
+'   OPEN "a.txt" FOR OUTPUT AS f             ' no `#`: the compiler picks the smallest free channel (1..255) and stores it in f
+'   OPEN "a.txt" FOR OUTPUT AS #n            ' with `#`: an explicit channel number, exactly as before
+'   n = FREEFILE                             ' smallest free channel, 0 when all 255 are open
+'   CLOSE f                                  ' no `#` and f is a FILE_HANDLE: closes the channel AND sets f = 0 (closing twice is harmless)
+'
+' One front-end rewrite serves every engine (the file statements themselves are unchanged), exactly like the MID and DELETE rewrites:
+'   * the parser folds the spelling FILE_HANDLE to I32 (and keeps the spelling in the node's lexemeSnippet) and now keeps the `#` of OPEN / CLOSE as
+'     AST_FLAG_FILE_HASH on the channel operand;
+'   * when the program uses FREEFILE, an `OPEN ... AS handle` or a `CLOSE handle`, the program gets a small channel ledger (a global array of 255
+'     flags) with three helper routines, and EVERY OPEN / CLOSE of the program keeps that ledger up to date, so FREEFILE sees explicit channels
+'     (`AS #1`) too. Programs that use none of these are not touched;
+'   * `OPEN ... AS handle` becomes   IF 1 THEN
+'                                       IF handle <> 0 THEN THROW "UXB_FILE_HANDLE_IN_USE: ..."
+'                                       handle = _UXB_FHFREE()
+'                                       IF handle = 0 THEN THROW "UXB_FILE_NO_FREE_CHANNEL: ..."
+'                                       OPEN ... AS handle : _UXB_FHMARK(handle, 1)
+'                                    END IF
+'   * `CLOSE handle` becomes         IF handle <> 0 THEN : CLOSE handle : _UXB_FHMARK(handle, 0) : handle = 0 : END IF
+' The handle must be a plain variable, parameter or field (a call or an index would be evaluated more than once); the ledger follows the program text,
+' so an OPEN that fails at run time (S-434) still marks its channel until the program CLOSEs it. JS and WASM recognise the type name; their file
+' statements keep the explicit refusal they have today.
+
+' 1 when the TYPE_REF node was written as FILE_HANDLE (the parser folded the canonical type to I32)
+Private Function SemFhTypeRefIsHandle(ByRef ps As ParseState, ByVal typeNode As Integer) As Integer
+    If typeNode < 0 Then Return 0
+    If UCase(ps.ast.nodes(typeNode).kind) <> "TYPE_REF" Then Return 0
+    If UCase(Trim(ps.ast.nodes(typeNode).lexemeSnippet)) = "FILE_HANDLE" Then Return 1
+    Return 0
+End Function
+
+' first TYPE_REF child of a declaration (DIM_DECL, PARAM_DECL, TYPE_FIELD, CLASS_FIELD); -1 when there is none
+Private Function SemFhDeclTypeRef(ByRef ps As ParseState, ByVal declNode As Integer) As Integer
+    If declNode < 0 Then Return -1
+    Dim child As Integer
+    child = ps.ast.nodes(declNode).firstChild
+    Do While child <> -1
+        If UCase(ps.ast.nodes(child).kind) = "TYPE_REF" Then Return child
+        child = ps.ast.nodes(child).nextSibling
+    Loop
+    Return -1
+End Function
+
+' DIM_DECL / PARAM_DECL an identifier refers to: the enclosing routine first, then the globals (the rule SemMidReceiverType uses)
+Private Function SemFhFindVarDecl(ByRef ps As ParseState, ByVal identNode As Integer) As Integer
+    Dim nameText As String
+    nameText = UCase(Trim(ps.ast.nodes(identNode).value))
+    Dim owner As Integer
+    owner = SemStaticRoutineOwner(ps, identNode)
+    Dim passNo As Integer
+    For passNo = 0 To 1
+        Dim i As Integer
+        For i = ps.ast.count - 1 To 0 Step -1
+            Dim declKind As String
+            declKind = UCase(ps.ast.nodes(i).kind)
+            If declKind <> "DIM_DECL" And declKind <> "PARAM_DECL" Then Continue For
+            If UCase(Trim(ps.ast.nodes(i).value)) <> nameText Then Continue For
+            Dim declOwner As Integer
+            declOwner = SemStaticRoutineOwner(ps, i)
+            If passNo = 0 And declOwner <> owner Then Continue For
+            If passNo = 1 And declOwner <> -1 Then Continue For
+            Return i
+        Next i
+    Next passNo
+    Return -1
+End Function
+
+' TYPE_FIELD of a record or CLASS_FIELD of a class (looking through the base classes); -1 when the type has no such field
+Private Function SemFhFieldDecl(ByRef ps As ParseState, ByRef typeNameUpper As String, ByRef fieldNameUpper As String) As Integer
+    Dim i As Integer
+    For i = 0 To ps.ast.count - 1
+        If UCase(ps.ast.nodes(i).kind) <> "TYPE_STMT" Then Continue For
+        If UCase(Trim(ps.ast.nodes(i).value)) <> typeNameUpper Then Continue For
+        Dim fieldNode As Integer
+        fieldNode = ps.ast.nodes(i).firstChild
+        Do While fieldNode <> -1
+            If UCase(ps.ast.nodes(fieldNode).kind) = "TYPE_FIELD" And UCase(Trim(ps.ast.nodes(fieldNode).value)) = fieldNameUpper Then Return fieldNode
+            fieldNode = ps.ast.nodes(fieldNode).nextSibling
+        Loop
+    Next i
+    Dim classNode As Integer
+    classNode = SemFindClassNode(ps, typeNameUpper)
+    Dim classHop As Integer
+    classHop = 0
+    Do While classNode >= 0 And classHop < 64
+        classHop += 1
+        Dim memberNode As Integer
+        memberNode = ps.ast.nodes(classNode).firstChild
+        Do While memberNode <> -1
+            Dim memberKind As String
+            memberKind = UCase(ps.ast.nodes(memberNode).kind)
+            If (memberKind = "CLASS_FIELD" Or memberKind = "CLASS_PROPERTY_DECL") And UCase(Trim(ps.ast.nodes(memberNode).value)) = fieldNameUpper Then Return memberNode
+            memberNode = ps.ast.nodes(memberNode).nextSibling
+        Loop
+        Dim baseName As String
+        If SemClassBaseName(ps, classNode, baseName) = 0 Then Exit Do
+        classNode = SemFindClassNode(ps, baseName)
+    Loop
+    Return -1
+End Function
+
+' Declaration node and declared type name (upper case) of a variable, THIS / ME, or a chain of record / class fields.
+' Returns -1 (and typeOut) when the expression names no declaration (THIS / ME give the class name only).
+Private Function SemFhExprDecl(ByRef ps As ParseState, ByVal exprNode As Integer, ByRef typeOut As String) As Integer
+    typeOut = ""
+    If exprNode < 0 Then Return -1
+    Dim exprKind As String
+    exprKind = UCase(ps.ast.nodes(exprNode).kind)
+    ' an element of an array (`handles(i)`) is declared by the array's DIM: it is found like a variable, but it is never a "plain" operand
+    If exprKind = "IDENT" Or exprKind = "IDENTIFIER" Or exprKind = "KEYWORD_REF" Or exprKind = "CALL_EXPR" Then
+        Dim exprName As String
+        exprName = UCase(Trim(ps.ast.nodes(exprNode).value))
+        If exprName = "THIS" Or exprName = "ME" Then
+            typeOut = SemDeleteEnclosingClass(ps, exprNode)
+            Return -1
+        End If
+        Dim declNode As Integer
+        declNode = SemFhFindVarDecl(ps, exprNode)
+        If declNode < 0 Then Return -1
+        Dim typeNode As Integer
+        typeNode = SemFhDeclTypeRef(ps, declNode)
+        If typeNode >= 0 Then typeOut = UCase(Trim(ps.ast.nodes(typeNode).value))
+        Return declNode
+    End If
+    If exprKind = "FIELD_EXPR" Then
+        Dim receiverType As String
+        Dim receiverDecl As Integer
+        receiverDecl = SemFhExprDecl(ps, ps.ast.nodes(exprNode).left, receiverType)
+        If receiverType = "" Then Return -1
+        Dim fieldDecl As Integer
+        fieldDecl = SemFhFieldDecl(ps, receiverType, UCase(Trim(ps.ast.nodes(exprNode).value)))
+        If fieldDecl < 0 Then Return -1
+        Dim fieldTypeNode As Integer
+        fieldTypeNode = SemFhDeclTypeRef(ps, fieldDecl)
+        If fieldTypeNode >= 0 Then typeOut = UCase(Trim(ps.ast.nodes(fieldTypeNode).value))
+        Return fieldDecl
+    End If
+    Return -1
+End Function
+
+' 1 when the expression is declared with the FILE_HANDLE spelling
+Private Function SemFhExprIsHandle(ByRef ps As ParseState, ByVal exprNode As Integer) As Integer
+    Dim typeText As String
+    Dim declNode As Integer
+    declNode = SemFhExprDecl(ps, exprNode, typeText)
+    If declNode < 0 Then Return 0
+    Return SemFhTypeRefIsHandle(ps, SemFhDeclTypeRef(ps, declNode))
+End Function
+
+' 1 when the expression holds no call and no index: it can be evaluated more than once without repeating a side effect
+Private Function SemFhExprIsPlain(ByRef ps As ParseState, ByVal exprNode As Integer) As Integer
+    If exprNode < 0 Then Return 1
+    Select Case UCase(ps.ast.nodes(exprNode).kind)
+    Case "IDENT", "IDENTIFIER", "KEYWORD_REF", "NUMBER"
+        Return 1
+    Case "FIELD_EXPR"
+        Return SemFhExprIsPlain(ps, ps.ast.nodes(exprNode).left)
+    Case "BINARY"
+        If SemFhExprIsPlain(ps, ps.ast.nodes(exprNode).left) = 0 Then Return 0
+        Return SemFhExprIsPlain(ps, ps.ast.nodes(exprNode).right)
+    Case "UNARY"
+        If SemFhExprIsPlain(ps, ps.ast.nodes(exprNode).left) = 0 Then Return 0
+        Return SemFhExprIsPlain(ps, ps.ast.nodes(exprNode).right)
+    End Select
+    Return 0
+End Function
+
+' readable name of a plain handle expression for the run-time messages (`f`, `g.dosya`, `THIS.dosya`)
+Private Function SemFhExprText(ByRef ps As ParseState, ByVal exprNode As Integer) As String
+    If exprNode < 0 Then Return "?"
+    Dim exprKind As String
+    exprKind = UCase(ps.ast.nodes(exprNode).kind)
+    If exprKind = "FIELD_EXPR" Then Return SemFhExprText(ps, ps.ast.nodes(exprNode).left) & "." & Trim(ps.ast.nodes(exprNode).value)
+    Return Trim(ps.ast.nodes(exprNode).value)
+End Function
+
+' ------------------------------------------------------------------------------------------------------------------------ node builders
+
+' EXPR_STMT whose expression is a call of a generated routine: _UXB_FHMARK(channel, state) / _UXB_FHRESET()
+Private Function SemFhCallStmt(ByRef ps As ParseState, ByVal origin As Integer, ByRef routineName As String, ByVal firstArg As Integer, ByVal secondArg As Integer) As Integer
+    Dim callNode As Integer
+    callNode = SemStaticNode(ps, origin, "CALL_EXPR", routineName)
+    If firstArg >= 0 Then ASTAddChild ps.ast, callNode, firstArg
+    If secondArg >= 0 Then ASTAddChild ps.ast, callNode, secondArg
+    Dim stmtNode As Integer
+    stmtNode = SemStaticNode(ps, origin, "EXPR_STMT")
+    ASTSetLeft ps.ast, stmtNode, callNode
+    Return stmtNode
+End Function
+
+Private Function SemFhNumber(ByRef ps As ParseState, ByVal origin As Integer, ByVal numberValue As Integer) As Integer
+    Return SemStaticNode(ps, origin, "NUMBER", LTrim(Str(numberValue)))
+End Function
+
+' BINARY comparison node: left <op> right
+Private Function SemFhCompare(ByRef ps As ParseState, ByVal origin As Integer, ByRef opText As String, ByVal leftNode As Integer, ByVal rightNode As Integer) As Integer
+    Dim cmpNode As Integer
+    cmpNode = SemStaticNode(ps, origin, "BINARY", "", opText)
+    ASTSetLeft ps.ast, cmpNode, leftNode
+    ASTSetRight ps.ast, cmpNode, rightNode
+    Return cmpNode
+End Function
+
+' IF <leftOperand> <op> 0 THEN THROW "<message>" END IF
+Private Function SemFhThrowIf(ByRef ps As ParseState, ByVal origin As Integer, ByVal operandNode As Integer, ByRef opText As String, ByRef messageText As String) As Integer
+    Dim ifNode As Integer
+    ifNode = SemStaticNode(ps, origin, "IF_STMT")
+    ASTAddChild ps.ast, ifNode, SemFhCompare(ps, origin, opText, operandNode, SemFhNumber(ps, origin, 0))
+    Dim throwNode As Integer
+    throwNode = SemStaticNode(ps, origin, "THROW_STMT")
+    ASTAddChild ps.ast, throwNode, SemStaticNode(ps, origin, "STRING", messageText)
+    ASTAddChild ps.ast, ifNode, throwNode
+    Return ifNode
+End Function
+
+' left = right
+Private Function SemFhAssign(ByRef ps As ParseState, ByVal origin As Integer, ByVal leftNode As Integer, ByVal rightNode As Integer) As Integer
+    Dim assignNode As Integer
+    assignNode = SemStaticNode(ps, origin, "ASSIGN_STMT", "", "=")
+    ASTSetLeft ps.ast, assignNode, leftNode
+    ASTSetRight ps.ast, assignNode, rightNode
+    Return assignNode
+End Function
+
+' a statement node becomes the block `IF 1 THEN ... END IF` (the shape the MID and DELETE rewrites use); the caller adds the statements as children
+Private Sub SemFhMakeBlock(ByRef ps As ParseState, ByVal stmtNode As Integer, ByRef opText As String)
+    ps.ast.nodes(stmtNode).firstChild = -1
+    ps.ast.nodes(stmtNode).kind = "IF_STMT"
+    ps.ast.nodes(stmtNode).op = opText
+    ps.ast.nodes(stmtNode).left = -1
+    ps.ast.nodes(stmtNode).right = -1
+    ASTAddChild ps.ast, stmtNode, SemFhNumber(ps, stmtNode, 1)
+End Sub
+
+' newNode becomes the next sibling of anchor (same statement list)
+Private Sub SemFhInsertAfter(ByRef ps As ParseState, ByVal anchor As Integer, ByVal newNode As Integer)
+    ps.ast.nodes(newNode).parent = ps.ast.nodes(anchor).parent
+    ps.ast.nodes(newNode).nextSibling = ps.ast.nodes(anchor).nextSibling
+    ps.ast.nodes(anchor).nextSibling = newNode
+End Sub
+
+' new fresh I32 temporary inside a block: DIM name AS I32 ; name = expression ; returns the temporary's name
+Private Function SemFhCaptureTemp(ByRef ps As ParseState, ByVal blockNode As Integer, ByVal exprNode As Integer) As String
+    Dim tempName As String
+    tempName = "_UXB_FHCH_" & LTrim(Str(blockNode)) & "_" & LTrim(Str(ps.ast.count))
+    Dim tempDim As Integer
+    tempDim = SemStaticNode(ps, blockNode, "DIM_STMT")
+    Dim tempDecl As Integer
+    tempDecl = SemStaticNode(ps, blockNode, "DIM_DECL", tempName)
+    ASTAddChild ps.ast, tempDecl, SemStaticNode(ps, blockNode, "TYPE_REF", "I32")
+    ASTAddChild ps.ast, tempDim, tempDecl
+    ASTAddChild ps.ast, blockNode, tempDim
+    ASTAddChild ps.ast, blockNode, SemFhAssign(ps, blockNode, SemStaticNode(ps, blockNode, "IDENT", tempName), exprNode)
+    Return tempName
+End Function
+
+' ------------------------------------------------------------------------------------------------------------------------ helper routines
+
+' Parses the ledger helpers as a small program, appends their nodes to the AST and places them: the DIM at the very front of the program, the routines at
+' the end (the same hand-over the MID assignment helper uses, which also keeps the parser's type-name registries intact).
+Private Function SemFhAppendHelpers(ByRef ps As ParseState, ByRef errText As String) As Integer
+    ' The parser refuses names that start with an underscore in expressions ("underscore commands are disabled"), so the text uses UXBFH_* names and the
+    ' merged nodes are renamed to the _UXB_FH* spelling afterwards (the _UXB_ prefix is what the strict-DECLARE check and the generated-routine rules know).
+    Dim code As String
+    code = "DIM UXBFH_USED(255) AS I32" & Chr(10)
+    code &= "FUNCTION UXBFH_FREE() AS I32" & Chr(10)
+    code &= "DIM kanalNo AS I32" & Chr(10)
+    code &= "FOR kanalNo = 1 TO 255" & Chr(10)
+    code &= "IF UXBFH_USED(kanalNo) = 0 THEN RETURN kanalNo" & Chr(10)
+    code &= "NEXT" & Chr(10)
+    code &= "RETURN 0" & Chr(10)
+    code &= "END FUNCTION" & Chr(10)
+    code &= "SUB UXBFH_MARK(kanalNo AS I32, doluMu AS I32)" & Chr(10)
+    code &= "IF kanalNo >= 1 AND kanalNo <= 255 THEN UXBFH_USED(kanalNo) = doluMu" & Chr(10)
+    code &= "END SUB" & Chr(10)
+    code &= "SUB UXBFH_RESET()" & Chr(10)
+    code &= "DIM kanalNo AS I32" & Chr(10)
+    code &= "FOR kanalNo = 1 TO 255" & Chr(10)
+    code &= "UXBFH_USED(kanalNo) = 0" & Chr(10)
+    code &= "NEXT" & Chr(10)
+    code &= "END SUB" & Chr(10)
+
+    Dim lx As LexerState
+    Dim helper As ParseState
+    Dim declaredCount As Integer
+    declaredCount = gDeclaredTypeCount
+    Dim referencedCount As Integer
+    referencedCount = gReferencedTypeCount
+    Dim declaredNames(Any) As String
+    Dim referencedNames(Any) As String
+    If declaredCount > 0 Then ReDim declaredNames(declaredCount - 1)
+    If referencedCount > 0 Then ReDim referencedNames(referencedCount - 1)
+    Dim saveIdx As Integer
+    For saveIdx = 0 To declaredCount - 1
+        declaredNames(saveIdx) = gDeclaredTypeNames(saveIdx)
+    Next saveIdx
+    For saveIdx = 0 To referencedCount - 1
+        referencedNames(saveIdx) = gReferencedTypeNames(saveIdx)
+    Next saveIdx
+    LexerInit lx, code
+    ParserInit helper, lx
+    Dim parsed As Integer
+    parsed = ParseProgram(helper)
+    gDeclaredTypeCount = declaredCount
+    gReferencedTypeCount = referencedCount
+    If declaredCount > 0 Then ReDim gDeclaredTypeNames(declaredCount - 1)
+    If referencedCount > 0 Then ReDim gReferencedTypeNames(referencedCount - 1)
+    For saveIdx = 0 To declaredCount - 1
+        gDeclaredTypeNames(saveIdx) = declaredNames(saveIdx)
+    Next saveIdx
+    For saveIdx = 0 To referencedCount - 1
+        gReferencedTypeNames(saveIdx) = referencedNames(saveIdx)
+    Next saveIdx
+    If parsed = 0 Then errText = "semantic: FILE_HANDLE helper failed: " & helper.lastError: Return 0
+
+    Dim offset As Integer
+    offset = ps.ast.count - 1
+    Dim copyIdx As Integer
+    For copyIdx = 1 To helper.ast.count - 1
+        Dim copied As Integer
+        copied = ASTNewNode(ps.ast, helper.ast.nodes(copyIdx).kind, "", "", 0, 0)
+        ps.ast.nodes(copied) = helper.ast.nodes(copyIdx)
+        With ps.ast.nodes(copied)
+            If .left >= 0 Then .left += offset
+            If .right >= 0 Then .right += offset
+            If .firstChild >= 0 Then .firstChild += offset
+            If .nextSibling >= 0 Then .nextSibling += offset
+            If .parent >= 0 Then .parent += offset
+            .lineNo = 0
+            .colNo = 0
+            .sourceFile = ""
+        End With
+    Next copyIdx
+
+    ' UXBFH_* -> _UXB_FH* in every merged node (declarations, calls, array element accesses)
+    For copyIdx = offset + 1 To ps.ast.count - 1
+        Dim renamedValue As String
+        renamedValue = UCase(Trim(ps.ast.nodes(copyIdx).value))
+        Select Case renamedValue
+        Case "UXBFH_USED"
+            ps.ast.nodes(copyIdx).value = "_UXB_FHUSED"
+        Case "UXBFH_FREE"
+            ps.ast.nodes(copyIdx).value = "_UXB_FHFREE"
+        Case "UXBFH_MARK"
+            ps.ast.nodes(copyIdx).value = "_UXB_FHMARK"
+        Case "UXBFH_RESET"
+            ps.ast.nodes(copyIdx).value = "_UXB_FHRESET"
+        End Select
+    Next copyIdx
+
+    ' hand the root-level statements of the helper program over: the global array first in the program, the routines last
+    Dim rootChild As Integer
+    rootChild = helper.ast.nodes(helper.rootNode).firstChild
+    If rootChild >= 0 Then rootChild += offset
+    Do While rootChild <> -1
+        Dim followingChild As Integer
+        followingChild = ps.ast.nodes(rootChild).nextSibling
+        ps.ast.nodes(rootChild).nextSibling = -1
+        If UCase(ps.ast.nodes(rootChild).kind) = "DIM_STMT" Then
+            SemStaticPrependGlobal ps, rootChild
+        Else
+            ASTAddChild ps.ast, ps.rootNode, rootChild
+        End If
+        rootChild = followingChild
+    Loop
+    Return 1
+End Function
+
+' ------------------------------------------------------------------------------------------------------------------------ OPEN
+
+' OPEN "file" FOR mode AS handle  (no `#`, handle declared FILE_HANDLE)  ->  the block described at the top of the file
+Private Function SemFhRewriteHandleOpen(ByRef ps As ParseState, ByVal openIdx As Integer, ByVal channelNode As Integer, ByRef errText As String) As Integer
+    If SemFhExprIsPlain(ps, channelNode) = 0 Then
+        errText = "semantic: UXB_FILE_HANDLE_TARGET: OPEN ... AS handle needs a plain FILE_HANDLE variable, parameter or field (a call or an index would be evaluated more than once); use AS #n with a channel number for other expressions"
+        Return 0
+    End If
+    Dim handleText As String
+    handleText = SemFhExprText(ps, channelNode)
+
+    ' the OPEN statement keeps its operands; the original node becomes the block around it
+    Dim newOpen As Integer
+    newOpen = SemStaticNode(ps, openIdx, "OPEN_STMT")
+    ps.ast.nodes(newOpen).firstChild = ps.ast.nodes(openIdx).firstChild
+    Dim moveChild As Integer
+    moveChild = ps.ast.nodes(newOpen).firstChild
+    Do While moveChild <> -1
+        ps.ast.nodes(moveChild).parent = newOpen
+        moveChild = ps.ast.nodes(moveChild).nextSibling
+    Loop
+    SemFhMakeBlock ps, openIdx, "FILE_HANDLE_OPEN"
+
+    ASTAddChild ps.ast, openIdx, SemFhThrowIf(ps, openIdx, SemMidCloneExpr(ps, channelNode), "<>", _
+        "UXB_FILE_HANDLE_IN_USE: OPEN AS " & handleText & ": the handle already holds an open channel (CLOSE " & handleText & " first)")
+    ASTAddChild ps.ast, openIdx, SemFhAssign(ps, openIdx, SemMidCloneExpr(ps, channelNode), SemStaticNode(ps, openIdx, "CALL_EXPR", "_UXB_FHFREE"))
+    ASTAddChild ps.ast, openIdx, SemFhThrowIf(ps, openIdx, SemMidCloneExpr(ps, channelNode), "=", _
+        "UXB_FILE_NO_FREE_CHANNEL: OPEN AS " & handleText & ": all 255 channels are in use")
+    ASTAddChild ps.ast, openIdx, newOpen
+    ASTAddChild ps.ast, openIdx, SemFhCallStmt(ps, openIdx, "_UXB_FHMARK", SemMidCloneExpr(ps, channelNode), SemFhNumber(ps, openIdx, 1))
+    Return 1
+End Function
+
+' OPEN ... AS #n (or AS n): the statement stays; the ledger learns the channel afterwards. A channel expression with a call is captured first.
+Private Function SemFhInstrumentExplicitOpen(ByRef ps As ParseState, ByVal openIdx As Integer, ByVal channelNode As Integer, ByRef errText As String) As Integer
+    If SemFhExprIsPlain(ps, channelNode) <> 0 Then
+        SemFhInsertAfter ps, openIdx, SemFhCallStmt(ps, openIdx, "_UXB_FHMARK", SemMidCloneExpr(ps, channelNode), SemFhNumber(ps, openIdx, 1))
+        Return 1
+    End If
+    ' block: DIM tmp ; tmp = <channel expression> ; OPEN ... AS tmp ; _UXB_FHMARK(tmp, 1)
+    Dim newOpen As Integer
+    newOpen = SemStaticNode(ps, openIdx, "OPEN_STMT")
+    ps.ast.nodes(newOpen).firstChild = ps.ast.nodes(openIdx).firstChild
+    Dim moveChild As Integer
+    moveChild = ps.ast.nodes(newOpen).firstChild
+    Dim previousChild As Integer
+    previousChild = -1
+    Do While moveChild <> -1
+        ps.ast.nodes(moveChild).parent = newOpen
+        If ps.ast.nodes(moveChild).nextSibling = channelNode Then previousChild = moveChild
+        moveChild = ps.ast.nodes(moveChild).nextSibling
+    Loop
+    SemFhMakeBlock ps, openIdx, "FILE_HANDLE_OPEN"
+    Dim tempName As String
+    tempName = SemFhCaptureTemp(ps, openIdx, channelNode)
+    ' the temporary replaces the channel operand of the moved OPEN
+    Dim tempIdent As Integer
+    tempIdent = SemStaticNode(ps, newOpen, "IDENT", tempName)
+    ps.ast.nodes(tempIdent).parent = newOpen
+    ps.ast.nodes(tempIdent).nextSibling = ps.ast.nodes(channelNode).nextSibling
+    If previousChild < 0 Then ps.ast.nodes(newOpen).firstChild = tempIdent Else ps.ast.nodes(previousChild).nextSibling = tempIdent
+    ps.ast.nodes(channelNode).nextSibling = -1
+    ASTAddChild ps.ast, openIdx, newOpen
+    ASTAddChild ps.ast, openIdx, SemFhCallStmt(ps, openIdx, "_UXB_FHMARK", SemStaticNode(ps, openIdx, "IDENT", tempName), SemFhNumber(ps, openIdx, 1))
+    Return 1
+End Function
+
+' ------------------------------------------------------------------------------------------------------------------------ CLOSE
+
+Private Function SemFhInstrumentClose(ByRef ps As ParseState, ByVal closeIdx As Integer, ByRef errText As String) As Integer
+    Dim channelCount As Integer
+    channelCount = SemChildCount(ps, closeIdx)
+    If channelCount = 0 Then
+        ' CLOSE with no channel closes every open file: the whole ledger is emptied
+        SemFhInsertAfter ps, closeIdx, SemFhCallStmt(ps, closeIdx, "_UXB_FHRESET", -1, -1)
+        Return 1
+    End If
+
+    ' does any operand need more than "mark afterwards"?
+    Dim needBlock As Integer
+    needBlock = 0
+    Dim scanChild As Integer
+    scanChild = ps.ast.nodes(closeIdx).firstChild
+    Do While scanChild <> -1
+        Dim scanHash As Integer
+        scanHash = IIf((ps.ast.nodes(scanChild).flags And AST_FLAG_FILE_HASH) <> 0, 1, 0)
+        If scanHash = 0 And SemFhExprIsHandle(ps, scanChild) <> 0 Then needBlock = 1
+        If SemFhExprIsPlain(ps, scanChild) = 0 Then needBlock = 1
+        scanChild = ps.ast.nodes(scanChild).nextSibling
+    Loop
+
+    If needBlock = 0 Then
+        ' every operand is a plain channel number: the statement stays, the ledger is told afterwards (in operand order)
+        Dim anchor As Integer
+        anchor = closeIdx
+        Dim markChild As Integer
+        markChild = ps.ast.nodes(closeIdx).firstChild
+        Do While markChild <> -1
+            Dim markStmt As Integer
+            markStmt = SemFhCallStmt(ps, closeIdx, "_UXB_FHMARK", SemMidCloneExpr(ps, markChild), SemFhNumber(ps, closeIdx, 0))
+            SemFhInsertAfter ps, anchor, markStmt
+            anchor = markStmt
+            markChild = ps.ast.nodes(markChild).nextSibling
+        Loop
+        Return 1
+    End If
+
+    ' block: one CLOSE per operand, in order
+    Dim operandList(0 To 63) As Integer
+    Dim operandCount As Integer
+    operandCount = 0
+    Dim collectChild As Integer
+    collectChild = ps.ast.nodes(closeIdx).firstChild
+    Do While collectChild <> -1
+        If operandCount > 63 Then errText = "semantic: CLOSE lists more than 64 channels": Return 0
+        operandList(operandCount) = collectChild
+        operandCount += 1
+        collectChild = ps.ast.nodes(collectChild).nextSibling
+    Loop
+    SemFhMakeBlock ps, closeIdx, "FILE_HANDLE_CLOSE"
+    Dim operandIdx As Integer
+    For operandIdx = 0 To operandCount - 1
+        Dim operandNode As Integer
+        operandNode = operandList(operandIdx)
+        ps.ast.nodes(operandNode).nextSibling = -1
+        Dim operandHash As Integer
+        operandHash = IIf((ps.ast.nodes(operandNode).flags And AST_FLAG_FILE_HASH) <> 0, 1, 0)
+        If operandHash = 0 And SemFhExprIsHandle(ps, operandNode) <> 0 Then
+            ' CLOSE handle: IF handle <> 0 THEN CLOSE handle ; ledger ; handle = 0 END IF
+            If SemFhExprIsPlain(ps, operandNode) = 0 Then
+                errText = "semantic: UXB_FILE_HANDLE_TARGET: CLOSE handle needs a plain FILE_HANDLE variable, parameter or field (a call or an index would be evaluated more than once)"
+                Return 0
+            End If
+            Dim guardIf As Integer
+            guardIf = SemStaticNode(ps, closeIdx, "IF_STMT")
+            ASTAddChild ps.ast, guardIf, SemFhCompare(ps, closeIdx, "<>", SemMidCloneExpr(ps, operandNode), SemFhNumber(ps, closeIdx, 0))
+            Dim innerClose As Integer
+            innerClose = SemStaticNode(ps, closeIdx, "CLOSE_STMT")
+            ASTAddChild ps.ast, innerClose, SemMidCloneExpr(ps, operandNode)
+            ASTAddChild ps.ast, guardIf, innerClose
+            ASTAddChild ps.ast, guardIf, SemFhCallStmt(ps, closeIdx, "_UXB_FHMARK", SemMidCloneExpr(ps, operandNode), SemFhNumber(ps, closeIdx, 0))
+            ASTAddChild ps.ast, guardIf, SemFhAssign(ps, closeIdx, SemMidCloneExpr(ps, operandNode), SemFhNumber(ps, closeIdx, 0))
+            ASTAddChild ps.ast, closeIdx, guardIf
+        ElseIf SemFhExprIsPlain(ps, operandNode) <> 0 Then
+            Dim plainClose As Integer
+            plainClose = SemStaticNode(ps, closeIdx, "CLOSE_STMT")
+            ASTAddChild ps.ast, plainClose, SemMidCloneExpr(ps, operandNode)
+            ASTAddChild ps.ast, closeIdx, plainClose
+            ASTAddChild ps.ast, closeIdx, SemFhCallStmt(ps, closeIdx, "_UXB_FHMARK", SemMidCloneExpr(ps, operandNode), SemFhNumber(ps, closeIdx, 0))
+        Else
+            ' explicit channel with a call in it: evaluate once
+            Dim captureName As String
+            captureName = SemFhCaptureTemp(ps, closeIdx, operandNode)
+            Dim capturedClose As Integer
+            capturedClose = SemStaticNode(ps, closeIdx, "CLOSE_STMT")
+            ASTAddChild ps.ast, capturedClose, SemStaticNode(ps, closeIdx, "IDENT", captureName)
+            ASTAddChild ps.ast, closeIdx, capturedClose
+            ASTAddChild ps.ast, closeIdx, SemFhCallStmt(ps, closeIdx, "_UXB_FHMARK", SemStaticNode(ps, closeIdx, "IDENT", captureName), SemFhNumber(ps, closeIdx, 0))
+        End If
+    Next operandIdx
+    Return 1
+End Function
+
+' ------------------------------------------------------------------------------------------------------------------------ driver
+
+Private Function SemNormalizeFileHandles(ByRef ps As ParseState, ByRef errText As String) As Integer
+    Dim sourceNodeCount As Integer
+    sourceNodeCount = ps.ast.count
+
+    ' a variable, parameter or field that is itself called FREEFILE keeps its meaning
+    Dim freefileIsName As Integer
+    freefileIsName = 0
+    Dim declScan As Integer
+    For declScan = 0 To sourceNodeCount - 1
+        Dim declKindText As String
+        declKindText = UCase(ps.ast.nodes(declScan).kind)
+        If declKindText = "DIM_DECL" Or declKindText = "PARAM_DECL" Or declKindText = "TYPE_FIELD" Or declKindText = "CLASS_FIELD" Or declKindText = "CONST_DECL" Then
+            If UCase(Trim(ps.ast.nodes(declScan).value)) = "FREEFILE" Then freefileIsName = 1
+        End If
+    Next declScan
+
+    ' does the program use FREEFILE, `OPEN ... AS handle` or `CLOSE handle`?
+    Dim needLedger As Integer
+    needLedger = 0
+    Dim scanIdx As Integer
+    For scanIdx = 0 To sourceNodeCount - 1
+        Dim scanKind As String
+        scanKind = UCase(ps.ast.nodes(scanIdx).kind)
+        If freefileIsName = 0 Then
+            If (scanKind = "IDENT" Or scanKind = "IDENTIFIER") And UCase(Trim(ps.ast.nodes(scanIdx).value)) = "FREEFILE" Then needLedger = 1
+            If scanKind = "CALL_EXPR" And UCase(Trim(ps.ast.nodes(scanIdx).value)) = "FREEFILE" And ps.ast.nodes(scanIdx).firstChild = -1 Then needLedger = 1
+        End If
+        If scanKind = "OPEN_STMT" Then
+            Dim scanChannel As Integer
+            scanChannel = SemChildAt(ps, scanIdx, 2)
+            If scanChannel >= 0 Then
+                If (ps.ast.nodes(scanChannel).flags And AST_FLAG_FILE_HASH) = 0 And SemFhExprIsHandle(ps, scanChannel) <> 0 Then needLedger = 1
+            End If
+        End If
+        If scanKind = "CLOSE_STMT" Then
+            Dim closeOperand As Integer
+            closeOperand = ps.ast.nodes(scanIdx).firstChild
+            Do While closeOperand <> -1
+                If (ps.ast.nodes(closeOperand).flags And AST_FLAG_FILE_HASH) = 0 And SemFhExprIsHandle(ps, closeOperand) <> 0 Then needLedger = 1
+                closeOperand = ps.ast.nodes(closeOperand).nextSibling
+            Loop
+        End If
+    Next scanIdx
+    If needLedger = 0 Then Return 1
+
+    If SemFhAppendHelpers(ps, errText) = 0 Then Return 0
+
+    Dim rewriteIdx As Integer
+    For rewriteIdx = 0 To sourceNodeCount - 1
+        Dim rewriteKind As String
+        rewriteKind = UCase(ps.ast.nodes(rewriteIdx).kind)
+        If freefileIsName = 0 Then
+            If (rewriteKind = "IDENT" Or rewriteKind = "IDENTIFIER") And UCase(Trim(ps.ast.nodes(rewriteIdx).value)) = "FREEFILE" Then
+                ps.ast.nodes(rewriteIdx).kind = "CALL_EXPR"
+                ps.ast.nodes(rewriteIdx).value = "_UXB_FHFREE"
+                Continue For
+            End If
+            If rewriteKind = "CALL_EXPR" And UCase(Trim(ps.ast.nodes(rewriteIdx).value)) = "FREEFILE" And ps.ast.nodes(rewriteIdx).firstChild = -1 Then
+                ps.ast.nodes(rewriteIdx).value = "_UXB_FHFREE"
+                Continue For
+            End If
+        End If
+        If rewriteKind = "OPEN_STMT" Then
+            Dim channelNode As Integer
+            channelNode = SemChildAt(ps, rewriteIdx, 2)
+            If channelNode < 0 Then Continue For
+            If (ps.ast.nodes(channelNode).flags And AST_FLAG_FILE_HASH) = 0 And SemFhExprIsHandle(ps, channelNode) <> 0 Then
+                If SemFhRewriteHandleOpen(ps, rewriteIdx, channelNode, errText) = 0 Then Return 0
+            Else
+                If SemFhInstrumentExplicitOpen(ps, rewriteIdx, channelNode, errText) = 0 Then Return 0
+            End If
+        ElseIf rewriteKind = "CLOSE_STMT" Then
+            If SemFhInstrumentClose(ps, rewriteIdx, errText) = 0 Then Return 0
+        End If
+    Next rewriteIdx
+    Return 1
+End Function
+
+#endif

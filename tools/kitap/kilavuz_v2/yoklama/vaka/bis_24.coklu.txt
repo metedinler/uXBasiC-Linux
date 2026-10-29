@@ -1,0 +1,54 @@
+Q5 FOR EACH sonrasi baska taban tipli degiskene kopyalama (beklenen 9)
+CLASS Sekil
+    PUBLIC
+    VIRTUAL METHOD Alan() AS I32
+        RETURN 0
+    END METHOD
+END CLASS
+CLASS KareS EXTENDS Sekil
+    PUBLIC
+    DIM k AS I32
+    CONSTRUCTOR(ak AS I32)
+        k = ak
+    END CONSTRUCTOR
+    OVERRIDE METHOD Alan() AS I32
+        RETURN k * k
+    END METHOD
+END CLASS
+DIM a AS KareS = NEW KareS(3)
+DIM l AS LIST
+LISTADD(l, a)
+DIM s AS Sekil
+DIM t AS Sekil
+FOR EACH s IN l
+    t = s
+    PRINT t.Alan()
+NEXT
+=====
+Q6 FOR EACH tur tutamaci, sonra tipli hesap (beklenen 9)
+CLASS Sekil
+    PUBLIC
+    VIRTUAL METHOD Alan() AS I32
+        RETURN 0
+    END METHOD
+END CLASS
+CLASS KareS EXTENDS Sekil
+    PUBLIC
+    DIM k AS I32
+    CONSTRUCTOR(ak AS I32)
+        k = ak
+    END CONSTRUCTOR
+    OVERRIDE METHOD Alan() AS I32
+        RETURN k * k
+    END METHOD
+END CLASS
+FUNCTION AlanOf(x AS Sekil) AS I32
+    RETURN x.Alan()
+END FUNCTION
+DIM a AS KareS = NEW KareS(3)
+DIM l AS LIST
+LISTADD(l, a)
+DIM s AS Sekil
+FOR EACH s IN l
+    PRINT AlanOf(s)
+NEXT

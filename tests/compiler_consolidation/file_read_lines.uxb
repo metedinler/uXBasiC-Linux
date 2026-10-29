@@ -1,0 +1,16 @@
+OPEN "consolidation_lines.txt" FOR OUTPUT AS #5
+PRINT #5, "a b"
+PRINT #5, ""
+PRINT #5, " c "
+CLOSE #5
+OPEN "consolidation_lines.txt" FOR INPUT AS #5
+DIM line AS STRING
+DIM count AS I32 = 0
+DO WHILE NOT EOF(5)
+    INPUT #5, line
+    PRINT "[" + line + "]"
+    count += 1
+    IF count > 5 THEN EXIT DO
+LOOP
+PRINT count
+CLOSE #5

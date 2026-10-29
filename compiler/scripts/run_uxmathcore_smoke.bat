@@ -15,7 +15,7 @@ if exist build_compiler_64.bat (
   exit /b 0
 )
 
-set "UXB=uxb\compiler\wrappers\uxb_main_wrapper_64.exe"
+set "UXB=uxb\bin\uxb.exe"
 if not exist "%UXB%" set "UXB=uxb\build\uxb_main_64.exe"
 if not exist "%UXB%" (
   echo WARN: compiler exe not found. DLL probe passed, include smoke skipped.

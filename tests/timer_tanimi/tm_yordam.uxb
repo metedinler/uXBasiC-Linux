@@ -1,0 +1,12 @@
+' S-624: TIMER bir FUNCTION'dan F64 olarak doner ve F64 parametre olarak gecer.
+FUNCTION Simdi() AS F64
+    RETURN TIMER
+END FUNCTION
+SUB Yaz(BYVAL x AS F64)
+    PRINT (x >= 0) AND (x < 86400)
+END SUB
+DIM g AS F64
+g = Simdi()
+PRINT (g >= 0) AND (g < 86400)
+Yaz(TIMER)
+Yaz(Simdi())

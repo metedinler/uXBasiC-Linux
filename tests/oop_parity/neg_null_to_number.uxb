@@ -1,0 +1,4 @@
+' S-564: NULL is for pointers and objects only; a number variable cannot take it (compile error UXB_NULL_TYPE on every engine).
+DIM i AS I32
+i = NULL
+PRINT i

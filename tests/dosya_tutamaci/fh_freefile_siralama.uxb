@@ -1,0 +1,19 @@
+' S-548: FREEFILE is the smallest free channel; explicit `AS #n` channels count as used, CLOSE gives them back.
+DIM a AS I32
+DIM b AS I32
+DIM c AS I32
+a = FREEFILE
+PRINT a
+OPEN "fh_t1.txt" FOR OUTPUT AS #a
+b = FREEFILE
+PRINT b
+OPEN "fh_t2.txt" FOR OUTPUT AS #b
+PRINT FREEFILE
+CLOSE #a
+PRINT FREEFILE
+OPEN "fh_t3.txt" FOR OUTPUT AS #5
+c = FREEFILE
+PRINT c
+CLOSE #b
+CLOSE #5
+PRINT FREEFILE

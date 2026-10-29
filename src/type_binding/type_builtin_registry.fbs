@@ -21,7 +21,7 @@ Private Function UXBBuiltinTypeRuleMake(ByVal nameText As String, ByVal returnTy
 End Function
 
 Function UXBBuiltinTypeRuleCount() As Integer
-    Return 77
+    Return 82
 End Function
 
 Function UXBBuiltinTypeRuleAt(ByVal idx As Integer, ByRef r As UXBBuiltinTypeRule) As Integer
@@ -29,7 +29,7 @@ Function UXBBuiltinTypeRuleAt(ByVal idx As Integer, ByRef r As UXBBuiltinTypeRul
     Case 0: r = UXBBuiltinTypeRuleMake("LEN", TYPE_I32, "STRING:1", "ALL")
     Case 1: r = UXBBuiltinTypeRuleMake("VAL", TYPE_F64, "STRING:1", "ALL")
     Case 2: r = UXBBuiltinTypeRuleMake("VALINT", TYPE_I32, "STRING:1", "ALL")
-    Case 3: r = UXBBuiltinTypeRuleMake("STR", TYPE_STRING, "NUMERIC:1", "ALL")
+    Case 3: r = UXBBuiltinTypeRuleMake("STR", TYPE_STRING, "ANY:1", "ALL")
     Case 4: r = UXBBuiltinTypeRuleMake("LEFT", TYPE_STRING, "STRING,INT", "ALL")
     Case 5: r = UXBBuiltinTypeRuleMake("RIGHT", TYPE_STRING, "STRING,INT", "ALL")
     Case 6: r = UXBBuiltinTypeRuleMake("MID", TYPE_STRING, "STRING,INT[,INT]", "ALL")
@@ -51,7 +51,7 @@ Function UXBBuiltinTypeRuleAt(ByVal idx As Integer, ByRef r As UXBBuiltinTypeRul
     Case 22: r = UXBBuiltinTypeRuleMake("INT", TYPE_I32, "NUMERIC:1", "ALL")
     Case 23: r = UXBBuiltinTypeRuleMake("CINT", TYPE_I32, "ANY:1", "ALL")
     Case 24: r = UXBBuiltinTypeRuleMake("CLNG", TYPE_I32, "ANY:1", "ALL")
-    Case 25: r = UXBBuiltinTypeRuleMake("CSNG", TYPE_F64, "ANY:1", "ALL")
+    Case 25: r = UXBBuiltinTypeRuleMake("CSNG", TYPE_F32, "ANY:1", "ALL")
     Case 26: r = UXBBuiltinTypeRuleMake("CDBL", TYPE_F64, "ANY:1", "ALL")
     Case 27: r = UXBBuiltinTypeRuleMake("LCASE", TYPE_STRING, "STRING:1", "ALL")
     Case 28: r = UXBBuiltinTypeRuleMake("UCASE", TYPE_STRING, "STRING:1", "ALL")
@@ -108,6 +108,14 @@ Function UXBBuiltinTypeRuleAt(ByVal idx As Integer, ByRef r As UXBBuiltinTypeRul
     ' S-101 (Mete decision 2026-09-20): LBOUND/UBOUND(array [, dimension]) - dimension 1-based, default 1.
     Case 75: r = UXBBuiltinTypeRuleMake("LBOUND", TYPE_I32, "ARRAY[,INT]", "ALL")
     Case 76: r = UXBBuiltinTypeRuleMake("UBOUND", TYPE_I32, "ARRAY[,INT]", "ALL")
+    ' S-508: FIX truncates toward zero and has the same static integer result
+    ' contract as INT; leaving it out made the type pass classify FIX(...) as
+    ' TYPE_OBJECT, so only direct PRINT could consume the value.
+    Case 77: r = UXBBuiltinTypeRuleMake("FIX", TYPE_I32, "NUMERIC:1", "ALL")
+    Case 78: r = UXBBuiltinTypeRuleMake("GETKEY", TYPE_I32, "NOARGS", "CONSOLE_RUNTIME")
+    Case 79: r = UXBBuiltinTypeRuleMake("INKEY", TYPE_I32, "FLAGS[,STATE]", "CONSOLE_RUNTIME")
+    Case 80: r = UXBBuiltinTypeRuleMake("CSRLIN", TYPE_I32, "NOARGS", "ALL")
+    Case 81: r = UXBBuiltinTypeRuleMake("POS", TYPE_I32, "NOARGS", "ALL")
     Case Else
         Return 0
     End Select

@@ -75,6 +75,41 @@ Private Function UXBMIRInterpIntResult(ByRef ins As UXBMIRInstructionRecord, ByV
     Return UXBInterpValueInt(bits)
 End Function
 
+' S-219: ROL/ROR use a 64-bit scratch register but their MIR result type
+' carries the source width.  Apply that type before the value re-enters the
+' normal interpreter state.
+Private Function UXBMIRInterpRotateResult(ByRef ins As UXBMIRInstructionRecord, ByVal rawBits As ULongInt) As UXBInterpValue
+    Dim t As String = UCase(Trim(ins.resultType))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    Select Case t
+    Case "U8", "UBYTE", "U16", "USHORT", "U32", "UINTEGER", "UINT", "ULONG", "U64", "ULONGINT", _
+         "I8", "BYTE", "SBYTE", "I16", "SHORT", "I32", "INTEGER", "INT", "LONG", "I64", "LONGINT"
+        Return UXBInterpApplyDeclaredType(UXBInterpValueUInt(rawBits), t)
+    End Select
+    Return UXBMIRInterpIntResult(ins, CLngInt(rawBits))
+End Function
+
+Private Function UXBMIRInterpRotateByWidth(ByRef ins As UXBMIRInstructionRecord, ByRef sourceValue As UXBInterpValue, ByVal countValue As LongInt, ByVal rotateRight As Integer) As ULongInt
+    Dim t As String = UCase(Trim(ins.resultType))
+    If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
+    Dim widthBits As Integer = 64
+    Select Case t
+    Case "U8", "UBYTE", "I8", "BYTE", "SBYTE": widthBits = 8
+    Case "U16", "USHORT", "I16", "SHORT": widthBits = 16
+    Case "U32", "UINTEGER", "UINT", "ULONG", "I32", "INTEGER", "INT", "LONG": widthBits = 32
+    End Select
+    Dim sourceBits As ULongInt = UXBMIRInterpUnsignedBits(sourceValue)
+    Dim mask As ULongInt = &hFFFFFFFFFFFFFFFFULL
+    If widthBits = 8 Then mask = &hFFULL
+    If widthBits = 16 Then mask = &hFFFFULL
+    If widthBits = 32 Then mask = &hFFFFFFFFULL
+    sourceBits And= mask
+    Dim shiftBits As Integer = countValue And (widthBits - 1)
+    If shiftBits = 0 Then Return sourceBits
+    If rotateRight = 0 Then Return ((sourceBits Shl shiftBits) Or (sourceBits Shr (widthBits - shiftBits))) And mask
+    Return ((sourceBits Shr shiftBits) Or (sourceBits Shl (widthBits - shiftBits))) And mask
+End Function
+
 Private Function UXBMIRInterpArithmeticShr64(ByVal value As LongInt, ByVal countValue As LongInt) As LongInt
     Dim shiftBits As Integer = countValue And 63
     If shiftBits = 0 Then Return value
@@ -105,6 +140,14 @@ Private Function UXBMIRInterpIntegerPow(ByVal baseValue As LongInt, ByVal expone
         If exponentWork <> 0 Then baseWork *= baseWork
     Loop
     Return UXBInterpValueInt(resultValue)
+End Function
+
+Private Function UXBMIRInterpFloatResult(ByRef ins As UXBMIRInstructionRecord, ByVal numericValue As Double) As UXBInterpValue
+    Dim result As UXBInterpValue = UXBInterpValueFloat(numericValue)
+    Dim resultType As String = UCase(Trim(ins.resultType))
+    If Left(resultType, 5) = "TYPE_" Then resultType = Mid(resultType, 6)
+    If resultType = "F32" Or resultType = "SINGLE" Then Return UXBInterpApplyDeclaredType(result, resultType)
+    Return result
 End Function
 
 Private Function UXBMIRInterpLogic16Value(ByVal op As String, ByRef leftValue As UXBInterpValue, ByRef rightValue As UXBInterpValue) As UXBInterpValue
@@ -162,18 +205,20 @@ Function UXBMIRInterpExecArith(ByRef ins As UXBMIRInstructionRecord, ByRef ctx A
     Select Case op
     Case "MIR_ADD"
         If leftValue.kind = UXB_VAL_STRING Or rightValue.kind = UXB_VAL_STRING Then Return UXBInterpValueString(UXBInterpValueToString(leftValue) & UXBInterpValueToString(rightValue))
-        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBInterpValueFloat(UXBMIRInterpAsDouble(leftValue) + UXBMIRInterpAsDouble(rightValue))
+        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) + UXBMIRInterpAsDouble(rightValue))
         Return UXBMIRInterpIntResult(ins, UXBMIRInterpAsInt(leftValue) + UXBMIRInterpAsInt(rightValue))
     Case "MIR_SUB"
-        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBInterpValueFloat(UXBMIRInterpAsDouble(leftValue) - UXBMIRInterpAsDouble(rightValue))
+        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) - UXBMIRInterpAsDouble(rightValue))
         Return UXBMIRInterpIntResult(ins, UXBMIRInterpAsInt(leftValue) - UXBMIRInterpAsInt(rightValue))
     Case "MIR_MUL"
-        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBInterpValueFloat(UXBMIRInterpAsDouble(leftValue) * UXBMIRInterpAsDouble(rightValue))
+        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) * UXBMIRInterpAsDouble(rightValue))
         Return UXBMIRInterpIntResult(ins, UXBMIRInterpAsInt(leftValue) * UXBMIRInterpAsInt(rightValue))
     Case "MIR_DIV", "MIR_IDIV"
+        ' S-691 (Mete: IEEE in every engine): floating point division by zero is inf / -inf / nan, never an error.
+        If op = "MIR_DIV" And UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) / UXBMIRInterpAsDouble(rightValue))
         If UXBMIRInterpAsDouble(rightValue) = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_DIV_ZERO, "MIR division by zero")
         If op = "MIR_IDIV" Then Return UXBInterpValueInt(UXBMIRInterpAsInt(leftValue) \ UXBMIRInterpAsInt(rightValue))
-        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBInterpValueFloat(UXBMIRInterpAsDouble(leftValue) / UXBMIRInterpAsDouble(rightValue))
+        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) / UXBMIRInterpAsDouble(rightValue))
         Return UXBInterpValueInt(UXBMIRInterpAsInt(leftValue) \ UXBMIRInterpAsInt(rightValue))
     Case "MIR_MOD"
         If UXBMIRInterpAsInt(rightValue) = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_DIV_ZERO, "MIR modulo by zero")
@@ -189,18 +234,18 @@ Function UXBMIRInterpExecArith(ByRef ins As UXBMIRInstructionRecord, ByRef ctx A
     Case "MIR_UGT": Return UXBInterpValueBool(UXBMIRInterpUnsignedBits(leftValue) > UXBMIRInterpUnsignedBits(rightValue))
     Case "MIR_UGE": Return UXBInterpValueBool(UXBMIRInterpUnsignedBits(leftValue) >= UXBMIRInterpUnsignedBits(rightValue))
     Case "MIR_NEG", "MIR_FNEG"
-        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBInterpValueFloat(-UXBMIRInterpAsDouble(leftValue))
+        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBMIRInterpFloatResult(ins, -UXBMIRInterpAsDouble(leftValue))
         Return UXBMIRInterpIntResult(ins, -UXBMIRInterpAsInt(leftValue))
     Case "MIR_INC"
         Return UXBInterpValueInt(UXBMIRInterpAsInt(leftValue) + 1)
     Case "MIR_DEC"
         Return UXBInterpValueInt(UXBMIRInterpAsInt(leftValue) - 1)
-    Case "MIR_FADD": Return UXBInterpValueFloat(UXBMIRInterpAsDouble(leftValue) + UXBMIRInterpAsDouble(rightValue))
-    Case "MIR_FSUB": Return UXBInterpValueFloat(UXBMIRInterpAsDouble(leftValue) - UXBMIRInterpAsDouble(rightValue))
-    Case "MIR_FMUL": Return UXBInterpValueFloat(UXBMIRInterpAsDouble(leftValue) * UXBMIRInterpAsDouble(rightValue))
+    Case "MIR_FADD": Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) + UXBMIRInterpAsDouble(rightValue))
+    Case "MIR_FSUB": Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) - UXBMIRInterpAsDouble(rightValue))
+    Case "MIR_FMUL": Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) * UXBMIRInterpAsDouble(rightValue))
     Case "MIR_FDIV"
-        If UXBMIRInterpAsDouble(rightValue) = 0 Then Return UXBInterpValueError(UXB_INTERP_ERR_DIV_ZERO, "MIR float division by zero")
-        Return UXBInterpValueFloat(UXBMIRInterpAsDouble(leftValue) / UXBMIRInterpAsDouble(rightValue))
+        ' S-691: IEEE division (x / 0 = inf, -inf or nan), as native x64, JS and WASM compute it.
+        Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) / UXBMIRInterpAsDouble(rightValue))
     Case "MIR_EQ": Return UXBInterpValueBool(UXBInterpValuesEqual(leftValue, rightValue))
     Case "MIR_NE": Return UXBInterpValueBool(UXBInterpValuesEqual(leftValue, rightValue) = 0)
     ' S-133: a STRING/WSTRING operand needs a LEXICOGRAPHIC (ordinal) comparison, not the numeric path
@@ -237,7 +282,7 @@ Function UXBMIRInterpExecArith(ByRef ins As UXBMIRInstructionRecord, ByRef ctx A
     Case "MIR_BXOR": Return UXBInterpValueInt(UXBMIRInterpAsInt(leftValue) Xor UXBMIRInterpAsInt(rightValue))
     Case "MIR_BNOT": Return UXBInterpValueInt(Not UXBMIRInterpAsInt(leftValue))
     Case "MIR_POW"
-        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBInterpValueFloat(UXBMIRInterpAsDouble(leftValue) ^ UXBMIRInterpAsDouble(rightValue))
+        If UXBMIRInterpNeedsFloat(leftValue, rightValue, op) <> 0 Then Return UXBMIRInterpFloatResult(ins, UXBMIRInterpAsDouble(leftValue) ^ UXBMIRInterpAsDouble(rightValue))
         Return UXBMIRInterpIntegerPow(UXBMIRInterpAsInt(leftValue), UXBMIRInterpAsInt(rightValue))
     Case "MIR_NAND", "MIR_NOR", "MIR_XNOR", "MIR_IMP", "MIR_CIMP", "MIR_NIMP", "MIR_NCIMP", "MIR_IDA", "MIR_IDB", "MIR_NOTA", "MIR_NOTB"
         Return UXBMIRInterpLogic16Value(op, leftValue, rightValue)
@@ -249,13 +294,11 @@ Function UXBMIRInterpExecArith(ByRef ins As UXBMIRInstructionRecord, ByRef ctx A
     Case "MIR_USHR"
         Return UXBInterpValueUInt(CULngInt(UXBMIRInterpAsInt(leftValue)) Shr (UXBMIRInterpAsInt(rightValue) And 63))
     Case "MIR_ROL"
-        Dim rolResult As ULongInt = UXBMIRInterpRol64(CULngInt(UXBMIRInterpAsInt(leftValue)), UXBMIRInterpAsInt(rightValue))
-        If UXBMIRInterpIsUnsignedInteger(leftValue) <> 0 Then Return UXBInterpValueUInt(rolResult)
-        Return UXBInterpValueInt(CLngInt(rolResult))
+        Dim rolResult As ULongInt = UXBMIRInterpRotateByWidth(ins, leftValue, UXBMIRInterpAsInt(rightValue), 0)
+        Return UXBMIRInterpRotateResult(ins, rolResult)
     Case "MIR_ROR"
-        Dim rorResult As ULongInt = UXBMIRInterpRor64(CULngInt(UXBMIRInterpAsInt(leftValue)), UXBMIRInterpAsInt(rightValue))
-        If UXBMIRInterpIsUnsignedInteger(leftValue) <> 0 Then Return UXBInterpValueUInt(rorResult)
-        Return UXBInterpValueInt(CLngInt(rorResult))
+        Dim rorResult As ULongInt = UXBMIRInterpRotateByWidth(ins, leftValue, UXBMIRInterpAsInt(rightValue), 1)
+        Return UXBMIRInterpRotateResult(ins, rorResult)
     Case "MIR_CAST", "MIR_COERCE"
         Return UXBInterpApplyDeclaredType(leftValue, ins.resultType)
     Case "MIR_CODEPTR", "MIR_LPTR"

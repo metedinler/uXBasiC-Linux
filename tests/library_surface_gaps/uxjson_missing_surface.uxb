@@ -1,0 +1,20 @@
+INCLUDE "include/modules/uxjson.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxjson.ArrayGet(0, 0)
+        PRINT uxjson.ArraySize(0)
+        PRINT uxjson.ErrorText()
+        PRINT uxjson.GetBoolean(0)
+        PRINT uxjson.GetI64(0)
+        PRINT uxjson.GetString(0)
+        PRINT uxjson.GetU64(0)
+        PRINT uxjson.ObjectGet(0, "")
+        PRINT uxjson.Parse("")
+        PRINT uxjson.PointerGet(0, "")
+        PRINT uxjson.Root(0)
+        PRINT uxjson.ValueType(0)
+        PRINT uxjson.Write(0, 0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXJSON"
+END MAIN

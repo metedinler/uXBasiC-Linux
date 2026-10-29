@@ -1,0 +1,5 @@
+SUB Probe()
+    DIM values(5 TO 7) AS F32
+    values(8) = F32(1.5)
+END SUB
+Probe()

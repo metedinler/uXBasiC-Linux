@@ -57,6 +57,8 @@ End Sub
 Private Function IsPathIdentStart(ByVal ch As String) As Integer
     Dim c As Integer
     c = Asc(ch)
+    ' S-579: a byte >= 128 belongs to a UTF-8 Turkish letter of a field name (the lexer already refused every other non-ASCII letter)
+    If c >= 128 Then Return 1
     If c >= Asc("A") And c <= Asc("Z") Then Return 1
     If c >= Asc("a") And c <= Asc("z") Then Return 1
     If ch = "_" Then Return 1
@@ -66,6 +68,7 @@ End Function
 Private Function IsPathIdentChar(ByVal ch As String) As Integer
     Dim c As Integer
     c = Asc(ch)
+    If c >= 128 Then Return 1
     If c >= Asc("A") And c <= Asc("Z") Then Return 1
     If c >= Asc("a") And c <= Asc("z") Then Return 1
     If c >= Asc("0") And c <= Asc("9") Then Return 1

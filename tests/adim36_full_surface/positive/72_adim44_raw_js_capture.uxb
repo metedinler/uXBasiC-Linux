@@ -1,0 +1,5 @@
+%%ALLOW_RAW_JS ON
+%%JS_BEGIN "program.js"
+console.log("adim44");
+%%JS_END
+PRINT "OK"

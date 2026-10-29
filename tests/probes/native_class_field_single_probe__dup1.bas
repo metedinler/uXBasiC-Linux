@@ -1,0 +1,7 @@
+CLASS BOX
+    X AS I32
+END CLASS
+
+DIM b AS BOX = NEW BOX()
+b.X = 33
+PRINT b.X

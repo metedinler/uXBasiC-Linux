@@ -1,0 +1,22 @@
+INTERFACE IKapat
+    METHOD Kapat() AS I32
+END INTERFACE
+CLASS Dos IMPLEMENTS IKapat
+    PUBLIC
+    METHOD Kapat() AS I32
+        RETURN 3
+    END METHOD
+    DESTRUCTOR()
+        PRINT 5
+    END DESTRUCTOR
+END CLASS
+CLASS Kap
+    PUBLIC
+    DIM k AS IKapat
+END CLASS
+' S-615: a field declared with an INTERFACE is DELETEd too (the destructor of the object's real class runs).
+DIM c AS Kap = NEW Kap()
+c.k = NEW Dos()
+PRINT c.k.Kapat()
+DELETE c.k
+IF c.k = NOTHING THEN PRINT 1

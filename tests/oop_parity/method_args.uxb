@@ -1,0 +1,21 @@
+' S-571 (2026-10-16): the arguments of a METHOD call reach the callee on every engine, also through a virtual
+' call. The JS backend passed them as a bare operand list while its runtime expects ONE array and silently
+' replaced anything else with an empty list (every method parameter was undefined).
+CLASS Calc
+    PUBLIC
+    METHOD Add(a AS I32, b AS I32) AS I32
+        RETURN a + b
+    END METHOD
+    VIRTUAL METHOD Scale(a AS I32) AS I32
+        RETURN a * 2
+    END METHOD
+END CLASS
+CLASS Calc3 EXTENDS Calc
+    PUBLIC
+    OVERRIDE METHOD Scale(a AS I32) AS I32
+        RETURN a * 3
+    END METHOD
+END CLASS
+DIM c AS Calc = NEW Calc3()
+PRINT c.Add(5, 6)
+PRINT c.Scale(7)

@@ -1,0 +1,16 @@
+' S-577: positive side -- a class that lists IMPLEMENTS is accepted as an interface argument.
+' S-578 fixed in Codex 2026-10-18; legacy AST-x64 now participates.
+INTERFACE IKonum
+    METHOD GetX() AS I32
+END INTERFACE
+CLASS Pt IMPLEMENTS IKonum
+    PUBLIC
+    METHOD GetX() AS I32
+        RETURN 4
+    END METHOD
+END CLASS
+SUB Yaz(k AS IKonum)
+    PRINT k.GetX()
+END SUB
+DIM pp AS Pt = NEW Pt()
+Yaz(pp)

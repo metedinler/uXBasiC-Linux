@@ -1,0 +1,18 @@
+' S-030 Faz 2A / K6: calisan gorev isbirlikci iptalle durur (dongu geri donusu iptal noktasi).
+' Gorev kendiliginden bitmez; iptal edilmezse test zaman asimina ugrar.
+THREAD Spin(n AS I64) AS I64
+    DIM i AS I64
+    DIM s AS I64
+    DO
+        i = i + 1
+        s = s + i
+    LOOP WHILE i > 0
+    RETURN s
+END THREAD
+DIM t AS TASK OF I64 = SPAWN Spin(1)
+t.CANCEL()
+t.WAIT()
+PRINT t.STATUS
+PRINT t.ERRORTEXT
+
+

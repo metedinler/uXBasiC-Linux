@@ -114,7 +114,7 @@ End Function
 ' INT_VERB_AST_COMPAT_FIX_20260711: int route includes explicit AST backend compatibility alias.
 Function UXBAdim27VerbExpectedFlags(ByVal verbText As String) As String
     Select Case LCase(Trim(verbText))
-    Case "lex": Return "--debug-token-dump|--tokens-json-out|--lexer-diagnostics-json-out|--preprocessed-out|--pp|--preprocessor"
+    Case "lex": Return "--debug-token-dump|--tokens-json-out|--lexer-diagnostics-json-out|--preprocessed-out"
     Case "par": Return "--parse-only|--ast-json-out|--parser-diagnostics-json-out"
     Case "ast": Return "--ast-contract-check|--ast-json-out|--ast-contract-json-out|--ast-contract-matrix-out"
     Case "sem": Return "--semantic|--semantic-diagnostics-json-out|--symbol-table-json-out|--type-table-json-out|--layout-report-json-out"

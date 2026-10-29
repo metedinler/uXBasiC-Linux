@@ -1,0 +1,32 @@
+INTERFACE IAnimal
+    METHOD Speak() AS I32
+END INTERFACE
+
+CLASS Animal
+    PUBLIC:
+    VIRTUAL METHOD Speak() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+
+CLASS Dog EXTENDS Animal IMPLEMENTS IAnimal
+    PUBLIC:
+    OVERRIDE METHOD Speak() AS I32
+        RETURN SUPER.Speak() + 10
+    END METHOD
+
+    MAGIC TOSTRING() AS I32
+        RETURN 2026
+    END METHOD
+
+    MAGIC CALL(x AS I32) AS I32
+        RETURN x + 100
+    END METHOD
+END CLASS
+
+DIM d AS Dog = NEW Dog()
+DIM a AS IAnimal = NEW Dog()
+PRINT d.Speak()
+PRINT a.Speak()
+PRINT STR(d)
+PRINT d(5)

@@ -1,0 +1,82 @@
+1 dizi isaretcisi sinir ici
+DIM a(3) AS I32
+a(0) = 11
+a(3) = 44
+DIM p AS PTR
+p = VARPTR(a)
+PRINT PEEKD(p)
+PRINT PEEKD(p + 12)
+POKED p + 4, 22
+PRINT a(1)
+MEMFILLD p, 7, 4
+PRINT a(0)
+PRINT a(3)
+=====
+2 bir eleman sonrasi
+DIM a(3) AS I32
+a(3) = 44
+DIM p AS PTR
+p = VARPTR(a)
+PRINT PEEKD(p + 12)
+PRINT PEEKD(p + 16)
+PRINT "ulasilmaz"
+=====
+3 REDIM sonrasi eski isaretci
+DIM a(3) AS I32
+a(0) = 11
+DIM p AS PTR
+p = VARPTR(a)
+REDIM a(99) AS I32
+PRINT PEEKD(p)
+PRINT "ulasilmaz"
+=====
+4 REDIM sonrasi yeni isaretci
+DIM a(3) AS I32
+DIM p AS PTR
+p = VARPTR(a)
+REDIM a(99) AS I32
+p = VARPTR(a)
+a(50) = 5
+PRINT PEEKD(p + 200)
+PRINT PEEKD(p + 396)
+=====
+5 MEMFILL tasmasi
+DIM a(3) AS I32
+DIM p AS PTR
+p = VARPTR(a)
+MEMFILLD p, 7, 5
+PRINT "ulasilmaz"
+=====
+6 DELETE sonrasi alan okuma
+CLASS Kutu
+    PUBLIC en AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+k.en = 7
+DELETE k
+PRINT k.en
+PRINT "ulasildi"
+=====
+7 DELETE sonrasi tekrar DELETE
+CLASS Kutu
+    PUBLIC en AS I32
+END CLASS
+DIM k AS Kutu = NEW Kutu()
+DELETE k
+DELETE k
+PRINT "ulasildi"
+=====
+8 VARPTR eleman sonrasi yazma
+DIM a(3) AS I32
+DIM p AS PTR
+p = VARPTR(a)
+POKED p + 16, 9
+PRINT "ulasilmaz"
+=====
+9 VARPTR(a(i)) sinir
+DIM a(3) AS I32
+DIM p AS PTR
+p = VARPTR(a(3))
+PRINT PEEKD(p)
+PRINT PEEKD(p + 4)
+PRINT "ulasilmaz"

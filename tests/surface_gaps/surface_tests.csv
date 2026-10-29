@@ -1,0 +1,3 @@
+id,source,expected,backend,features
+gap001,01_logic16_aliases.uxb,expected/01_logic16_aliases.stdout.txt,AST,"NXOR EQV EQA IFF CIMP NIMP NCIMP IDA IDB NOTA NOTB"
+gap002,02_preprocessor_b_uncovered.uxb,expected/02_preprocessor_b_uncovered.stdout.txt,AST,"CAPABILITY EXPORT_BASIC HOST_IMPORT ENDREPEAT"

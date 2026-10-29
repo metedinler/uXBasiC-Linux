@@ -1,0 +1,4 @@
+' helper for declare_include_sirasi / neg_declare_include_sirasi (S-544): one SUB, included by text
+SUB IncSelam()
+    PRINT 7
+END SUB

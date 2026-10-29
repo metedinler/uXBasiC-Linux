@@ -1,0 +1,20 @@
+' S-549 (design 2.3): two FILE_HANDLE variables pick their own channels; CLOSE gives them back and sets them to 0.
+DIM f AS FILE_HANDLE
+DIM g AS FILE_HANDLE
+DIM satir AS STRING
+
+OPEN "fh_ornek_a.txt" FOR OUTPUT AS f
+OPEN "fh_ornek_b.txt" FOR OUTPUT AS g
+PRINT f
+PRINT g
+PRINT #f, "birinci"
+PRINT #g, "ikinci"
+CLOSE f
+CLOSE g
+PRINT f
+PRINT g
+
+OPEN "fh_ornek_a.txt" FOR INPUT AS f
+INPUT #f, satir
+PRINT satir
+CLOSE f

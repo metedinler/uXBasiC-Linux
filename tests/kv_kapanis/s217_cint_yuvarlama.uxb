@@ -1,0 +1,3 @@
+' S-217: CINT yuvarlar, INT tabana indirir (yerel motorlarla ayni); eskiden JS kesiyordu.
+PRINT CINT(3.5)
+PRINT INT(-3.1)

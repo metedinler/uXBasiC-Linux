@@ -1,0 +1,11 @@
+{
+  "valid": {
+    "output": "42"
+  },
+  "function_parameter": {
+    "output": "42\n42"
+  },
+  "invalid_assignment": {
+    "error": "Semantic gate basarisiz"
+  }
+}

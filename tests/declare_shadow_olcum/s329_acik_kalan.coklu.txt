@@ -1,0 +1,34 @@
+A1_yalniz_ad_alaninda_nitelensiz
+' S-329 bilerek acik kalan bosluk: ad yalniz NAMESPACE S icinde tanimli, USING yok, nitelensiz cagri. Bugun kapi bunu "tanimli" sayar.
+NAMESPACE S
+    FUNCTION F(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+END NAMESPACE
+PRINT "once"
+PRINT F(2)
+=====
+A2_yalniz_sinifta_yontem_nitelensiz
+' S-329 bilerek acik kalan bosluk: Bump yalniz CLASS icinde yontem; sinif disinda nitelensiz cagri. Bugun kapi bunu "tanimli" sayar.
+CLASS Sayac
+    PUBLIC
+    DIM n AS I32
+    SUB Bump()
+        n = n + 1
+    END SUB
+END CLASS
+PRINT "once"
+Bump()
+=====
+A3_baska_yordamdaki_dizi_adi
+' S-329 bilerek acik kalan bosluk: v dizisi baska yordamda bildirilmis, bu yordamda ayni ad cagri soz dizimiyle kullaniliyor.
+SUB Bir()
+    DIM v(3) AS I32
+    v(1) = 4
+END SUB
+SUB Iki()
+    PRINT "once"
+    PRINT v(1)
+END SUB
+Bir()
+Iki()

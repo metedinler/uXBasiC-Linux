@@ -1,0 +1,17 @@
+INCLUDE "assert_cursor.uxb"
+PRINT "ç漢🙂";
+CheckCursor(1, 4)
+PRINT CHR(13); "Z";
+CheckCursor(1, 2)
+PRINT CHR(9);
+CheckCursor(1, 9)
+PRINT CHR(8);
+CheckCursor(1, 8)
+PRINT CHR(0);
+CheckCursor(1, 8)
+PRINT CHR(10);
+CheckCursor(2, 1)
+PRINT "P",
+CheckCursor(2, 15)
+PRINT "PASS"
+CheckCursor(3, 1)

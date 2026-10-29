@@ -1,0 +1,25 @@
+dict_say | DIM d AS DICT | DICTSET(d, "a", 1)\nDICTSET(d, "a", DICTGET(d, "a") + 1)\nPRINT DICTGET(d, "a")
+dict_say_cint | DIM d AS DICT | DICTSET(d, "a", 1)\nDICTSET(d, "a", CINT(DICTGET(d, "a")) + 1)\nPRINT DICTGET(d, "a")
+dict_deger_degisken | DIM d AS DICT\nDIM n AS I32 | DICTSET(d, "a", 7)\nn = CINT(DICTGET(d, "a"))\nPRINT n * 2
+list_deger_degisken | DIM l AS LIST\nDIM n AS I32 | LISTADD(l, 5)\nn = CINT(LISTGET(l, 0))\nPRINT n + 1
+list_kuyruk | DIM l AS LIST | LISTADD(l, 1)\nLISTADD(l, 2)\nLISTADD(l, 3)\nDIM x AS I32\nx = CINT(LISTGET(l, 0))\nLISTREMOVE(l, 0)\nPRINT x; " "; LISTLEN(l); " "; CINT(LISTGET(l, 0))
+virtual_basit | | POKEB 100, 65\nPRINT PEEKB(100)
+virtual_genis | | POKED 200, 12345\nPOKEQ 300, 123456789012\nPRINT PEEKD(200); " "; PEEKQ(300)
+virtual_sinir | | POKEB 4000000000, 1\nPRINT "yazildi"
+virtual_boyut_komut | | VIRTUAL 8192\nPOKEB 5000, 7\nPRINT PEEKB(5000)
+virtual_memfill | | MEMFILLB 10, 255, 4\nPRINT PEEKB(10); PEEKB(13); PEEKB(14)
+virtual_memcopy | | POKED 20, 1000\nMEMCOPYD 40, 20, 1\nPRINT PEEKD(40)
+virtual_ptr_ifade | DIM base AS PTR = 100 | POKEB base + 3, 9\nPRINT PEEKB(103)
+type_dizi_sirala | TYPE Kisi\n    ad AS STRING\n    yas AS I32\nEND TYPE | DIM k(2) AS Kisi\nk(0).ad = "Can": k(0).yas = 30\nk(1).ad = "Ece": k(1).yas = 20\nk(2).ad = "Ali": k(2).yas = 25\nDIM i AS I32\nDIM j AS I32\nDIM t AS Kisi\nFOR i = 0 TO 1\n    FOR j = 0 TO 1 - i\n        IF k(j).yas > k(j + 1).yas THEN\n            t = k(j)\n            k(j) = k(j + 1)\n            k(j + 1) = t\n        END IF\n    NEXT\nNEXT\nFOR i = 0 TO 2\n    PRINT k(i).ad; " "; k(i).yas\nNEXT
+type_kopya | TYPE P\n    x AS I32\nEND TYPE | DIM a AS P\nDIM b AS P\na.x = 5\nb = a\nb.x = 9\nPRINT a.x; " "; b.x
+type_parametre | TYPE P\n    x AS I32\nEND TYPE\nSUB Art(BYREF p AS P)\n    p.x += 1\nEND SUB | DIM a AS P\nArt(a)\nArt(a)\nPRINT a.x
+type_dondur | TYPE P\n    x AS I32\n    y AS I32\nEND TYPE\nFUNCTION Yap(a AS I32, b AS I32) AS P\n    DIM r AS P\n    r.x = a\n    r.y = b\n    RETURN r\nEND FUNCTION | DIM q AS P = Yap(3, 4)\nPRINT q.x + q.y
+type_icinde_dizi | TYPE Hat\n    v(2) AS I32\nEND TYPE | DIM h AS Hat\nh.v(1) = 8\nPRINT h.v(1)
+type_with | TYPE P\n    x AS I32\n    y AS I32\nEND TYPE | DIM a AS P\nWITH a\n    .x = 1\n    .y = 2\nEND WITH\nPRINT a.x + a.y
+enum_secim | ENUM Gun\n    PZT = 1\n    SAL\n    CAR\nEND ENUM | DIM g AS Gun = Gun.SAL\nSELECT CASE g\n    CASE Gun.PZT\n        PRINT "pazartesi"\n    CASE Gun.SAL\n        PRINT "sali"\nEND SELECT\nPRINT Gun.CAR
+enum_aritmetik | ENUM R\n    A = 10\n    B = 20\nEND ENUM | PRINT R.A + R.B
+union_uyeler | UNION Bit ABI C\n    tam AS U32\n    bayt(3) AS U8\nEND UNION | DIM u AS Bit\nu.tam = 258\nPRINT u.bayt(0); " "; u.bayt(1)
+const_dizi_sinir | CONST N = 4 | DIM a(N) AS I32\na(N) = 3\nPRINT a(N)
+iki_boyutlu_type | TYPE Hucre\n    d AS I32\nEND TYPE | DIM m(1, 1) AS Hucre\nm(1, 0).d = 6\nPRINT m(1, 0).d
+dizi_kopyala | DIM a(2) AS I32\nDIM b(2) AS I32 | a(1) = 5\nb = a\nPRINT b(1)
+dizi_esit | DIM a(1) AS I32 | PRINT a(0) = 0

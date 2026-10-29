@@ -1,0 +1,6 @@
+DECLARE FUNCTION ux_mean_f64 LIB "uxstats.dll" ALIAS "ux_mean_f64" (BYVAL data AS PTR, BYVAL n AS I32) AS F64
+DECLARE FUNCTION ux_matmul_f64 LIB "uxmatrix.dll" ALIAS "ux_matmul_f64" (BYVAL a AS PTR, BYVAL b AS PTR, BYVAL c AS PTR, BYVAL n AS I32) AS I32
+DECLARE FUNCTION ux_tensor_create LIB "uxtensor.dll" ALIAS "ux_tensor_create" (BYVAL shape AS PTR, BYVAL rank AS I32) AS PTR
+DECLARE FUNCTION ux_nn_forward LIB "uxnn.dll" ALIAS "ux_nn_forward" (BYVAL model AS PTR, BYVAL input AS PTR, BYVAL output AS PTR) AS I32
+DECLARE FUNCTION ux_onnx_run LIB "uxonnx.dll" ALIAS "ux_onnx_run" (BYVAL session AS PTR, BYVAL input AS PTR, BYVAL output AS PTR) AS I32
+DECLARE FUNCTION ux_llama_eval LIB "uxllama.dll" ALIAS "ux_llama_eval" (BYVAL ctx AS PTR, BYVAL prompt AS STRING) AS I32

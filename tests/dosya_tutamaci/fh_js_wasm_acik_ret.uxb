@@ -1,0 +1,5 @@
+' Historical filename. JS remains an explicit rejection; Mete 2026-10-28
+' enabled real Node/WASM file I/O. WASM must create fh_jw.txt and print yok.
+DIM f AS FILE_HANDLE
+OPEN "fh_jw.txt" FOR OUTPUT AS f
+PRINT "yok"

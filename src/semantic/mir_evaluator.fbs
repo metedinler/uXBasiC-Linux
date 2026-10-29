@@ -1,3 +1,5 @@
+#include once "../common/float_integer_conversion.fbs"
+
 Type MIRMemByteEntry
     addr As ULongInt
     value As UByte
@@ -285,7 +287,7 @@ End Function
 ' simply means "leave the value alone".
 Private Function MIRApplyDeclaredScalarType(ByRef v As MIRValue, ByRef typeNameRaw As String) As Integer
     Dim t As String
-    t = UCase(Trim(typeNameRaw))
+    t = UCase(Trim(UXBStep3StorageType(typeNameRaw)))
     If t = "" Then Return 0
     If Left(t, 5) = "TYPE_" Then t = Mid(t, 6)
 
@@ -294,7 +296,11 @@ Private Function MIRApplyDeclaredScalarType(ByRef v As MIRValue, ByRef typeNameR
     Case "U8", "UBYTE", "U16", "USHORT", "U32", "UINTEGER", "UINT", "ULONG", _
          "U64", "ULONGINT", "I8", "BYTE", "SBYTE", "I16", "SHORT", _
          "I32", "INTEGER", "INT", "LONG", "I64", "LONGINT", "PTR"
-        If v.valueType = "FLOAT" Then v.intValue = CLngInt(v.floatValue)
+        If v.valueType = "FLOAT" Then
+            Dim truncatedBits As ULongInt
+            If UXBFloatTruncateIntegerBits(v.floatValue, truncatedBits) = 0 Then Return 0
+            v.intValue = CLngInt(truncatedBits)
+        End If
     End Select
 
     Select Case t
@@ -549,7 +555,7 @@ Private Function MIREvaluateArithmeticInstruction(ByRef state As MIREvaluatorSta
                 errMsg = "MIR: Sag operand bulunamadi: " & gMirInstr.operands(1)
                 Return 0
             End If
-            If MIRBinaryOp(gMirInstr.opcode, lhsValue, rhsValue, resultValue, errMsg) = 0 Then Return 0
+            If MIRBinaryOp(gMirInstr.opcode, lhsValue, rhsValue, resultValue, errMsg, gMirInstr.resultType) = 0 Then Return 0
             If MIRSetVarValue(state, gMirInstr.result, resultValue) = 0 Then
                 errMsg = "MIR: Sonuc degiskeni ayarlanamadi: " & gMirInstr.result
                 Return 0
@@ -1902,11 +1908,7 @@ Private Function MIREvalFfiArgSlot(ByRef state As MIREvaluatorState, ByVal argPo
         keepAlive = MIRValueToText(v)
         ' S-145: FreeBASIC StrPtr of an empty string is NULL; "" must reach the callee as a real empty C string.
         If Len(keepAlive) = 0 Then keepAlive = Chr(0)
-#Ifdef __FB_64BIT__
         outValueU64 = CULngInt(CLngInt(CPtr(Any Ptr, StrPtr(keepAlive))))
-#Else
-        outValueU64 = CULngInt(CULng(CPtr(Any Ptr, StrPtr(keepAlive))))
-#EndIf
         Return 1
 
     Case Else
@@ -2204,11 +2206,7 @@ Private Function MIRInvokeDllCall(ByRef state As MIREvaluatorState, ByRef ret As
             ret.stringValue = ""
         Else
             Dim zret As ZString Ptr
-#Ifdef __FB_64BIT__
             zret = CPtr(ZString Ptr, CULngInt(rv))
-#Else
-            zret = CPtr(ZString Ptr, CUInt(rv))
-#EndIf
             ret.stringValue = *zret
         End If
         Return 1

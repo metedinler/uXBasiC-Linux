@@ -1,0 +1,18 @@
+%%DEFINE APP_NAME "ADIM30_BROWSER"
+%%ALLOW_RAW_JS ON
+%%ALLOW_RAW_WAT ON
+%%JSON_SET app.name "ADIM30_BROWSER"
+%%HTML_BEGIN "index.html"
+<div id="app">ADIM30 browser shell</div>
+%%HTML_END
+%%CSS_BEGIN "style.css"
+#app { font-family: sans-serif; }
+%%CSS_END
+%%JS_BEGIN "inline.js"
+console.log("ADIM30 inline js");
+%%JS_END
+%%WAT_BEGIN "inline.wat"
+(module)
+%%WAT_END
+%%ASSET_COPY "assets/logo.txt" "logo.txt"
+PRINT "BROWSER-META"

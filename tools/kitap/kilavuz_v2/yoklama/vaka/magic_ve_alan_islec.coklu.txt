@@ -1,0 +1,573 @@
+MAGIC AND alan AND alan (beklenen 4)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC AND(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = v AND o.v
+        RETURN r
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+a.v = 12
+b.v = 4
+c = a AND b
+PRINT c.v
+=====
+MAGIC AND yalniz v (beklenen 12)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC AND(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = v
+        RETURN r
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+a.v = 12
+b.v = 4
+c = a AND b
+PRINT c.v
+=====
+MAGIC AND yalniz o.v (beklenen 4)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC AND(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = o.v
+        RETURN r
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+a.v = 12
+b.v = 4
+c = a AND b
+PRINT c.v
+=====
+MAGIC AND sabit 4 (fixture benzeri, beklenen 4)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC AND(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = 4
+        RETURN r
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+c = a AND b
+PRINT c.v
+=====
+MAGIC ADD ayni yapi (beklenen 16)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC ADD(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = v + o.v
+        RETURN r
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+a.v = 12
+b.v = 4
+c = a + b
+PRINT c.v
+=====
+MAGIC AND ile I32 sonuc donusu (beklenen 4)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC AND(o AS Sayi) AS I32
+        RETURN v AND o.v
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+a.v = 12
+b.v = 4
+DIM n AS I32
+n = a AND b
+PRINT n
+=====
+METHOD icinde alan = alan AND alan (MAGIC degil; beklenen 4)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    METHOD Ve(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = v AND o.v
+        RETURN r
+    END METHOD
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+a.v = 12
+b.v = 4
+c = a.Ve(b)
+PRINT c.v
+=====
+Ust duzeyde alan = alan AND alan (beklenen 4)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+a.v = 12
+b.v = 4
+c.v = a.v AND b.v
+PRINT c.v
+=====
+MAGIC OR alan OR alan (beklenen 12)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC OR(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        r.v = v OR o.v
+        RETURN r
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+a.v = 8
+b.v = 4
+c = a OR b
+PRINT c.v
+=====
+MAGIC AND yerel degiskenle (beklenen 4)
+CLASS Sayi
+    PUBLIC
+    DIM v AS I32
+    MAGIC AND(o AS Sayi) AS Sayi
+        DIM r AS Sayi = NEW Sayi()
+        DIM t AS I32
+        t = v AND o.v
+        r.v = t
+        RETURN r
+    END MAGIC
+END CLASS
+DIM a AS Sayi = NEW Sayi()
+DIM b AS Sayi = NEW Sayi()
+DIM c AS Sayi = NEW Sayi()
+a.v = 12
+b.v = 4
+c = a AND b
+PRINT c.v
+=====
+CLASS alan: c.v = a.v AND b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v AND b.v
+PRINT c.v
+=====
+TYPE alan: c.v = a.v AND b.v
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v AND b.v
+PRINT c.v
+=====
+CLASS alan: c.v = a.v OR b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v OR b.v
+PRINT c.v
+=====
+TYPE alan: c.v = a.v OR b.v
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v OR b.v
+PRINT c.v
+=====
+CLASS alan: c.v = a.v XOR b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v XOR b.v
+PRINT c.v
+=====
+TYPE alan: c.v = a.v XOR b.v
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v XOR b.v
+PRINT c.v
+=====
+CLASS alan: c.v = a.v + b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v + b.v
+PRINT c.v
+=====
+TYPE alan: c.v = a.v + b.v
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v + b.v
+PRINT c.v
+=====
+CLASS alan: c.v = a.v - b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v - b.v
+PRINT c.v
+=====
+TYPE alan: c.v = a.v - b.v
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v - b.v
+PRINT c.v
+=====
+CLASS alan: c.v = a.v * b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v * b.v
+PRINT c.v
+=====
+TYPE alan: c.v = a.v * b.v
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v * b.v
+PRINT c.v
+=====
+CLASS alan: c.v = a.v \ b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v \ b.v
+PRINT c.v
+=====
+TYPE alan: c.v = a.v \ b.v
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v \ b.v
+PRINT c.v
+=====
+CLASS alan: c.v = a.v MOD b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v MOD b.v
+PRINT c.v
+=====
+TYPE alan: c.v = a.v MOD b.v
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v MOD b.v
+PRINT c.v
+=====
+CLASS alan: c.v = a.v SHL 1
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v SHL 1
+PRINT c.v
+=====
+TYPE alan: c.v = a.v SHL 1
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v SHL 1
+PRINT c.v
+=====
+CLASS alan: c.v = a.v SHR 1
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v SHR 1
+PRINT c.v
+=====
+TYPE alan: c.v = a.v SHR 1
+TYPE T
+    v AS I32
+END TYPE
+DIM a AS T
+DIM b AS T
+DIM c AS T
+a.v = 12
+b.v = 4
+c.v = a.v SHR 1
+PRINT c.v
+=====
+degisken: n = a.v AND b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+DIM n AS I32
+n = a.v AND b.v
+PRINT n
+=====
+PRINT a.v AND b.v
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+PRINT a.v AND b.v
+=====
+alan = degisken AND sabit
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+DIM q AS I32 = 12
+c.v = q AND 4
+PRINT c.v
+=====
+alan = alan AND sabit
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = a.v AND 4
+PRINT c.v
+=====
+alan = (alan AND alan) parantezli
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = (a.v AND b.v)
+PRINT c.v
+=====
+alan = I32(alan AND alan)
+CLASS S
+    PUBLIC
+    DIM v AS I32
+END CLASS
+DIM a AS S = NEW S()
+DIM b AS S = NEW S()
+DIM c AS S = NEW S()
+a.v = 12
+b.v = 4
+c.v = I32(a.v AND b.v)
+PRINT c.v
+=====
+dizi elemani = degisken AND sabit (beklenen 4)
+DIM d(3) AS I32
+DIM q AS I32 = 12
+d(1) = q AND 4
+PRINT d(1)
+=====
+dizi elemani = degisken OR sabit (beklenen 14)
+DIM d(3) AS I32
+DIM q AS I32 = 12
+d(1) = q OR 2
+PRINT d(1)
+=====
+degisken = degisken AND sabit (beklenen 4)
+DIM q AS I32 = 12
+DIM r AS I32
+r = q AND 4
+PRINT r
+=====
+TYPE alan = degisken XOR sabit (beklenen 9)
+TYPE T
+    v AS I32
+END TYPE
+DIM t1 AS T
+DIM q AS I32 = 12
+t1.v = q XOR 5
+PRINT t1.v
+=====
+TYPE alan bilesik atama (beklenen 4)
+TYPE T
+    v AS I32
+END TYPE
+DIM t1 AS T
+t1.v = 12
+t1.v = t1.v AND 4
+PRINT t1.v
+=====
+alan = kosul AND kosul sonucu (beklenen -1)
+TYPE T
+    v AS I32
+END TYPE
+DIM t1 AS T
+DIM q AS I32 = 12
+t1.v = q > 3 AND q < 20
+PRINT t1.v
+=====
+alan = ANDALSO (beklenen -1)
+TYPE T
+    v AS I32
+END TYPE
+DIM t1 AS T
+DIM q AS I32 = 12
+t1.v = (q > 3) ANDALSO (q < 20)
+PRINT t1.v
+=====
+alan = NOT degisken (beklenen -13)
+TYPE T
+    v AS I32
+END TYPE
+DIM t1 AS T
+DIM q AS I32 = 12
+t1.v = NOT q
+PRINT t1.v
+=====
+alan = degisken AND sabit icinde SUB parametre kaydi
+TYPE T
+    v AS I32
+END TYPE
+DIM t1 AS T
+DIM q AS I32 = 12
+t1.v = q AND 4 + 1
+PRINT t1.v

@@ -1,0 +1,6 @@
+AST=unreachable statement after RETURN_STMT
+MIR=unreachable statement after RETURN_STMT
+x64=unreachable statement after RETURN_STMT
+AST-x64=unreachable statement after RETURN_STMT
+JS=unreachable statement after RETURN_STMT
+WASM=unreachable statement after RETURN_STMT

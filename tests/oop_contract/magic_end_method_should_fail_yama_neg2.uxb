@@ -1,0 +1,6 @@
+CLASS Sayi
+    MAGIC ADD(other AS Sayi) AS Sayi
+        DIM r AS Sayi
+        RETURN r
+    END METHOD
+END CLASS

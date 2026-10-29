@@ -1,0 +1,26 @@
+[
+ {
+  "ad": "q01 INSTANCEOF (duzeltildi)",
+  "kod": "CLASS Hayvan\n    PUBLIC\n    VIRTUAL METHOD Ses() AS STRING\n        RETURN \"...\"\n    END METHOD\nEND CLASS\nCLASS Kopek EXTENDS Hayvan\n    PUBLIC\nEND CLASS\nDIM k AS Kopek = NEW Kopek()\nDIM h AS Hayvan\nh = k\nPRINT INSTANCEOF(h, Kopek)"
+ },
+ {
+  "ad": "q02 yalniz parametresiz kurucu",
+  "kod": "CLASS P\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR()\n        x = 1\n    END CONSTRUCTOR\nEND CLASS\nDIM p2 AS P = NEW P()\nPRINT p2.x"
+ },
+ {
+  "ad": "q03 iki parametreli kurucu (kitapta var)",
+  "kod": "CLASS P\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR(a AS I32)\n        x = a\n    END CONSTRUCTOR\nEND CLASS\nDIM p1 AS P = NEW P(5)\nPRINT p1.x"
+ },
+ {
+  "ad": "q04 iki kurucu: parametresiz ve parametreli",
+  "kod": "CLASS P\n    PUBLIC\n    DIM x AS I32\n    CONSTRUCTOR()\n        x = 1\n    END CONSTRUCTOR\n    CONSTRUCTOR(a AS I32)\n        x = a\n    END CONSTRUCTOR\nEND CLASS\nDIM p1 AS P = NEW P(5)\nPRINT p1.x"
+ },
+ {
+  "ad": "q05 TYPENAME/yansima",
+  "kod": "CLASS K\n    PUBLIC\n    DIM x AS I32\nEND CLASS\nDIM k AS K = NEW K()\nPRINT TYPENAME(k)"
+ },
+ {
+  "ad": "q06 VARPTR kayit dizisi (n03 kontrol: dizi tamsayi)",
+  "kod": "DIM a(3) AS I32\nDIM p AS PTR = VARPTR(a)\nPOKED p + 8, 41\nPRINT a(2)"
+ }
+]

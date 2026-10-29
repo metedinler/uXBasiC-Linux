@@ -1,0 +1,15 @@
+' S-675: tamsayı değerli işleçler (\, MOD, AND, ...) ondalık (F64) bir parametre ya da atama bağlamında kullanılabilir.
+' Eski AST-x64 bu işleci sonuçsuz bırakır ve derlemeyi "x64 build basarisiz:" ileti satırıyla bitirirdi.
+FUNCTION Fk(a AS I64, b AS F64) AS I64
+    RETURN a + CINT(b)
+END FUNCTION
+DIM i AS I64
+DIM rc AS I64
+DIM f AS F64
+i = 7
+rc = Fk(2, 1 + i \ 5)
+PRINT rc
+rc = Fk(2, 1 + i)
+PRINT rc
+f = 1.5 + i MOD 4
+PRINT f

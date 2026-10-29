@@ -1,0 +1,15 @@
+' S-271 / S-714: USING uzerinden arite secimi hicbir yolda dogru calismiyor; ad temelli belirsizlik hatasi yanlis sonucun yerine gecer.
+NAMESPACE A
+    FUNCTION F(x AS I32) AS I32
+        RETURN x * 2
+    END FUNCTION
+END NAMESPACE
+NAMESPACE B
+    FUNCTION F(x AS I32, y AS I32) AS I32
+        RETURN x * y
+    END FUNCTION
+END NAMESPACE
+USING A
+USING B
+PRINT F(5)
+PRINT F(5, 6)

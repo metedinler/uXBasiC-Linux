@@ -148,6 +148,7 @@ End Function
 Function ParseDimStmt(ByRef ps As ParseState, ByRef firstTok As Token) As Integer
     Dim dimNode As Integer
     dimNode = MakeNodeFromToken(ps, "DIM_STMT", "", "", firstTok)
+    If UCase(firstTok.lexeme) = "STATIC" Then ps.ast.nodes(dimNode).op = "STATIC"
 
     Do
         Dim declNode As Integer

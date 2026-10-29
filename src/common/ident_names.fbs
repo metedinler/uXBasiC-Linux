@@ -1,0 +1,51 @@
+#ifndef UXB_IDENT_NAMES_FBS
+#define UXB_IDENT_NAMES_FBS
+
+' S-579 (2026-10-17): names may carry the Turkish letters. The lexer folds every name to ONE canonical spelling (lexer_keyword_table.fbs).
+' The two interpreters (AST, MIR) keep that spelling as UTF-8 bytes. The code-generating backends (x64 NASM, WAT, JS) need ASCII-only names, so
+' when gUxbAsciiIdentNames is 1 the lexer writes each remaining non-ASCII letter as `u` + four hex digits + `x` (ş -> u015fx, kişi -> kiu015fxi).
+' Literal uXXXXx prefixes are escaped as u0075x before encoding, so ASCII names cannot alias Turkish names.
+' Messages show the canonical user name: UxbIdentDisplayText decodes those six letters and the literal-u escape, once.
+' (the capitals Ç Ğ Ö Ş Ü are folded to ç ğ ö ş ü and İ to i before this point, ASCII I is the capital of i; ı is its own letter).
+Dim Shared gUxbAsciiIdentNames As Integer
+
+Private Function UxbIdentDisplayText(ByVal text As String) As String
+    If gUxbAsciiIdentNames = 0 Then Return text
+    Dim foldedText As String
+    foldedText = LCase(text)
+    If InStr(foldedText, "x") = 0 Then Return text
+    ' every mangled letter is `u` + 4 hex digits + `x`: cheap exit when the text has none of the six patterns
+    If InStr(foldedText, "u00e7x") = 0 And InStr(foldedText, "u011fx") = 0 And InStr(foldedText, "u0131x") = 0 And InStr(foldedText, "u00f6x") = 0 And InStr(foldedText, "u015fx") = 0 And InStr(foldedText, "u00fcx") = 0 And InStr(foldedText, "u0075x") = 0 Then Return text
+
+    Dim outText As String
+    outText = ""
+    Dim idx As Integer
+    idx = 1
+    Do While idx <= Len(text)
+        Dim shown As String
+        shown = ""
+        If Mid(foldedText, idx, 1) = "u" And idx + 5 <= Len(text) Then
+            If Mid(foldedText, idx + 5, 1) = "x" Then
+                Select Case Mid(foldedText, idx, 6)
+                Case "u0075x": shown = Mid(text, idx, 1) ' literal uXXXXx, decoded once
+                Case "u00e7x": shown = Chr(&hC3) & Chr(&hA7)   ' ç
+                Case "u011fx": shown = Chr(&hC4) & Chr(&h9F)   ' ğ
+                Case "u0131x": shown = Chr(&hC4) & Chr(&hB1)   ' ı
+                Case "u00f6x": shown = Chr(&hC3) & Chr(&hB6)   ' ö
+                Case "u015fx": shown = Chr(&hC5) & Chr(&h9F)   ' ş
+                Case "u00fcx": shown = Chr(&hC3) & Chr(&hBC)   ' ü
+                End Select
+            End If
+        End If
+        If shown <> "" Then
+            outText &= shown
+            idx += 6
+        Else
+            outText &= Mid(text, idx, 1)
+            idx += 1
+        End If
+    Loop
+    Return outText
+End Function
+
+#endif

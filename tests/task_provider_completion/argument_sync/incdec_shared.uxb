@@ -1,0 +1,14 @@
+DIM total AS I64 = 0
+THREAD Increment() AS I32
+    DIM i AS I32
+    DIM prior AS I64
+    FOR i = 1 TO 5000
+        prior = total++
+    NEXT
+    RETURN 1
+END THREAD
+DIM a AS TASK OF I32 = SPAWN Increment()
+DIM b AS TASK OF I32 = SPAWN Increment()
+PRINT a.JOIN()
+PRINT b.JOIN()
+PRINT total

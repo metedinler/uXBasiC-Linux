@@ -1,0 +1,45 @@
+A1 ayri satirlar sabit indeks
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+d(0).a = 1
+d(0).b = 2
+d(1).a = 3
+d(1).b = 4
+PRINT d(0).a + d(1).b
+=====
+A2 iki nokta ayrac, sabit indeks
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+d(0).a = 1: d(0).b = 2
+d(1).a = 3: d(1).b = 4
+PRINT d(0).a + d(1).b
+=====
+A3 yalniz tek iki nokta (dizi alani + normal deyim)
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM d(2) AS P
+DIM s AS I32
+d(0).a = 1: s = 5
+PRINT d(0).a + s
+=====
+A4 iki nokta ayrac, dizi (TYPE olmayan)
+DIM d(2) AS I32
+d(0) = 1: d(1) = 2
+PRINT d(0) + d(1)
+=====
+A5 iki nokta ayrac, normal TYPE degisken alanlari
+TYPE P
+    a AS I32
+    b AS I32
+END TYPE
+DIM p AS P
+p.a = 1: p.b = 2
+PRINT p.a + p.b

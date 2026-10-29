@@ -1,0 +1,241 @@
+#ifndef UXB_WASM_TYPED_INSTRUCTIONS_FBS
+#define UXB_WASM_TYPED_INSTRUCTIONS_FBS
+
+Private Function UXBWasmTypedInstruction(ByRef m As MIRModule, ByRef ins As MIRIRInstruction, ByRef handled As Integer, ByRef errText As String) As String
+    Dim op As String = UXBWasmCanonicalOpcode(ins.opcode)
+    If op = "HOST_IMPORT" And ins.operandCount >= 1 Then
+        If UXBWasmFindFunctionIndex(m, ins.operands(0)) >= 0 Then op = "CALL"
+    End If
+    Dim resultType As String = UXBWasmValueType(ins.result)
+    Dim s As String, i As Integer, target As Integer
+    handled = 1
+    Select Case op
+    Case "LOAD_CONST", "LOAD_VAR", "CAST"
+        If ins.operandCount < 1 Or Trim(ins.result) = "" Then errText = "WASM typed load/cast requires value and result": Return ""
+        Return UXBWasmTypedValue(ins.operands(0), resultType) & UXBWasmEmitVarSet(ins.result)
+    Case "STORE_VAR"
+        Dim storeName As String = IIf(ins.operandCount >= 2, ins.operands(0), ins.result)
+        Dim storeValue As String = IIf(ins.operandCount >= 2, ins.operands(1), ins.operands(0))
+        If gUxbWasmExceptionState <> 0 And UCase(storeName) = "__MIR_EXC_VALUE" Then
+            If UXBWasmIsText(UXBWasmValueType(storeValue)) = 0 And Trim(storeValue) <> "0" Then
+                errText = "UXB_WASM_NUMERIC_EXCEPTION_UNSUPPORTED: exception values currently require STRING": Return ""
+            End If
+        End If
+        If ins.operandCount >= 2 Then Return UXBWasmTypedValue(ins.operands(1), UXBWasmValueType(ins.operands(0))) & UXBWasmEmitVarSet(ins.operands(0))
+        If ins.operandCount = 1 And ins.result <> "" Then Return UXBWasmTypedValue(ins.operands(0), resultType) & UXBWasmEmitVarSet(ins.result)
+    Case "CALL"
+        If ins.operandCount < 1 Then errText = "WASM CALL requires target": Return ""
+        target = UXBWasmFindFunctionIndex(m, ins.operands(0))
+        If target >= 0 Then
+            For i = 1 To ins.operandCount - 1
+                If i - 1 >= m.functions(target).paramVarCount Then errText = "WASM CALL argument count exceeds signature": Return ""
+                s &= UXBWasmTypedValue(ins.operands(i), m.functions(target).paramVarTypes(i - 1))
+            Next i
+            s &= "      call $" & UXBWasmSafeName(ins.operands(0)) & Chr(10)
+            If ins.result <> "" Then
+                s &= UXBWasmConvert(m.functions(target).returnType, resultType) & UXBWasmEmitVarSet(ins.result)
+            Else
+                s &= "      drop" & Chr(10)
+            End If
+            Return s
+        End If
+    Case "RET"
+        If ins.bareReturn <> 0 And gUxbWasmHasGosub <> 0 Then handled = 0: Return ""
+        Dim retType As String = gWasmValueFunction->returnType
+        If ins.operandCount > 0 And UCase(Trim(ins.operands(0))) <> "__RESULT__" Then
+            s = UXBWasmTypedValue(ins.operands(0), retType)
+        ElseIf ins.result <> "" Then
+            s = UXBWasmTypedValue(ins.result, retType)
+        Else
+            s = "      " & UXBWasmCarrier(retType) & ".const 0" & Chr(10)
+        End If
+        If gUxbWasmExceptionState <> 0 And UCase(gWasmValueFunction->name) = "MAIN" Then
+            Dim checkException As String = UXBWasmEmitValue("__mir_exc_active") & "      if" & Chr(10)
+            checkException &= "        i32.const 99" & Chr(10) & UXBWasmEmitValue("__mir_exc_value")
+            checkException &= "        i32.const 0" & Chr(10) & "        call $uxb_string_op" & Chr(10) & "        drop" & Chr(10) & "      end" & Chr(10)
+            s = checkException & s
+        End If
+        Return s & "      local.set $__result" & Chr(10) & "      br $exit" & Chr(10)
+    Case "ADD", "SUB", "MUL", "DIV", "FADD", "FSUB", "FMUL", "FDIV", "EQ", "NE", "LT", "LE", "GT", "GE"
+        If ins.operandCount < 2 Then handled = 0: Return ""
+        Dim aType As String = UXBWasmValueType(ins.operands(0))
+        Dim bType As String = UXBWasmValueType(ins.operands(1))
+        Dim isCmp As Integer = IIf(op = "EQ" Or op = "NE" Or op = "LT" Or op = "LE" Or op = "GT" Or op = "GE", 1, 0)
+        If UXBWasmIsText(aType) Or UXBWasmIsText(bType) Then
+            If UXBWasmIsText(aType) = 0 Or UXBWasmIsText(bType) = 0 Then errText = "WASM text operator requires two strings": Return ""
+            If op <> "ADD" And isCmp = 0 Then errText = "WASM invalid text arithmetic operator " & op: Return ""
+            s = "      i32.const " & IIf(isCmp <> 0, "2", "1") & Chr(10)
+            s &= UXBWasmEmitValue(ins.operands(0)) & UXBWasmEmitValue(ins.operands(1))
+            s &= "      call $__uxb_str_op" & Chr(10)
+            If isCmp <> 0 Then s &= "      i32.const 0" & Chr(10) & "      i32." & LCase(op) & IIf(op = "EQ" Or op = "NE", "", "_s") & Chr(10) & "      i32.const -1" & Chr(10) & "      i32.mul" & Chr(10)
+            Return s & UXBWasmEmitVarSet(ins.result)
+        End If
+        Dim wideType As String = "F32"
+        If aType = "F64" Or bType = "F64" Or resultType = "F64" Then wideType = "F64"
+        If UXBWasmCarrier(aType) <> "i32" Or UXBWasmCarrier(bType) <> "i32" Or UXBWasmCarrier(resultType) <> "i32" Or Left(op, 1) = "F" Then
+            Dim numericInstr As String = LCase(op)
+            If Left(numericInstr, 1) = "f" Then numericInstr = Mid(numericInstr, 2)
+            s = UXBWasmTypedValue(ins.operands(0), wideType) & UXBWasmTypedValue(ins.operands(1), wideType)
+            s &= "      " & UXBWasmCarrier(wideType) & "." & numericInstr & Chr(10)
+            If isCmp <> 0 Then
+                s &= "      i32.const -1" & Chr(10) & "      i32.mul" & Chr(10)
+            Else
+                s &= UXBWasmConvert(wideType, resultType)
+            End If
+            Return s & UXBWasmEmitVarSet(ins.result)
+        End If
+    Case "NEG", "FNEG"
+        If ins.operandCount >= 1 And UXBWasmCarrier(resultType) <> "i32" Then Return UXBWasmTypedValue(ins.operands(0), resultType) & "      " & UXBWasmCarrier(resultType) & ".neg" & Chr(10) & UXBWasmEmitVarSet(ins.result)
+    Case "JZ", "JNZ"
+        If ins.operandCount >= 2 And UXBWasmCarrier(UXBWasmValueType(ins.operands(0))) <> "i32" Then
+            Dim vType As String = UXBWasmCarrier(UXBWasmValueType(ins.operands(0)))
+            s = UXBWasmEmitValue(ins.operands(0)) & "      " & vType & ".const 0" & Chr(10) & "      " & vType & IIf(op = "JZ", ".eq", ".ne") & Chr(10)
+            Return s & "      if" & Chr(10) & "        i32.const " & ins.operands(1) & Chr(10) & "        local.set $__pc" & Chr(10) & "        br $dispatch" & Chr(10) & "      end" & Chr(10)
+        End If
+    Case "ARRAY_FIELD_LOAD", "ARRAY_FIELD_STORE"
+        Dim afStore As Integer = IIf(op = "ARRAY_FIELD_STORE", 1, 0)
+        If ins.operandCount <> 6 + afStore Then errText = "WASM ARRAY_FIELD operand count invalid": Return ""
+        Dim afType As String = UXBWasmSourceType(ins.resultType)
+        Dim afCode As Integer
+        Select Case afType
+        Case "I8": afCode = 1
+        Case "U8", "BOOL", "BOOLEAN": afCode = 2
+        Case "I16": afCode = 3
+        Case "U16": afCode = 4
+        Case "I32": afCode = 5
+        Case "U32": afCode = 6
+        Case "F32": afCode = 9
+        Case "F64": afCode = 10
+        Case "STRING": afCode = 11
+        Case Else: errText = "WASM ARRAY_FIELD type not supported: " & afType: Return ""
+        End Select
+        s = "      i32.const " & IIf(afStore <> 0, "87", "86") & Chr(10)
+        s &= UXBWasmTypedValue(ins.operands(0), "F64") & UXBWasmTypedValue(ins.operands(1), "F64")
+        s &= "      f64.const " & LTrim(Str(ValLng(ins.operands(4 + afStore)) * 16 + afCode)) & Chr(10)
+        If afStore <> 0 Then s &= UXBWasmTypedValue(ins.operands(3), "F64") Else s &= "      f64.const 0" & Chr(10)
+        s &= "      call $uxb_host_number4" & Chr(10)
+        If afStore <> 0 Then Return s & "      drop" & Chr(10)
+        Return s & UXBWasmConvert("F64", resultType) & UXBWasmEmitVarSet(ins.result)
+    Case "LOAD_INDEXED", "STORE_INDEXED"
+        If op = "LOAD_INDEXED" Then
+            If UXBWasmCarrier(resultType) = "i32" Then handled = 0: Return ""
+        Else
+            If ins.operandCount < 3 Then errText = "WASM STORE_INDEXED requires array,index,value": Return ""
+            If UXBWasmCarrier(UXBWasmValueType(ins.operands(2))) = "i32" Then handled = 0: Return ""
+        End If
+        s = "      i32.const " & IIf(op = "LOAD_INDEXED", "81", "82") & Chr(10)
+        For i = 0 To 3
+            If i < ins.operandCount Then s &= UXBWasmTypedValue(ins.operands(i), "F64") Else s &= "      f64.const 0" & Chr(10)
+        Next i
+        s &= "      call $uxb_host_number4" & Chr(10)
+        If ins.result <> "" Then Return s & UXBWasmConvert("F64", resultType) & UXBWasmEmitVarSet(ins.result)
+        Return s & "      drop" & Chr(10)
+    Case "HOST_IMPORT"
+        If ins.operandCount < 1 Then handled = 0: Return ""
+        Dim callName As String = UCase(Trim(ins.operands(0)))
+        Select Case callName
+        Case "OPEN", "CLOSE", "GET", "PUT", "SEEK", "EOF", "LOF", "INPUTF", "FILE_PRINT_BEGIN", "FILE_PRINT_ITEM", "FILE_PRINT_END"
+            Dim fileId As Integer = UXBWasmHostCallId(callName)
+            Dim fileArgs As Integer = ins.operandCount - 1
+            If fileArgs > 4 Then errText = "WASM file service argument count exceeds contract": Return ""
+            If callName = "GET" And UXBWasmIsText(resultType) <> 0 Then
+                errText = "WASM binary GET requires an integer target; text files use INPUT #": Return ""
+            End If
+            If callName = "PUT" And fileArgs > 0 Then
+                If UXBWasmIsText(UXBWasmValueType(ins.operands(fileArgs))) <> 0 Then
+                    errText = "WASM binary PUT requires an integer value; text files use PRINT #": Return ""
+                End If
+            End If
+            Dim fileKind As Integer = 0
+            If callName = "FILE_PRINT_ITEM" And fileArgs > 0 Then
+                Dim itemType As String = UXBWasmValueType(ins.operands(1))
+                If UXBWasmIsText(itemType) <> 0 Then fileKind = 1
+                If itemType = "F32" Then fileKind = 2
+            End If
+            s = "      i32.const " & LTrim(Str(fileId)) & Chr(10)
+            For i = 0 To 15
+                If i < fileArgs Then
+                    s &= UXBWasmTypedValue(ins.operands(i + 1), "F64")
+                ElseIf i = 8 Then
+                    s &= "      f64.const " & LTrim(Str(fileArgs)) & Chr(10)
+                ElseIf i = 9 Then
+                    s &= "      f64.const " & LTrim(Str(fileKind)) & Chr(10)
+                Else
+                    s &= "      f64.const 0" & Chr(10)
+                End If
+            Next i
+            s &= "      call $uxb_host_number16" & Chr(10)
+            If ins.result <> "" Then Return s & UXBWasmConvert("F64", resultType) & UXBWasmEmitVarSet(ins.result)
+            Return s & "      drop" & Chr(10)
+        End Select
+        If callName = "PRINT" And ins.operandCount >= 2 Then
+            Dim vType As String = UXBWasmValueType(ins.operands(1))
+            If UXBWasmIsText(vType) <> 0 Then Return UXBWasmEmitValue(ins.operands(1)) & "      call $uxb_print_string" & Chr(10)
+            If vType = "F32" Then Return UXBWasmEmitValue(ins.operands(1)) & "      call $ux_print_f32" & Chr(10)
+            If UXBWasmCarrier(vType) <> "i32" Then Return UXBWasmTypedValue(ins.operands(1), "F64") & "      call $ux_print_f64" & Chr(10)
+        End If
+        Dim stringId As Integer = 0
+        If callName = "MID" Or callName = "MID$" Then
+            If ins.operandCount < 3 Or ins.operandCount > 4 Then errText = "WASM MID requires text,start[,count]": Return ""
+            s = UXBWasmTypedValue(ins.operands(1), "I32") & UXBWasmTypedValue(ins.operands(2), "I32")
+            If ins.operandCount = 4 Then s &= UXBWasmTypedValue(ins.operands(3), "I32") Else s &= "      i32.const -1" & Chr(10)
+            s &= "      call $__uxb_str_mid" & Chr(10)
+            If ins.result <> "" Then Return s & UXBWasmEmitVarSet(ins.result)
+            Return s & "      drop" & Chr(10)
+        End If
+        If callName = "STRING" Or callName = "STRING$" Then
+            If ins.operandCount <> 3 Then errText = "WASM STRING requires count,character": Return ""
+            s = UXBWasmTypedValue(ins.operands(1), "I32") & UXBWasmTypedValue(ins.operands(2), "I32")
+            If UXBWasmIsText(UXBWasmValueType(ins.operands(2))) <> 0 Then s &= "      call $__uxb_str_repeat_text" & Chr(10) Else s &= "      call $__uxb_str_repeat_byte" & Chr(10)
+            If ins.result <> "" Then Return s & UXBWasmEmitVarSet(ins.result)
+            Return s & "      drop" & Chr(10)
+        End If
+        Select Case callName
+        Case "LEN": stringId = 3
+        Case "ASC": stringId = 4
+        Case "CHR", "CHR$": stringId = 5
+        Case "LEFT", "LEFT$": stringId = 6
+        Case "RIGHT", "RIGHT$": stringId = 7
+        Case "UCASE", "UCASE$": stringId = 8
+        Case "LCASE", "LCASE$": stringId = 9
+        Case "TRIM", "TRIM$": stringId = 10
+        Case "LTRIM", "LTRIM$": stringId = 11
+        Case "RTRIM", "RTRIM$": stringId = 12
+        End Select
+        If stringId <> 0 Then
+            s = "      i32.const " & LTrim(Str(stringId)) & Chr(10)
+            For i = 1 To 2
+                If i < ins.operandCount Then s &= UXBWasmTypedValue(ins.operands(i), "I32") Else s &= "      i32.const 0" & Chr(10)
+            Next i
+            s &= "      call $__uxb_str_op" & Chr(10)
+            If ins.result <> "" Then Return s & UXBWasmEmitVarSet(ins.result)
+            Return s & "      drop" & Chr(10)
+        End If
+        Dim numberCall As Integer = IIf(UXBWasmCarrier(resultType) <> "i32", 1, 0)
+        Select Case callName
+        Case "STR", "VAL", "CLNG", "CINT", "FIX", "INT", "SGN", "CSNG", "CDBL", "ABS", "SQR", "SQRT", "SIN", "COS", "TAN", "ATN", "LOG", "EXP"
+            numberCall = 1
+        End Select
+        For i = 1 To ins.operandCount - 1
+            If UXBWasmCarrier(UXBWasmValueType(ins.operands(i))) <> "i32" Then numberCall = 1
+        Next i
+        If numberCall <> 0 And callName <> "PRINTLN" Then
+            Dim numberId As Integer = UXBWasmHostCallId(callName)
+            If callName = "STR" And ins.operandCount > 1 Then
+                If UXBWasmValueType(ins.operands(1)) = "F32" Then numberId = 35
+            End If
+            If numberId < 0 Then errText = "UXB_WASM_CALL_TARGET_UNBOUND: " & callName: Return ""
+            s = "      i32.const " & LTrim(Str(numberId)) & Chr(10)
+            For i = 1 To 4
+                If i < ins.operandCount Then s &= UXBWasmTypedValue(ins.operands(i), "F64") Else s &= "      f64.const 0" & Chr(10)
+            Next i
+            s &= "      call $uxb_host_number4" & Chr(10)
+            If ins.result <> "" Then Return s & UXBWasmConvert("F64", resultType) & UXBWasmEmitVarSet(ins.result)
+            Return s & "      drop" & Chr(10)
+        End If
+    End Select
+    handled = 0
+    Return ""
+End Function
+
+#endif

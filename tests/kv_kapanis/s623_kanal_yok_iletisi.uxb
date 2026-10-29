@@ -1,0 +1,8 @@
+' S-623 / S-548: tum kanallar doluyken `OPEN ... AS tutamac` acik hatayla durur ve ileti MIR dahil her yorumlayicida gorunur.
+DIM i AS I32
+DIM f AS FILE_HANDLE
+FOR i = 1 TO 255
+    OPEN "dolu.txt" FOR OUTPUT AS #i
+NEXT
+OPEN "dolu2.txt" FOR OUTPUT AS f
+PRINT "olmamali"

@@ -1,0 +1,8 @@
+' S-329 koruma: USING ile acilan ad alanindaki yordam nitelensiz cagrilir.
+NAMESPACE S
+    FUNCTION F(a AS I32) AS I32
+        RETURN a * 3
+    END FUNCTION
+END NAMESPACE
+USING S
+PRINT F(2)

@@ -1,0 +1,8 @@
+CONST A = 3
+SUB Shadow()
+    DIM A AS I32
+    A = 7
+    PRINT A
+END SUB
+CALL Shadow()
+PRINT A

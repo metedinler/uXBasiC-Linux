@@ -1,0 +1,14 @@
+DIM p AS F64 = 3.9
+DIM n AS F64 = -3.9
+DIM a AS I32 = FIX(p)
+DIM b AS I64
+b = FIX(p)
+DIM f AS F64
+f = FIX(p)
+PRINT a
+PRINT b
+PRINT f
+PRINT FIX(p) + 1
+PRINT I32(FIX(p))
+PRINT I64(FIX(p))
+PRINT FIX(n)

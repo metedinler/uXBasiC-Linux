@@ -1,0 +1,47 @@
+INCLUDE "include/modules/uxcapi.uxmh"
+
+DIM vecType AS U64
+DIM leftMem AS U64
+DIM rightMem AS U64
+DIM resultMem AS U64
+DIM callHandle AS U64
+DIM ok AS I32
+
+vecType = uxcapi.TypeStructNew()
+ok = uxcapi.TypeAddField(vecType, uxcapi.KIND_F32)
+ok = uxcapi.TypeAddField(vecType, uxcapi.KIND_F32)
+ok = uxcapi.TypeSetExpectedLayout(vecType, 8, U32(4))
+ok = uxcapi.TypeFinalize(vecType)
+PRINT "TYPE_FINALIZE="; ok
+PRINT "TYPE_SIZE="; uxcapi.TypeSize(vecType)
+PRINT "TYPE_ALIGN="; uxcapi.TypeAlignment(vecType)
+
+leftMem = uxcapi.MemoryCalloc(1, 8)
+rightMem = uxcapi.MemoryCalloc(1, 8)
+resultMem = uxcapi.MemoryCalloc(1, 8)
+
+ok = uxcapi.MemoryWriteF32(leftMem, 0, 1.5)
+ok = uxcapi.MemoryWriteF32(leftMem, 4, 2.5)
+ok = uxcapi.MemoryWriteF32(rightMem, 0, 10.0)
+ok = uxcapi.MemoryWriteF32(rightMem, 4, 20.0)
+
+callHandle = uxcapi.CallNew("uxcabi_aggregate_test.dll", "uxcabi_vec2_sum", uxcapi.KIND_F64, 0, 0)
+ok = uxcapi.ArgStruct(callHandle, vecType, leftMem, 8)
+ok = uxcapi.Invoke(callHandle)
+PRINT "SUM="; uxcapi.ResultF64(callHandle)
+uxcapi.CallFree(callHandle)
+
+callHandle = uxcapi.CallNew("uxcabi_aggregate_test.dll", "uxcabi_vec2_add", uxcapi.KIND_VOID, 0, 0)
+ok = uxcapi.CallSetReturnStruct(callHandle, vecType)
+ok = uxcapi.ArgStruct(callHandle, vecType, leftMem, 8)
+ok = uxcapi.ArgStruct(callHandle, vecType, rightMem, 8)
+ok = uxcapi.Invoke(callHandle)
+ok = uxcapi.ResultStructCopy(callHandle, resultMem, 8)
+PRINT "ADD_X="; uxcapi.MemoryReadF32(resultMem, 0)
+PRINT "ADD_Y="; uxcapi.MemoryReadF32(resultMem, 4)
+uxcapi.CallFree(callHandle)
+
+uxcapi.MemoryFree(leftMem)
+uxcapi.MemoryFree(rightMem)
+uxcapi.MemoryFree(resultMem)
+uxcapi.TypeFree(vecType)

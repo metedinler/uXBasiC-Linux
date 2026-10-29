@@ -1,0 +1,15 @@
+%%SET TITLE = "ADIM36 META"
+%%PROFILE WEB_DEBUG
+%%PATH_ALIAS "@assets" AS "tests/adim36_full_surface/assets"
+%%LOCK_META TITLE
+%%ENV "PATH" AS HOST_PATH
+%%MINIFY JS ON
+%%FINGERPRINT_ASSETS ON
+%%INFOMETA "adim36 meta command coverage"
+%%EMITNOTE "meta-note"
+%%CSS_RULE "#app", "color:red;"
+%%CSS_IMPORT "reset.css"
+
+%%SET WIDTH = 4
+DIM A(%%EVAL(WIDTH)) AS I32
+PRINT "META-OK"

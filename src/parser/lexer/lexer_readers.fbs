@@ -46,13 +46,17 @@ Private Sub ReadNumber(ByRef st As LexerState)
     Dim suffixText As String
     baseText = "DEC"
 
-    If PeekCh(st) = "&" And (UCase(PeekChEx(st, 1)) = "H" Or UCase(PeekChEx(st, 1)) = "O") Then
-        baseText = IIf(UCase(PeekChEx(st, 1)) = "H", "HEX", "OCT")
+    If PeekCh(st) = "&" And (UCase(PeekChEx(st, 1)) = "H" Or UCase(PeekChEx(st, 1)) = "O" Or UCase(PeekChEx(st, 1)) = "B") Then
+        Select Case UCase(PeekChEx(st, 1))
+        Case "H": baseText = "HEX"
+        Case "O": baseText = "OCT"
+        Case "B": baseText = "BIN"
+        End Select
         AdvanceCh st, ch: s &= ch
         AdvanceCh st, ch: s &= ch
         Do While Not AtEnd(st)
             ch = PeekCh(st)
-            If (baseText = "HEX" And IsHexDigit(ch) <> 0) Or (baseText = "OCT" And IsOctDigit(ch) <> 0) Then
+            If (baseText = "HEX" And IsHexDigit(ch) <> 0) Or (baseText = "OCT" And IsOctDigit(ch) <> 0) Or (baseText = "BIN" And IsBinDigit(ch) <> 0) Then
                 AdvanceCh st, ch
                 s &= ch
             Else
@@ -88,7 +92,8 @@ Private Sub ReadNumber(ByRef st As LexerState)
             suffixText &= ch
             s &= ch
         Loop
-        PushNumberTokRaw st, s, s, ln, cn, st.cursor - Len(s), baseText, suffixText
+        ' S-562: %b101 -> kanonik &B101 (ham yazim rawLexeme'de kalir)
+        PushNumberTokRaw st, s, "&B" & Mid(s, 3), ln, cn, st.cursor - Len(s), baseText, suffixText
         Exit Sub
     End If
 
@@ -115,7 +120,12 @@ Private Sub ReadNumber(ByRef st As LexerState)
             suffixText &= ch
             s &= ch
         Loop
-        PushNumberTokRaw st, s, s, ln, cn, st.cursor - Len(s), baseText, suffixText
+        ' S-562: 0x1F / 0b101 / 0o17 yazimlari sozcuk cozumleyicide zaten SAYI (taban etiketli) idi, ama ham yazim oldugu gibi
+        ' ASTya gecince AST/MIR/eski AST-x64 `0`, native cop sayi, JS `undefined` veriyor, `0x1F + 1` ise `1` oluyordu.
+        ' Kanonik metin dilin tek onaltilik/ikilik/sekizlik yazimi olan &H / &B / &O olur (rawLexeme degismez).
+        Dim radixCanonical As String
+        radixCanonical = IIf(baseText = "HEX", "&H", IIf(baseText = "BIN", "&B", "&O")) & Mid(s, 3)
+        PushNumberTokRaw st, s, radixCanonical, ln, cn, st.cursor - Len(s), baseText, suffixText
         Exit Sub
     End If
 
@@ -175,6 +185,15 @@ Private Sub ReadIdentifier(ByRef st As LexerState)
             Exit Do
         End If
     Loop
+
+    ' S-579: names may carry the twelve Turkish letters; any other non-ASCII character is refused with its position and code point
+    Dim badIdentText As String
+    Dim badIdentOffset As Integer
+    If LexerIdentCharsAllowed(s, badIdentText, badIdentOffset) = 0 Then
+        LexerAddDiagnostic st, "LEX_IDENT_CHAR", "character not allowed in a name: " & badIdentText & " in '" & s & "' (names may use ASCII letters, digits, _ and the Turkish letters ç ğ ı ö ş ü Ç Ğ İ Ö Ş Ü)", ln, cn + badIdentOffset
+        PushTokRaw st, "UNKNOWN", s, s, ln, cn, st.cursor - Len(s)
+        Exit Sub
+    End If
 
     Dim identCanonical As String
     identCanonical = CanonicalIdentifier(s)

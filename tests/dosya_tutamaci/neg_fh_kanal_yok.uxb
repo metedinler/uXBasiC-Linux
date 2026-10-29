@@ -1,0 +1,9 @@
+' S-548 (F1) / S-549 (F3): with every channel in use `OPEN ... AS handle` stops with a clear error instead of opening channel 0.
+' (The MIR interpreter cannot report it: its own diagnostic log needs a file number too, S-623.)
+DIM i AS I32
+DIM f AS FILE_HANDLE
+FOR i = 1 TO 255
+    OPEN "fh_full.txt" FOR OUTPUT AS #i
+NEXT
+OPEN "fh_full2.txt" FOR OUTPUT AS f
+PRINT "olmamali"

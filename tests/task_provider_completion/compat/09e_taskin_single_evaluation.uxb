@@ -1,0 +1,11 @@
+FUNCTION OnceValue() AS I32
+    PRINT "once"
+    RETURN 21
+END FUNCTION
+
+PIPE DoubleContext(value AS I32) AS I32
+    TASKOUT = TASKIN * 2
+END PIPE
+
+TRIGGER PIPE DoubleContext, OnceValue()
+PRINT TASKOUT

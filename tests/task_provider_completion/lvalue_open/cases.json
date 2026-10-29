@@ -1,0 +1,9 @@
+{
+  "shared_class_field": {
+    "output": "1\n1\n10000\n10000.25",
+    "engines": [
+      "x64",
+      "AST-x64"
+    ]
+  }
+}

@@ -560,11 +560,14 @@ Function MIRLowerSetEachLoop(ByRef ps As ParseState, ByVal stmtIdx As Integer, B
         Case "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "INTEGER", "LONG", "LONGINT", "SHORT", "BYTE", "UBYTE", "USHORT", "UINTEGER", "ULONG", "ULONGINT", "SBYTE", "INT", "UINT"
             Dim setValTemp As String = MIRNextTemp(tempSeed)
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, setValTemp, 2, "VAL", memberVal
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, "F64"
             setStoreValue = MIRNextTemp(tempSeed)
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, setStoreValue, 2, "CLNG", setValTemp
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, setLoopCanon
         Case "F32", "F64", "SINGLE", "DOUBLE"
             setStoreValue = MIRNextTemp(tempSeed)
             MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_CALL, setStoreValue, 2, "VAL", memberVal
+            MIRSetLastInstructionMetadata module, fnIdx, blkIdx, "F64"
         End Select
     End If
     MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_STORE_VAR, ps.ast.nodes(stmtIdx).value, 1, setStoreValue

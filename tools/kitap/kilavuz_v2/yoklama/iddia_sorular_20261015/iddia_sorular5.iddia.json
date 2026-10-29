@@ -1,0 +1,38 @@
+[
+ {
+  "ad": "h01 PRINT &h44",
+  "kod": "PRINT &h44"
+ },
+ {
+  "ad": "h02 &HFF buyuk harf",
+  "kod": "PRINT &HFF + 1"
+ },
+ {
+  "ad": "h03 DIM a = &h10",
+  "kod": "DIM a AS I32 = &h10\nPRINT a"
+ },
+ {
+  "ad": "h04 &b ikili",
+  "kod": "PRINT &b1010"
+ },
+ {
+  "ad": "h05 &o sekizli",
+  "kod": "PRINT &o17"
+ },
+ {
+  "ad": "h06 0x biciminde",
+  "kod": "PRINT 0x1F"
+ },
+ {
+  "ad": "h07 $ biciminde",
+  "kod": "PRINT $1F"
+ },
+ {
+  "ad": "h08 POKEB adresinde hex",
+  "kod": "POKEB &h20, 7\nPRINT PEEKB(32)"
+ },
+ {
+  "ad": "h09 6502 tablo son iki deger",
+  "kod": "CONST ZP = 0\nDIM x AS I32 = 2\nDIM y AS I32 = 3\nPOKEW ZP + 32, 17408\nPOKEB 17411, 66\nPOKEW ZP + 16, 17440\nPOKEB 17440, 88\nPRINT PEEKB(PEEKW(ZP + 32) + y)\nDIM bx AS I32 = 240\nPRINT PEEKB(PEEKW(ZP + ((32 + bx) AND 255)))"
+ }
+]

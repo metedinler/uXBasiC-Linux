@@ -1,0 +1,9 @@
+CLASS Kutu
+    PUBLIC
+    n AS I32
+END CLASS
+DIM a(1 TO 2, 3 TO 4) AS Kutu
+REDIM a(0 TO 2, 1 TO 3) AS Kutu
+a(2,3) = NEW Kutu()
+a(2,3).n = 5
+PRINT a(2,3).n

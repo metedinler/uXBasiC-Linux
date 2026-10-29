@@ -1,0 +1,4 @@
+AST=semantic: CLASS field hides inherited member CHILD.X from BASE
+MIR=semantic: CLASS field hides inherited member CHILD.X from BASE
+x64=semantic: CLASS field hides inherited member CHILD.X from BASE
+AST-x64=semantic: CLASS field hides inherited member CHILD.X from BASE

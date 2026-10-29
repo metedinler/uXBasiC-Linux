@@ -1,0 +1,85 @@
+# ad | kurulum | ifade
+topla | | PRINT 7 + 2
+cikar | | PRINT 7 - 2
+carp | | PRINT 7 * 2
+bol | | PRINT 7 / 2
+tambol | | PRINT 7 \ 2
+mod | | PRINT 7 MOD 2
+us | | PRINT 2 ** 3
+yuzde | | PRINT 7 % 2
+eksi_tek | | PRINT -(7)
+arti_tek | | PRINT +7
+esit_tek | | PRINT 3 = 3
+esit_cift | | PRINT 3 == 3
+esit_degil1 | | PRINT 3 <> 4
+esit_degil2 | | PRINT 3 != 4
+kucuk | | PRINT 3 < 4
+kucuk_esit | | PRINT 3 <= 3
+buyuk | | PRINT 3 > 4
+buyuk_esit | | PRINT 3 >= 3
+and | | PRINT 5 AND 3
+or | | PRINT 5 OR 3
+xor | | PRINT 5 XOR 3
+not | | PRINT NOT 5
+sapka | | PRINT 5 ^ 3
+ampersand | | PRINT 5 & 3
+boru_bit | | PRINT 5 | 3
+tilde | | PRINT ~5
+unlem | | PRINT !5
+ve_ve | | PRINT 5 && 3
+veya_veya | | PRINT 5 || 0
+nand | | PRINT 5 NAND 3
+nor | | PRINT 5 NOR 3
+xnor | | PRINT 5 XNOR 3
+nxor | | PRINT 5 NXOR 3
+eqv | | PRINT 5 EQV 3
+eqa | | PRINT 5 EQA 3
+imp | | PRINT 5 IMP 3
+cimp | | PRINT 5 CIMP 3
+nimp | | PRINT 5 NIMP 3
+ncimp | | PRINT 5 NCIMP 3
+ida | | PRINT 5 IDA 3
+idb | | PRINT 5 IDB 3
+nota | | PRINT 5 NOTA 3
+notb | | PRINT 5 NOTB 3
+andalso | | PRINT 5 ANDALSO 0
+orelse | | PRINT 5 ORELSE 0
+shl | | PRINT 1 SHL 4
+shr | | PRINT 256 SHR 4
+kaydir_sol | | PRINT 1 << 4
+kaydir_sag | | PRINT 256 >> 4
+rol8 | DIM x AS U8 = 129 | PRINT x ROL 1
+ror8 | DIM x AS U8 = 129 | PRINT x ROR 1
+rol32 | DIM x AS U32 = 2147483649 | PRINT x ROL 1
+metin_topla | | PRINT "a" + "b"
+metin_amp | | PRINT "a" & "b"
+metin_esit | | PRINT "a" = "a"
+metin_kucuk | | PRINT "a" < "b"
+iff | | PRINT IFF(1 > 0, 10, 20)
+ucluk | | PRINT 1 > 0 ? 10 : 20
+ucluk_ic | DIM x AS I32 = -5 | PRINT x < 0 ? -1 : x > 0 ? 1 : 0
+boru_islec | FUNCTION Iki(x AS I32) AS I32\n    RETURN x * 2\nEND FUNCTION\nFUNCTION Uc(x AS I32) AS I32\n    RETURN x + 3\nEND FUNCTION | PRINT 5 |> Iki |> Uc
+art_art | DIM x AS I32 = 5 | x++\nPRINT x
+eks_eks | DIM x AS I32 = 5 | x--\nPRINT x
+ata_topla | DIM x AS I32 = 10 | x += 3\nPRINT x
+ata_cikar | DIM x AS I32 = 10 | x -= 3\nPRINT x
+ata_carp | DIM x AS I32 = 10 | x *= 3\nPRINT x
+ata_bol | DIM x AS F64 = 10 | x /= 4\nPRINT x
+ata_tambol | DIM x AS I32 = 10 | x \= 3\nPRINT x
+ata_yuzde | DIM x AS I32 = 10 | x %= 3\nPRINT x
+ata_amp | DIM s AS STRING = "a" | s &= "b"\nPRINT s
+ata_bit_or | DIM x AS I32 = 5 | x |= 2\nPRINT x
+ata_xor | DIM x AS I32 = 5 | x ^= 3\nPRINT x
+ata_sol | DIM x AS I32 = 1 | x <<= 3\nPRINT x
+ata_sag | DIM x AS I32 = 64 | x >>= 3\nPRINT x
+ata_us | DIM x AS I32 = 2 | x **= 5\nPRINT x
+ata_rol | DIM x AS U8 = 129 | x ROL= 1\nPRINT x
+ata_ror | DIM x AS U8 = 129 | x ROR= 1\nPRINT x
+ata_ve | DIM x AS I32 = 7 | x AND= 3\nPRINT x
+ata_veya | DIM x AS I32 = 4 | x OR= 3\nPRINT x
+ata_inc | DIM x AS I32 = 7 | INC x\nPRINT x
+ata_dec | DIM x AS I32 = 7 | DEC x\nPRINT x
+ata_inc2 | DIM x AS I32 = 7 | INC x, 5\nPRINT x
+adres_ad | DIM x AS I32 = 7\nDIM p AS PTR | p = @x\nPRINT PEEKD(p)
+virgul_deger | | PRINT (1, 2)
+parantez | | PRINT (2 + 3) * 4

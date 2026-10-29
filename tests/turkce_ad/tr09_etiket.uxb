@@ -1,0 +1,14 @@
+' S-579: Türkçe harfli etiketler — GOTO ve GOSUB
+DIM sayaç AS I32 = 0
+başla:
+sayaç = sayaç + 1
+IF sayaç < 3 THEN GOTO başla
+PRINT sayaç
+GOSUB Çözüm
+PRINT sayaç
+GOTO Bitiş
+Çözüm:
+sayaç = sayaç * 10
+RETURN
+Bitiş:
+PRINT 99

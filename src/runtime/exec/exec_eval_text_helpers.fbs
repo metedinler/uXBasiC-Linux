@@ -468,17 +468,17 @@ Private Function ExecBuiltinTextStringCall( _
     End If
 
     Dim stringCharCode As Integer
-    Dim stringCharAst As ASTNode
-    stringCharAst = ps.ast.nodes(stringCharNode)
-    If UCase(stringCharAst.kind) = "STRING" Then
-        If Len(stringCharAst.value) = 0 Then
+    Dim stringCharValue As ExecValue
+    If ExecEvalExpression(ps, stringCharNode, es, stringCharValue, errText) = 0 Then Return 0
+    If UCase(stringCharValue.valueType) = "STRING" Or UCase(stringCharValue.valueType) = "WSTRING" Then
+        Dim stringCharText As String = ExecValueToString(stringCharValue)
+        If Len(stringCharText) = 0 Then
             errText = "exec: STRING char arg empty"
             Return 0
         End If
-        stringCharCode = Asc(Left(stringCharAst.value, 1))
+        stringCharCode = Asc(Left(stringCharText, 1))
     Else
-        stringCharCode = ExecEvalNode(ps, es, stringCharNode, errText)
-        If errText <> "" Then Return 0
+        stringCharCode = ExecValueToInteger(stringCharValue)
     End If
 
     If stringCharCode < 0 Or stringCharCode > 255 Then
@@ -677,6 +677,21 @@ Private Function ExecTryEvalCallExprAsText(ByRef ps As ParseState, ByRef es As E
         textOut = ExecValueToStringForNode(ps, strArgNode, strValue)
         Return 1
 
+    Case "HEX", "OCT", "BIN"
+        If ExecChildCount(ps, callNodeIdx) <> 1 Then
+            errText = "exec: " & textCallName & " expects one argument"
+            Return 0
+        End If
+        Dim radixValue As ExecValue
+        If ExecEvalExpression(ps, ExecChildAt(ps, callNodeIdx, 0), es, radixValue, errText) = 0 Then Return 0
+        Dim radixBits As ULongInt = CULngInt(ExecValueToInteger(radixValue))
+        Select Case textCallName
+        Case "HEX": textOut = Hex(radixBits)
+        Case "OCT": textOut = Oct(radixBits)
+        Case "BIN": textOut = Bin(radixBits)
+        End Select
+        Return 1
+
     Case "UCASE"
         Dim ucText As String
         If ExecBuiltinArgAsText(ps, es, callNodeIdx, textCallName, ucText, errText) = 0 Then Return 0
@@ -850,7 +865,7 @@ Private Function ExecTryEvalCallExprAsText(ByRef ps As ParseState, ByRef es As E
     Return 1
 End Function
 
-Private Function ExecEvalNodeAsText(ByRef ps As ParseState, ByRef es As ExecState, ByVal nodeIdx As Integer, ByRef textOut As String, ByRef errText As String) As Integer
+Private Function ExecEvalNodeAsTextRaw(ByRef ps As ParseState, ByRef es As ExecState, ByVal nodeIdx As Integer, ByRef textOut As String, ByRef errText As String) As Integer
     If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then
         errText = "exec: invalid text node"
         Return 0
@@ -906,4 +921,12 @@ Private Function ExecEvalNodeAsText(ByRef ps As ParseState, ByRef es As ExecStat
 
     textOut = ExecValueToStringForNode(ps, nodeIdx, valueOut)
     Return 1
+End Function
+
+Private Function ExecEvalNodeAsText(ByRef ps As ParseState, ByRef es As ExecState, ByVal nodeIdx As Integer, ByRef textOut As String, ByRef errText As String) As Integer
+    Dim firstSnapshot As Integer
+    If ExecPrepareExpressionCalls(ps, es, nodeIdx, firstSnapshot, errText) = 0 Then Return 0
+    Dim ok As Integer = ExecEvalNodeAsTextRaw(ps, es, nodeIdx, textOut, errText)
+    ExecReleaseArgumentSnapshots es, firstSnapshot
+    Return ok
 End Function

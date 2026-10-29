@@ -1,0 +1,25 @@
+' S-526: rutin ICINDE bildirilen tamsayi degisken ondalik islemde sayisal olarak donusturulur (eski AST-x64 bit duzenini okuyordu).
+FUNCTION Ff() AS F64
+    DIM v AS F64 = 0.95
+    DIM k AS I64 = 10000
+    RETURN v * k
+END FUNCTION
+FUNCTION Fg() AS F64
+    DIM v AS F64 = 0.95
+    DIM k AS I64 = 10000
+    RETURN v + k
+END FUNCTION
+FUNCTION Fh() AS F64
+    DIM v AS F64 = 0.95
+    DIM k AS I32 = 4
+    RETURN v / k
+END FUNCTION
+FUNCTION Fk() AS F64
+    DIM s AS F32 = 1.5
+    DIM d AS F64 = 2.5
+    RETURN d + s
+END FUNCTION
+PRINT Ff()
+PRINT Fg()
+PRINT Fh()
+PRINT Fk()

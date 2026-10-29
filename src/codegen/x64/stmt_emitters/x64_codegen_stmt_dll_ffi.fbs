@@ -3,6 +3,9 @@
 
 Private Sub X64CollectDllCallPlanNode(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext)
     If nodeIdx < 0 Or nodeIdx >= ps.ast.count Then Exit Sub
+    For seen As Integer = 0 To cg.ffiCallTotal - 1
+        If gX64FfiNodeIndices(seen) = nodeIdx Then Exit Sub
+    Next
 
     If X64IsDllCallNode(ps, nodeIdx) <> 0 Then
         Dim argc As Integer
@@ -11,6 +14,7 @@ Private Sub X64CollectDllCallPlanNode(ByRef ps As ParseState, ByVal nodeIdx As I
         argStartPos = X64DllCallArgStartPos(ps, nodeIdx)
 
         If cg.ffiCallTotal >= 0 And cg.ffiCallTotal <= UBound(gX64FfiArgCounts) Then
+            gX64FfiNodeIndices(cg.ffiCallTotal) = nodeIdx
             gX64FfiArgCounts(cg.ffiCallTotal) = argc - argStartPos
             If gX64FfiArgCounts(cg.ffiCallTotal) < 0 Then gX64FfiArgCounts(cg.ffiCallTotal) = 0
             cg.ffiCallTotal += 1
@@ -34,6 +38,7 @@ Private Sub X64CollectDllCallPlanNode(ByRef ps As ParseState, ByVal nodeIdx As I
                     Dim argStartPos2 As Integer
                     argStartPos2 = X64DllCallArgStartPos(ps, nodeIdx)
                     If cg.ffiCallTotal >= 0 And cg.ffiCallTotal <= UBound(gX64FfiArgCounts) Then
+                        gX64FfiNodeIndices(cg.ffiCallTotal) = nodeIdx
                         gX64FfiArgCounts(cg.ffiCallTotal) = argc2 - argStartPos2
                         If gX64FfiArgCounts(cg.ffiCallTotal) < 0 Then gX64FfiArgCounts(cg.ffiCallTotal) = 0
                         cg.ffiCallTotal += 1
@@ -148,13 +153,16 @@ Private Sub X64EmitFfiSupport(ByRef cg As X64CodegenContext)
 End Sub
 
 Private Function X64EmitDllCallNode(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef cg As X64CodegenContext, ByRef errText As String) As Integer
-    If cg.ffiCallEmitIndex >= cg.ffiCallTotal Then
-        errText = "x64-codegen: ffi call emit index overflow"
+    ' Source traversal order differs from code emission order (main first,
+    ' routines later). Bind by AST identity, not the next emitted call number.
+    Dim stubIdNum As Integer = 0
+    For planIdx As Integer = 0 To cg.ffiCallTotal - 1
+        If gX64FfiNodeIndices(planIdx) = nodeIdx Then stubIdNum = planIdx + 1: Exit For
+    Next
+    If stubIdNum = 0 Then
+        errText = "x64-codegen: FFI AST call is absent from resolver plan"
         Return 0
     End If
-
-    Dim stubIdNum As Integer
-    stubIdNum = cg.ffiCallEmitIndex + 1
     Dim stubId As String
     stubId = X64ToStr(stubIdNum)
 
@@ -172,6 +180,8 @@ Private Function X64EmitDllCallNode(ByRef ps As ParseState, ByVal nodeIdx As Int
         Return 0
     End If
 
+    Dim argBytes As Integer = X64Align16(argCount * 8)
+    If argBytes > 0 Then X64EmitText cg, "    sub rsp, " & X64ToStr(argBytes)
     Dim i As Integer
     For i = 0 To argCount - 1
         Dim argNode As Integer
@@ -189,14 +199,37 @@ Private Function X64EmitDllCallNode(ByRef ps As ParseState, ByVal nodeIdx As Int
             If X64EmitExprToRax(ps, argNode, cg, errText) = 0 Then Return 0
         End If
 
-        X64EmitText cg, "    mov [rel __uxb_ffi_arg_" & stubId & "_" & X64ToStr(i + 1) & "], rax"
+        X64EmitText cg, "    mov [rsp+" & X64ToStr(i * 8) & "], rax"
     Next i
 
-    ' S-144: the stub assumes RSP is 16-byte aligned at the call; an enclosing binary expression that keeps its
-    ' left operand with `push rax` (`f() <> "" OR g() = ""`) leaves it 8 mod 16 and the callee crashed on an
-    ' aligned SSE access, so the call realigns the stack at run time (X64EmitCall0). The arguments travel in
-    ' the __uxb_ffi_arg_* cells, so no register is live across it.
-    X64EmitCall0 cg, "__uxb_ffi_stub_" & stubId
+    ' Arguments belong to this call frame. Shared per-site argument cells
+    ' corrupted recursive calls and simultaneous task workers at the same site.
+    Dim extraArgs As Integer = argCount - 4
+    If extraArgs < 0 Then extraArgs = 0
+    Dim savedRspOffset As Integer = 32 + extraArgs * 8
+    X64EmitText cg, "    mov r10, rsp"
+    X64EmitText cg, "    sub rsp, " & X64ToStr(savedRspOffset + 16)
+    X64EmitText cg, "    and rsp, -16"
+    X64EmitText cg, "    mov [rsp+" & X64ToStr(savedRspOffset) & "], r10"
+    For i = 4 To argCount - 1
+        X64EmitText cg, "    mov rax, [r10+" & X64ToStr(i * 8) & "]"
+        X64EmitText cg, "    mov [rsp+" & X64ToStr(32 + (i - 4) * 8) & "], rax"
+    Next
+    For i = 0 To IIf(argCount < 4, argCount, 4) - 1
+        X64EmitText cg, "    mov " & UXBWin64IntegerArgReg(i) & ", [r10+" & X64ToStr(i * 8) & "]"
+        X64EmitText cg, "    movq " & UXBWin64FloatArgReg(i) & ", " & UXBWin64IntegerArgReg(i)
+    Next
+    Dim ffiBound As String = X64NextLabel(cg, "ffi_bound")
+    X64EmitText cg, "    mov r11, [rel __uxb_ffi_symptr_" & stubId & "]"
+    X64EmitText cg, "    test r11, r11"
+    X64EmitText cg, "    jnz " & ffiBound
+    X64EmitText cg, "    mov ecx, 127"
+    X64EmitText cg, "    call exit"
+    X64EmitText cg, "    ud2"
+    X64EmitLabel cg, ffiBound
+    X64EmitText cg, "    call r11"
+    X64EmitText cg, "    mov rsp, [rsp+" & X64ToStr(savedRspOffset) & "]"
+    If argBytes > 0 Then X64EmitText cg, "    add rsp, " & X64ToStr(argBytes)
 
     ' S-144: a C function returning `int` only defines EAX (RAX's upper half is undefined/zero), so
     ' `-1` came back as 4294967295: `IF uxsdl3.DaysInMonth(2026, 13) = -1` was false and every negative

@@ -1,0 +1,8 @@
+FUNCTION Topla(n1 AS I32, n2 AS I32, n3 AS I32, n4 AS I32, a AS I32[], b AS F64[]) AS I32
+    RETURN n1 + n2 + n3 + n4 + a(3) + I32(b(-1))
+END FUNCTION
+DIM a(2 TO 4) AS I32
+DIM b(-1 TO 0) AS F64
+a(3) = 11
+b(-1) = 7.5
+PRINT Topla(1, 2, 3, 4, a, b)

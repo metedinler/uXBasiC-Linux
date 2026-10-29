@@ -1,0 +1,1 @@
+# Mete 2026-10-28: DECLARE is optional; this historical neg_ case now validates successful execution.

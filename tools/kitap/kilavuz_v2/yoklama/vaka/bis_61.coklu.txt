@@ -1,0 +1,159 @@
+tamsayi bolme sifira
+DIM a AS I32 = 5
+DIM z AS I32 = 0
+DIM d(2) AS I32
+DIM f AS F64 = 5
+DIM zf AS F64 = 0
+PRINT "once"
+PRINT a \ z
+PRINT "sonra"
+=====
+MOD sifira
+DIM a AS I32 = 5
+DIM z AS I32 = 0
+DIM d(2) AS I32
+DIM f AS F64 = 5
+DIM zf AS F64 = 0
+PRINT "once"
+PRINT a MOD z
+PRINT "sonra"
+=====
+ondalik bolme sifira
+DIM a AS I32 = 5
+DIM z AS I32 = 0
+DIM d(2) AS I32
+DIM f AS F64 = 5
+DIM zf AS F64 = 0
+PRINT "once"
+PRINT f / zf
+PRINT "sonra"
+=====
+tamsayi / degisken sifira
+DIM a AS I32 = 5
+DIM z AS I32 = 0
+DIM d(2) AS I32
+DIM f AS F64 = 5
+DIM zf AS F64 = 0
+PRINT "once"
+PRINT a / z
+PRINT "sonra"
+=====
+dizi okuma sinir disi
+DIM a AS I32 = 5
+DIM z AS I32 = 0
+DIM d(2) AS I32
+DIM f AS F64 = 5
+DIM zf AS F64 = 0
+PRINT "once"
+PRINT d(7)
+PRINT "sonra"
+=====
+dizi yazma sinir disi
+DIM a AS I32 = 5
+DIM z AS I32 = 0
+DIM d(2) AS I32
+DIM f AS F64 = 5
+DIM zf AS F64 = 0
+PRINT "once"
+d(7) = 1
+PRINT "sonra"
+=====
+dizi negatif indeks
+DIM a AS I32 = 5
+DIM z AS I32 = 0
+DIM d(2) AS I32
+DIM f AS F64 = 5
+DIM zf AS F64 = 0
+PRINT "once"
+PRINT d(-1)
+PRINT "sonra"
+=====
+bos nesne metot
+CLASS K
+    PUBLIC v AS I32
+    METHOD Don() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+DIM o AS K
+PRINT "once"
+PRINT o.Don()
+PRINT "sonra"
+=====
+bos nesne alan
+CLASS K
+    PUBLIC v AS I32
+    METHOD Don() AS I32
+        RETURN 1
+    END METHOD
+END CLASS
+DIM o AS K
+PRINT "once"
+PRINT o.v
+PRINT "sonra"
+=====
+liste sinir disi
+DIM l AS LIST
+l = LIST_NEW()
+LISTADD(l, 1)
+PRINT "once"
+PRINT LISTGET(l, 5)
+PRINT "sonra"
+=====
+sozluk olmayan anahtar
+DIM s AS DICT
+s = DICT_NEW()
+PRINT "once"
+PRINT DICTGET(s, "yok")
+PRINT "sonra"
+=====
+SQR negatif
+PRINT "once"
+DIM x AS F64 = -1
+PRINT SQR(x)
+PRINT "sonra"
+=====
+LOG sifir
+PRINT "once"
+DIM x AS F64 = 0
+PRINT LOG(x)
+PRINT "sonra"
+=====
+EXP tasma
+PRINT "once"
+DIM x AS F64 = 1000
+PRINT EXP(x)
+PRINT "sonra"
+=====
+kayan nokta tasma
+PRINT "once"
+DIM x AS F64 = 1E308
+PRINT x * 10
+PRINT "sonra"
+=====
+dosya yok
+PRINT "once"
+OPEN "yok_dosya_xyz.txt" FOR INPUT AS #1
+PRINT "sonra"
+=====
+kaydirma buyuk
+PRINT "once"
+DIM s AS I32 = 40
+PRINT 1 SHL s
+PRINT "sonra"
+=====
+VAL harf
+PRINT "once"
+PRINT VAL("abc")
+PRINT "sonra"
+=====
+CHR buyuk
+PRINT "once"
+PRINT ASC(CHR(300))
+PRINT "sonra"
+=====
+LEFT negatif
+PRINT "once"
+DIM n AS I32 = -1
+PRINT LEFT("abc", n)
+PRINT "sonra"

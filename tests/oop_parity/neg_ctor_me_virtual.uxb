@@ -1,0 +1,11 @@
+CLASS Base
+    PUBLIC
+    VIRTUAL METHOD Value() AS I32
+        RETURN 1
+    END METHOD
+    CONSTRUCTOR()
+        PRINT ME.Value()
+    END CONSTRUCTOR
+END CLASS
+
+DIM obj AS Base = NEW Base()

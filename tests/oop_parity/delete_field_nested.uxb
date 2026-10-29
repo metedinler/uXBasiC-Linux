@@ -1,0 +1,21 @@
+CLASS C3
+    PUBLIC
+    DESTRUCTOR()
+        PRINT 3
+    END DESTRUCTOR
+END CLASS
+CLASS C2
+    PUBLIC
+    DIM c AS C3
+END CLASS
+CLASS C1
+    PUBLIC
+    DIM b AS C2
+END CLASS
+' S-615: the field can be reached through a chain of fields.
+DIM a AS C1 = NEW C1()
+a.b = NEW C2()
+a.b.c = NEW C3()
+DELETE a.b.c
+IF a.b.c = NOTHING THEN PRINT 1
+IF a.b <> NOTHING THEN PRINT 2

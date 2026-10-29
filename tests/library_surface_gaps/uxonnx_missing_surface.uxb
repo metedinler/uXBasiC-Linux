@@ -1,0 +1,20 @@
+INCLUDE "include/modules/uxonnx.uxmh"
+
+MAIN
+    IF FALSE THEN
+        PRINT uxonnx.InputCount(0)
+        PRINT uxonnx.InputName(0, 0)
+        PRINT uxonnx.LastError(0)
+        PRINT uxonnx.OutputCount(0)
+        PRINT uxonnx.OutputName(0, 0)
+        PRINT uxonnx.Run1(0, "", 0, "")
+        PRINT uxonnx.SessionCreate("", 0)
+        uxonnx.SessionFree(0)
+        PRINT uxonnx.TensorCreate1D(0)
+        PRINT uxonnx.TensorCreate3D(0, 0, 0)
+        PRINT uxonnx.TensorCreate4D(0, 0, 0, 0)
+        PRINT uxonnx.TensorDataPtr(0)
+        PRINT uxonnx.TensorDim(0, 0)
+    END IF
+    PRINT "PASS_LIBRARY_SURFACE_UXONNX"
+END MAIN

@@ -1,0 +1,9 @@
+' S-544: a SUB body that calls a routine defined further down also needs the DECLARE above it.
+DECLARE SUB Sonra(x AS I32)
+SUB Once(x AS I32)
+    Sonra(x + 1)
+END SUB
+SUB Sonra(x AS I32)
+    PRINT x
+END SUB
+Once(4)

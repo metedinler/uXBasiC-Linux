@@ -1,0 +1,15 @@
+' S-605: inside a STATIC method a name means a local / parameter, else a program-level variable (an instance field of the same name is not visible).
+DIM n AS I32
+n = 9
+CLASS Say
+    PUBLIC
+    DIM n AS I32
+    STATIC METHOD G() AS I32
+        RETURN n
+    END METHOD
+    STATIC METHOD H(n AS I32) AS I32
+        RETURN n + 1
+    END METHOD
+END CLASS
+PRINT Say.G()
+PRINT Say.H(4)

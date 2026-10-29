@@ -1,0 +1,31 @@
+ENUM Palette
+    Red
+    Green
+END ENUM
+ENUM Small AS I8
+    Low = -128
+    High = 127
+END ENUM
+ENUM Wide AS U32
+    Big = 4294967295
+END ENUM
+ENUM Largest AS U64
+    Maximum = 18446744073709551615
+END ENUM
+DIM selectedColor AS Palette = Palette.Green
+DIM smallValue AS Small = Small.Low
+DIM wideValue AS Wide = Wide.Big
+FUNCTION Identity(value AS Palette) AS Palette
+    RETURN value
+END FUNCTION
+PRINT selectedColor
+PRINT Identity(selectedColor)
+PRINT smallValue
+smallValue = Small.High
+PRINT smallValue
+PRINT wideValue
+PRINT SIZEOF(Palette)
+PRINT SIZEOF(Small)
+PRINT SIZEOF(Wide)
+DIM maximumValue AS Largest = Largest.Maximum
+PRINT maximumValue

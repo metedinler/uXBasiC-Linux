@@ -1,0 +1,19 @@
+' S-652: degistirici koleksiyon islevleri (LISTSET, LISTADD, LISTREMOVE, LISTCLEAR, DICTSET, DICTCLEAR, SETADD, SETREMOVE,
+' SETCLEAR) basarida dilin DOGRU degeri -1'i dondurur; AST, MIR, native x64 ve JS ayni degeri yazdirir
+' (eskiden AST/MIR hep -1, native 1, JS boyut / 1-0 / 0 veriyordu). Sonuc degisip degismedigini anlatmaz.
+DIM l AS LIST
+DIM d AS DICT
+DIM s AS SET
+PRINT LISTADD(l, 5)
+PRINT LISTADD(l, 6)
+PRINT LISTSET(l, 0, 7)
+PRINT LISTREMOVE(l, 1)
+PRINT LISTCLEAR(l)
+PRINT DICTSET(d, "a", 1)
+PRINT DICTSET(d, "a", 2)
+PRINT DICTCLEAR(d)
+PRINT SETADD(s, "x")
+PRINT SETADD(s, "x")
+PRINT SETREMOVE(s, "x")
+PRINT SETREMOVE(s, "x")
+PRINT SETCLEAR(s)
