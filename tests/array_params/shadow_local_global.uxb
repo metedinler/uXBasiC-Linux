@@ -1,0 +1,11 @@
+' Yerel degisken, ayni adli ust duzey (global) degiskeni golgelemeli; fonksiyon icindeki atama globali bozmamali.
+FUNCTION F() AS I32
+    DIM g AS I32
+    g = 99
+    RETURN g
+END FUNCTION
+
+DIM g AS I32
+g = 5
+PRINT F()
+PRINT g

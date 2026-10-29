@@ -71,3 +71,6 @@ __pycache__/
 # Keep the publication manifest and source documentation visible.
 !release_assets/README.md
 !release_assets/release_manifest.json
+
+# Linux build outputs
+/linux/out/
