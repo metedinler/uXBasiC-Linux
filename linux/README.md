@@ -53,3 +53,19 @@ klasor adi olur ve `cannot open errors json` hatasi verir. `pathfix.so` (LD_PREL
 beklenen cikti (`2`,`5` / `yok`). `jsw` + `node`: ayni cikti. JSON ciktilari uretilir (89 dosya).
 `wat`: dize iceren programda `WAT string linear-memory lowering is not implemented` ile reddeder
 (derleyici siniri; Linux'a ozgu degil). Sayisal-yalniz bir programla WAT/WASM denenmedi.
+
+## Wine ile native x64 denemesi (2026-10-29)
+Amac: Linux'ta uretilen Windows x64 exe'sini Wine ile calistirmak. Adimlar (repo kopyasinda, cikti repoya yazilmasin diye):
+1. `apt-get install wine64 gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 nasm`
+2. `native/uxb_runtime` kaynaklarini `x86_64-w64-mingw32-g++ -shared` ile `uxb_runtime.dll` + `libuxb_runtime.dll.a` olarak derle
+   (9 .cpp: `uxb_runtime*.cpp` ve `backends/*.cpp`; repoda hazir DLL yok, yalniz `build_result.json` izleniyor).
+   Import kutuphanesi `dist/libraries/lib/` altina, DLL `bin/` altina konur (derleyici bu yollara bakar).
+3. `run_uxb.sh bld prog.uxb` NASM kodunu (`build/<tarih>/exe/x64_build/program.asm`) uretir; `.bat` Linux'ta calismaz,
+   bu yuzden elle: `nasm -f win64 program.asm -o program.obj` ve
+   `x86_64-w64-mingw32-gcc program.obj libuxb_runtime.dll.a -o prog.exe`, sonra `wine prog.exe`.
+   Not: `bld` derleme sonunda "resolver: source file not found" (ters egik cizgili yol) hatasi verir; asm yine de uretilir.
+
+Sonuc: basit program (dizi, IF, FOR) Wine altinda yorumlayiciyla birebir ayni cikti verdi.
+**Bulunan hata (Linux'a ozgu degil):** fonksiyon-yereli degisken ayni adli ust duzey degiskeni golgelemiyor.
+Ornek: `tests/array_params/shadow_local_global.uxb` -> AST yorumlayici `99 / 5` (dogru), MIR yorumlayici `99 / 99`,
+native x64 `cop / 99`. Boyer-Moore testi bu yuzden once Wine'da `yok` yazdirdi; testlerde yerel ad `m` yapildi.
