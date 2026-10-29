@@ -1,0 +1,9 @@
+FUNCTION Total(n AS I32) AS I32
+    DIM a() AS I32
+    REDIM a(0 TO 0) AS I32
+    a(0) = n
+    DIM previous AS I32 = 0
+    IF n > 1 THEN previous = Total(n - 1)
+    RETURN a(0) + previous
+END FUNCTION
+PRINT Total(3)

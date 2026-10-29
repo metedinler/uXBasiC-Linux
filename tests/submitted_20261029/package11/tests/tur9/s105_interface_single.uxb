@@ -1,0 +1,11 @@
+INTERFACE IHesap
+    METHOD Calis(x AS I32) AS I32
+END INTERFACE
+CLASS Ikiye IMPLEMENTS IHesap
+    PUBLIC
+    METHOD Calis(x AS I32) AS I32
+        RETURN x * 2
+    END METHOD
+END CLASS
+DIM h AS IHesap = NEW Ikiye()
+PRINT h.Calis(7)

@@ -2,6 +2,7 @@
 #define UXB_MIR_VERIFIER_FBS
 
 #include once "../mir/mir_registry.fbs"
+#include once "../common/number_literal.fbs"
 
 Type UXBMIRVerifyStats
     functionCount As Integer
@@ -57,24 +58,7 @@ Function UXBMIRVerifyOpcodeNameIsValid(ByRef opName As String) As Integer
 End Function
 
 Private Function UXBMIRVerifyTryParseInt(ByRef textValue As String, ByRef valueOut As Integer) As Integer
-    Dim t As String
-    t = Trim(textValue)
-    If t = "" Then Return 0
-
-    Dim startPos As Integer
-    startPos = 1
-    If Left(t, 1) = "+" Or Left(t, 1) = "-" Then startPos = 2
-    If startPos > Len(t) Then Return 0
-
-    Dim i As Integer
-    For i = startPos To Len(t)
-        Dim ch As String
-        ch = Mid(t, i, 1)
-        If ch < "0" Or ch > "9" Then Return 0
-    Next i
-
-    valueOut = Val(t)
-    Return 1
+    Return UXBDecimalI32Literal(textValue, valueOut)
 End Function
 
 Private Function UXBMIRFindBlockById(ByRef fn As MIRFunction, ByVal blockId As Integer) As Integer

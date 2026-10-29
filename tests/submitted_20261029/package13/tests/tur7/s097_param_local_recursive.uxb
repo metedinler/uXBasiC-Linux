@@ -1,0 +1,15 @@
+DECLARE FUNCTION Reader(a AS I32[]) AS I32
+DECLARE FUNCTION Repeat(n AS I32) AS I32
+FUNCTION Reader(a AS I32[]) AS I32
+    RETURN a(4)
+END FUNCTION
+FUNCTION Repeat(n AS I32) AS I32
+    DIM a(4 TO 5) AS I32
+    a(4) = n
+    IF n > 1 THEN
+        RETURN Repeat(n - 1) + Reader(a)
+    END IF
+    RETURN Reader(a)
+END FUNCTION
+PRINT Repeat(3)
+' EXPECT stdout: 6

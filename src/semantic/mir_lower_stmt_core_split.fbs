@@ -426,7 +426,11 @@ Private Function MIRLowerTopLevelStmtCoreA(ByRef ps As ParseState, ByVal stmtIdx
                 End If
                 Dim boundsNode As Integer
                 boundsNode = MIRFindChildByKind(ps, ch, "DIM_BOUNDS")
-                If boundsNode <> -1 And MIRChildCount(ps, boundsNode) = 1 Then
+                If boundsNode <> -1 AndAlso ps.ast.nodes(boundsNode).op = "UNALLOCATED_ARRAY" Then
+                    MIRAppendInstruction module, fnIdx, blkIdx, MIR_OP_DIM, "", 6, varName, "0", "-1", LTrim(Str(dimElemBytes)), typeName, "UNALLOCATED"
+                    MIRRegisterArrayGlobal module, varName, typeName
+                    If fnIdx <> 0 Then MIRAppendFunctionLocal module, fnIdx, varName, "ARRAY"
+                ElseIf boundsNode <> -1 AndAlso MIRChildCount(ps, boundsNode) = 1 Then
                     Dim lowerName As String
                     Dim upperName As String
                     Dim boundExpr As Integer

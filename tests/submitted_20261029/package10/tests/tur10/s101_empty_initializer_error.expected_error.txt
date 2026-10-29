@@ -1,0 +1,1 @@
+DIM: unallocated array cannot have an initializer

@@ -1,0 +1,7 @@
+DECLARE FUNCTION ReadFirst(a AS I32[]) AS I32
+FUNCTION ReadFirst(a AS I32[]) AS I32
+    RETURN a(6)
+END FUNCTION
+DIM data(3 TO 5) AS I32
+PRINT ReadFirst(data)
+' EXPECT nonzero exit, array index out of bounds

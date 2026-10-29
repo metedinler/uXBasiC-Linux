@@ -97,22 +97,29 @@ Function ParseDimDeclarator(ByRef ps As ParseState) As Integer
     declNode = MakeNodeFromToken(ps, "DIM_DECL", identTok.lexeme, "", identTok)
     If storageClass <> "" Then ps.ast.nodes(declNode).op = storageClass   ' DIM_DECL.op = depolama sinifi (ATOMIC)
 
+    Dim unallocatedDim As Integer = 0
     If MatchOp(ps, "(") Then
         Dim boundsNode As Integer
         boundsNode = ASTNewNode(ps.ast, "DIM_BOUNDS", "", "", identTok.lineNo, identTok.colNo)
 
-        Do
-            Dim boundExpr As Integer
-            boundExpr = ParseDimBound(ps)
-            If boundExpr = -1 Then Return -1
-            ASTAddChild ps.ast, boundsNode, boundExpr
+        ' S-101: an empty pair of parentheses is a declared but UNALLOCATED
+        ' one-dimensional array.  A regular DIM_BOUNDS with children is unchanged.
+        If MatchOp(ps, ")") Then
+            ps.ast.nodes(boundsNode).op = "UNALLOCATED_ARRAY"
+            unallocatedDim = 1
+        Else
+            Do
+                Dim boundExpr As Integer
+                boundExpr = ParseDimBound(ps)
+                If boundExpr = -1 Then Return -1
+                ASTAddChild ps.ast, boundsNode, boundExpr
 
-            If MatchOp(ps, ",") = 0 Then Exit Do
-        Loop
-
-        If MatchOp(ps, ")") = 0 Then
-            ps.lastError = "DIM: missing ) in array bounds"
-            Return -1
+                If MatchOp(ps, ",") = 0 Then Exit Do
+            Loop
+            If MatchOp(ps, ")") = 0 Then
+                ps.lastError = "DIM: missing ) in array bounds"
+                Return -1
+            End If
         End If
 
         ASTAddChild ps.ast, declNode, boundsNode
@@ -129,6 +136,10 @@ Function ParseDimDeclarator(ByRef ps As ParseState) As Integer
     ASTAddChild ps.ast, declNode, typeNode
 
     If MatchOp(ps, "=") Then
+        If unallocatedDim <> 0 Then
+            ps.lastError = "DIM: unallocated array cannot have an initializer"
+            Return -1
+        End If
         Dim initExpr As Integer
         initExpr = ParseExpression(ps)
         If initExpr = -1 Then

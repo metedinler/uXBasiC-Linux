@@ -1,8 +1,8 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
 set "UXB_CLI_EXE=%~dp0bin\uxb.exe"
-if not defined UXB_EXE if exist "%~dp0build\compilers\codex31\uxb.exe" set "UXB_CLI_EXE=%~dp0build\compilers\codex31\uxb.exe"
-if "%UXB_CLI_EXE%"=="%~dp0build\compilers\codex31\uxb.exe" if not defined UXB_NATIVE_RUNTIME_DIR if exist "%~dp0build\runtime\codex6\uxb_runtime.dll" set "UXB_NATIVE_RUNTIME_DIR=%~dp0build\runtime\codex6"
+if not defined UXB_EXE if exist "%~dp0build\compilers\codex33\uxb.exe" set "UXB_CLI_EXE=%~dp0build\compilers\codex33\uxb.exe"
+if "%UXB_CLI_EXE%"=="%~dp0build\compilers\codex33\uxb.exe" if not defined UXB_NATIVE_RUNTIME_DIR if exist "%~dp0build\runtime\codex7\uxb_runtime.dll" set "UXB_NATIVE_RUNTIME_DIR=%~dp0build\runtime\codex7"
 if defined UXB_EXE set "UXB_CLI_EXE=%UXB_EXE%"
 if not exist "%UXB_CLI_EXE%" (
   echo ERROR: Derleyici bulunamadi: "%UXB_CLI_EXE%" 1>&2

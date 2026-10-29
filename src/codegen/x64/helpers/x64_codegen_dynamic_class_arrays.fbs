@@ -76,7 +76,11 @@ Private Function X64SdaCompute(ByRef ps As ParseState, ByRef targetUpper As Stri
         If k = "REDIM_DECL" Then hasRedim = 1
         If typeText <> "" Then elemType = UCase(Trim(typeText))
         Dim firstBound As Integer = ps.ast.nodes(boundsNode).firstChild
-        If firstBound < 0 Then Return 0
+        If firstBound < 0 Then
+            If ps.ast.nodes(boundsNode).op <> "UNALLOCATED_ARRAY" Then Return 0
+            dynamicDecl = 1
+            Continue For
+        End If
         If ps.ast.nodes(firstBound).nextSibling >= 0 Then Return 0
         Dim loNode As Integer = -1
         Dim hiNode As Integer = firstBound
@@ -158,13 +162,23 @@ End Function
 Private Function X64EmitSdaElementAddr(ByRef ps As ParseState, ByRef cg As X64CodegenContext, ByRef varName As String) As Integer
     If X64SdaDescriptorToReg(cg, varName, "rcx") = 0 Then Return 0
     Dim okLabel As String = X64NextLabel(cg, "sda_index_ok")
+    Dim errorLabel As String = X64NextLabel(cg, "sda_index_fail")
     Dim messageLabel As String = X64NextLabel(cg, "sda_index_error")
     X64EmitData cg, messageLabel & ": db ""uXBasic runtime error: array index out of bounds " & X64Upper(Trim(varName)) & """, 10, 0"
-    X64EmitText cg, "    sub rax, [rcx + 8]"
+    ' The empty descriptor has upper=-1, lower=0, data=0. An unsigned
+    ' offset comparison alone mistakes its length for UINT64_MAX.
+    X64EmitText cg, "    test rcx, rcx"
+    X64EmitText cg, "    jz " & errorLabel
+    X64EmitText cg, "    cmp qword [rcx], 0"
+    X64EmitText cg, "    je " & errorLabel
     X64EmitText cg, "    mov rdx, [rcx + 16]"
+    X64EmitText cg, "    cmp rdx, [rcx + 8]"
+    X64EmitText cg, "    jl " & errorLabel
+    X64EmitText cg, "    sub rax, [rcx + 8]"
     X64EmitText cg, "    sub rdx, [rcx + 8]"
     X64EmitText cg, "    cmp rax, rdx"
     X64EmitText cg, "    jbe " & okLabel
+    X64EmitLabel cg, errorLabel
     X64EmitText cg, "    lea rcx, [rel " & messageLabel & "]"
     X64EmitText cg, "    and rsp, -16"
     X64EmitText cg, "    sub rsp, 32"

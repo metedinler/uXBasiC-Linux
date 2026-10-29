@@ -283,19 +283,52 @@
     },
   };
 
+  // S-097/S-101: validate JS integer bounds before allocation, preserve,
+  // or address calculation.  Bitwise 32-bit coercion is never valid here.
+  const checkedArrayShape = (length, lower, allowEmpty) => {
+    const n = Number(length), lo = Number(lower);
+    if (!Number.isSafeInteger(n) || n < (allowEmpty ? 0 : 1) || n > 268435455) {
+      return fail("UXB_ARRAY_SIZE", "array invalid length");
+    }
+    if (!Number.isSafeInteger(lo) || lo > Number.MAX_SAFE_INTEGER - (n - 1) || lo < Number.MIN_SAFE_INTEGER - (n - 1)) {
+      return fail("UXB_ARRAY_BOUNDS", "array lower/upper bound is not a safe integer");
+    }
+    return { n, lo };
+  };
+  const arrayBounds = (array) => {
+    if (!Array.isArray(array)) return fail("UXB_ARRAY_TARGET_MISSING", "array target is not an array");
+    const lo = Number(array.__uxbLower ?? 0);
+    if (!Number.isSafeInteger(lo) || lo > Number.MAX_SAFE_INTEGER - (array.length - 1) || lo < Number.MIN_SAFE_INTEGER - (array.length - 1)) {
+      return fail("UXB_ARRAY_BOUNDS", "array lower/upper bound is not a safe integer");
+    }
+    return { lo, hi: lo + array.length - 1 };
+  };
+  const arrayIndex = (array, index) => {
+    const bounds = arrayBounds(array);
+    const ix = Number(index);
+    if (!Number.isSafeInteger(ix)) return fail("UXB_ARRAY_INDEX", "array index out of bounds");
+    const offset = ix - bounds.lo;
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset >= array.length) {
+      return fail("UXB_ARRAY_INDEX", "array index out of bounds");
+    }
+    return offset;
+  };
+
   uxb.data = {
     arrayNew(length = 0, fill = 0, lower = 0) {
-      const arr = Array(Number(length) || 0).fill(fill);
-      arr.__uxbLower = Number(lower) || 0;
+      const { n, lo } = checkedArrayShape(length, lower, true);
+      const arr = Array(n).fill(fill);
+      arr.__uxbLower = lo;
       return arr;
     },
     arrayResize(array, length, fill = 0, lower = 0, preserve = false) {
       if (!Array.isArray(array)) return fail("UXB_ARRAY_TARGET_MISSING", "REDIM target is not an array");
-      const n = Number(length), lo = Number(lower);
-      if (!Number.isInteger(n) || n < 1 || n > 268435455) return fail("UXB_ARRAY_SIZE", "array invalid bounds or byte size overflow");
-      const next = Array(n).fill(fill), oldLo = Number(array.__uxbLower) || 0;
+      const { n, lo } = checkedArrayShape(length, lower, false);
+      const { lo: oldLo, hi: oldHi } = arrayBounds(array);
+      // Construct the replacement before mutating the original descriptor.
+      const next = Array(n).fill(fill);
       if (preserve) {
-        const first = Math.max(lo, oldLo), last = Math.min(lo + n - 1, oldLo + array.length - 1);
+        const first = Math.max(lo, oldLo), last = Math.min(lo + n - 1, oldHi);
         for (let i = first; i <= last; i++) next[i-lo] = array[i-oldLo];
       }
       // Preserve descriptor identity for forwarded array parameters.
@@ -305,15 +338,11 @@
       return array;
     },
     arrayLoad(array, index) {
-      if (!array) return 0;
-      const i = (Number(index) | 0) - (Number(array.__uxbLower) || 0);
-      if (i < 0 || i >= array.length) return fail("UXB_ARRAY_INDEX", "array index out of bounds");
+      const i = arrayIndex(array, index);
       return array[i] ?? 0;
     },
     arrayStore(array, index, value) {
-      if (!array) return fail("UXB_ARRAY_TARGET_MISSING", "arrayStore target is missing");
-      const i = (Number(index) | 0) - (Number(array.__uxbLower) || 0);
-      if (i < 0 || i >= array.length) return fail("UXB_ARRAY_INDEX", "array index out of bounds");
+      const i = arrayIndex(array, index);
       array[i] = value;
       return value;
     },
@@ -337,12 +366,10 @@
     // S-101: LBOUND/UBOUND of an array whose bounds exist only at run time (REDIM'd array,
     // `arr AS T[]` parameter). Compile-time bounds are folded to constants by the lowering.
     arrayLBound(array) {
-      if (!Array.isArray(array)) return fail("UXB_ARRAY_TARGET_MISSING", "LBOUND target is not an array");
-      return Number(array.__uxbLower) || 0;
+      return arrayBounds(array).lo;
     },
     arrayUBound(array) {
-      if (!Array.isArray(array)) return fail("UXB_ARRAY_TARGET_MISSING", "UBOUND target is not an array");
-      return (Number(array.__uxbLower) || 0) + array.length - 1;
+      return arrayBounds(array).hi;
     },
     memoryRefArray(array, elementBytes = 8) {
       if (!Array.isArray(array)) return fail("UXB_ARRAY_MEMORY_REF", "memoryRefArray requires an array");

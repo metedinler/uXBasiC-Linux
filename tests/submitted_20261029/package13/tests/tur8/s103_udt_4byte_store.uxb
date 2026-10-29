@@ -1,0 +1,13 @@
+TYPE Pair16
+    a AS I16
+    b AS I16
+END TYPE
+DECLARE SUB Change(a AS Pair16[])
+SUB Change(a AS Pair16[])
+    a(2).b = 73
+END SUB
+DIM data(1 TO 3) AS Pair16
+data(2).b = 2
+Change(data)
+PRINT data(2).b
+' EXPECT: 73

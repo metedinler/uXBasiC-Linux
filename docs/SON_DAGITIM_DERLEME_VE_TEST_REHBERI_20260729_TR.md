@@ -12,9 +12,9 @@ başvurusudur; her koşu için yeni bir kullanım belgesi açılmaz. Sonuçlar
 `uxb.cmd` dosyasına çift tıklamak komut yazılabilen bir Windows komut
 penceresi açar; `exit` ile kapanır. PowerShell'de aynı başlatıcıya seçenek
 verilebilir. `UXB_EXE` ortam değişkeniyle özel bir aday seçilmediyse
-son doğrulanmış özel aday `build/compilers/codex31/uxb.exe` kullanılır; kaynak ve sürüm kanıtı `reports/workspace_maintenance/current_acceptance.json` içindedir;
+son doğrulanmış özel aday `build/compilers/codex33/uxb.exe` kullanılır; kaynak ve sürüm kanıtı `reports/workspace_maintenance/current_acceptance.json` içindedir;
 bu aday yoksa `bin/uxb.exe` seçilir. Eşleşen private runtime
-`build/runtime/codex6` olur; `UXB_NATIVE_RUNTIME_DIR` açıkça verilmişse
+`build/runtime/codex7` olur; `UXB_NATIVE_RUNTIME_DIR` açıkça verilmişse
 başlatıcı onu korur. Claude'un ortak `bin` kurulumunun üzerine yazılmaz.
 Komutlara verilen göreli yollar çağrılan klasöre
 göredir; başlatıcı bu yolları sessizce değiştirmez.
@@ -112,26 +112,46 @@ Bir seçeneği bilmeden yeni koşucu yazmak yerine burada dosya adı veya
 işlev anahtar sözcüğü ara, sonra ilgili kaynağı aç. Dinamik aktarılan
 `%*` veya `sys.argv` seçeneğinin anlamı çağrılan araçtan okunur.
 
-## 0.3 Güncel doğrulama ve açık kapsam — 28 Ekim
+## 0.3 Güncel doğrulama ve açık kapsam — 29 Ekim
 
-Son Codex özel adayı: `build/compilers/codex12/uxb.exe`, private runtime
-`build/runtime/codex3`. STRING dizi/TYPE alanı düzeltmeleri S-681/S-682:
-`string_storage11/summary.json`40/40, altı örnek altı motorda ve iki örnek
-iki gerçek native sağlayıcıda. İndeks bir kez hesaplanır; RHS önce çalışır,
-NUL/boş/kopya/halka devri ve komşu alanlar korunur. Ek S-683, AST/MIR/JS
-STRING dizi elemanlarını sayısal0 yerine boş metinle başlatır; DIM,
-REDIM/PRESERVE kesişimi ve yeni elemanlar ölçüldü. `os11/summary.json`36/36
-aynı son adayın gerçek OS işçisi/örtüşme/iptal kabulüdür. `models10` ilk7
-pakette408/408 sonrası S-683 için kesildi; kendi TEMP çıktısı kullanım/
-reparse/sınır kontrolüyle temizlendi. Tam `models11` bitti:3949/4045;
-36 eski S-655 ve60 DLL paketleme S-685 düşüşü. S-685 aynı EXE hash'iyle
-74/76 ve kalan full_abi4/4 tekrarlarıyla düzeltildi (örtüşmeler toplanmaz).
-`merged12.md` seçili11 paket897/898, tek eski exception düşüşü;
-`gsl12_final.md`32/32 ve `host_package_contract.json`10/10.
-Compiler12 hash'i `afad9093611228f2a3c09d0ac5b73d373cb8fa8b8a146ba661c473af2534233c`.
-Başlatıcının varsayılanı henüz aday4'tür; compiler12 Claude'un sonradan
-inen27 Ekim kaynaklarının derlemesi değildir ve onların yerine yayımlanmadı.
-Farklı ölçümler toplanmaz; genel S-030 tamamlanmış sayılmaz.
+Güncel kabulün tek makine-okunur kaydı reports/workspace_maintenance/current_acceptance.json,
+insan-okunur sonucu aynı klasörde SONUC.md'dir. Önceki adayların sayıları
+bu kaydın tarihsel kanıtıdır; güncel çalıştırma gibi toplanmaz. Günlük
+başlatıcı ve runtime yolu bu rehberin0. bölümündedir. Genel S-030 açık:
+CLASS sahibi/generation, tüm kaynak-slot kilitleri, hata/iptal cleanup,
+FFI ömrü ve gerçek JS/WASM worker kabulü tamamlanmadan kapatılmaz.
+
+TUR10–15 uygulanırken eski kümülatif kaynaklar canlı src üzerine kopyalanmadı.
+Yeni farklar kontrol edilip birleştirildi; TUR13'ün hazırlama betiği yerine
+mevcut tests/turkce_ad/run_tests.py kullanıldı. Paketlerin116 özgün testinin
+hash'i korunur. TUR7'nin eksik REDIM AS tipi ayrı _v2.uxb uyarlamasında
+düzeltilmiştir; özgün kaynak veya hata beklentisi gevşetilmedi. İki boyutlu
+sınır sorgusu legacy hariç beş motorda ölçülür; bu filtre düzeltmesi compiler
+onarımı sayılmaz. TUR14 strateji ve TUR15 genel planları topluca yapılmış
+ilan edilmez;16. tur kullanıcı tarafından sonraki mesaja bırakılmıştır.
+
+Mevcut koşucuyla örnek:
+
+```powershell
+python tests/turkce_ad/run_tests.py --uxb build/compilers/codex33/uxb.exe --native-runtime-dir build/runtime/codex7 --test-root tests/submitted_20261029/package13/tests --output reports/workspace_maintenance/round13_current --jobs 2 --timeout 180
+```
+
+Doğrudan JS sözleşmeleri aktif runtime/js/common/ux_runtime_core.js üzerinde
+Node ile çalışır. FB I32 testi gerçek ortak yardımcıyı çağırır; bozuk MIR'in
+bütün zorunlu kapılarına enjeksiyon veya bütün S-034 kapanışı sayılmaz.
+C++ STRING sözleşmesi gerçek DLL'yi ve iki OS işçisini kullanır:
+
+```powershell
+$env:PATH = 'C:/msys64/ucrt64/bin;' + $env:PATH
+New-Item -ItemType Directory -Force build/test_outputs/round10_15_contracts | Out-Null
+& C:/msys64/ucrt64/bin/x86_64-w64-mingw32-g++.exe -std=c++17 -O2 -Wall -Wextra -Werror -pthread tests/submitted_20261029/extra/string_runtime_contract.cpp -Lbuild/runtime/codex7 -luxb_runtime -o build/test_outputs/round10_15_contracts/string_runtime_contract.exe
+$env:PATH = (Resolve-Path build/runtime/codex7).Path + ';' + $env:PATH
+& ./build/test_outputs/round10_15_contracts/string_runtime_contract.exe
+```
+
+PATH yalnız bu terminal sürecinde değişir. Sonuç kaydedildikten sonra bu
+geçici test EXE'si kaldırılır; kaynak ve log korunur. C++ testi ortak
+kaynak-slot kilidi olmadan stale raw pointer kullanma izni vermez.
 
 ### Özel compiler DLL paketini düzeltmek — S-685
 
@@ -144,10 +164,10 @@ kopyalanmaz. `compiler_interpreter_runtime.json` dosya/hash listesidir.
 `-HostLibraries uxgsl.dll,uxcapi.dll` terminalde virgüllü liste kabul eder.
 
 ```powershell
-$env:UXB_NATIVE_RUNTIME_DIR = (Resolve-Path build/runtime/codex3).Path
-pwsh -NoProfile -ExecutionPolicy Bypass -File build_64.ps1 -OutputPath build/compilers/codex12/uxb.exe -StageRuntimeOnly
-pwsh -NoProfile -ExecutionPolicy Bypass -File tests/run_all_model_tests.ps1 -Uxb build/compilers/codex31/uxb.exe -Only uxgsl -Cases full_abi -ReportPath reports/workspace_maintenance/gsl_contract.md
-pwsh -NoProfile -ExecutionPolicy Bypass -File tests/compiler_consolidation/run_host_package_contract.ps1 -Uxb build/compilers/codex31/uxb.exe
+$env:UXB_NATIVE_RUNTIME_DIR = (Resolve-Path build/runtime/codex7).Path
+pwsh -NoProfile -ExecutionPolicy Bypass -File build_64.ps1 -OutputPath build/compilers/codex33/uxb.exe -StageRuntimeOnly
+pwsh -NoProfile -ExecutionPolicy Bypass -File tests/run_all_model_tests.ps1 -Uxb build/compilers/codex33/uxb.exe -Only uxgsl -Cases full_abi -ReportPath reports/workspace_maintenance/gsl_contract.md
+pwsh -NoProfile -ExecutionPolicy Bypass -File tests/compiler_consolidation/run_host_package_contract.ps1 -Uxb build/compilers/codex33/uxb.exe
 ```
 
 `UXB_NATIVE_RUNTIME_DIR` DLL ile import library'nin birlikte bulunduğu
@@ -160,76 +180,11 @@ iki sağlayıcı gerçekten çalıştırılır. Son sözleşme testi10/10'dur.
 genel yürütme ilkesi değiştirilmez. Bu bilgisayarda işaretli UXB-Common.ps1
 normal RemoteSigned çağrısında engellendiği için bu açık seçenek kullanıldı.
 
-Komut dosyası düzeltmeleri S-325 ve S-661–S-663 kapandı: son aday4
-CLI39/39; `reports/workspace_maintenance/cli4.log`. Başlatıcının ortam
-ayarı olmadan gerçek `.uxcli` çağrısı ve etkileşimli komut penceresi
-`launcher4.log` içinde kayıtlıdır. Compiler SHA256:
-`5a280a3b72eb2c1ce2958b8edbf3951e4a06c70922d44ac86cec863dcf4c1a20`.
-
-S-657 STRING çağrı değeri/argüman ömrü ve S-658 saklama durumları kökten
-düzeltildi. Son compiler4 altı seçili paket333/333; `models4.md`.
-Bu toplamın içindeki yeni18 kontrol NUL, boş STRING, alias dönüşü, karışık
-argümanlar ve gerçek iki native işçide bekleme içerir. Ayrı OS işçisi,
-örtüşme/iptal36/36 (`os3/summary.json`) aynı runtime2 ile geçti.
-Native STRING ABI18/20 →20/20 (`native_span2.json`); DLL SHA256:
-`a2013974737e5b9184d8db5bc61f2ea239b3cb1c4b8a22f3b8ccddede53ec3b8`.
-Son CLI adayı4 aynı altı paketle yeniden kabul edildi; `models4.md` ve
-`models4.md.progress.json` altı paketin tamamlandığını kaydeder. os3 ayrı
-compiler3 ölçümüdür; iki aday aynı runtime2'yi kullanır. Önceki kendi dört
-compiler EXE'si kaldırıldı; `previous_own_compilers.json` hashleri korur.
-Örtüşen sayılar toplanmaz.
-
-Genel S-030 kapanmadı: ortak STRING/CLASS sahipliği, STATIC_INIT,
-exception/cancel cleanup, explicit kilitler ve gerçek JS/WASM worker
-sağlayıcıları açık. Sıra ve kapanış ölçütleri mevcut
-`ai_koordinasyon/S030_SAGLAYICI_TAMAMLAMA_GOREV_PLANI_20261020.md`
-başındaki güncel panodadır. Bu tur yeni bir MIR katmanı veya sahiplik ABI'si
-kurulmadı; var olan mekanizmaların tüketicileri düzeltildi.
-
-Devam eden ikinci dilim: aday8 ortak STRING çağrı sırası, owned snapshot ve
-skaler += kilidini uygular (S-667/S-668); çağıranın yerelini callee'ye sızdıran
-AST/MIR depo çözümlemesi ve adla restore S-674 ile düzeltildi. string_shared8
-48/48, ayrı string_lexical8 altı motor6/6; os8 gerçek worker/örtüşme/iptal36/36.
-models8 ilk19 paketten sonra koşucu hatasında kesildi; tam kabul değildir.
-S-678 runtime yolu düzeltmesi loader6/6 ve diagnostic27/27 ile doğrulandı.
-S-679 gerçek eksik runtime denemesinde hatayı raporlayıp sonraki CLI41
-kontrolünü tamamlar; genel çıkış1, temiz paket1/2 olarak kalır. Ham kayıtlar
-models_runner_fault8_final.md ve .logs dizinindedir. Önceki333 sonucu
-bu adaya taşınmış sayılmaz.
-Aday8 compiler SHA256c22e7d6737dee3fb0f8d15312e05953c048773900a8af9293bc4279a6e695dac;
-private runtime3 SHA2567c22864a0d0cc548f3c5060755bd7d3e3f6f7688c3c52c29cf0c3e95225c7b88.
-
-Özel compiler -OutputPath paketi artık yorumlayıcıların uxffi.dll/libffi
-bağımlılıklarını da yanında tutar; güncel-build erken dönüşü de bunu
-tamamlar. Manifest compiler_interpreter_runtime.json içindedir (S-677).
-İlk models8 iki FFI hücresi eksik DLL nedeniyle düştü; aynı EXE kimliğiyle
-paket tamamlanınca host_ffi8 sonuçları2/2. Ham ilk FAIL kayıtları korunur.
-S-676 consolidation callback yerleşimi3/3; raporda0 ikili, geçici çıktı
-kökleri kaldırılmış, generated test kaynakları yerinde (placement.json).
-
-Tarihsel ek ölçüm: ilk bakım adayı1 ile TIMER42/48 (`timer.log`). Ardından
-Claude'un 24 Ekim canlı kaynak inişi S-651'i düzeltti; kendi k1022n
-ölçümü48/48 olarak DURUM'a işlendi. Önceki42/48 güncel kaynak sonucu değildir.
-S-667 için yeni aday5, bu35 dosyalık kaynak inişini de içerir; derleme ve
-kabulü sürerken aday4'ün333/333 sonucu yeni kaynak kabulü sayılmaz.
-Kitabın197 örneği eski ölçüm önbelleğidir; kitap üretimi bunları yeniden
-çalıştırmış sayılmaz.573 betik CLI dökümü de573 aracın yürütme kabulü değildir.
-
-S-660 ortak koşucu düzeltmesi: varsayılan geçici mod6 motor ×2 program12/12;
-raporda yalnız14 JSON kalır. Açık `--keep-builds`1/1 native kabulünde çıktı
-`build/test_outputs` altında kaldı; iş bitince o tanı çıktısı kaldırıldı,
-`artifact_kept/summary.json` ve `kept_output_cleanup.json` korundu.
-İkili envanteri, işlem hashleri ve korunan kopya yolları
-`binary_inventory.json`, `binary_actions.jsonl`, `binary_cleanup.json`
-içindedir. Bunlar aynı `reports/workspace_maintenance` dizinindedir;
-benzersiz eski ikililerin taşınması eski rapordaki yolun artık yerinde
-olmayabileceği anlamına gelir, kanıt kaydı silinmez.
-Tamamlanan temizlik:10620 aynı ikili kopyası kaldırıldı;2766 benzersiz
-ikili doğru build alanına taşındı. Son salt-okunur envanter121 koruma,
-sıfır yeni işlem gösterdi. bin altında ana compiler ve Claude'un altı
-k1022i…n adayı kaldı; gerekli DLL'ler korundu. Net C: boş alan farkı
-+11.183.480.832 byte (eşzamanlı faaliyetler dahil), aynı kopyaların mantıksal
-boyutu12.734.060.913 byte. Bunlar compiler özelliği kabul sayıları değildir.
+S-325/S-661–S-663 komut dosyası, S-657/S-658 STRING ve önceki adayların
+ayrıntılı ölçümleri SONUC.md ile current_acceptance.json tarihçesinde korunur.
+Bu rehberde eski aday yolunu güncel varsayılan gibi kullanmayın. Native DLL
+paket sözleşmesi için yukarıdaki mevcut StageRuntimeOnly aracını kullanın;
+senkron ret testi gerçek worker kabulünün yerine geçmez.
 
 ## 0.3 Verilen28 Ekim yama paketlerinin kabulü
 
@@ -237,8 +192,8 @@ Test kaynakları `tests/submitted_20261028/` altındadır. Özgün ve uyarlanmı
 
 ```powershell
 python tests/submitted_20261028/s288/check_registry_coverage.py
-python tests/turkce_ad/run_tests.py --uxb build/compilers/codex31/uxb.exe --native-runtime-dir build/runtime/codex6 --test-root tests/submitted_20261028/declare --output reports/workspace_maintenance/declare_current --jobs 1 --timeout 120
-python tests/turkce_ad/run_tests.py --uxb build/compilers/codex31/uxb.exe --native-runtime-dir build/runtime/codex6 --test-root tests/submitted_20261028/s288 --output reports/workspace_maintenance/s288_current --jobs 1 --timeout 120
+python tests/turkce_ad/run_tests.py --uxb build/compilers/codex33/uxb.exe --native-runtime-dir build/runtime/codex7 --test-root tests/submitted_20261028/declare --output reports/workspace_maintenance/declare_current --jobs 1 --timeout 120
+python tests/turkce_ad/run_tests.py --uxb build/compilers/codex33/uxb.exe --native-runtime-dir build/runtime/codex7 --test-root tests/submitted_20261028/s288 --output reports/workspace_maintenance/s288_current --jobs 1 --timeout 120
 ```
 
 Bunlar kullanım örneğidir; kayıtlı compiler20 kabulü DECLARE50/50, eski politika176/176, S28884/84, MemoryRef9/9 ve derlenmiş FreeBASIC yordam12/12. Compiler21 konsol12/12 ve OS36/36 ayrı kimlikle kaydedildi. Son compiler21 geniş kapısı `merged21.md`:7/7 paket,1152/1152. Başlatıcının @ ve doğrudan .uxcli biçimleri gerçek UXCLI_OK ile geçti.148 kendi eski/tekrar çıktısı hash/etkin kullanım kontrolüyle kaldırıldı; son compiler21/runtime5 korunur. Eski örnek/raporlardaki kendi compiler yolları tarihsel olabilir. Örnek komut yazılması yeni koşu kanıtı değildir.
@@ -250,7 +205,7 @@ Okunabilir runtime kaynağı `runtime/wasm/ux_value_runtime.js` doğrudan düzen
 `tests/turkce_ad/run_tests.py` dosya etkisini de denetler: cases.json `files: {"WASM": {"yol": {"hex":"..."}}, "ALL": {...}}`; `text` UTF-8 tam byte eşitliği, `absent: true` yokluk ister. Expected düzeninde aynı veri `<ad>.files.json` dosyasındadır. Yol izole çalışma alanında kalır; byte/hash/başarı file_checks alanında kaydedilir, geçici ürün sonra kaldırılır.
 
 ```powershell
-python tests/turkce_ad/run_tests.py --uxb build/compilers/codex31/uxb.exe --native-runtime-dir build/runtime/codex6 --test-root tests/wasm_file_provider --engines WASM --output reports/workspace_maintenance/wasm_file_current --jobs 1
+python tests/turkce_ad/run_tests.py --uxb build/compilers/codex33/uxb.exe --native-runtime-dir build/runtime/codex7 --test-root tests/wasm_file_provider --engines WASM --output reports/workspace_maintenance/wasm_file_current --jobs 1
 ```
 
 `check_browser_host.js runtime.js module.wasm [entry]` gerçek üretilen modülü Node erişimi olmayan browser-benzeri VM’de çalıştırır; eksik dosya yeteneği açık ret ve dosya yokluğu gerektirir. `check_file_cleanup.js run_wasm.js [beklenen_program_exit]` gerçek Node open/close çağrılarını gözler; normal/END/THROW bitişinde bütün gerçek fd’ler kapanmalıdır. Bunlar tests/wasm_file_provider altında odaklı kabul araçlarıdır; yeni genel test koşucusu değildir.
@@ -426,21 +381,21 @@ dosyasına bakın.
 
 ## 0.5 TUR5–9 ve ilk yama paketi kabulü
 
-Mevcut tests/turkce_ad/run_tests.py, TUR5…TUR9 ile patch1 ve abi_extended klasörlerindeki cases.json dosyalarını okur. Örnek: `python tests/turkce_ad/run_tests.py --uxb build/compilers/codex31/uxb.exe --native-runtime-dir build/runtime/codex6 --test-root tests/submitted_20261028/patch1 --output reports/workspace_maintenance/patch1_current --jobs 1 --timeout 180`. --only var olan test adlarını seçer; --engines hedefleri daraltır. Testin motor alt kümesi bütün motorların geçtiği iddiası değildir. Negatif hücre için hem süreç hatası hem doğru tanı gerekir.
+Mevcut tests/turkce_ad/run_tests.py, TUR5…TUR9 ile patch1 ve abi_extended klasörlerindeki cases.json dosyalarını okur. Örnek: `python tests/turkce_ad/run_tests.py --uxb build/compilers/codex33/uxb.exe --native-runtime-dir build/runtime/codex7 --test-root tests/submitted_20261028/patch1 --output reports/workspace_maintenance/patch1_current --jobs 1 --timeout 180`. --only var olan test adlarını seçer; --engines hedefleri daraltır. Testin motor alt kümesi bütün motorların geçtiği iddiası değildir. Negatif hücre için hem süreç hatası hem doğru tanı gerekir.
 
 Özgün ZIP test kopyaları submitted_round5_20261028.json ve submitted_round6_9_20261028.json ile hashlenir. TUR7 REDIM örneğinde eksik AS I32, ayrı s097_param_dynamic_v2 kaynağında düzeltilmiştir; özgün kaynak ve başarısız26 ölçümü korunur. STATIC array web sağlayıcısı eski24’te de LOCK_ENTER hatası verir; ayrı static_web_before24/static_scope29 raporları bu açık S-245/S-346 kapsamını gerçek olumlu testle gösterir. Bu beklenti geçti diye değiştirilmez.
 
 S-111 iki argümanlı boyut sorgusu iş yükü, dilin mevcut %%FOR/%%ENDFOR önişlemcisiyle test kaynağında açılır: tests/submitted_20261028/tur9/s111_dimension_index_benchmark.uxb. Aynı sem_dimension_benchmark.uxcli dosyasıyla iki adayın SEM süresi Stopwatch ile ölçülebilir. Derleyici/iş yükü kimliği, çıkış ve ham stdout birlikte saklanır; adaylar sırayla ve diğer ağır testler bitince ölçülür. Yeni kaynak yazdıran haricî üretici yoktur.
 
 
-Konum paketi: `python tests/turkce_ad/run_tests.py --uxb build/compilers/codex31/uxb.exe --native-runtime-dir build/runtime/codex6 --test-root tests/console_cursor --output reports/workspace_maintenance/cursor_current --jobs 2 --timeout 180`. Aynı runner ham byte çıktıyı yakalar; yalnız platform CRLF satır sonunu ham karşılaştırmada normalleştirir, tek CR/TAB/BS/NUL korunur. console_cursor merkezi model listesine mevcut print_zones koşucusu yeniden kullanılarak eklendi: `tests/run_all_model_tests.ps1 -Uxb build/compilers/codex31/uxb.exe -Only console_cursor`. -Cases mevcut test adlarını seçer. Paylaşılan PRINT koşucusu artık -TestRoot ve -Only alır; yeni runner yazılmadı. Native runtime6 için süreçte UXB_NATIVE_RUNTIME_DIR ayarlanır; varsayılan günlük başlatıcı doğrulanmış31/runtime6 kullanır.
+Konum paketi: `python tests/turkce_ad/run_tests.py --uxb build/compilers/codex33/uxb.exe --native-runtime-dir build/runtime/codex7 --test-root tests/console_cursor --output reports/workspace_maintenance/cursor_current --jobs 2 --timeout 180`. Aynı runner ham byte çıktıyı yakalar; yalnız platform CRLF satır sonunu ham karşılaştırmada normalleştirir, tek CR/TAB/BS/NUL korunur. console_cursor merkezi model listesine mevcut print_zones koşucusu yeniden kullanılarak eklendi: `tests/run_all_model_tests.ps1 -Uxb build/compilers/codex33/uxb.exe -Only console_cursor`. -Cases mevcut test adlarını seçer. Paylaşılan PRINT koşucusu artık -TestRoot ve -Only alır; yeni runner yazılmadı. Native runtime6 için süreçte UXB_NATIVE_RUNTIME_DIR ayarlanır; varsayılan günlük başlatıcı doğrulanmış31/runtime6 kullanır.
 
 Derleme alt süreci yerel UXB-Common.ps1 imzası nedeniyle staging aşamasında engellenirse sistem politikasını değiştirmeden yalnız o süreç için `powershell.exe -NoProfile -ExecutionPolicy Bypass -File build_64.ps1 -StageRuntimeOnly -OutputPath build/compilers/<aday>/uxb.exe` kullanılır. Tam derleme de aynı süreç seçeneğiyle mevcut build_64.ps1 üzerinden yapılabilir. Native API ekleri için mevcut native/uxb_runtime/build_runtime_dll.ps1 -Variant auto -OutputDirectory build/runtime/<aday> -SkipPublish kullanılır; çalışma DLL ve derleyici birlikte doğrulanır.
 
 <!-- UXB_TOOL_CATALOG_BEGIN -->
 ## Kaynaktan çıkarılan betik ve CLI dökümü
 
-578 betiğin tam içeriği okunarak Python/PowerShell sözdiziminden çıkarıldı. Bu döküm çalıştırma başarısı değildir. Ayrıntılı kaynak kimlikleri: `reports/acceptance_inventory/tools.json`.
+582 betiğin tam içeriği okunarak Python/PowerShell sözdiziminden çıkarıldı. Bu döküm çalıştırma başarısı değildir. Ayrıntılı kaynak kimlikleri: `reports/acceptance_inventory/tools.json`.
 
 Python satırlarında seçenek adları, varsayılanlar, zorunluluk ve choices kaynak ifadeleriyle; PowerShell satırlarında gerçek parametre bildirimleriyle gösterilir. BAT/CMD `%*` seçenekleri çağırdığı araca iletir. Dinamik seçenekler ve alt araçlar ayrıca okunmalıdır.
 
@@ -4604,6 +4559,47 @@ Parametre bildirimi yok; alt araç/ortam değişkeni kullanımı olabilir.
 Rutinler: üst düzey komutlar.
 Çağrı/yol başvuruları: yok.
 
+### `tests/submitted_20261029/package10/tests/tur10/verify_source_contract.py`
+
+Açıklama başlığı yok; aşağıdaki giriş ve alt araçları inceleyin.
+
+```text
+Parametre bildirimi yok; alt araç/ortam değişkeni kullanımı olabilir.
+```
+Rutinler: üst düzey komutlar.
+Çağrı/yol başvuruları: yok.
+
+### `tests/submitted_20261029/package11/tests/tur10/verify_source_contract.py`
+
+Açıklama başlığı yok; aşağıdaki giriş ve alt araçları inceleyin.
+
+```text
+Parametre bildirimi yok; alt araç/ortam değişkeni kullanımı olabilir.
+```
+Rutinler: üst düzey komutlar.
+Çağrı/yol başvuruları: yok.
+
+### `tests/submitted_20261029/package11/tests/tur11/verify_embedded_parity.py`
+
+Recover embedded FreeBASIC JS string literal projection and verify byte parity.
+
+```text
+positional: sys.argv[1]
+positional: sys.argv[2]
+```
+Rutinler: üst düzey komutlar.
+Çağrı/yol başvuruları: yok.
+
+### `tests/submitted_20261029/package13/tests/tur10/verify_source_contract.py`
+
+Açıklama başlığı yok; aşağıdaki giriş ve alt araçları inceleyin.
+
+```text
+Parametre bildirimi yok; alt araç/ortam değişkeni kullanımı olabilir.
+```
+Rutinler: üst düzey komutlar.
+Çağrı/yol başvuruları: yok.
+
 ### `tests/support/controlled_process.ps1`
 
 Shared library-test process boundary: isolated working directory, exit code, bounded execution, and complete redirected output. No workspace cleanup. The all-model runner can supply its own temporary batch wrapper.
@@ -7010,7 +7006,7 @@ Açıklama başlığı yok; aşağıdaki giriş ve alt araçları inceleyin.
 %~1
 ```
 Rutinler: üst düzey komutlar.
-Çağrı/yol başvuruları: dp0bin\uxb.exe, dp0build\compilers\codex31\uxb.exe, uxb.cmd.
+Çağrı/yol başvuruları: dp0bin\uxb.exe, dp0build\compilers\codex33\uxb.exe, uxb.cmd.
 
 ### `UXB_MIR_STRICT_RUNTIME_TESTS_20260711.ps1`
 

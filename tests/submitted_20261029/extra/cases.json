@@ -1,0 +1,6 @@
+{
+  "empty_write": {"error":"array index out of bounds"},
+  "empty_parameter": {"error":"array index out of bounds"},
+  "empty_float": {"output":"0\n-1\n1.25\n1.25\n3"},
+  "empty_recursive": {"output":"6"}
+}

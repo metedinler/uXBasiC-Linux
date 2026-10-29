@@ -1,0 +1,5 @@
+FUNCTION FirstValue(a AS I32[]) AS I32
+    RETURN a(0)
+END FUNCTION
+DIM items() AS I32
+PRINT FirstValue(items)

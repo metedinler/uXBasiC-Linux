@@ -1,0 +1,14 @@
+TYPE Pair16
+    a AS I16
+    b AS I16
+END TYPE
+DECLARE FUNCTION Pick(a AS Pair16[]) AS I16
+FUNCTION Pick(a AS Pair16[]) AS I16
+    RETURN a(2).b
+END FUNCTION
+DIM points(1 TO 3) AS Pair16
+points(1).b = 11
+points(2).b = 29
+points(3).b = 47
+PRINT Pick(points)
+' EXPECT: 29 (AST/MIR/MIR-x64/legacy x64, if supported)

@@ -1,0 +1,19 @@
+INTERFACE IToplayici
+    METHOD Topla(a AS I32, b AS I32) AS I32
+END INTERFACE
+INTERFACE ICarpici
+    METHOD Carp(a AS I32, b AS I32) AS I32
+END INTERFACE
+CLASS Islemci IMPLEMENTS IToplayici, ICarpici
+    PUBLIC
+    METHOD Topla(a AS I32, b AS I32) AS I32
+        RETURN a + b
+    END METHOD
+    METHOD Carp(a AS I32, b AS I32) AS I32
+        RETURN a * b
+    END METHOD
+END CLASS
+DIM t AS IToplayici = NEW Islemci()
+PRINT t.Topla(1, 2)
+DIM c AS ICarpici = NEW Islemci()
+PRINT c.Carp(2, 5)

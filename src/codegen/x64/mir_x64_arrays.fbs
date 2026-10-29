@@ -504,6 +504,14 @@ Function MIRX64EmitDimArray(ByRef ins As MIRIRInstruction, ByRef cg As MIRX64Con
     Dim overrideBytes As Integer = 0
     If ins.operandCount > 3 Then overrideBytes = ValInt(ins.operands(3))
     If ins.operandCount > 4 Then overrideType = ins.operands(4)
+    If ins.operandCount >= 6 AndAlso ins.operands(5) = "UNALLOCATED" Then
+        If MIRX64EnsureArraySlot(cg, ins.operands(0), 0, 0, arrIdx, errText, overrideBytes, overrideType, 1) = 0 Then Return 0
+        If MIRX64EmitArrayDescriptorAddrToReg(cg, ins.operands(0), "rcx", errText) = 0 Then Return 0
+        MIRX64Emit cg, "    mov qword [rcx], 0"
+        MIRX64Emit cg, "    mov qword [rcx + 8], 0"
+        MIRX64Emit cg, "    mov qword [rcx + 16], -1"
+        Return 1
+    End If
     If (ins.operandCount > 5 AndAlso ins.operands(5) = "LIVE_DESCRIPTOR") Or MIRX64IsIntegerLiteral(ins.operands(1)) = 0 Or MIRX64IsIntegerLiteral(ins.operands(2)) = 0 Then
         If MIRX64EnsureArraySlot(cg, ins.operands(0), 0, 0, arrIdx, errText, overrideBytes, overrideType, 1) = 0 Then Return 0
         Return MIRX64EmitLiveResize(ins, cg, arrIdx, 0, errText)

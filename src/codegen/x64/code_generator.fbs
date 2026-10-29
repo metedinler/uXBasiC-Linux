@@ -5828,6 +5828,25 @@ Private Function X64EmitSdaDeclaration(ByRef ps As ParseState, ByVal stmtNode As
             X64EmitText cg, "    mov qword [rcx + 16], 0"
         End If
     End If
+    Dim unallocatedBounds As Integer = 0
+    Dim unallocatedChild As Integer = ps.ast.nodes(declNode).firstChild
+    Do While unallocatedChild >= 0
+        If ps.ast.nodes(unallocatedChild).kind = "DIM_BOUNDS" AndAlso ps.ast.nodes(unallocatedChild).op = "UNALLOCATED_ARRAY" Then
+            unallocatedBounds = 1
+            Exit Do
+        End If
+        unallocatedChild = ps.ast.nodes(unallocatedChild).nextSibling
+    Loop
+    If unallocatedBounds <> 0 Then
+        If X64SdaDescriptorToReg(cg, declName, "rcx") = 0 Then
+            errText = "x64-codegen: unallocated array descriptor missing: " & declName
+            Return 0
+        End If
+        X64EmitText cg, "    mov qword [rcx], 0"
+        X64EmitText cg, "    mov qword [rcx + 8], 0"
+        X64EmitText cg, "    mov qword [rcx + 16], -1"
+        Return 1
+    End If
     Return X64SdaResize(ps, cg, declNode, declName, keepOld, errText)
 End Function
 

@@ -65,23 +65,21 @@ std::unordered_map<const char*, std::size_t>& literal_lengths() {
 // but never infer a language STRING's length from its first zero byte.
 // The ring already owns its std::string length; persistent copies carry the
 // length alongside their existing owner entry. No probing before pointers.
-std::size_t text_length(const char* value) {
-    if (!value) return 0;
+std::string text_or_empty(const char* value) {
+    if (!value) return {};
     for (const auto& slot : text_ring) {
-        if (slot.c_str() == value) return slot.size();
+        if (slot.c_str() == value) return slot;
     }
     {
         std::lock_guard<std::mutex> lock(owned_text_mutex);
         const auto it = owned_texts().find(value);
-        if (it != owned_texts().end()) return it->second.length;
+        // Copy while release/store is excluded, not just while looking up
+        // the length. The caller still protects the source slot via Model D.
+        if (it != owned_texts().end()) return std::string(value, it->second.length);
         const auto literal = literal_lengths().find(value);
-        if (literal != literal_lengths().end()) return literal->second;
+        if (literal != literal_lengths().end()) return std::string(value, literal->second);
     }
-    return std::strlen(value);  // Foreign C string, no supplied byte length.
-}
-
-std::string text_or_empty(const char* value) {
-    return value ? std::string(value, text_length(value)) : std::string();
+    return std::string(value);  // Foreign C string: caller owns its lifetime.
 }
 
 int64_t checked_count(int64_t value) {
@@ -232,20 +230,22 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_register_string_literals(const int64_t*
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_str_store(const char** slot, const char* src) {
     if (!slot) return __uxb_rt_runtime_error_exit("STRING destination slot is null");
-    const char* old = *slot;
-    if (src && src == old) {
+    {
         std::lock_guard<std::mutex> lock(owned_text_mutex);
+        const char* old = *slot;
         const auto it = owned_texts().find(old);
-        if (it != owned_texts().end() && it->second.owner == static_cast<void*>(slot)) return 1;
+        if (src && src == old && it != owned_texts().end() && it->second.owner == static_cast<void*>(slot)) return 1;
     }
-    const std::size_t n = text_length(src);
+    const std::string snapshot = text_or_empty(src);
+    const std::size_t n = snapshot.size();
     char* copy = static_cast<char*>(std::malloc(n + 1));
     if (!copy) return __uxb_rt_runtime_error_exit("STRING memory allocation failed");
-    if (n) std::memcpy(copy, src, n);
+    if (n) std::memcpy(copy, snapshot.data(), n);
     copy[n] = '\0';
     {
         std::lock_guard<std::mutex> lock(owned_text_mutex);
         auto& table = owned_texts();
+        const char* old = *slot;
         if (old) {
             auto it = table.find(old);
             if (it != table.end() && it->second.owner == static_cast<void*>(slot)) {
@@ -254,14 +254,15 @@ UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_str_store(const char** slot, const char
             }
         }
         table[copy] = {static_cast<void*>(slot), n};
+        *slot = copy;
     }
-    *slot = copy;
     return 1;
 }
 
 UXB_RT_API int64_t UXB_RT_CDECL __uxb_rt_str_release(const char** slot) {
-    if (!slot || !*slot) return 0;
+    if (!slot) return 0;
     std::lock_guard<std::mutex> lock(owned_text_mutex);
+    if (!*slot) return 0;
     auto& table = owned_texts();
     auto it = table.find(*slot);
     if (it == table.end() || it->second.owner != static_cast<void*>(slot)) return 0;
@@ -594,8 +595,9 @@ UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_string(int64_t count, int64_t code)
     return hold_text(std::string(static_cast<std::size_t>(count), static_cast<char>(code)));
 }
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_string_text(int64_t count, const char* text) {
-    if (text_length(text) == 0) __uxb_rt_runtime_error_exit("STRING char arg empty");
-    return __uxb_rt_string(count, static_cast<unsigned char>(*text));
+    const std::string snapshot = text_or_empty(text);
+    if (snapshot.empty()) __uxb_rt_runtime_error_exit("STRING char arg empty");
+    return __uxb_rt_string(count, static_cast<unsigned char>(snapshot[0]));
 }
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_hex(int64_t value) { std::ostringstream out; out << std::uppercase << std::hex << value; return hold_text(out.str()); }
 UXB_RT_API const char* UXB_RT_CDECL __uxb_rt_oct(int64_t value) { std::ostringstream out; out << std::oct << value; return hold_text(out.str()); }

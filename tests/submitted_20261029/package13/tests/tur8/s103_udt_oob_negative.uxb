@@ -1,0 +1,11 @@
+TYPE Pair16
+    a AS I16
+    b AS I16
+END TYPE
+DECLARE FUNCTION Pick(a AS Pair16[]) AS I16
+FUNCTION Pick(a AS Pair16[]) AS I16
+    RETURN a(8).b
+END FUNCTION
+DIM points(1 TO 3) AS Pair16
+PRINT Pick(points)
+' EXPECT: array index out of bounds, nonzero exit in native lanes

@@ -1,0 +1,7 @@
+{
+  "original": "tur7/s097_param_dynamic.uxb",
+  "reason": "Original REDIM omits AS I32, which existing V2 requires. Original source/expected preserved; separate V2 variant used in widened matrix.",
+  "adaptation": "tur7/s097_param_dynamic_v2.uxb",
+  "matrix": "25 programs, all6 except scalar2D bounds query in legacy AST-x64 (existing unsupported scope). Original supplied50 AST/MIR was not relabeled as accepted.",
+  "initial_matrix_correction": "First32 adaptation accidentally excluded WASM and included legacy for2D query; corrected against previous measured tur9_29 engine matrix. This is a fixture correction, not compiler work."
+}

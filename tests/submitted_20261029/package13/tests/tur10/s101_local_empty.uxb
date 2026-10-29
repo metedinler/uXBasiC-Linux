@@ -1,0 +1,10 @@
+DECLARE SUB Deneme()
+SUB Deneme()
+    DIM a() AS I32
+    PRINT LBOUND(a)
+    PRINT UBOUND(a)
+    REDIM a(1 TO 3) AS I32
+    a(2) = 19
+    PRINT a(2)
+END SUB
+Deneme()

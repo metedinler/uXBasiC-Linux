@@ -1,0 +1,84 @@
+{
+  "tur9/s101_unallocated_dynamic_pending": {
+    "output": "0\n-1\n5"
+  },
+  "tur9/s105_interface_multiple": {
+    "output": "3\n10"
+  },
+  "tur9/s105_interface_single": {
+    "output": "14"
+  },
+  "tur9/s111_bounds_static_1d": {
+    "output": "0\n5"
+  },
+  "tur9/s111_bounds_static_2d": {
+    "output": "0\n2",
+    "engines": [
+      "AST",
+      "MIR",
+      "x64",
+      "JS",
+      "WASM"
+    ]
+  },
+  "tur10/s101_empty_bounds": {
+    "output": "0\n-1"
+  },
+  "tur10/s101_empty_initializer_error": {
+    "error": "DIM: unallocated array cannot have an initializer"
+  },
+  "tur10/s101_empty_read_error": {
+    "error": "array index out of bounds"
+  },
+  "tur10/s101_invalid_redim_empty": {
+    "error": "expression expected"
+  },
+  "tur10/s101_local_empty": {
+    "output": "0\n-1\n19"
+  },
+  "tur10/s101_nonempty_compatibility": {
+    "output": "2\n4\n11"
+  },
+  "tur10/s101_redim_after_empty": {
+    "output": "0\n-1\n0\n5\n42"
+  },
+  "tur10/s101_redim_preserve_after_empty": {
+    "output": "2\n6\n17"
+  },
+  "tur7/s097_param_static_nonzero_read": {
+    "output": "41"
+  },
+  "tur7/s097_param_local_recursive": {
+    "output": "6"
+  },
+  "tur7/s097_param_low_oob": {
+    "error": "array index out of bounds"
+  },
+  "tur7/s097_param_static_nonzero_write": {
+    "output": "62"
+  },
+  "tur7/s097_param_forward": {
+    "output": "17"
+  },
+  "tur7/s097_param_local_static": {
+    "output": "25"
+  },
+  "tur7/s097_param_dynamic_v2": {
+    "output": "33"
+  },
+  "tur7/s097_param_high_oob": {
+    "error": "array index out of bounds"
+  },
+  "tur8/s103_udt_12byte_param": {
+    "output": "55"
+  },
+  "tur8/s103_udt_4byte_param": {
+    "output": "29"
+  },
+  "tur8/s103_udt_oob_negative": {
+    "error": "array index out of bounds"
+  },
+  "tur8/s103_udt_4byte_store": {
+    "output": "73"
+  }
+}

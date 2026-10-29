@@ -61,4 +61,32 @@ Function UXBArrayDimensionLiteral(ByRef rawText As String, ByRef dimensionOut As
     Return 1
 End Function
 
+' MIR block IDs use signed decimal I32, independent of host Integer width.
+' Both semantic and canonical validators consume this same overflow gate.
+Function UXBDecimalI32Literal(ByRef rawText As String, ByRef valueOut As Integer) As Integer
+    valueOut = 0
+    Dim t As String = Trim(rawText)
+    If t = "" Then Return 0
+    Dim firstDigit As Integer = 1
+    Dim negativeValue As Integer = 0
+    If Left(t, 1) = "-" Or Left(t, 1) = "+" Then
+        negativeValue = IIf(Left(t, 1) = "-", 1, 0)
+        firstDigit = 2
+    End If
+    If firstDigit > Len(t) Then Return 0
+    Dim limitValue As ULongInt = 2147483647ULL
+    If negativeValue <> 0 Then limitValue = 2147483648ULL
+    Dim magnitude As ULongInt = 0
+    For i As Integer = firstDigit To Len(t)
+        Dim digitValue As Integer = Asc(t, i) - Asc("0")
+        If digitValue < 0 Or digitValue > 9 Then Return 0
+        If magnitude > (limitValue - CULngInt(digitValue)) \ 10 Then Return 0
+        magnitude = magnitude * 10 + CULngInt(digitValue)
+    Next
+    Dim signedValue As LongInt = CLngInt(magnitude)
+    If negativeValue <> 0 Then signedValue = -signedValue
+    valueOut = CInt(signedValue)
+    Return 1
+End Function
+
 #endif

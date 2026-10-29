@@ -583,8 +583,22 @@ Function ExecEvalDIM(ByRef ps As ParseState, ByVal nodeIdx As Integer, ByRef es 
             Dim dimCount As Integer
             dimCount = ExecChildCount(ps, boundsNode)
             If dimCount < 1 Then
-                errText = "DIM: empty array bounds"
-                Return 0
+                If ps.ast.nodes(boundsNode).op <> "UNALLOCATED_ARRAY" Then
+                    errText = "DIM: empty array bounds"
+                    Return 0
+                End If
+                varValue.valueType = "ARRAY"
+                ExecSetVarValue es, varName, varValue
+                If es.variableStorageError <> "" Then errText = es.variableStorageError: Return 0
+                ExecSetVarDeclMeta es, varName, declType, 1, 1, 0, -1, 0
+                Dim unallocatedIdx As Integer = ExecFindVar(es, varName)
+                If unallocatedIdx < 0 Then errText = "DIM: array variable allocation failed": Return 0
+                ExecVarAt(es, unallocatedIdx).dimDeclNodePlus1 = declNode + 1
+                If ExecArrayResizeVar(es, varName, 0, -1, 0) = 0 Then
+                    errText = "DIM: empty array descriptor initialization failed"
+                    Return 0
+                End If
+                Continue For
             End If
 
             Dim lowerBound As Integer

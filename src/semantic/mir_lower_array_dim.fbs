@@ -286,13 +286,17 @@ Function MIRLowerArrayBoundsCall(ByRef ps As ParseState, ByVal nodeIdx As Intege
         End If
         Dim dimCount As Integer
         dimCount = MIRChildCount(ps, firstBounds)
+        If dimCount = 0 And ps.ast.nodes(firstBounds).op = "UNALLOCATED_ARRAY" Then
+            dimCount = 1
+            runtimeForm = 1
+        End If
         If dimNo > dimCount Then
             errText = "mir: " & callName & " dimension " & LTrim(Str(dimNo)) & " is out of range: array " & arrayName & " has " & LTrim(Str(dimCount)) & " dimension(s)"
             Return 0
         End If
         If dimCount = 1 Then
             ' one dimension: constant only while it is declared once with literal bounds
-            If declCount = 1 And allConst <> 0 Then
+            If runtimeForm = 0 And declCount = 1 And allConst <> 0 Then
                 If MIRArrayDimBoundsConstAt(ps, firstBounds, 1, foldLower, foldUpper, errText) = 0 Then Return 0
             Else
                 runtimeForm = 1

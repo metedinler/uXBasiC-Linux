@@ -315,8 +315,13 @@ Function UXBMIRInterpExecStorage(ByRef ins As UXBMIRInstructionRecord, ByRef ctx
             Dim arrayId As Integer = UXBInterpHeapAlloc(ctx.heap, "ARRAY", arrayElemType)
             If UXBLibraryTypeNeedsManagedCopy(arrayElemType) <> 0 Then ctx.heap.slots(arrayId).libraryScopeDepth = st.currentScopeDepth
             ctx.heap.slots(arrayId).ownerName = "array " & arrayName
-            If UXBInterpHeapSetArrayBounds(ctx.heap, arrayId, CInt(lowerValue.intValue), CInt(upperValue.intValue)) = 0 Then
-                Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "invalid array bounds")
+            If ins.operandCount >= 6 AndAlso ins.operands(5) = "UNALLOCATED" Then
+                ctx.heap.slots(arrayId).boundsDeclared = 1
+                ' UXBInterpHeapAlloc already initializes count=0, lower=0, upper=-1.
+            Else
+                If UXBInterpHeapSetArrayBounds(ctx.heap, arrayId, CInt(lowerValue.intValue), CInt(upperValue.intValue)) = 0 Then
+                    Return UXBInterpValueError(UXB_INTERP_ERR_BAD_ARGUMENT, "invalid array bounds")
+                End If
             End If
             Dim arrayValue As UXBInterpValue = UXBInterpValueHandle("ARRAY", arrayId)
             UXBMIRInterpSetVar st, arrayName, arrayValue

@@ -1,0 +1,2 @@
+DIM a(5) AS I32
+PRINT UBOUND(a, 2)

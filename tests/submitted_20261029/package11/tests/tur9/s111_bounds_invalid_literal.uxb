@@ -1,0 +1,2 @@
+DIM a(5) AS I32
+PRINT LBOUND(a, 1.5)

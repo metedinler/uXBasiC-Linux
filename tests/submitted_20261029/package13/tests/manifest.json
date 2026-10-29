@@ -1,0 +1,256 @@
+{
+  "schema": 1,
+  "policy": "fail-closed",
+  "cases": [
+    {
+      "id": "s101_unallocated_dynamic_pending",
+      "source": "tests/tur9/s101_unallocated_dynamic_pending.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur9/s101_unallocated_dynamic_pending.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s105_interface_multiple",
+      "source": "tests/tur9/s105_interface_multiple.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur9/s105_interface_multiple.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s105_interface_single",
+      "source": "tests/tur9/s105_interface_single.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur9/s105_interface_single.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s111_bounds_static_1d",
+      "source": "tests/tur9/s111_bounds_static_1d.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur9/s111_bounds_static_1d.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s111_bounds_static_2d",
+      "source": "tests/tur9/s111_bounds_static_2d.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur9/s111_bounds_static_2d.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s101_empty_bounds",
+      "source": "tests/tur10/s101_empty_bounds.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur10/s101_empty_bounds.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s101_empty_initializer_error",
+      "source": "tests/tur10/s101_empty_initializer_error.uxb",
+      "kind": "error",
+      "expected_file": "tests/tur10/s101_empty_initializer_error.expected_error.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s101_empty_read_error",
+      "source": "tests/tur10/s101_empty_read_error.uxb",
+      "kind": "error",
+      "expected_file": "tests/tur10/s101_empty_read_error.expected_error.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s101_invalid_redim_empty",
+      "source": "tests/tur10/s101_invalid_redim_empty.uxb",
+      "kind": "error",
+      "expected_file": "tests/tur10/s101_invalid_redim_empty.expected_error.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s101_local_empty",
+      "source": "tests/tur10/s101_local_empty.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur10/s101_local_empty.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s101_nonempty_compatibility",
+      "source": "tests/tur10/s101_nonempty_compatibility.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur10/s101_nonempty_compatibility.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s101_redim_after_empty",
+      "source": "tests/tur10/s101_redim_after_empty.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur10/s101_redim_after_empty.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s101_redim_preserve_after_empty",
+      "source": "tests/tur10/s101_redim_preserve_after_empty.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur10/s101_redim_preserve_after_empty.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s097_param_static_nonzero_read",
+      "source": "tests/tur7/s097_param_static_nonzero_read.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur7/s097_param_static_nonzero_read.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s097_param_local_recursive",
+      "source": "tests/tur7/s097_param_local_recursive.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur7/s097_param_local_recursive.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s097_param_low_oob",
+      "source": "tests/tur7/s097_param_low_oob.uxb",
+      "kind": "error",
+      "expected_file": "tests/tur7/s097_param_low_oob.expected_error.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s097_param_static_nonzero_write",
+      "source": "tests/tur7/s097_param_static_nonzero_write.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur7/s097_param_static_nonzero_write.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s097_param_forward",
+      "source": "tests/tur7/s097_param_forward.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur7/s097_param_forward.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s097_param_local_static",
+      "source": "tests/tur7/s097_param_local_static.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur7/s097_param_local_static.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s097_param_dynamic",
+      "source": "tests/tur7/s097_param_dynamic.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur7/s097_param_dynamic.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s097_param_high_oob",
+      "source": "tests/tur7/s097_param_high_oob.uxb",
+      "kind": "error",
+      "expected_file": "tests/tur7/s097_param_high_oob.expected_error.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s103_udt_12byte_param",
+      "source": "tests/tur8/s103_udt_12byte_param.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur8/s103_udt_12byte_param.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s103_udt_4byte_param",
+      "source": "tests/tur8/s103_udt_4byte_param.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur8/s103_udt_4byte_param.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s103_udt_oob_negative",
+      "source": "tests/tur8/s103_udt_oob_negative.uxb",
+      "kind": "error",
+      "expected_file": "tests/tur8/s103_udt_oob_negative.expected_error.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    },
+    {
+      "id": "s103_udt_4byte_store",
+      "source": "tests/tur8/s103_udt_4byte_store.uxb",
+      "kind": "output",
+      "expected_file": "tests/tur8/s103_udt_4byte_store.expected.txt",
+      "engines": [
+        "AST",
+        "MIR"
+      ]
+    }
+  ]
+}
